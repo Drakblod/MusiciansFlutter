@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "674065132924",
+    "firebase_url": "https://musiciansapp-35f70-default-rtdb.europe-west1.firebasedatabase.app",
+    "project_id": "musiciansapp-35f70",
+    "storage_bucket": "musiciansapp-35f70.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:674065132924:android:12e1cd352afa4d118488f9",
+        "android_client_info": {
+          "package_name": "com.musiciansonly.musicians"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDsIItykulJQ-Nw0lg_DCZvCUxyD_Z1HYo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

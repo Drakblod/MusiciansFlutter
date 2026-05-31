@@ -1,0 +1,731 @@
+import 'dart:async';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_database/firebase_database.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import '../models/user_profile.dart';
+import '../models/band.dart';
+import '../models/sub_request.dart';
+import '../models/message.dart';
+import '../models/calendar_event.dart';
+import '../models/agreement.dart';
+
+class FirebaseService {
+  static const String databaseUrl =
+      "https://musiciansapp-35f70-default-rtdb.europe-west1.firebasedatabase.app";
+
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+
+  // Use the explicit Database URL for European Realtime Database instance
+  DatabaseReference _dbRef([String path = '']) {
+    return FirebaseDatabase.instanceFor(
+      app: FirebaseDatabase.instance.app,
+      databaseURL: databaseUrl,
+    ).ref(path);
+  }
+
+  // ==========================================
+  // 1. Authentication
+  // ==========================================
+
+  Future<UserCredential> loginAsync(String email, String password) async {
+    return await _auth.signInWithEmailAndPassword(
+      email: email,
+      password: password,
+    );
+  }
+
+  Future<UserCredential> registerAsync(
+    String email,
+    String password,
+    String userType,
+    String nickname,
+  ) async {
+    final credential = await _auth.createUserWithEmailAndPassword(
+      email: email,
+      password: password,
+    );
+
+    final userId = credential.user?.uid;
+    if (userId != null) {
+      final profile = UserProfile(
+        userId: userId,
+        userType: userType,
+        nickname: nickname,
+        displayName: nickname,
+        location: 'Stockholm, Sweden',
+        about: 'Hey! I am a musician ready to play.',
+        instruments: [userType],
+      );
+      await saveUserProfileAsync(userId, profile);
+    }
+    return credential;
+  }
+
+  String? get currentUserId => _auth.currentUser?.uid;
+
+  bool get isLoggedIn => _auth.currentUser != null;
+
+  Future<void> logoutAsync() async {
+    await _auth.signOut();
+  }
+
+  // ==========================================
+  // 2. User Profiles
+  // ==========================================
+
+  Future<void> saveUserProfileAsync(String userId, UserProfile profile) async {
+    final infoMap = {
+      'DisplayName': profile.displayName,
+      'Level': profile.level,
+      'Location': profile.location,
+      'About': profile.about,
+      'Instruments': profile.instruments,
+      'Styles': profile.styles,
+      'Genres': profile.genres,
+      'Contact': profile.contact,
+      'History': profile.history,
+      'Projects': profile.projects,
+      'ProfilePictureUrl': profile.profilePictureUrl,
+    };
+    await _dbRef('users/$userId/info').set(infoMap);
+    await _dbRef('users/$userId/DisplayName').set(profile.displayName);
+  }
+
+  Future<UserProfile?> getUserProfileAsync([String? userId]) async {
+    final targetId = userId ?? currentUserId;
+    if (targetId == null) return null;
+
+    final snapshot = await _dbRef('users/$targetId').get();
+    if (snapshot.exists && snapshot.value is Map) {
+      final rootMap = snapshot.value as Map;
+      final infoMap = rootMap['info'] is Map ? rootMap['info'] as Map : {};
+      return UserProfile(
+        userId: targetId,
+        userType: rootMap['UserType']?.toString() ?? infoMap['UserType']?.toString(),
+        nickname: rootMap['Nickname']?.toString() ?? infoMap['Nickname']?.toString(),
+        displayName: infoMap['DisplayName']?.toString() ?? rootMap['DisplayName']?.toString(),
+        location: infoMap['Location']?.toString(),
+        about: infoMap['About']?.toString(),
+        level: infoMap['Level']?.toString(),
+        instruments: _parseList(infoMap['Instruments']),
+        styles: _parseList(infoMap['Styles']),
+        genres: _parseList(infoMap['Genres']),
+        contact: infoMap['Contact']?.toString(),
+        history: infoMap['History']?.toString(),
+        projects: infoMap['Projects']?.toString(),
+        profilePictureUrl: infoMap['ProfilePictureUrl']?.toString(),
+      );
+    }
+    return null;
+  }
+
+  Future<List<UserProfile>> getAllUsersAsync() async {
+    final snapshot = await _dbRef('users').get();
+    final List<UserProfile> users = [];
+    if (snapshot.exists && snapshot.value is Map) {
+      final data = snapshot.value as Map;
+      data.forEach((k, v) {
+        if (v is Map) {
+          final userId = k.toString();
+          final rootMap = v;
+          final infoMap = rootMap['info'] is Map ? rootMap['info'] as Map : {};
+          users.add(UserProfile(
+            userId: userId,
+            userType: rootMap['UserType']?.toString() ?? infoMap['UserType']?.toString(),
+            nickname: rootMap['Nickname']?.toString() ?? infoMap['Nickname']?.toString(),
+            displayName: infoMap['DisplayName']?.toString() ?? rootMap['DisplayName']?.toString(),
+            location: infoMap['Location']?.toString(),
+            about: infoMap['About']?.toString(),
+            level: infoMap['Level']?.toString(),
+            instruments: _parseList(infoMap['Instruments']),
+            styles: _parseList(infoMap['Styles']),
+            genres: _parseList(infoMap['Genres']),
+            contact: infoMap['Contact']?.toString(),
+            history: infoMap['History']?.toString(),
+            projects: infoMap['Projects']?.toString(),
+            profilePictureUrl: infoMap['ProfilePictureUrl']?.toString(),
+          ));
+        }
+      });
+    }
+    return users;
+  }
+
+  List<String> _parseList(dynamic val) {
+    if (val == null) return [];
+    if (val is List) return val.map((e) => e.toString()).toList();
+    if (val is Map) return val.values.map((e) => e.toString()).toList();
+    return [val.toString()];
+  }
+
+  // ==========================================
+  // 3. Favorites
+  // ==========================================
+
+  Future<bool> isFavoriteAsync(String targetUserId) async {
+    final selfId = currentUserId;
+    if (selfId == null) return false;
+    final snapshot = await _dbRef('users/$selfId/Favorites/$targetUserId').get();
+    return snapshot.exists && snapshot.value == true;
+  }
+
+  Future<void> toggleFavoriteAsync(String targetUserId, bool isFavorite) async {
+    final selfId = currentUserId;
+    if (selfId == null) return;
+    if (isFavorite) {
+      await _dbRef('users/$selfId/Favorites/$targetUserId').set(true);
+    } else {
+      await _dbRef('users/$selfId/Favorites/$targetUserId').remove();
+    }
+  }
+
+  // ==========================================
+  // 4. Bands
+  // ==========================================
+
+  Future<Map<String, String>> getUserBandsAsync(String userId) async {
+    final snapshot = await _dbRef('users/$userId/Bands').get();
+    final Map<String, String> bands = {};
+    if (snapshot.exists) {
+      final value = snapshot.value;
+      if (value is Map) {
+        value.forEach((k, v) {
+          final bandId = k.toString();
+          if (v is Map) {
+            final name = v['Name']?.toString() ?? v['name']?.toString() ?? bandId;
+            bands[bandId] = name;
+          } else if (v is String) {
+            bands[bandId] = v;
+          } else {
+            bands[bandId] = bandId;
+          }
+        });
+      } else if (value is List) {
+        for (int i = 0; i < value.length; i++) {
+          final item = value[i];
+          if (item != null) {
+            if (item is Map) {
+              final name = item['Name']?.toString() ?? item['name']?.toString() ?? i.toString();
+              bands[i.toString()] = name;
+            } else {
+              bands[i.toString()] = item.toString();
+            }
+          }
+        }
+      }
+    }
+    return bands;
+  }
+
+  Future<Band?> getBandInfoAsync(String bandId) async {
+    final snapshot = await _dbRef('Bands/$bandId').get();
+    if (snapshot.exists && snapshot.value is Map) {
+      return Band.fromJson(snapshot.value as Map, bandId);
+    }
+    return null;
+  }
+
+  Future<void> createBandAsync(String userId, Band band) async {
+    final bandNameKey = (band.name ?? 'My Band').replaceAll(' ', '_');
+    final bandRef = _dbRef('Bands/$bandNameKey');
+    
+    final updatedBand = Band(
+      id: bandNameKey,
+      name: band.name,
+      ensembleType: band.ensembleType,
+      genres: band.genres,
+      location: band.location,
+      rehearsalLocation: band.rehearsalLocation,
+      rehearsalDayOfWeek: band.rehearsalDayOfWeek,
+      rehearsalStartTime: band.rehearsalStartTime,
+      rehearsalEndTime: band.rehearsalEndTime,
+      about: band.about,
+      description: band.description,
+      membersBand: {
+        userId: BandMember(nickname: 'Leader', role: 'Leader'),
+      },
+    );
+
+    // Save globally
+    await bandRef.set(updatedBand.toJson());
+    // Assign Leader in global band members
+    await _dbRef('Bands/$bandNameKey/Members_band/$userId').set({
+      'Nickname': 'Leader',
+      'Role': 'Leader',
+    });
+    // Link band in user's profile
+    await _dbRef('users/$userId/Bands/$bandNameKey').set(updatedBand.toJson());
+    // Add member to band conversation
+    await _dbRef('bandconversations/$bandNameKey/members/$userId').set(true);
+  }
+
+  Future<List<BandMember>> getBandMembersAsync(String bandId) async {
+    final snapshot = await _dbRef('Bands/$bandId/Members_band').get();
+    final List<BandMember> members = [];
+    if (snapshot.exists && snapshot.value is Map) {
+      (snapshot.value as Map).forEach((k, v) {
+        if (v is Map) {
+          members.add(BandMember.fromJson(v));
+        }
+      });
+    }
+    return members;
+  }
+
+  // ==========================================
+  // 5. Substitute Requests
+  // ==========================================
+
+  Future<void> saveSubRequestAsync(SubRequest request) async {
+    final newRef = _dbRef('SubRequests').push();
+    final key = newRef.key;
+    if (key != null) {
+      final updated = SubRequest(
+        id: key,
+        subRequestId: key,
+        creatorUserId: currentUserId,
+        userId: currentUserId,
+        voicePart: request.voicePart,
+        location: request.location,
+        startTime: request.startTime,
+        endTime: request.endTime,
+        description: request.description,
+        date: request.date,
+        role: request.role,
+        isPaid: request.isPaid,
+        bandName: request.bandName,
+        rehearsalDayOfWeek: request.rehearsalDayOfWeek,
+      );
+      
+      // Save in root SubRequests
+      await newRef.set(updated.toJson());
+
+      // Save under user's profile SubRequests
+      if (currentUserId != null) {
+        await _dbRef('users/$currentUserId/SubRequests/$key').set(updated.toJson());
+      }
+    }
+  }
+
+  Future<List<SubRequest>> getAllSubRequestsAsync() async {
+    final snapshot = await _dbRef('SubRequests').get();
+    final List<SubRequest> requests = [];
+    if (snapshot.exists && snapshot.value is Map) {
+      (snapshot.value as Map).forEach((k, v) {
+        if (v is Map) {
+          requests.add(SubRequest.fromJson(v, k.toString()));
+        }
+      });
+    }
+    return requests;
+  }
+
+  Future<void> addResponseToSubRequestAsync(String subRequestId, String userId) async {
+    await _dbRef('SubRequests/$subRequestId/Responses/$userId').set(true);
+  }
+
+  // ==========================================
+  // 6. Direct Chat Messages
+  // ==========================================
+
+  Future<String> getOrCreateDirectConversationAsync(String userId1, String userId2) async {
+    final snapshot = await _dbRef('conversations').get();
+    if (snapshot.exists && snapshot.value is Map) {
+      final conversationsMap = snapshot.value as Map;
+      for (var entry in conversationsMap.entries) {
+        final convId = entry.key.toString();
+        final convData = entry.value;
+        if (convData is Map) {
+          final participantsRaw = convData['Participants'] ?? convData['participants'];
+          List<String> participants = [];
+          if (participantsRaw is List) {
+            participants = participantsRaw.map((e) => e.toString()).toList();
+          } else if (participantsRaw is Map) {
+            participants = participantsRaw.values.map((e) => e.toString()).toList();
+          }
+          final agreement = convData['Agreement'] ?? convData['agreement'];
+          
+          if (participants.length == 2 &&
+              participants.contains(userId1) &&
+              participants.contains(userId2) &&
+              agreement == null) {
+            return convId;
+          }
+        }
+      }
+    }
+
+    // Create a new direct conversation with participant list
+    final newRef = _dbRef('conversations').push();
+    final newId = newRef.key!;
+    await newRef.set({
+      'Participants': [userId1, userId2],
+      'CreatedTimestamp': DateTime.now().toUtc().toIso8601String(),
+      'Agreement': null,
+    });
+    return newId;
+  }
+
+  Future<void> sendConversationMessageAsync(
+    String conversationId,
+    String text,
+    String receiverUserId,
+    String senderName,
+  ) async {
+    final selfId = currentUserId;
+    if (selfId == null) return;
+
+    final msgRef = _dbRef('conversations/$conversationId/messages').push();
+    final key = msgRef.key;
+
+    final message = Message(
+      id: key,
+      senderId: selfId,
+      receiverId: receiverUserId,
+      text: text,
+      timestamp: DateTime.now(),
+      isRead: false,
+      senderName: senderName,
+    );
+
+    await msgRef.set(message.toJson());
+
+    // Trigger local unread flag in database
+    await _dbRef('conversations/$conversationId/unread/$receiverUserId').set(true);
+  }
+
+  Stream<List<Message>> subscribeToMessages(String conversationId) {
+    return _dbRef('conversations/$conversationId/messages')
+        .orderByChild('Timestamp')
+        .onValue
+        .map((event) {
+      final List<Message> list = [];
+      final data = event.snapshot.value;
+      if (data is Map) {
+        data.forEach((k, v) {
+          if (v is Map) {
+            list.add(Message.fromJson(v, k.toString(), currentUserId: currentUserId));
+          }
+        });
+        // Sort chronologically
+        list.sort((a, b) => (a.timestamp ?? DateTime.now())
+            .compareTo(b.timestamp ?? DateTime.now()));
+      }
+      return list;
+    });
+  }
+
+  Future<void> markConversationAsRead(String conversationId) async {
+    final selfId = currentUserId;
+    if (selfId == null) return;
+    await _dbRef('conversations/$conversationId/unread/$selfId').remove();
+
+    // Mark specific incoming messages in list as read
+    final snapshot = await _dbRef('conversations/$conversationId/messages').get();
+    if (snapshot.exists && snapshot.value is Map) {
+      (snapshot.value as Map).forEach((k, v) async {
+        if (v is Map && v['ReceiverId'] == selfId && v['IsRead'] != true) {
+          await _dbRef('conversations/$conversationId/messages/$k/IsRead').set(true);
+        }
+      });
+    }
+  }
+
+  Stream<bool> subscribeToUnreadNotifications() {
+    final selfId = currentUserId;
+    if (selfId == null) return Stream.value(false);
+
+    return _dbRef('conversations').onValue.map((event) {
+      final data = event.snapshot.value;
+      if (data is Map) {
+        for (var convId in data.keys) {
+          final conv = data[convId];
+          if (conv is Map && conv['unread'] is Map) {
+            final unreadMap = conv['unread'] as Map;
+            if (unreadMap[selfId] == true) {
+              return true;
+            }
+          }
+        }
+      }
+      return false;
+    });
+  }
+
+  Future<bool> hasAnyUnreadMessagesAsync() async {
+    final selfId = currentUserId;
+    if (selfId == null) return false;
+
+    final snapshot = await _dbRef('conversations').get();
+    if (snapshot.exists && snapshot.value is Map) {
+      final data = snapshot.value as Map;
+      for (var convId in data.keys) {
+        final conv = data[convId];
+        if (conv is Map && conv['unread'] is Map) {
+          final unreadMap = conv['unread'] as Map;
+          if (unreadMap[selfId] == true) {
+            return true;
+          }
+        }
+      }
+    }
+    return false;
+  }
+
+  Future<List<Map<String, dynamic>>> getActiveConversationsAsync() async {
+    final selfId = currentUserId;
+    if (selfId == null) return [];
+
+    final snapshot = await _dbRef('conversations').get();
+    final List<Map<String, dynamic>> conversations = [];
+
+    if (snapshot.exists && snapshot.value is Map) {
+      final data = snapshot.value as Map;
+      for (var entry in data.entries) {
+        final convId = entry.key.toString();
+        final convData = entry.value;
+        if (convData is Map) {
+          final participantsRaw = convData['Participants'] ?? convData['participants'];
+          List<String> participants = [];
+          if (participantsRaw is List) {
+            participants = participantsRaw.map((e) => e.toString()).toList();
+          } else if (participantsRaw is Map) {
+            participants = participantsRaw.values.map((e) => e.toString()).toList();
+          }
+
+          if (participants.contains(selfId)) {
+            final otherUserId = participants.firstWhere((id) => id != selfId, orElse: () => '');
+            if (otherUserId.isEmpty) continue;
+
+            String lastMessageText = "No messages yet";
+            DateTime timestamp = DateTime.now();
+            final messagesData = convData['messages'] ?? convData['Messages'];
+            bool hasUnread = false;
+
+            if (convData['unread'] is Map) {
+              final unreadMap = convData['unread'] as Map;
+              if (unreadMap[selfId] == true) {
+                hasUnread = true;
+              }
+            }
+
+            if (messagesData is Map) {
+              final List<Message> msgs = [];
+              messagesData.forEach((k, v) {
+                if (v is Map) {
+                  msgs.add(Message.fromJson(v, k.toString(), currentUserId: selfId));
+                }
+              });
+              if (msgs.isNotEmpty) {
+                msgs.sort((a, b) => (a.timestamp ?? DateTime.now())
+                    .compareTo(b.timestamp ?? DateTime.now()));
+                lastMessageText = msgs.last.text ?? "No messages yet";
+                timestamp = msgs.last.timestamp ?? DateTime.now();
+              }
+            }
+
+            String otherUserName = "Loading...";
+            final profile = await getUserProfileAsync(otherUserId);
+            if (profile != null) {
+              otherUserName = profile.displayName ?? profile.nickname ?? "Unknown User";
+            }
+
+            conversations.add({
+              'conversationId': convId,
+              'otherUserId': otherUserId,
+              'otherUserName': otherUserName,
+              'lastMessageText': lastMessageText,
+              'timestamp': timestamp,
+              'hasUnread': hasUnread,
+            });
+          }
+        }
+      }
+    }
+
+    conversations.sort((a, b) {
+      if (a['hasUnread'] != b['hasUnread']) {
+        return a['hasUnread'] ? -1 : 1;
+      }
+      return (b['timestamp'] as DateTime).compareTo(a['timestamp'] as DateTime);
+    });
+
+    return conversations;
+  }
+
+  // ==========================================
+  // 7. Calendar Events
+  // ==========================================
+
+  Future<void> addBandEventAsync(CalendarEvent event) async {
+    final bandId = event.bandId;
+    if (bandId == null) return;
+
+    final ref = _dbRef('BandEvents/$bandId').push();
+    final key = ref.key;
+    if (key != null) {
+      final updated = CalendarEvent(
+        id: key,
+        bandId: bandId,
+        title: event.title,
+        description: event.description,
+        type: event.type,
+        location: event.location,
+        creatorId: currentUserId,
+        creatorName: event.creatorName,
+        isFinalized: event.isFinalized,
+        proposedDates: event.proposedDates,
+        date: event.date,
+        startTime: event.startTime,
+        endTime: event.endTime,
+      );
+      await ref.set(updated.toJson());
+    }
+  }
+
+  Future<List<CalendarEvent>> getBandEventsAsync(String bandId) async {
+    final snapshot = await _dbRef('BandEvents/$bandId').get();
+    final List<CalendarEvent> events = [];
+    if (snapshot.exists && snapshot.value is Map) {
+      (snapshot.value as Map).forEach((k, v) {
+        if (v is Map) {
+          events.add(CalendarEvent.fromJson(v, k.toString()));
+        }
+      });
+    }
+    return events;
+  }
+
+  // ==========================================
+  // 8. Band Room Chat & Files Integration
+  // ==========================================
+
+  Stream<List<Message>> subscribeToBandMessages(String bandId) {
+    return _dbRef('bandconversations/$bandId/messages')
+        .orderByChild('Timestamp')
+        .onValue
+        .map((event) {
+      final List<Message> list = [];
+      final data = event.snapshot.value;
+      if (data is Map) {
+        data.forEach((k, v) {
+          if (v is Map) {
+            list.add(Message.fromJson(v, k.toString(), currentUserId: currentUserId));
+          }
+        });
+        list.sort((a, b) => (a.timestamp ?? DateTime.now())
+            .compareTo(b.timestamp ?? DateTime.now()));
+      }
+      return list;
+    });
+  }
+
+  Future<void> sendBandMessageAsync(
+    String bandId,
+    String text,
+    String senderName,
+  ) async {
+    final selfId = currentUserId;
+    if (selfId == null) return;
+
+    final msgRef = _dbRef('bandconversations/$bandId/messages').push();
+    final key = msgRef.key;
+
+    final message = Message(
+      id: key,
+      senderId: selfId,
+      text: text,
+      timestamp: DateTime.now(),
+      senderName: senderName,
+    );
+
+    await msgRef.set(message.toJson());
+  }
+
+  Future<Map<String, String>> getBandFilesAsync(String bandId) async {
+    final snapshot = await _dbRef('files/$bandId').get();
+    final Map<String, String> files = {};
+    if (snapshot.exists && snapshot.value is Map) {
+      (snapshot.value as Map).forEach((k, v) {
+        if (v is Map) {
+          final fileName = v['FileName']?.toString() ?? v['fileName']?.toString() ?? 'Shared File';
+          files[k.toString()] = fileName;
+        } else if (v is String) {
+          files[k.toString()] = v;
+        }
+      });
+    }
+    return files;
+  }
+
+  Future<void> addBandFileAsync(String bandId, String fileName) async {
+    final ref = _dbRef('files/$bandId').push();
+    await ref.set({
+      'FileName': fileName,
+    });
+  }
+
+  Future<void> removeBandFileAsync(String bandId, String fileId) async {
+    await _dbRef('files/$bandId/$fileId').remove();
+  }
+
+  Future<void> savePushTokenAsync(String token) async {
+    try {
+      final userId = currentUserId;
+      if (userId == null) return;
+      await _dbRef('users/$userId/info/PushToken').set(token);
+      print("[FirebaseService] Push Token saved for user $userId");
+    } catch (e) {
+      print("[FirebaseService] Error saving push token: $e");
+    }
+  }
+
+  Future<void> initializePushNotifications() async {
+    try {
+      print("PUSH: Initializing Push Notification Service...");
+      final messaging = FirebaseMessaging.instance;
+
+      // Request permissions
+      final settings = await messaging.requestPermission(
+        alert: true,
+        announcement: false,
+        badge: true,
+        carPlay: false,
+        criticalAlert: false,
+        provisional: false,
+        sound: true,
+      );
+
+      if (settings.authorizationStatus == AuthorizationStatus.authorized) {
+        print("PUSH: Permission Granted");
+      } else {
+        print("PUSH: Permission Denied");
+      }
+
+      // Handle token refreshes
+      messaging.onTokenRefresh.listen((token) async {
+        print("PUSH: TOKEN REFRESHED: $token");
+        await savePushTokenAsync(token);
+      });
+
+      // Get current token
+      final currentToken = await messaging.getToken();
+      if (currentToken != null && currentToken.isNotEmpty) {
+        print("PUSH: Token already exists: $currentToken");
+        await savePushTokenAsync(currentToken);
+      }
+
+      // Foreground message listener
+      FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+        print("PUSH: NOTIFICATION RECEIVED: ${message.data}");
+      });
+
+      // Opened from background/terminated listener
+      FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+        print("PUSH: NOTIFICATION OPENED: ${message.data}");
+      });
+    } catch (e) {
+      print("PUSH: ERROR Initializing: $e");
+    }
+  }
+}
