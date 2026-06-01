@@ -528,7 +528,20 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                   ),
                 ],
               ),
-              const Icon(Icons.settings_outlined, color: Colors.white, size: 24),
+              AnimatedTapDetector(
+                onTap: () {
+                  final appState = Provider.of<AppState>(context, listen: false);
+                  final bandId = appState.activeBandId;
+                  if (bandId != null) {
+                    Navigator.pushNamed(
+                      context,
+                      '/sub-request-responses',
+                      arguments: {'bandId': bandId},
+                    );
+                  }
+                },
+                child: const Icon(Icons.settings_outlined, color: Colors.white, size: 24),
+              ),
             ],
           ),
         ),

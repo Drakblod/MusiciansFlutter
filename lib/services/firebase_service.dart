@@ -320,8 +320,78 @@ class FirebaseService {
     return requests;
   }
 
+  Future<List<SubRequest>> getUserSubRequestsAsync(String userId) async {
+    final snapshot = await _dbRef('users/$userId/SubRequests').get();
+    final List<SubRequest> requests = [];
+    if (snapshot.exists && snapshot.value is Map) {
+      (snapshot.value as Map).forEach((k, v) {
+        if (v is Map) {
+          requests.add(SubRequest.fromJson(v, k.toString()));
+        }
+      });
+    }
+    return requests;
+  }
+
   Future<void> addResponseToSubRequestAsync(String subRequestId, String userId) async {
     await _dbRef('SubRequests/$subRequestId/Responses/$userId').set(true);
+  }
+
+  Future<bool> deleteSubRequestAsync(String creatorId, String subRequestId) async {
+    try {
+      if (creatorId.isEmpty || subRequestId.isEmpty) return false;
+      
+      // Delete from user's subrequests
+      await _dbRef('users/$creatorId/SubRequests/$subRequestId').remove();
+      
+      // Delete from root SubRequests
+      await _dbRef('SubRequests/$subRequestId').remove();
+      
+      return true;
+    } catch (e) {
+      print("[FirebaseService] Error deleting subrequest: $e");
+      return false;
+    }
+  }
+
+  Future<int> getSubRequestResponseCountAsync(String subRequestId) async {
+    try {
+      final snapshot = await _dbRef('SubRequests/$subRequestId/Responses').get();
+      if (snapshot.exists && snapshot.value is Map) {
+        return (snapshot.value as Map).length;
+      }
+      return 0;
+    } catch (e) {
+      print("[FirebaseService] Error getting response count: $e");
+      return 0;
+    }
+  }
+
+  Future<String> createAgreementChatAsync(
+    String senderId,
+    String receiverId,
+    Agreement agreement,
+    Message message,
+  ) async {
+    final convRef = _dbRef('conversations').push();
+    final conversationId = convRef.key!;
+    
+    await convRef.set({
+      'Participants': [senderId, receiverId],
+      'CreatedTimestamp': DateTime.now().toUtc().toIso8601String(),
+      'Agreement': agreement.toJson(),
+    });
+    
+    final msgRef = _dbRef('conversations/$conversationId/messages').push();
+    
+    // Build message JSON and write
+    final msgJson = message.toJson();
+    await msgRef.set(msgJson);
+    
+    // Mark as unread for the receiver
+    await _dbRef('conversations/$conversationId/unread/$receiverId').set(true);
+
+    return conversationId;
   }
 
   // ==========================================

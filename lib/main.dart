@@ -7,6 +7,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'providers/app_state.dart';
 import 'theme/app_theme.dart';
 import 'models/user_profile.dart';
+import 'models/sub_request.dart';
 
 import 'views/login_screen.dart';
 import 'views/register_screen.dart';
@@ -22,6 +23,9 @@ import 'views/browse_musicians_screen.dart';
 import 'views/find_gigs_screen.dart';
 import 'views/band_room_chat_screen.dart';
 import 'views/profile_tab_screen.dart';
+import 'views/sub_request_responses_screen.dart';
+import 'views/sub_request_response_details_screen.dart';
+import 'views/receipt_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -116,6 +120,42 @@ class MyApp extends StatelessWidget {
             return MaterialPageRoute(
               builder: (context) => MusicianProfileScreen(
                 musician: musician,
+              ),
+              settings: settings,
+            );
+          }
+
+          if (settings.name == '/sub-request-responses') {
+            final args = settings.arguments as Map<String, dynamic>? ?? {};
+            return MaterialPageRoute(
+              builder: (context) => SubRequestResponsesScreen(
+                bandId: args['bandId'] ?? '',
+              ),
+              settings: settings,
+            );
+          }
+
+          if (settings.name == '/sub-request-response-details') {
+            final args = settings.arguments as Map<String, dynamic>? ?? {};
+            return MaterialPageRoute(
+              builder: (context) => SubRequestResponseDetailsScreen(
+                subRequest: args['subRequest'] as SubRequest,
+              ),
+              settings: settings,
+            );
+          }
+
+          if (settings.name == '/receipt') {
+            final args = settings.arguments as Map<String, dynamic>? ?? {};
+            return MaterialPageRoute(
+              builder: (context) => ReceiptScreen(
+                name: args['name'] ?? '',
+                voicePart: args['voicePart'] ?? '',
+                date: args['date'] ?? '',
+                startTime: args['startTime'] ?? '',
+                endTime: args['endTime'] ?? '',
+                conversationId: args['conversationId'] ?? '',
+                receiverUserId: args['receiverUserId'] ?? '',
               ),
               settings: settings,
             );
