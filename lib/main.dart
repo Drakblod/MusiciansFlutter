@@ -26,6 +26,7 @@ import 'views/profile_tab_screen.dart';
 import 'views/sub_request_responses_screen.dart';
 import 'views/sub_request_response_details_screen.dart';
 import 'views/receipt_screen.dart';
+import 'views/producer_search_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -90,6 +91,7 @@ class MyApp extends StatelessWidget {
           '/find-gigs': (context) => const FindGigsScreen(),
           '/band-room': (context) => const BandRoomChatScreen(),
           '/profile': (context) => const ProfileTabScreen(),
+          '/producer-search': (context) => const ProducerSearchScreen(),
         },
         onGenerateRoute: (settings) {
           // Dynamic Routing with specific custom arguments

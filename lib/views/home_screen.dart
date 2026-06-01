@@ -243,7 +243,15 @@ class HomeScreen extends StatelessWidget {
             icon: Icons.people_outline_rounded,
             title: 'Find Musicians',
             subtitle: 'Find and connect with talented musicians near you',
-            onTap: () => _handleBandNavigation(context, appState, '/find-sub'),
+            onTap: () {
+              final isProducer = profile?.instruments.contains('PRODUCER') == true ||
+                  profile?.userType == 'PRODUCER';
+              if (isProducer) {
+                Navigator.pushNamed(context, '/producer-search');
+              } else {
+                _handleBandNavigation(context, appState, '/find-sub');
+              }
+            },
           ),
           const SizedBox(height: 16),
           _buildActionCard(
