@@ -394,6 +394,24 @@ class FirebaseService {
     await _dbRef('conversations/$conversationId/unread/$receiverUserId').set(true);
   }
 
+  Stream<Map<String, dynamic>?> subscribeToConversationMetadata(String conversationId) {
+    return _dbRef('conversations/$conversationId').onValue.map((event) {
+      final data = event.snapshot.value;
+      if (data is Map) {
+        final agreementRaw = data['Agreement'] ?? data['agreement'];
+        Agreement? agreement;
+        if (agreementRaw is Map) {
+          agreement = Agreement.fromJson(agreementRaw);
+        }
+        return {
+          'participants': _parseList(data['Participants'] ?? data['participants']),
+          'agreement': agreement,
+        };
+      }
+      return null;
+    });
+  }
+
   Stream<List<Message>> subscribeToMessages(String conversationId) {
     return _dbRef('conversations/$conversationId/messages')
         .orderByChild('Timestamp')
@@ -530,6 +548,12 @@ class FirebaseService {
               otherUserName = profile.displayName ?? profile.nickname ?? "Unknown User";
             }
 
+            final agreementRaw = convData['Agreement'] ?? convData['agreement'];
+            Agreement? agreement;
+            if (agreementRaw != null && agreementRaw is Map) {
+              agreement = Agreement.fromJson(agreementRaw);
+            }
+
             conversations.add({
               'conversationId': convId,
               'otherUserId': otherUserId,
@@ -537,6 +561,7 @@ class FirebaseService {
               'lastMessageText': lastMessageText,
               'timestamp': timestamp,
               'hasUnread': hasUnread,
+              'agreement': agreement,
             });
           }
         }

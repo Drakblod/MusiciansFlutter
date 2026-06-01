@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../providers/app_state.dart';
 import '../theme/app_theme.dart';
 import '../models/message.dart';
+import '../models/agreement.dart';
 import '../widgets/gradient_scaffold.dart';
 import '../widgets/custom_top_bar.dart';
 import '../widgets/animated_tap_detector.dart';
@@ -29,6 +30,7 @@ class ChatDetailScreen extends StatefulWidget {
 class _ChatDetailScreenState extends State<ChatDetailScreen> {
   final _messageController = TextEditingController();
   final _scrollController = ScrollController();
+  bool _isAgreementExpanded = true;
 
   @override
   void dispose() {
@@ -160,6 +162,161 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
               ),
             ),
           ),
+          
+          // Confirmed Gig Agreement Banner
+          StreamBuilder<Map<String, dynamic>?>(
+            stream: appState.firebaseService.subscribeToConversationMetadata(widget.conversationId),
+            builder: (context, snapshot) {
+              if (!snapshot.hasData || snapshot.data == null) {
+                return const SizedBox.shrink();
+              }
+              final metadata = snapshot.data!;
+              final agreement = metadata['agreement'] as Agreement?;
+              if (agreement == null) {
+                return const SizedBox.shrink();
+              }
+
+              return AnimatedContainer(
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeInOut,
+                width: double.infinity,
+                decoration: const BoxDecoration(
+                  color: Color(0xEB0A1E13), // Deep translucent emerald green
+                  border: Border(
+                    bottom: BorderSide(color: Color(0xFF0F4D25), width: 1.5),
+                  ),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Header Row
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.handshake_rounded, 
+                                color: Colors.greenAccent, 
+                                size: 20
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'CONFIRMED GIG AGREEMENT',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.greenAccent,
+                                  letterSpacing: 1.0,
+                                ),
+                              ),
+                            ],
+                          ),
+                          GestureDetector(
+                            onTap: () {
+                              setState(() {
+                                _isAgreementExpanded = !_isAgreementExpanded;
+                              });
+                            },
+                            child: Row(
+                              children: [
+                                Text(
+                                  _isAgreementExpanded ? 'Hide Details' : 'Show Details',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 12,
+                                    color: Colors.greenAccent.withOpacity(0.8),
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                Icon(
+                                  _isAgreementExpanded 
+                                      ? Icons.keyboard_arrow_up_rounded 
+                                      : Icons.keyboard_arrow_down_rounded,
+                                  color: Colors.greenAccent,
+                                  size: 18,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      
+                      // Details Area
+                      if (_isAgreementExpanded) ...[
+                        const SizedBox(height: 12),
+                        
+                        // Details block
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.25),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: const Color(0xFF0F4D25).withOpacity(0.4), 
+                              width: 1
+                            ),
+                          ),
+                          child: Column(
+                            children: [
+                              _buildAgreementRow(
+                                Icons.music_note_rounded,
+                                'Band / Project',
+                                agreement.bandName ?? 'N/A'
+                              ),
+                              const SizedBox(height: 8),
+                              _buildAgreementRow(
+                                Icons.person_search_rounded,
+                                'Vocalist Role / Part',
+                                agreement.voicePart ?? 'N/A'
+                              ),
+                              const SizedBox(height: 8),
+                              _buildAgreementRow(
+                                Icons.calendar_today_rounded,
+                                'Date & Time',
+                                '${agreement.date ?? "N/A"} (${agreement.startTime ?? "—"} to ${agreement.endTime ?? "—"})'
+                              ),
+                              const SizedBox(height: 8),
+                              _buildAgreementRow(
+                                Icons.location_on_rounded,
+                                'Location',
+                                agreement.location ?? 'N/A'
+                              ),
+                              if (agreement.additionalTerms != null && 
+                                  agreement.additionalTerms!.trim().isNotEmpty) ...[
+                                const SizedBox(height: 8),
+                                _buildAgreementRow(
+                                  Icons.description_rounded,
+                                  'Additional Terms',
+                                  agreement.additionalTerms!
+                                ),
+                              ]
+                            ],
+                          ),
+                        ),
+                      ] else ...[
+                        // Collapsed Quick Summary
+                        const SizedBox(height: 6),
+                        Text(
+                          '${agreement.bandName ?? "Band"} • ${agreement.voicePart ?? "Sub"} • ${agreement.date ?? "No Date"}',
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            color: Colors.white70,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+
           // Message Thread List
           Expanded(
             child: StreamBuilder<List<Message>>(
@@ -334,6 +491,34 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildAgreementRow(IconData icon, String label, String value) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 16, color: Colors.greenAccent.withOpacity(0.7)),
+        const SizedBox(width: 8),
+        Text(
+          '$label:  ',
+          style: GoogleFonts.inter(
+            fontSize: 12,
+            color: Colors.greenAccent.withOpacity(0.7),
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        Expanded(
+          child: Text(
+            value,
+            style: GoogleFonts.inter(
+              fontSize: 12,
+              color: Colors.white,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
