@@ -1,3 +1,4 @@
+import 'dart:ui' show PlatformDispatcher;
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:provider/provider.dart';
@@ -24,6 +25,18 @@ import 'views/profile_tab_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Custom error handler to present errors on screen in release mode
+  FlutterError.onError = (FlutterErrorDetails details) {
+    FlutterError.presentError(details);
+    runApp(ErrorApp(error: details.toString()));
+  };
+
+  PlatformDispatcher.instance.onError = (error, stack) {
+    runApp(ErrorApp(error: "$error\n$stack"));
+    return true;
+  };
+
   try {
     if (kIsWeb) {
       await Firebase.initializeApp(
@@ -40,8 +53,10 @@ void main() async {
     } else {
       await Firebase.initializeApp();
     }
-  } catch (e) {
+  } catch (e, stack) {
     debugPrint("Firebase initialization error: $e");
+    runApp(ErrorApp(error: "Firebase Init Error: $e\n$stack"));
+    return;
   }
   runApp(const MyApp());
 }
@@ -140,5 +155,56 @@ class AuthGate extends StatelessWidget {
     } else {
       return const LoginScreen();
     }
+  }
+}
+
+class ErrorApp extends StatelessWidget {
+  final String error;
+  const ErrorApp({super.key, required this.error});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      home: Scaffold(
+        backgroundColor: const Color(0xFF1E0B36),
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    "Initialization/Runtime Error Details:",
+                    style: TextStyle(
+                      color: Colors.redAccent,
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.black45,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.redAccent.withOpacity(0.3)),
+                    ),
+                    child: Text(
+                      error,
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 14,
+                        fontFamily: 'monospace',
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }

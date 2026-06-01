@@ -11,13 +11,15 @@ class AppState extends ChangeNotifier {
   String? _activeBandId;
   String? _activeBandName;
   bool _hasUnreadMessages = false;
-  bool _isLoading = false;
+  bool _isLoading = true;
   int _currentTab = 0;
 
   StreamSubscription<bool>? _unreadSubscription;
 
   AppState() {
-    _initializeAuthListener();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initializeAuthListener();
+    });
   }
 
   UserProfile? get currentUserProfile => _currentUserProfile;
@@ -34,9 +36,6 @@ class AppState extends ChangeNotifier {
   }
 
   void _initializeAuthListener() {
-    _isLoading = true;
-    notifyListeners();
-
     // Check if user is already logged in on startup
     if (firebaseService.isLoggedIn) {
       _loadProfileAndSubscribe();
