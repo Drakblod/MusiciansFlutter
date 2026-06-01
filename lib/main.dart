@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
 
@@ -24,7 +25,21 @@ import 'views/profile_tab_screen.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
-    await Firebase.initializeApp();
+    if (kIsWeb) {
+      await Firebase.initializeApp(
+        options: const FirebaseOptions(
+          apiKey: "AIzaSyDsIItykulJQ-Nw0lg_DCZvCUxyD_Z1HYo",
+          authDomain: "musiciansapp-35f70.firebaseapp.com",
+          databaseURL: "https://musiciansapp-35f70-default-rtdb.europe-west1.firebasedatabase.app",
+          projectId: "musiciansapp-35f70",
+          storageBucket: "musiciansapp-35f70.firebasestorage.app",
+          messagingSenderId: "674065132924",
+          appId: "1:674065132924:web:e4e3bd93847249b68488f9",
+        ),
+      );
+    } else {
+      await Firebase.initializeApp();
+    }
   } catch (e) {
     debugPrint("Firebase initialization error: $e");
   }
