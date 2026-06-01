@@ -41,8 +41,39 @@ class _FindGigsScreenState extends State<FindGigsScreen>
     try {
       final appState = Provider.of<AppState>(context, listen: false);
       final list = await appState.firebaseService.getAllSubRequestsAsync();
+      
+      final userProfile = appState.currentUserProfile;
+      final userInstruments = userProfile?.instruments ?? [];
+
+      final filtered = list.where((gig) {
+        // 1. Filter out corrupt / un-named / empty gigs
+        if (gig.bandName == null || gig.bandName!.trim().isEmpty) return false;
+        if (gig.voicePart == null || gig.voicePart!.trim().isEmpty) return false;
+        if (gig.date == null || gig.date!.trim().isEmpty) return false;
+
+        // 2. Filter out past gigs
+        final gigDate = DateTime.tryParse(gig.date!);
+        if (gigDate == null) return false;
+        
+        final now = DateTime.now();
+        final today = DateTime(now.year, now.month, now.day);
+        if (gigDate.isBefore(today)) return false;
+
+        // 3. Filter by user instruments (with fallback to show all if profile instruments are empty)
+        if (userInstruments.isEmpty) return true;
+        
+        final voicePartLower = gig.voicePart!.toLowerCase();
+        final matches = userInstruments.any((inst) {
+          final instLower = inst.toLowerCase();
+          return instLower == voicePartLower || 
+                 voicePartLower.contains(instLower) || 
+                 instLower.contains(voicePartLower);
+        });
+        return matches;
+      }).toList();
+
       setState(() {
-        _liveGigs = list;
+        _liveGigs = filtered;
       });
     } catch (e) {
       debugPrint("Error fetching sub requests: $e");
