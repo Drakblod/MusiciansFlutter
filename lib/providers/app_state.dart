@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import '../services/firebase_service.dart';
 import '../models/user_profile.dart';
 
@@ -49,7 +50,9 @@ class AppState extends ChangeNotifier {
     try {
       _currentUserProfile = await firebaseService.getUserProfileAsync();
       _subscribeToUnread();
-      unawaited(firebaseService.initializePushNotifications());
+      if (!kIsWeb) {
+        unawaited(firebaseService.initializePushNotifications());
+      }
       if (currentUserId != null) {
         final bands = await firebaseService.getUserBandsAsync(currentUserId!);
         if (bands.isNotEmpty && _activeBandId == null) {
