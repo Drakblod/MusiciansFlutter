@@ -336,7 +336,34 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                     color: Colors.white,
                   ),
                 ),
-                const Icon(Icons.filter_list_rounded, color: Colors.white, size: 24),
+                Row(
+                  children: [
+                    TextButton.icon(
+                      onPressed: () {
+                        Navigator.pushNamed(context, '/gig-map');
+                      },
+                      icon: const Icon(Icons.map_rounded, color: AppTheme.primaryAccent, size: 18),
+                      label: Text(
+                        'Map View',
+                        style: GoogleFonts.inter(
+                          color: AppTheme.primaryAccent,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
+                      ),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        backgroundColor: AppTheme.primaryAccent.withOpacity(0.12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          side: BorderSide(color: AppTheme.primaryAccent.withOpacity(0.3)),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    const Icon(Icons.filter_list_rounded, color: Colors.white, size: 24),
+                  ],
+                ),
               ],
             ),
           ),

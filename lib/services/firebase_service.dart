@@ -295,6 +295,8 @@ class FirebaseService {
         isPaid: request.isPaid,
         bandName: request.bandName,
         rehearsalDayOfWeek: request.rehearsalDayOfWeek,
+        latitude: request.latitude,
+        longitude: request.longitude,
       );
       
       // Save in root SubRequests

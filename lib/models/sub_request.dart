@@ -20,6 +20,8 @@ class SubRequest {
   final String? level;
   final String? style;
   final Map<String, bool> responses;
+  final double? latitude;
+  final double? longitude;
 
   SubRequest({
     this.id,
@@ -43,6 +45,8 @@ class SubRequest {
     this.level,
     this.style,
     this.responses = const {},
+    this.latitude,
+    this.longitude,
   });
 
   factory SubRequest.fromJson(Map<dynamic, dynamic> json, String keyId) {
@@ -53,6 +57,13 @@ class SubRequest {
         parsedResponses[k.toString()] = v == true;
       });
     }
+
+    final latRaw = json['Latitude'];
+    final lngRaw = json['Longitude'];
+    double? parsedLat;
+    double? parsedLng;
+    if (latRaw is num) parsedLat = latRaw.toDouble();
+    if (lngRaw is num) parsedLng = lngRaw.toDouble();
 
     return SubRequest(
       id: keyId,
@@ -76,6 +87,8 @@ class SubRequest {
       level: json['Level']?.toString(),
       style: json['Style']?.toString(),
       responses: parsedResponses,
+      latitude: parsedLat,
+      longitude: parsedLng,
     );
   }
 
@@ -101,6 +114,8 @@ class SubRequest {
       'Level': level,
       'Style': style,
       'Responses': responses,
+      'Latitude': latitude,
+      'Longitude': longitude,
     };
   }
 }

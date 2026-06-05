@@ -18,14 +18,42 @@ class FindSubScreen extends StatefulWidget {
 
 class _FindSubScreenState extends State<FindSubScreen> {
   final _messageController = TextEditingController();
-  final _searchController = TextEditingController();
+  final _locationController = TextEditingController();
 
   String _selectedInstrument = 'Electric Guitar';
+  String _selectedRole = 'Substitute';
   DateTime _selectedDate = DateTime.now().add(const Duration(days: 4));
   TimeOfDay _startTime = const TimeOfDay(hour: 18, minute: 0);
   TimeOfDay _endTime = const TimeOfDay(hour: 21, minute: 0);
   bool _isPaid = true;
   bool _isSubmitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final appState = Provider.of<AppState>(context, listen: false);
+      if (appState.currentUserProfile?.location != null) {
+        _locationController.text = appState.currentUserProfile!.location!;
+      } else {
+        _locationController.text = 'Stockholm, Sweden';
+      }
+    });
+  }
+
+  Map<String, double>? _resolveCoordinates(String location) {
+    final loc = location.toLowerCase();
+    if (loc.contains('stockholm')) {
+      return {'latitude': 59.3293, 'longitude': 18.0686};
+    } else if (loc.contains('gothenburg') || loc.contains('göteborg')) {
+      return {'latitude': 57.7089, 'longitude': 11.9746};
+    } else if (loc.contains('malmö') || loc.contains('malmo')) {
+      return {'latitude': 55.6050, 'longitude': 13.0038};
+    } else if (loc.contains('uppsala')) {
+      return {'latitude': 59.8586, 'longitude': 17.6389};
+    }
+    return null;
+  }
 
   final List<String> _instruments = [
     "BANDLEADER",
@@ -83,7 +111,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
   @override
   void dispose() {
     _messageController.dispose();
-    _searchController.dispose();
+    _locationController.dispose();
     super.dispose();
   }
 
@@ -147,18 +175,26 @@ class _FindSubScreenState extends State<FindSubScreen> {
       final appState = Provider.of<AppState>(context, listen: false);
       final profile = appState.currentUserProfile;
 
+      final resolvedLoc = _locationController.text.trim().isNotEmpty
+          ? _locationController.text.trim()
+          : (profile?.location ?? 'Stockholm, Sweden');
+      
+      final coords = _resolveCoordinates(resolvedLoc);
+
       // Create model
       final request = SubRequest(
         voicePart: _selectedInstrument,
-        location: profile?.location ?? 'Stockholm, Sweden',
+        location: resolvedLoc,
         startTime: '${_startTime.hour.toString().padLeft(2, '0')}:${_startTime.minute.toString().padLeft(2, '0')}:00',
         endTime: '${_endTime.hour.toString().padLeft(2, '0')}:${_endTime.minute.toString().padLeft(2, '0')}:00',
         description: _messageController.text,
         date: _selectedDate.toIso8601String(),
-        role: 'Substitute',
+        role: _selectedRole,
         isPaid: _isPaid,
         bandName: appState.activeBandName ?? 'Freelance Gig',
         rehearsalDayOfWeek: DateFormat('EEEE').format(_selectedDate),
+        latitude: coords?['latitude'],
+        longitude: coords?['longitude'],
       );
 
       await appState.firebaseService.saveSubRequestAsync(request);
@@ -166,7 +202,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Substitute request posted successfully!'),
+            content: Text('Request posted successfully!'),
             backgroundColor: AppTheme.success,
           ),
         );
@@ -418,15 +454,95 @@ class _FindSubScreenState extends State<FindSubScreen> {
               ),
             ),
             const SizedBox(height: 24),
-            // Search Input
-            TextField(
-              controller: _searchController,
-              decoration: const InputDecoration(
-                hintText: 'Search for musician or band',
-                prefixIcon: Icon(Icons.search_rounded, color: AppTheme.textSecondary),
+            // Role Selector
+            Text(
+              'WHAT TYPE OF POSITION?',
+              style: GoogleFonts.outfit(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: AppTheme.textSecondary,
+                letterSpacing: 1.5,
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _selectedRole = 'Substitute';
+                      });
+                    },
+                    child: Container(
+                      height: 50,
+                      decoration: BoxDecoration(
+                        color: _selectedRole == 'Substitute'
+                            ? AppTheme.primaryAccent.withOpacity(0.12)
+                            : AppTheme.cardBackground,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: _selectedRole == 'Substitute'
+                              ? AppTheme.primaryAccent
+                              : const Color(0xFF2E2A4E),
+                          width: 1.5,
+                        ),
+                      ),
+                      child: Center(
+                        child: Text(
+                          'Substitute',
+                          style: GoogleFonts.inter(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: _selectedRole == 'Substitute'
+                                ? Colors.white
+                                : AppTheme.textSecondary,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _selectedRole = 'Member';
+                      });
+                    },
+                    child: Container(
+                      height: 50,
+                      decoration: BoxDecoration(
+                        color: _selectedRole == 'Member'
+                            ? AppTheme.primaryAccent.withOpacity(0.12)
+                            : AppTheme.cardBackground,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: _selectedRole == 'Member'
+                              ? AppTheme.primaryAccent
+                              : const Color(0xFF2E2A4E),
+                          width: 1.5,
+                        ),
+                      ),
+                      child: Center(
+                        child: Text(
+                          'Permanent Member',
+                          style: GoogleFonts.inter(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: _selectedRole == 'Member'
+                                ? Colors.white
+                                : AppTheme.textSecondary,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
 
             // Instrument Picker Dropdown
             Container(
@@ -457,6 +573,16 @@ class _FindSubScreenState extends State<FindSubScreen> {
                     }
                   },
                 ),
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // Location Input
+            TextField(
+              controller: _locationController,
+              decoration: const InputDecoration(
+                hintText: 'Location (e.g. Stockholm, Gothenburg, Malmö)',
+                prefixIcon: Icon(Icons.location_on_rounded, color: AppTheme.textSecondary),
               ),
             ),
             const SizedBox(height: 24),

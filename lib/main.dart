@@ -27,6 +27,8 @@ import 'views/sub_request_responses_screen.dart';
 import 'views/sub_request_response_details_screen.dart';
 import 'views/receipt_screen.dart';
 import 'views/producer_search_screen.dart';
+import 'views/gig_map_page.dart';
+import 'views/sub_request_details_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -92,6 +94,7 @@ class MyApp extends StatelessWidget {
           '/band-room': (context) => const BandRoomChatScreen(),
           '/profile': (context) => const ProfileTabScreen(),
           '/producer-search': (context) => const ProducerSearchScreen(),
+          '/gig-map': (context) => const GigMapPage(),
         },
         onGenerateRoute: (settings) {
           // Dynamic Routing with specific custom arguments
@@ -142,6 +145,16 @@ class MyApp extends StatelessWidget {
             return MaterialPageRoute(
               builder: (context) => SubRequestResponseDetailsScreen(
                 subRequest: args['subRequest'] as SubRequest,
+              ),
+              settings: settings,
+            );
+          }
+
+          if (settings.name == '/gig-details') {
+            final subRequest = settings.arguments as SubRequest;
+            return MaterialPageRoute(
+              builder: (context) => SubRequestDetailsScreen(
+                subRequest: subRequest,
               ),
               settings: settings,
             );
