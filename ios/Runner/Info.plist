@@ -49,5 +49,9 @@
 	<array>
 		<string>remote-notification</string>
 	</array>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Allow access to photo library to upload instrument images to the marketplace.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Allow access to camera to take photos of your instruments for the marketplace.</string>
 </dict>
 </plist>

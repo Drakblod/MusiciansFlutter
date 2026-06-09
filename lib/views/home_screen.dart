@@ -281,6 +281,16 @@ class HomeScreen extends StatelessWidget {
             subtitle: 'Manage your band, chat and organize everything',
             onTap: () => _handleBandNavigation(context, appState, '/band-room'),
           ),
+          const SizedBox(height: 16),
+          _buildActionCard(
+            context,
+            icon: Icons.storefront_outlined,
+            title: 'Marketplace',
+            subtitle: 'Buy, sell, or rent gear and spaces, or offer music services',
+            onTap: () {
+              Navigator.pushNamed(context, '/marketplace');
+            },
+          ),
           const SizedBox(height: 40),
 
           // Logout Button

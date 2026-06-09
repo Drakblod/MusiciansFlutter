@@ -5,6 +5,7 @@ class GradientScaffold extends StatelessWidget {
   final Widget body;
   final PreferredSizeWidget? appBar;
   final Widget? bottomNavigationBar;
+  final Widget? floatingActionButton;
   final bool resizeToAvoidBottomInset;
 
   const GradientScaffold({
@@ -12,6 +13,7 @@ class GradientScaffold extends StatelessWidget {
     required this.body,
     this.appBar,
     this.bottomNavigationBar,
+    this.floatingActionButton,
     this.resizeToAvoidBottomInset = true,
   });
 
@@ -26,6 +28,7 @@ class GradientScaffold extends StatelessWidget {
         appBar: appBar,
         body: body,
         bottomNavigationBar: bottomNavigationBar,
+        floatingActionButton: floatingActionButton,
         resizeToAvoidBottomInset: resizeToAvoidBottomInset,
       ),
     );

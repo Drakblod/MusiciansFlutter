@@ -1,13 +1,18 @@
 import 'dart:async';
+import 'dart:io' show File;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:image_picker/image_picker.dart';
 import '../models/user_profile.dart';
 import '../models/band.dart';
 import '../models/sub_request.dart';
 import '../models/message.dart';
 import '../models/calendar_event.dart';
 import '../models/agreement.dart';
+import '../models/listing.dart';
 
 class FirebaseService {
   static const String databaseUrl =
@@ -825,4 +830,121 @@ class FirebaseService {
       print("PUSH: ERROR Initializing: $e");
     }
   }
+
+  // ==========================================
+  // 9. Marketplace
+  // ==========================================
+
+  Future<List<String>> uploadListingImagesAsync(String listingId, List<XFile> images) async {
+    List<String> urls = [];
+    for (int i = 0; i < images.length; i++) {
+      try {
+        final image = images[i];
+        final ref = FirebaseStorage.instance
+            .ref()
+            .child('marketplaceImages')
+            .child(listingId)
+            .child('image_${i}_${DateTime.now().millisecondsSinceEpoch}.jpg');
+
+        UploadTask uploadTask;
+        if (kIsWeb) {
+          final bytes = await image.readAsBytes();
+          uploadTask = ref.putData(bytes, SettableMetadata(contentType: 'image/jpeg'));
+        } else {
+          uploadTask = ref.putFile(File(image.path));
+        }
+        final snapshot = await uploadTask;
+        final url = await snapshot.ref.getDownloadURL();
+        urls.add(url);
+      } catch (e) {
+        print("[FirebaseService] Error uploading image: $e");
+      }
+    }
+    return urls;
+  }
+
+  String generateListingId() {
+    return _dbRef('marketplaceListings').push().key!;
+  }
+
+  Future<void> saveListingAsync(Listing listing) async {
+    final key = listing.id ?? _dbRef('marketplaceListings').push().key;
+    if (key != null) {
+      final updated = Listing(
+        id: key,
+        userId: listing.userId ?? currentUserId,
+        title: listing.title,
+        description: listing.description,
+        category: listing.category,
+        listingType: listing.listingType,
+        price: listing.price,
+        city: listing.city,
+        imageUrls: listing.imageUrls,
+        status: listing.status,
+        createdAt: listing.createdAt,
+        updatedAt: listing.updatedAt,
+      );
+      await _dbRef('marketplaceListings/$key').set(updated.toJson());
+    }
+  }
+
+  Future<void> updateListingAsync(Listing listing) async {
+    if (listing.id == null) return;
+    await _dbRef('marketplaceListings/${listing.id}').set(listing.toJson());
+  }
+
+  Future<void> updateListingStatusAsync(String listingId, String status) async {
+    await _dbRef('marketplaceListings/$listingId/status').set(status);
+    await _dbRef('marketplaceListings/$listingId/updatedAt').set(DateTime.now().millisecondsSinceEpoch);
+  }
+
+  Future<List<Listing>> getActiveListingsAsync() async {
+    // Limit to latest 100 listings to optimize queries.
+    final query = _dbRef('marketplaceListings')
+        .orderByChild('createdAt')
+        .limitToLast(100);
+
+    final snapshot = await query.get();
+    final List<Listing> listings = [];
+    if (snapshot.exists && snapshot.value is Map) {
+      (snapshot.value as Map).forEach((k, v) {
+        if (v is Map) {
+          final listing = Listing.fromJson(v, k.toString());
+          if (listing.status == 'active') {
+            listings.add(listing);
+          }
+        }
+      });
+    }
+    listings.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return listings;
+  }
+
+  Future<List<Listing>> getUserListingsAsync(String userId) async {
+    final snapshot = await _dbRef('marketplaceListings').get();
+    final List<Listing> listings = [];
+    if (snapshot.exists && snapshot.value is Map) {
+      (snapshot.value as Map).forEach((k, v) {
+        if (v is Map) {
+          final listing = Listing.fromJson(v, k.toString());
+          if (listing.userId == userId && listing.status != 'deleted') {
+            listings.add(listing);
+          }
+        }
+      });
+    }
+    listings.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return listings;
+  }
+
+  Future<void> reportListingAsync(String listingId, String reportedByUserId, String reason) async {
+    final ref = _dbRef('reportedListings').push();
+    await ref.set({
+      'listingId': listingId,
+      'reportedByUserId': reportedByUserId,
+      'reason': reason,
+      'timestamp': DateTime.now().toUtc().toIso8601String(),
+    });
+  }
 }
+

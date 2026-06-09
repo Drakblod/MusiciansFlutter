@@ -29,6 +29,11 @@ import 'views/receipt_screen.dart';
 import 'views/producer_search_screen.dart';
 import 'views/gig_map_page.dart';
 import 'views/sub_request_details_screen.dart';
+import 'views/marketplace_page.dart';
+import 'views/create_listing_page.dart';
+import 'views/listing_details_page.dart';
+import 'views/my_listings_page.dart';
+import 'models/listing.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -95,8 +100,21 @@ class MyApp extends StatelessWidget {
           '/profile': (context) => const ProfileTabScreen(),
           '/producer-search': (context) => const ProducerSearchScreen(),
           '/gig-map': (context) => const GigMapPage(),
+          '/marketplace': (context) => const MarketplacePage(),
+          '/create-listing': (context) => const CreateListingPage(),
+          '/my-listings': (context) => const MyListingsPage(),
         },
         onGenerateRoute: (settings) {
+          if (settings.name == '/listing-details') {
+            final listing = settings.arguments as Listing;
+            return MaterialPageRoute(
+              builder: (context) => ListingDetailsPage(
+                listing: listing,
+              ),
+              settings: settings,
+            );
+          }
+
           // Dynamic Routing with specific custom arguments
           if (settings.name == '/chat-detail') {
             final args = settings.arguments as Map<String, dynamic>? ?? {};
