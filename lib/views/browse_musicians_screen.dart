@@ -20,8 +20,61 @@ class _BrowseMusiciansScreenState extends State<BrowseMusiciansScreen> {
   List<UserProfile> _allMusicians = [];
   List<UserProfile> _filteredMusicians = [];
   bool _isLoading = true;
+  bool _showAllInstruments = false;
 
-  final List<String> _categories = ['All', 'Electric Guitar', 'Electric Bass', 'Drums', 'Keyboard/Synth', 'Vocalist'];
+  final List<String> _categories = [
+    "All",
+    "BANDLEADER",
+    "PRODUCER",
+    "Vocalist",
+    "Electric Guitar",
+    "Electric Bass",
+    "Drums",
+    "Keyboard/Synth",
+    "Piano",
+    "Acoustic Guitar",
+    "Recorder",
+    "Flute",
+    "Oboe",
+    "Clarinet",
+    "Bassoon",
+    "Soprano Sax",
+    "Alto Sax",
+    "Tenor Sax",
+    "Bari Sax",
+    "Trumpet",
+    "Cornet",
+    "Trombone",
+    "French Horn",
+    "Euphonium",
+    "Tuba",
+    "Violin",
+    "Viola",
+    "Cello",
+    "Contrabass",
+    "Harp",
+    "Harpsichord",
+    "Organ (Hammond)",
+    "Latin Percussion",
+    "Classical Percussion",
+    "Soprano Recorder",
+    "Alto Recorder",
+    "Tenor Recorder",
+    "Bass Recorder",
+    "Piccolo Flute",
+    "Alto Flute",
+    "Bass Flute",
+    "English Horn",
+    "Eb Clarinet",
+    "Alto Clarinet",
+    "Bass Clarinet",
+    "Contra Bassoon",
+    "Piccolo Trumpet",
+    "Alto Trombone",
+    "Viola da Gamba",
+    "Steel Guitar",
+    "Steel Pan"
+  ];
 
   @override
   void initState() {
@@ -163,47 +216,69 @@ class _BrowseMusiciansScreenState extends State<BrowseMusiciansScreen> {
           ),
           const SizedBox(height: 16),
 
-          // Categories chips row
-          SizedBox(
-            height: 38,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              itemCount: _categories.length,
-              itemBuilder: (context, index) {
-                final category = _categories[index];
-                final isSelected = _selectedCategory == category;
-                return Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: ChoiceChip(
-                    label: Text(category),
-                    selected: isSelected,
-                    onSelected: (val) {
-                      if (val) {
-                        setState(() {
-                          _selectedCategory = category;
-                        });
-                        _applyFilters();
-                      }
-                    },
-                    selectedColor: AppTheme.primaryAccent,
-                    backgroundColor: AppTheme.inputBackground,
-                    labelStyle: GoogleFonts.inter(
-                      fontSize: 12,
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                      color: Colors.white,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    side: BorderSide(
-                      color: isSelected ? AppTheme.primaryAccent : const Color(0xFF2E2A4E),
-                    ),
-                  ),
-                );
-              },
+          // Categories chips wrap
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: (_showAllInstruments
+                    ? _categories
+                    : _categories.take(10).toList())
+                .map((category) {
+              final isSelected = _selectedCategory == category;
+              return ChoiceChip(
+                label: Text(category),
+                selected: isSelected,
+                onSelected: (val) {
+                  if (val) {
+                    setState(() {
+                      _selectedCategory = category;
+                    });
+                    _applyFilters();
+                  }
+                },
+                selectedColor: AppTheme.primaryAccent,
+                backgroundColor: AppTheme.inputBackground,
+                labelStyle: GoogleFonts.inter(
+                  fontSize: 12,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                  color: Colors.white,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                side: BorderSide(
+                  color: isSelected ? AppTheme.primaryAccent : const Color(0xFF2E2A4E),
+                ),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 6),
+          TextButton.icon(
+            onPressed: () {
+              setState(() {
+                _showAllInstruments = !_showAllInstruments;
+              });
+            },
+            icon: Icon(
+              _showAllInstruments ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
+              color: AppTheme.primaryAccent,
+              size: 20,
+            ),
+            label: Text(
+              _showAllInstruments ? 'Show Less' : 'Show More',
+              style: GoogleFonts.inter(
+                color: AppTheme.primaryAccent,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            style: TextButton.styleFrom(
+              padding: EdgeInsets.zero,
+              minimumSize: const Size(0, 0),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
 
           // Musicians List
           Expanded(
