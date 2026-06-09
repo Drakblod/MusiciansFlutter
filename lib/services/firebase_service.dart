@@ -899,9 +899,9 @@ class FirebaseService {
   }
 
   Future<List<Listing>> getActiveListingsAsync() async {
-    // Limit to latest 100 listings to optimize queries.
+    // Limit to latest 100 listings by key (chronological push ID) to optimize queries.
     final query = _dbRef('marketplaceListings')
-        .orderByChild('createdAt')
+        .orderByKey()
         .limitToLast(100);
 
     final snapshot = await query.get();
