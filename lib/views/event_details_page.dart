@@ -1,0 +1,783 @@
+import 'dart:async';
+import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
+import '../providers/app_state.dart';
+import '../theme/app_theme.dart';
+import '../models/band_event.dart';
+import '../models/band.dart';
+import '../models/user_profile.dart';
+import '../widgets/gradient_scaffold.dart';
+import '../widgets/custom_top_bar.dart';
+import '../widgets/animated_tap_detector.dart';
+
+class EventDetailsPage extends StatefulWidget {
+  final String bandId;
+  final String eventId;
+  final BandEvent initialEvent;
+
+  const EventDetailsPage({
+    super.key,
+    required this.bandId,
+    required this.eventId,
+    required this.initialEvent,
+  });
+
+  @override
+  State<EventDetailsPage> createState() => _EventDetailsPageState();
+}
+
+class _EventDetailsPageState extends State<EventDetailsPage> {
+  BandEvent? _event;
+  StreamSubscription<BandEvent?>? _eventSubscription;
+  List<BandMember> _members = [];
+  Map<String, UserProfile> _cachedProfiles = {};
+  bool _isLoadingMembers = true;
+  String? _currentUserRole;
+
+  @override
+  void initState() {
+    super.initState();
+    _event = widget.initialEvent;
+    _subscribeToEvent();
+    _loadMembersAndProfiles();
+  }
+
+  @override
+  void dispose() {
+    _eventSubscription?.cancel();
+    super.dispose();
+  }
+
+  void _subscribeToEvent() {
+    final appState = Provider.of<AppState>(context, listen: false);
+    _eventSubscription = appState.firebaseService
+        .subscribeToBandEvent(widget.bandId, widget.eventId)
+        .listen((updatedEvent) {
+      if (updatedEvent != null && mounted) {
+        setState(() {
+          _event = updatedEvent;
+        });
+      }
+    });
+  }
+
+  Future<void> _loadMembersAndProfiles() async {
+    if (!mounted) return;
+    setState(() => _isLoadingMembers = true);
+
+    try {
+      final appState = Provider.of<AppState>(context, listen: false);
+      final members = await appState.firebaseService.getBandMembersAsync(widget.bandId);
+      
+      // Cache profiles in parallel
+      final Map<String, UserProfile> profiles = {};
+      await Future.wait(members.map((m) async {
+        final userId = m.userId;
+        if (userId != null) {
+          final profile = await appState.firebaseService.getUserProfileAsync(userId);
+          if (profile != null) {
+            profiles[userId] = profile;
+          }
+        }
+      }));
+
+      // Determine current user's role
+      final currentUserId = appState.currentUserId;
+      final currentMember = members.firstWhere(
+        (m) => m.userId == currentUserId,
+        orElse: () => BandMember(role: 'Member'),
+      );
+
+      if (mounted) {
+        setState(() {
+          _members = members;
+          _cachedProfiles = profiles;
+          _currentUserRole = currentMember.role;
+          _isLoadingMembers = false;
+        });
+      }
+    } catch (e) {
+      debugPrint("Error loading event member profiles: $e");
+      if (mounted) {
+        setState(() => _isLoadingMembers = false);
+      }
+    }
+  }
+
+  bool get _isAdmin {
+    return _currentUserRole == 'Leader' || _currentUserRole == 'Admin';
+  }
+
+  Widget _getEventIcon(String type) {
+    String emoji = '📅';
+    switch (type) {
+      case 'Rehearsal':
+        emoji = '🎼';
+        break;
+      case 'Concert':
+        emoji = '🎺';
+        break;
+      case 'Gig':
+        emoji = '🎸';
+        break;
+      case 'Recording Session':
+        emoji = '🎙️';
+        break;
+      case 'Meeting':
+        emoji = '👥';
+        break;
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppTheme.primaryAccent.withOpacity(0.15),
+        shape: BoxShape.circle,
+      ),
+      child: Text(
+        emoji,
+        style: const TextStyle(fontSize: 28),
+      ),
+    );
+  }
+
+  void _respond(String status) async {
+    final appState = Provider.of<AppState>(context, listen: false);
+    final userId = appState.currentUserId;
+    if (userId == null || _event == null) return;
+
+    try {
+      await appState.firebaseService.updateEventResponseAsync(
+        widget.bandId,
+        widget.eventId,
+        userId,
+        status,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("RSVP updated to: ${status.toUpperCase()}"),
+          backgroundColor: AppTheme.success,
+          duration: const Duration(seconds: 1),
+        ),
+      );
+    } catch (e) {
+      debugPrint("Error responding to event: $e");
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Failed to update RSVP"),
+          backgroundColor: AppTheme.danger,
+        ),
+      );
+    }
+  }
+
+  void _deleteEvent() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF0F0C20),
+        title: Text(
+          "Delete Event",
+          style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
+        content: Text(
+          "Are you sure you want to permanently delete this event? This cannot be undone.",
+          style: GoogleFonts.inter(color: AppTheme.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("Cancel", style: TextStyle(color: AppTheme.textSecondary)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.danger),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text("Delete", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      final appState = Provider.of<AppState>(context, listen: false);
+      try {
+        await appState.firebaseService.deleteBandEventAsync(widget.bandId, widget.eventId);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Event deleted"), backgroundColor: AppTheme.success),
+          );
+          Navigator.pop(context);
+        }
+      } catch (e) {
+        debugPrint("Error deleting event: $e");
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Failed to delete event"), backgroundColor: AppTheme.danger),
+          );
+        }
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_event == null) {
+      return const GradientScaffold(
+        appBar: CustomTopBar(title: 'Event Details', showBack: true),
+        body: Center(child: CircularProgressIndicator(color: AppTheme.primaryAccent)),
+      );
+    }
+
+    final event = _event!;
+    final appState = Provider.of<AppState>(context);
+    final currentUserId = appState.currentUserId;
+
+    // Parse dates
+    final startLocal = DateTime.tryParse(event.startDateTime)?.toLocal() ?? DateTime.now();
+    final endLocal = DateTime.tryParse(event.endDateTime)?.toLocal() ?? DateTime.now();
+
+    final dateStr = DateFormat('EEEE, MMMM d, yyyy').format(startLocal);
+    final timeStr = '${DateFormat('HH:mm').format(startLocal)} - ${DateFormat('HH:mm').format(endLocal)}';
+
+    // Calculate response counts
+    final attendingList = <String>[];
+    final maybeList = <String>[];
+    final declinedList = <String>[];
+    final noResponseList = <String>[];
+
+    for (var member in _members) {
+      final userId = member.userId;
+      if (userId == null) continue;
+
+      final name = _cachedProfiles[userId]?.displayName ?? _cachedProfiles[userId]?.nickname ?? member.nickname ?? 'Unknown Member';
+      final response = event.responses[userId]?.status;
+
+      if (response == 'attending') {
+        attendingList.add(name);
+      } else if (response == 'maybe') {
+        maybeList.add(name);
+      } else if (response == 'declined') {
+        declinedList.add(name);
+      } else {
+        noResponseList.add(name);
+      }
+    }
+
+    // Musician-specific instrument/voice part calculations
+    final Map<String, int> instrumentAttending = {};
+    final Map<String, int> instrumentTotal = {};
+
+    for (var member in _members) {
+      final userId = member.userId;
+      if (userId == null) continue;
+      final profile = _cachedProfiles[userId];
+      if (profile == null) continue;
+
+      List<String> insts = [];
+      if (profile.instruments.isNotEmpty) {
+        insts = profile.instruments;
+      } else if (profile.userType != null && profile.userType!.isNotEmpty) {
+        insts = [profile.userType!];
+      } else {
+        insts = ['Other'];
+      }
+
+      final responseStatus = event.responses[userId]?.status;
+      final isAttending = responseStatus == 'attending';
+
+      for (var inst in insts) {
+        final normalized = inst.trim();
+        if (normalized.isEmpty) continue;
+
+        instrumentTotal[normalized] = (instrumentTotal[normalized] ?? 0) + 1;
+        if (isAttending) {
+          instrumentAttending[normalized] = (instrumentAttending[normalized] ?? 0) + 1;
+        }
+      }
+    }
+
+    final userResponse = currentUserId != null ? event.responses[currentUserId]?.status : null;
+
+    return GradientScaffold(
+      appBar: CustomTopBar(
+        title: event.title,
+        showBack: true,
+      ),
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.all(20),
+          children: [
+            // 1. Header Information Card
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppTheme.cardBackground,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFF2E2A4E), width: 1.5),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _getEventIcon(event.eventType),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          event.title,
+                          style: GoogleFonts.outfit(
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          event.eventType,
+                          style: GoogleFonts.inter(
+                            fontSize: 13,
+                            color: AppTheme.primaryAccent,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            const Icon(Icons.calendar_today_outlined, size: 14, color: AppTheme.textSecondary),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                dateStr,
+                                style: GoogleFonts.inter(fontSize: 13, color: Colors.white),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            const Icon(Icons.access_time_outlined, size: 14, color: AppTheme.textSecondary),
+                            const SizedBox(width: 8),
+                            Text(
+                              timeStr,
+                              style: GoogleFonts.inter(fontSize: 13, color: Colors.white),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            const Icon(Icons.location_on_outlined, size: 14, color: AppTheme.textSecondary),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                event.location,
+                                style: GoogleFonts.inter(fontSize: 13, color: Colors.white),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // 2. RSVP Buttons (Only if requireResponse is true)
+            if (event.requireResponse) ...[
+              Text(
+                'YOUR RESPONSE',
+                style: GoogleFonts.outfit(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: AppTheme.primaryAccent,
+                  letterSpacing: 1.5,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  // Attending
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => _respond('attending'),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        decoration: BoxDecoration(
+                          color: userResponse == 'attending'
+                              ? AppTheme.success.withOpacity(0.2)
+                              : AppTheme.cardBackground,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: userResponse == 'attending' ? AppTheme.success : const Color(0xFF2E2A4E),
+                            width: 1.5,
+                          ),
+                        ),
+                        child: Column(
+                          children: [
+                            Icon(
+                              Icons.check_circle_outline_rounded,
+                              color: userResponse == 'attending' ? AppTheme.success : AppTheme.textSecondary,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Attending',
+                              style: GoogleFonts.inter(
+                                fontSize: 13,
+                                color: userResponse == 'attending' ? Colors.white : AppTheme.textSecondary,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+
+                  // Maybe
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => _respond('maybe'),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        decoration: BoxDecoration(
+                          color: userResponse == 'maybe'
+                              ? AppTheme.warning.withOpacity(0.2)
+                              : AppTheme.cardBackground,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: userResponse == 'maybe' ? AppTheme.warning : const Color(0xFF2E2A4E),
+                            width: 1.5,
+                          ),
+                        ),
+                        child: Column(
+                          children: [
+                            Icon(
+                              Icons.help_outline_rounded,
+                              color: userResponse == 'maybe' ? AppTheme.warning : AppTheme.textSecondary,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Maybe',
+                              style: GoogleFonts.inter(
+                                fontSize: 13,
+                                color: userResponse == 'maybe' ? Colors.white : AppTheme.textSecondary,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+
+                  // Cannot Attend
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => _respond('declined'),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        decoration: BoxDecoration(
+                          color: userResponse == 'declined'
+                              ? AppTheme.danger.withOpacity(0.2)
+                              : AppTheme.cardBackground,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: userResponse == 'declined' ? AppTheme.danger : const Color(0xFF2E2A4E),
+                            width: 1.5,
+                          ),
+                        ),
+                        child: Column(
+                          children: [
+                            Icon(
+                              Icons.cancel_outlined,
+                              color: userResponse == 'declined' ? AppTheme.danger : AppTheme.textSecondary,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Declined',
+                              style: GoogleFonts.inter(
+                                fontSize: 13,
+                                color: userResponse == 'declined' ? Colors.white : AppTheme.textSecondary,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+            ],
+
+            // 3. Description & Additional Notes Section
+            if (event.description.isNotEmpty || event.additionalNotes.isNotEmpty) ...[
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppTheme.cardBackground,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (event.description.isNotEmpty) ...[
+                      Text(
+                        'DESCRIPTION',
+                        style: GoogleFonts.outfit(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.primaryAccent,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        event.description,
+                        style: GoogleFonts.inter(fontSize: 14, color: Colors.white, height: 1.4),
+                      ),
+                    ],
+                    if (event.description.isNotEmpty && event.additionalNotes.isNotEmpty)
+                      const Divider(height: 24, color: Color(0xFF2E2A4E)),
+                    if (event.additionalNotes.isNotEmpty) ...[
+                      Text(
+                        'ADDITIONAL NOTES',
+                        style: GoogleFonts.outfit(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.primaryAccent,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        event.additionalNotes,
+                        style: GoogleFonts.inter(fontSize: 13, color: AppTheme.textSecondary, height: 1.4),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+            ],
+
+            // 4. Instrument/Voice Part Attendance Overview (Musician Specific)
+            if (event.requireResponse) ...[
+              Text(
+                'INSTRUMENT / VOICE PART SUMMARY',
+                style: GoogleFonts.outfit(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: AppTheme.primaryAccent,
+                  letterSpacing: 1.5,
+                ),
+              ),
+              const SizedBox(height: 10),
+              _isLoadingMembers
+                  ? const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(16.0),
+                        child: CircularProgressIndicator(color: AppTheme.primaryAccent),
+                      ),
+                    )
+                  : instrumentTotal.isEmpty
+                      ? Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: AppTheme.cardBackground,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
+                          ),
+                          child: Center(
+                            child: Text(
+                              "No instruments registered in member profiles.",
+                              style: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 13),
+                            ),
+                          ),
+                        )
+                      : Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: AppTheme.cardBackground,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
+                          ),
+                          child: Column(
+                            children: instrumentTotal.keys.map((inst) {
+                              final total = instrumentTotal[inst] ?? 0;
+                              final attending = instrumentAttending[inst] ?? 0;
+                              final ratio = total > 0 ? (attending / total) : 0.0;
+
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 12),
+                                child: Column(
+                                  children: [
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Text(
+                                          inst,
+                                          style: GoogleFonts.inter(
+                                            fontSize: 14,
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                        Text(
+                                          '$attending/$total responded',
+                                          style: GoogleFonts.inter(
+                                            fontSize: 13,
+                                            color: attending == total
+                                                ? AppTheme.success
+                                                : AppTheme.textSecondary,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 6),
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(4),
+                                      child: LinearProgressIndicator(
+                                        value: ratio,
+                                        minHeight: 6,
+                                        backgroundColor: const Color(0xFF1E1A3A),
+                                        valueColor: AlwaysStoppedAnimation<Color>(
+                                          attending == total
+                                              ? AppTheme.success
+                                              : AppTheme.primaryAccent,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ),
+              const SizedBox(height: 20),
+
+              // 5. Attendance Detail Lists
+              Text(
+                'ATTENDANCE RESPONSES',
+                style: GoogleFonts.outfit(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: AppTheme.primaryAccent,
+                  letterSpacing: 1.5,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Container(
+                decoration: BoxDecoration(
+                  color: AppTheme.cardBackground,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
+                ),
+                child: Column(
+                  children: [
+                    _buildResponseGroup('Attending (${attendingList.length})', attendingList, AppTheme.success),
+                    _buildResponseGroup('Maybe (${maybeList.length})', maybeList, AppTheme.warning),
+                    _buildResponseGroup('Cannot Attend (${declinedList.length})', declinedList, AppTheme.danger),
+                    _buildResponseGroup('No Response (${noResponseList.length})', noResponseList, AppTheme.textSecondary),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 32),
+            ],
+
+            // 6. Delete Event Button for Admins
+            if (_isAdmin)
+              Center(
+                child: AnimatedTapDetector(
+                  onTap: _deleteEvent,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                    decoration: BoxDecoration(
+                      color: Colors.transparent,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppTheme.danger.withOpacity(0.8), width: 1.5),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.delete_outline, color: AppTheme.danger, size: 20),
+                        const SizedBox(width: 8),
+                        Text(
+                          "Delete Event",
+                          style: GoogleFonts.inter(
+                            color: AppTheme.danger,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            const SizedBox(height: 40),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildResponseGroup(String title, List<String> names, Color color) {
+    if (names.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Theme(
+      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+      child: ExpansionTile(
+        title: Text(
+          title,
+          style: GoogleFonts.inter(
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
+        ),
+        iconColor: color,
+        collapsedIconColor: color.withOpacity(0.7),
+        children: names.map((name) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  radius: 12,
+                  backgroundColor: color.withOpacity(0.2),
+                  child: Text(
+                    name.isNotEmpty ? name.substring(0, 1).toUpperCase() : 'M',
+                    style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    name,
+                    style: GoogleFonts.inter(fontSize: 14, color: Colors.white),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+}

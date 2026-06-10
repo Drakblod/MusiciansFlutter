@@ -60,7 +60,7 @@ class Band {
     if (membersRaw is Map) {
       membersRaw.forEach((k, v) {
         if (v is Map) {
-          parsedMembers[k.toString()] = BandMember.fromJson(v);
+          parsedMembers[k.toString()] = BandMember.fromJson(v, k.toString());
         }
       });
     }
@@ -137,13 +137,15 @@ class Band {
 }
 
 class BandMember {
+  final String? userId;
   final String? nickname;
   final String? role;
 
-  BandMember({this.nickname, this.role});
+  BandMember({this.userId, this.nickname, this.role});
 
-  factory BandMember.fromJson(Map<dynamic, dynamic> json) {
+  factory BandMember.fromJson(Map<dynamic, dynamic> json, [String? userId]) {
     return BandMember(
+      userId: userId,
       nickname: json['Nickname']?.toString(),
       role: json['Role']?.toString(),
     );

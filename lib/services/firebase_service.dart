@@ -13,6 +13,7 @@ import '../models/message.dart';
 import '../models/calendar_event.dart';
 import '../models/agreement.dart';
 import '../models/listing.dart';
+import '../models/band_event.dart';
 
 class FirebaseService {
   static const String databaseUrl =
@@ -270,7 +271,7 @@ class FirebaseService {
     if (snapshot.exists && snapshot.value is Map) {
       (snapshot.value as Map).forEach((k, v) {
         if (v is Map) {
-          members.add(BandMember.fromJson(v));
+          members.add(BandMember.fromJson(v, k.toString()));
         }
       });
     }
@@ -945,6 +946,88 @@ class FirebaseService {
       'reason': reason,
       'timestamp': DateTime.now().toUtc().toIso8601String(),
     });
+  }
+
+  // ==========================================
+  // 10. Band Room Events (Spond-like)
+  // ==========================================
+
+  Future<void> saveBandEventAsync(String bandId, BandEvent event) async {
+    final eventId = event.id ?? _dbRef('Bands/$bandId/Events').push().key;
+    if (eventId != null) {
+      final updated = BandEvent(
+        id: eventId,
+        title: event.title,
+        description: event.description,
+        eventType: event.eventType,
+        location: event.location,
+        startDateTime: event.startDateTime,
+        endDateTime: event.endDateTime,
+        additionalNotes: event.additionalNotes,
+        createdBy: event.createdBy.isNotEmpty ? event.createdBy : (currentUserId ?? ''),
+        createdAt: event.createdAt != 0 ? event.createdAt : DateTime.now().millisecondsSinceEpoch,
+        updatedAt: DateTime.now().millisecondsSinceEpoch,
+        requireResponse: event.requireResponse,
+        responses: event.responses,
+      );
+      await _dbRef('Bands/$bandId/Events/$eventId').set(updated.toJson());
+    }
+  }
+
+  Future<List<BandEvent>> getBandEventsListAsync(String bandId) async {
+    final snapshot = await _dbRef('Bands/$bandId/Events').get();
+    final List<BandEvent> list = [];
+    if (snapshot.exists && snapshot.value is Map) {
+      (snapshot.value as Map).forEach((k, v) {
+        if (v is Map) {
+          list.add(BandEvent.fromJson(v, k.toString()));
+        }
+      });
+    }
+    return list;
+  }
+
+  Stream<BandEvent?> subscribeToBandEvent(String bandId, String eventId) {
+    return _dbRef('Bands/$bandId/Events/$eventId').onValue.map((event) {
+      final data = event.snapshot.value;
+      if (data is Map) {
+        return BandEvent.fromJson(data, eventId);
+      }
+      return null;
+    });
+  }
+
+  Stream<List<BandEvent>> subscribeToBandEvents(String bandId) {
+    return _dbRef('Bands/$bandId/Events').onValue.map((event) {
+      final List<BandEvent> list = [];
+      final data = event.snapshot.value;
+      if (data is Map) {
+        data.forEach((k, v) {
+          if (v is Map) {
+            list.add(BandEvent.fromJson(v, k.toString()));
+          }
+        });
+      }
+      return list;
+    });
+  }
+
+  Future<void> updateEventResponseAsync(
+    String bandId,
+    String eventId,
+    String userId,
+    String status,
+  ) async {
+    final timestamp = DateTime.now().toUtc().toIso8601String();
+    await _dbRef('Bands/$bandId/Events/$eventId/Responses/$userId').set({
+      'status': status,
+      'timestamp': timestamp,
+    });
+    await _dbRef('Bands/$bandId/Events/$eventId/updatedAt').set(DateTime.now().millisecondsSinceEpoch);
+  }
+
+  Future<void> deleteBandEventAsync(String bandId, String eventId) async {
+    await _dbRef('Bands/$bandId/Events/$eventId').remove();
   }
 }
 
