@@ -22,6 +22,7 @@ class SubRequest {
   final Map<String, bool> responses;
   final double? latitude;
   final double? longitude;
+  final List<String>? targetUserIds;
 
   SubRequest({
     this.id,
@@ -47,6 +48,7 @@ class SubRequest {
     this.responses = const {},
     this.latitude,
     this.longitude,
+    this.targetUserIds,
   });
 
   factory SubRequest.fromJson(Map<dynamic, dynamic> json, String keyId) {
@@ -64,6 +66,14 @@ class SubRequest {
     double? parsedLng;
     if (latRaw is num) parsedLat = latRaw.toDouble();
     if (lngRaw is num) parsedLng = lngRaw.toDouble();
+
+    final targetUserIdsRaw = json['TargetUserIds'];
+    List<String>? parsedTargetUserIds;
+    if (targetUserIdsRaw is List) {
+      parsedTargetUserIds = targetUserIdsRaw.map((e) => e.toString()).toList();
+    } else if (targetUserIdsRaw is Map) {
+      parsedTargetUserIds = targetUserIdsRaw.values.map((e) => e.toString()).toList();
+    }
 
     return SubRequest(
       id: keyId,
@@ -89,6 +99,7 @@ class SubRequest {
       responses: parsedResponses,
       latitude: parsedLat,
       longitude: parsedLng,
+      targetUserIds: parsedTargetUserIds,
     );
   }
 
@@ -116,6 +127,7 @@ class SubRequest {
       'Responses': responses,
       'Latitude': latitude,
       'Longitude': longitude,
+      'TargetUserIds': targetUserIds,
     };
   }
 }

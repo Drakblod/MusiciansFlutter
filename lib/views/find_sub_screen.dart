@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../providers/app_state.dart';
 import '../theme/app_theme.dart';
 import '../models/sub_request.dart';
+import '../models/user_profile.dart';
 import '../widgets/custom_top_bar.dart';
 import '../widgets/gradient_scaffold.dart';
 import '../widgets/animated_tap_detector.dart';
@@ -27,6 +28,59 @@ class _FindSubScreenState extends State<FindSubScreen> {
   TimeOfDay _endTime = const TimeOfDay(hour: 21, minute: 0);
   bool _isPaid = true;
   bool _isSubmitting = false;
+
+  bool _sendToFavoritesOnly = false;
+  List<UserProfile> _favorites = [];
+  List<UserProfile> _filteredFavorites = [];
+  Map<String, bool> _selectedFavorites = {};
+  bool _isLoadingFavorites = false;
+
+  void _updateFilteredFavorites() {
+    final selectedInstrumentLower = _selectedInstrument.toLowerCase();
+    _filteredFavorites = _favorites.where((m) {
+      final matchesInstrument = (m.userType?.toLowerCase() == selectedInstrumentLower) ||
+          m.instruments.any((i) => i.toLowerCase() == selectedInstrumentLower);
+      return matchesInstrument;
+    }).toList();
+    
+    _selectedFavorites.clear();
+    for (final f in _filteredFavorites) {
+      if (f.userId != null) {
+        _selectedFavorites[f.userId!] = true;
+      }
+    }
+  }
+
+  Future<void> _loadFavorites() async {
+    setState(() {
+      _isLoadingFavorites = true;
+    });
+    try {
+      final appState = Provider.of<AppState>(context, listen: false);
+      final favIds = await appState.firebaseService.getFavoriteUserIdsAsync();
+      
+      final List<UserProfile> loaded = [];
+      for (final id in favIds) {
+        final profile = await appState.firebaseService.getUserProfileAsync(id);
+        if (profile != null) {
+          loaded.add(profile);
+        }
+      }
+      
+      setState(() {
+        _favorites = loaded;
+        _updateFilteredFavorites();
+      });
+    } catch (e) {
+      debugPrint("Error loading favorites: $e");
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingFavorites = false;
+        });
+      }
+    }
+  }
 
   @override
   void initState() {
@@ -175,6 +229,43 @@ class _FindSubScreenState extends State<FindSubScreen> {
       final appState = Provider.of<AppState>(context, listen: false);
       final profile = appState.currentUserProfile;
 
+      if (_sendToFavoritesOnly) {
+        if (_favorites.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('You have no favorited musicians. Go to the Browse tab to add favorites or turn off the Favorites switch.'),
+              backgroundColor: AppTheme.danger,
+            ),
+          );
+          setState(() => _isSubmitting = false);
+          return;
+        }
+        if (_filteredFavorites.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('None of your favorites play $_selectedInstrument. Add matching favorites or turn off the Favorites switch.'),
+              backgroundColor: AppTheme.danger,
+            ),
+          );
+          setState(() => _isSubmitting = false);
+          return;
+        }
+        final checkedUserIds = _selectedFavorites.entries
+            .where((e) => e.value)
+            .map((e) => e.key)
+            .toList();
+        if (checkedUserIds.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Please check at least one favorite musician to send the request to.'),
+              backgroundColor: AppTheme.danger,
+            ),
+          );
+          setState(() => _isSubmitting = false);
+          return;
+        }
+      }
+
       final resolvedLoc = _locationController.text.trim().isNotEmpty
           ? _locationController.text.trim()
           : (profile?.location ?? 'Stockholm, Sweden');
@@ -195,6 +286,12 @@ class _FindSubScreenState extends State<FindSubScreen> {
         rehearsalDayOfWeek: DateFormat('EEEE').format(_selectedDate),
         latitude: coords?['latitude'],
         longitude: coords?['longitude'],
+        targetUserIds: _sendToFavoritesOnly
+            ? _selectedFavorites.entries
+                .where((e) => e.value)
+                .map((e) => e.key)
+                .toList()
+            : null,
       );
 
       await appState.firebaseService.saveSubRequestAsync(request);
@@ -569,6 +666,9 @@ class _FindSubScreenState extends State<FindSubScreen> {
                     if (newValue != null) {
                       setState(() {
                         _selectedInstrument = newValue;
+                        if (_sendToFavoritesOnly) {
+                          _updateFilteredFavorites();
+                        }
                       });
                     }
                   },
@@ -788,6 +888,194 @@ class _FindSubScreenState extends State<FindSubScreen> {
                 ),
               ],
             ),
+            const SizedBox(height: 16),
+            const Divider(color: Color(0xFF2E2A4E), height: 32),
+
+            // Send request to Favorites only switch
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Send request to Favorites only',
+                        style: GoogleFonts.inter(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Only selected favorites will see this request',
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          color: AppTheme.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Switch(
+                  value: _sendToFavoritesOnly,
+                  onChanged: (val) {
+                    setState(() {
+                      _sendToFavoritesOnly = val;
+                      if (_sendToFavoritesOnly) {
+                        _loadFavorites();
+                      }
+                    });
+                  },
+                  activeColor: AppTheme.primaryAccent,
+                  activeTrackColor: AppTheme.primaryAccent.withOpacity(0.3),
+                  inactiveThumbColor: AppTheme.textSecondary,
+                  inactiveTrackColor: Colors.grey.withOpacity(0.2),
+                ),
+              ],
+            ),
+
+            if (_sendToFavoritesOnly) ...[
+              const SizedBox(height: 16),
+              if (_isLoadingFavorites)
+                const Center(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(vertical: 20),
+                    child: CircularProgressIndicator(color: AppTheme.primaryAccent),
+                  ),
+                )
+              else if (_favorites.isEmpty)
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppTheme.danger.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppTheme.danger.withOpacity(0.3)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.warning_amber_rounded, color: AppTheme.danger),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'You have no favorited musicians. Go to the Browse tab to add favorites, or turn off this switch.',
+                          style: GoogleFonts.inter(color: Colors.white, fontSize: 13),
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else if (_filteredFavorites.isEmpty)
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppTheme.warning.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppTheme.warning.withOpacity(0.3)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.info_outline_rounded, color: AppTheme.warning),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'None of your favorites play $_selectedInstrument. Add matching favorites or turn off this switch.',
+                          style: GoogleFonts.inter(color: Colors.white, fontSize: 13),
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else ...[
+                Text(
+                  'SELECT RECIPIENTS',
+                  style: GoogleFonts.outfit(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.textSecondary,
+                    letterSpacing: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                ListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: _filteredFavorites.length,
+                  itemBuilder: (context, index) {
+                    final musician = _filteredFavorites[index];
+                    final userId = musician.userId ?? '';
+                    final isChecked = _selectedFavorites[userId] ?? false;
+
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: AppTheme.cardBackground,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: isChecked ? AppTheme.primaryAccent.withOpacity(0.5) : const Color(0xFF231F45),
+                          width: 1,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 20,
+                            backgroundColor: AppTheme.primaryAccent.withOpacity(0.2),
+                            backgroundImage: musician.profilePictureUrl != null &&
+                                    musician.profilePictureUrl!.isNotEmpty
+                                ? NetworkImage(musician.profilePictureUrl!)
+                                : null,
+                            child: musician.profilePictureUrl == null ||
+                                    musician.profilePictureUrl!.isEmpty
+                                ? Text(
+                                    (musician.displayName ?? 'U').substring(0, 1).toUpperCase(),
+                                    style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                                  )
+                                : null,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  musician.displayName ?? 'Unknown',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                                if (musician.location != null)
+                                  Text(
+                                    musician.location!,
+                                    style: GoogleFonts.inter(
+                                      fontSize: 11,
+                                      color: AppTheme.textSecondary,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                          Checkbox(
+                            value: isChecked,
+                            onChanged: (val) {
+                              setState(() {
+                                _selectedFavorites[userId] = val ?? false;
+                              });
+                            },
+                            activeColor: AppTheme.primaryAccent,
+                            checkColor: Colors.white,
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ],
             const SizedBox(height: 30),
 
             // Submit Button

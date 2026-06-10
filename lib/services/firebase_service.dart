@@ -185,6 +185,15 @@ class FirebaseService {
     }
   }
 
+  Future<List<String>> getFavoriteUserIdsAsync() async {
+    final selfId = currentUserId;
+    if (selfId == null) return [];
+    final snapshot = await _dbRef('users/$selfId/Favorites').get();
+    if (!snapshot.exists || snapshot.value is! Map) return [];
+    final map = snapshot.value as Map;
+    return map.keys.map((k) => k.toString()).toList();
+  }
+
   // ==========================================
   // 4. Bands
   // ==========================================
@@ -303,6 +312,7 @@ class FirebaseService {
         rehearsalDayOfWeek: request.rehearsalDayOfWeek,
         latitude: request.latitude,
         longitude: request.longitude,
+        targetUserIds: request.targetUserIds,
       );
       
       // Save in root SubRequests
@@ -318,10 +328,19 @@ class FirebaseService {
   Future<List<SubRequest>> getAllSubRequestsAsync() async {
     final snapshot = await _dbRef('SubRequests').get();
     final List<SubRequest> requests = [];
+    final selfId = currentUserId;
     if (snapshot.exists && snapshot.value is Map) {
       (snapshot.value as Map).forEach((k, v) {
         if (v is Map) {
-          requests.add(SubRequest.fromJson(v, k.toString()));
+          final req = SubRequest.fromJson(v, k.toString());
+          final targets = req.targetUserIds;
+          if (targets == null || targets.isEmpty) {
+            requests.add(req);
+          } else {
+            if (selfId != null && (targets.contains(selfId) || req.creatorUserId == selfId)) {
+              requests.add(req);
+            }
+          }
         }
       });
     }
@@ -331,10 +350,19 @@ class FirebaseService {
   Future<List<SubRequest>> getUserSubRequestsAsync(String userId) async {
     final snapshot = await _dbRef('users/$userId/SubRequests').get();
     final List<SubRequest> requests = [];
+    final selfId = currentUserId;
     if (snapshot.exists && snapshot.value is Map) {
       (snapshot.value as Map).forEach((k, v) {
         if (v is Map) {
-          requests.add(SubRequest.fromJson(v, k.toString()));
+          final req = SubRequest.fromJson(v, k.toString());
+          final targets = req.targetUserIds;
+          if (targets == null || targets.isEmpty) {
+            requests.add(req);
+          } else {
+            if (selfId != null && (targets.contains(selfId) || req.creatorUserId == selfId)) {
+              requests.add(req);
+            }
+          }
         }
       });
     }
