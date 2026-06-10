@@ -1029,5 +1029,22 @@ class FirebaseService {
   Future<void> deleteBandEventAsync(String bandId, String eventId) async {
     await _dbRef('Bands/$bandId/Events/$eventId').remove();
   }
+
+  Future<void> addBandMemberAsync(
+    String bandId,
+    String userId,
+    String role,
+    String nickname,
+  ) async {
+    await _dbRef('Bands/$bandId/Members_band/$userId').set({
+      'Nickname': nickname,
+      'Role': role,
+    });
+    final band = await getBandInfoAsync(bandId);
+    if (band != null) {
+      await _dbRef('users/$userId/Bands/$bandId').set(band.toJson());
+    }
+    await _dbRef('bandconversations/$bandId/members/$userId').set(true);
+  }
 }
 

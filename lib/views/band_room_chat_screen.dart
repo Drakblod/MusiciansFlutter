@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../providers/app_state.dart';
 import '../theme/app_theme.dart';
 import '../models/band.dart';
+import '../models/user_profile.dart';
 import '../models/message.dart';
 import '../models/band_event.dart';
 import '../widgets/animated_tap_detector.dart';
@@ -894,59 +895,154 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
   }
 
   Widget _buildMembersTab() {
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: _members.length,
-      itemBuilder: (context, index) {
-        final member = _members[index];
-        return Container(
-          margin: const EdgeInsets.only(bottom: 12),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: BoxDecoration(
-            color: AppTheme.cardBackground,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: const Color(0xFF231F45), width: 1),
-          ),
-          child: Row(
-            children: [
-              CircleAvatar(
-                radius: 20,
-                backgroundColor: AppTheme.primaryAccent.withOpacity(0.3),
-                child: Text(
-                  (member.nickname ?? 'M').substring(0, 1).toUpperCase(),
-                  style: const TextStyle(color: Colors.white),
+    final appState = Provider.of<AppState>(context, listen: false);
+    final bandId = appState.activeBandId;
+    final selfId = appState.currentUserId;
+
+    final currentMember = _members.firstWhere(
+      (m) => m.userId == selfId,
+      orElse: () => BandMember(role: 'Member'),
+    );
+    final isLeaderOrAdmin = currentMember.role == 'Leader' || currentMember.role == 'Admin';
+
+    return Column(
+      children: [
+        if (isLeaderOrAdmin && bandId != null)
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: AnimatedTapDetector(
+              onTap: () => _showAddMemberDialog(bandId),
+              child: Container(
+                height: 50,
+                decoration: BoxDecoration(
+                  gradient: AppTheme.primaryGradient,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Center(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.person_add_alt_1_outlined, color: Colors.white),
+                      SizedBox(width: 8),
+                      Text(
+                        "Add Band Member",
+                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+            ),
+          ),
+        Expanded(
+          child: ListView.builder(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            itemCount: _members.length,
+            itemBuilder: (context, index) {
+              final member = _members[index];
+              return Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: AppTheme.cardBackground,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFF231F45), width: 1),
+                ),
+                child: Row(
                   children: [
-                    Text(
-                      member.nickname ?? 'Unknown Member',
-                      style: GoogleFonts.outfit(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold),
+                    CircleAvatar(
+                      radius: 20,
+                      backgroundColor: AppTheme.primaryAccent.withOpacity(0.3),
+                      child: Text(
+                        (member.nickname ?? 'M').substring(0, 1).toUpperCase(),
+                        style: const TextStyle(color: Colors.white),
+                      ),
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      member.role ?? 'Member',
-                      style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            member.nickname ?? 'Unknown Member',
+                            style: GoogleFonts.outfit(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            member.role ?? 'Member',
+                            style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
+                          ),
+                        ],
+                      ),
                     ),
+                    if (member.role == 'Leader')
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: AppTheme.primaryAccent.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          'Leader',
+                          style: GoogleFonts.inter(fontSize: 10, color: AppTheme.primaryAccent, fontWeight: FontWeight.bold),
+                        ),
+                      ),
                   ],
                 ),
-              ),
-              if (member.role == 'Leader')
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: AppTheme.primaryAccent.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    'Leader',
-                    style: GoogleFonts.inter(fontSize: 10, color: AppTheme.primaryAccent, fontWeight: FontWeight.bold),
-                  ),
-                ),
-            ],
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _showAddMemberDialog(String bandId) async {
+    final appState = Provider.of<AppState>(context, listen: false);
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(color: AppTheme.primaryAccent),
+      ),
+    );
+
+    List<UserProfile> allUsers = [];
+    try {
+      allUsers = await appState.firebaseService.getAllUsersAsync();
+    } catch (e) {
+      debugPrint("Error fetching users: $e");
+    } finally {
+      if (mounted) {
+        Navigator.pop(context); // Dismiss loader
+      }
+    }
+
+    if (!mounted) return;
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          child: Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFF0F0C20).withOpacity(0.95),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: const Color(0xFF2E2A4E), width: 1.5),
+            ),
+            padding: const EdgeInsets.all(20),
+            width: MediaQuery.of(context).size.width * 0.9,
+            height: MediaQuery.of(context).size.height * 0.6,
+            child: _AddMemberDialogContent(
+              bandId: bandId,
+              allUsers: allUsers,
+              existingMembers: _members,
+              onMemberAdded: () {
+                _initBand(bandId);
+              },
+            ),
           ),
         );
       },
@@ -1199,6 +1295,180 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                     const SizedBox(height: 24),
                   ],
                 ),
+        ),
+      ],
+    );
+  }
+}
+
+class _AddMemberDialogContent extends StatefulWidget {
+  final String bandId;
+  final List<UserProfile> allUsers;
+  final List<BandMember> existingMembers;
+  final VoidCallback onMemberAdded;
+
+  const _AddMemberDialogContent({
+    required this.bandId,
+    required this.allUsers,
+    required this.existingMembers,
+    required this.onMemberAdded,
+  });
+
+  @override
+  State<_AddMemberDialogContent> createState() => _AddMemberDialogContentState();
+}
+
+class _AddMemberDialogContentState extends State<_AddMemberDialogContent> {
+  final _searchController = TextEditingController();
+  String _searchQuery = '';
+  bool _isAdding = false;
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final appState = Provider.of<AppState>(context, listen: false);
+    final existingUserIds = widget.existingMembers.map((m) => m.userId).toSet();
+
+    final filteredUsers = widget.allUsers.where((user) {
+      if (user.userId == null || existingUserIds.contains(user.userId)) {
+        return false;
+      }
+      final name = (user.displayName ?? user.nickname ?? '').toLowerCase();
+      return name.contains(_searchQuery.toLowerCase());
+    }).toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          "Add Band Member",
+          style: GoogleFonts.outfit(
+            fontSize: 18,
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _searchController,
+          style: const TextStyle(color: Colors.white),
+          decoration: InputDecoration(
+            hintText: "Search by name...",
+            prefixIcon: const Icon(Icons.search, color: AppTheme.textSecondary),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            fillColor: const Color(0xFF141029),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
+          ),
+          onChanged: (val) {
+            setState(() {
+              _searchQuery = val;
+            });
+          },
+        ),
+        const SizedBox(height: 16),
+        Expanded(
+          child: _isAdding
+              ? const Center(child: CircularProgressIndicator(color: AppTheme.primaryAccent))
+              : filteredUsers.isEmpty
+                  ? Center(
+                      child: Text(
+                        _searchQuery.isEmpty ? "No other users found." : "No matching users found.",
+                        style: const TextStyle(color: AppTheme.textSecondary),
+                      ),
+                    )
+                  : ListView.builder(
+                      itemCount: filteredUsers.length,
+                      itemBuilder: (context, index) {
+                        final user = filteredUsers[index];
+                        final name = user.displayName ?? user.nickname ?? 'Unknown';
+
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: AppTheme.cardBackground,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            children: [
+                              CircleAvatar(
+                                radius: 16,
+                                backgroundColor: AppTheme.primaryAccent.withOpacity(0.2),
+                                child: Text(
+                                  name.substring(0, 1).toUpperCase(),
+                                  style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      name,
+                                      style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
+                                    ),
+                                    if (user.instruments.isNotEmpty)
+                                      Text(
+                                        user.instruments.join(', '),
+                                        style: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 11),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                  ],
+                                ),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.add_circle, color: AppTheme.primaryAccent, size: 24),
+                                onPressed: () async {
+                                  setState(() => _isAdding = true);
+                                  try {
+                                    await appState.firebaseService.addBandMemberAsync(
+                                      widget.bandId,
+                                      user.userId!,
+                                      'Member',
+                                      user.nickname ?? name,
+                                    );
+                                    widget.onMemberAdded();
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text("$name added to the band!"),
+                                          backgroundColor: AppTheme.success,
+                                        ),
+                                      );
+                                      Navigator.pop(context); // Close dialog
+                                    }
+                                  } catch (e) {
+                                    debugPrint("Error adding band member: $e");
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text("Failed to add $name: $e"),
+                                          backgroundColor: AppTheme.danger,
+                                        ),
+                                      );
+                                    }
+                                  } finally {
+                                    if (mounted) {
+                                      setState(() => _isAdding = false);
+                                    }
+                                  }
+                                },
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
         ),
       ],
     );
