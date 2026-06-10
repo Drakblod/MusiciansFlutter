@@ -67,13 +67,14 @@ exports.onBandEventCreated = functions.database
         },
         android: {
           notification: {
-            sound: 'default',
+            sound: 'guitarsound',
+            channelId: 'event_notifications',
           },
         },
         apns: {
           payload: {
             aps: {
-              sound: 'default',
+              sound: 'guitarsound.caf',
             },
           },
         },
