@@ -95,6 +95,7 @@ class MyApp extends StatelessWidget {
           '/find-sub': (context) => const FindSubScreen(),
           '/create-band': (context) => const CreateBandScreen(),
           '/browse-musicians': (context) => const BrowseMusiciansScreen(),
+          '/favorites': (context) => const BrowseMusiciansScreen(favoritesOnly: true),
           '/find-gigs': (context) => const FindGigsScreen(),
           '/band-room': (context) => const BandRoomChatScreen(),
           '/profile': (context) => const ProfileTabScreen(),

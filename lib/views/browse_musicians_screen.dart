@@ -8,7 +8,9 @@ import '../widgets/custom_top_bar.dart';
 import '../widgets/gradient_scaffold.dart';
 
 class BrowseMusiciansScreen extends StatefulWidget {
-  const BrowseMusiciansScreen({super.key});
+  final bool favoritesOnly;
+
+  const BrowseMusiciansScreen({super.key, this.favoritesOnly = false});
 
   @override
   State<BrowseMusiciansScreen> createState() => _BrowseMusiciansScreenState();
@@ -94,14 +96,27 @@ class _BrowseMusiciansScreenState extends State<BrowseMusiciansScreen> {
     setState(() => _isLoading = true);
     try {
       final appState = Provider.of<AppState>(context, listen: false);
-      final users = await appState.firebaseService.getAllUsersAsync();
+      
+      List<UserProfile> users;
+      if (widget.favoritesOnly) {
+        final favIds = await appState.firebaseService.getFavoriteUserIdsAsync();
+        users = [];
+        for (final id in favIds) {
+          final profile = await appState.firebaseService.getUserProfileAsync(id);
+          if (profile != null) {
+            users.add(profile);
+          }
+        }
+      } else {
+        users = await appState.firebaseService.getAllUsersAsync();
+      }
       
       // Filter out the current user themselves
       final selfId = appState.currentUserId;
       _allMusicians = users.where((u) => u.userId != selfId).toList();
 
-      // Seed mock musicians if the database is empty
-      if (_allMusicians.isEmpty) {
+      // Seed mock musicians if the database is empty and we are NOT in favoritesOnly mode
+      if (_allMusicians.isEmpty && !widget.favoritesOnly) {
         _allMusicians = _getMockMusicians();
       }
       
@@ -185,8 +200,8 @@ class _BrowseMusiciansScreenState extends State<BrowseMusiciansScreen> {
   @override
   Widget build(BuildContext context) {
     return GradientScaffold(
-      appBar: const CustomTopBar(
-        title: 'Browse Musicians',
+      appBar: CustomTopBar(
+        title: widget.favoritesOnly ? 'My Favorites' : 'Browse Musicians',
         showBack: true,
       ),
       body: SafeArea(
@@ -197,7 +212,7 @@ class _BrowseMusiciansScreenState extends State<BrowseMusiciansScreen> {
             children: [
           const SizedBox(height: 10),
           Text(
-            'BROWSE MUSICIANS',
+            widget.favoritesOnly ? 'MY FAVORITES' : 'BROWSE MUSICIANS',
             style: GoogleFonts.outfit(
               fontSize: 26,
               fontWeight: FontWeight.bold,

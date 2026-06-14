@@ -44,9 +44,9 @@ class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
                   Expanded(
                     child: _buildProfileOrBack(context, appState, canPop),
                   ),
-                  // Column 1: Calendar Icon
+                  // Column 1: Favorites Icon
                   Expanded(
-                    child: _buildCalendar(context, appState),
+                    child: _buildFavorites(context, appState),
                   ),
                   // Column 2: Home Logo
                   Expanded(
@@ -113,23 +113,14 @@ class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
     }
   }
 
-  Widget _buildCalendar(BuildContext context, AppState appState) {
+  Widget _buildFavorites(BuildContext context, AppState appState) {
     return AnimatedTapDetector(
       onTap: () {
-        if (appState.activeBandId != null) {
-          Navigator.pushNamed(context, '/calendar', arguments: appState.activeBandId);
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Please select a Band Room to view the Calendar.'),
-              backgroundColor: AppTheme.primaryAccent,
-            ),
-          );
-        }
+        Navigator.pushNamed(context, '/favorites');
       },
       child: const Center(
         child: Icon(
-          Icons.calendar_month_outlined,
+          Icons.star_border_rounded,
           color: Colors.white,
           size: 24,
         ),
