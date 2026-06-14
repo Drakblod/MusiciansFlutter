@@ -6,6 +6,7 @@ import '../providers/app_state.dart';
 import '../theme/app_theme.dart';
 import '../models/sub_request.dart';
 import '../models/user_profile.dart';
+import '../models/band.dart';
 import '../widgets/custom_top_bar.dart';
 import '../widgets/gradient_scaffold.dart';
 import '../widgets/animated_tap_detector.dart';
@@ -82,6 +83,49 @@ class _FindSubScreenState extends State<FindSubScreen> {
     }
   }
 
+  TimeOfDay _parseTime(String? timeStr, TimeOfDay defaultTime) {
+    if (timeStr == null || timeStr.isEmpty) return defaultTime;
+    try {
+      final parts = timeStr.split(':');
+      if (parts.length == 2) {
+        final hour = int.parse(parts[0]);
+        final minute = int.parse(parts[1]);
+        return TimeOfDay(hour: hour, minute: minute);
+      }
+    } catch (e) {
+      debugPrint("Error parsing time string $timeStr: $e");
+    }
+    return defaultTime;
+  }
+
+  Future<void> _loadBandInfo() async {
+    final appState = Provider.of<AppState>(context, listen: false);
+    final bandId = appState.activeBandId;
+    if (bandId != null) {
+      try {
+        final Band? band = await appState.firebaseService.getBandInfoAsync(bandId);
+        if (band != null && mounted) {
+          setState(() {
+            if (band.rehearsalLocation != null && band.rehearsalLocation!.isNotEmpty) {
+              _locationController.text = band.rehearsalLocation!;
+            } else if (band.location != null && band.location!.isNotEmpty) {
+              _locationController.text = band.location!;
+            }
+
+            if (band.rehearsalStartTime != null && band.rehearsalStartTime!.isNotEmpty) {
+              _startTime = _parseTime(band.rehearsalStartTime, _startTime);
+            }
+            if (band.rehearsalEndTime != null && band.rehearsalEndTime!.isNotEmpty) {
+              _endTime = _parseTime(band.rehearsalEndTime, _endTime);
+            }
+          });
+        }
+      } catch (e) {
+        debugPrint("Error loading band info: $e");
+      }
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -92,6 +136,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
       } else {
         _locationController.text = 'Stockholm, Sweden';
       }
+      _loadBandInfo();
     });
   }
 
