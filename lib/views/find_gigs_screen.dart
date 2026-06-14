@@ -21,11 +21,12 @@ class _FindGigsScreenState extends State<FindGigsScreen>
   late TabController _tabController;
   final Set<String> _savedGigIds = {};
   List<SubRequest> _liveGigs = [];
+  List<SubRequest> _inviteGigs = [];
   bool _isLoading = true;
 
   @override
   void initState() {
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
     super.initState();
     _loadSubRequests();
   }
@@ -41,11 +42,12 @@ class _FindGigsScreenState extends State<FindGigsScreen>
     try {
       final appState = Provider.of<AppState>(context, listen: false);
       final list = await appState.firebaseService.getAllSubRequestsAsync();
+      final currentUserId = appState.currentUserId;
       
       final userProfile = appState.currentUserProfile;
       final userInstruments = userProfile?.instruments ?? [];
 
-      final filtered = list.where((gig) {
+      final filteredUpcoming = list.where((gig) {
         // 1. Filter out corrupt / un-named / empty gigs
         if (gig.bandName == null || gig.bandName!.trim().isEmpty) return false;
         if (gig.voicePart == null || gig.voicePart!.trim().isEmpty) return false;
@@ -72,8 +74,23 @@ class _FindGigsScreenState extends State<FindGigsScreen>
         return matches;
       }).toList();
 
+      final filteredInvites = list.where((gig) {
+        if (gig.bandName == null || gig.bandName!.trim().isEmpty) return false;
+        if (gig.date == null || gig.date!.trim().isEmpty) return false;
+        
+        final gigDate = DateTime.tryParse(gig.date!);
+        if (gigDate == null) return false;
+        final now = DateTime.now();
+        final today = DateTime(now.year, now.month, now.day);
+        if (gigDate.isBefore(today)) return false;
+
+        final targets = gig.targetUserIds;
+        return targets != null && currentUserId != null && targets.contains(currentUserId);
+      }).toList();
+
       setState(() {
-        _liveGigs = filtered;
+        _liveGigs = filteredUpcoming;
+        _inviteGigs = filteredInvites;
       });
     } catch (e) {
       debugPrint("Error fetching sub requests: $e");
@@ -377,6 +394,7 @@ class _FindGigsScreenState extends State<FindGigsScreen>
             labelStyle: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 14),
             tabs: const [
               Tab(text: 'Upcoming'),
+              Tab(text: 'Invites'),
               Tab(text: 'Saved'),
             ],
           ),
@@ -390,6 +408,7 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                     controller: _tabController,
                     children: [
                       _buildGigsList(_liveGigs),
+                      _buildGigsList(_inviteGigs),
                       _buildGigsList(
                         _liveGigs.where((g) => _savedGigIds.contains(g.id ?? g.subRequestId)).toList(),
                       ),
@@ -404,6 +423,9 @@ class _FindGigsScreenState extends State<FindGigsScreen>
 }
 
   Widget _buildGigsList(List<SubRequest> gigList) {
+    final appState = Provider.of<AppState>(context, listen: false);
+    final currentUserId = appState.currentUserId;
+
     if (gigList.isEmpty) {
       return Center(
         child: Text(
@@ -570,6 +592,37 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                                   ),
                                 ),
                               ),
+
+                            // Direct Invite Tag
+                            if (gig.targetUserIds != null &&
+                                currentUserId != null &&
+                                gig.targetUserIds!.contains(currentUserId)) ...[
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                decoration: BoxDecoration(
+                                  gradient: const LinearGradient(
+                                    colors: [Color(0xFFFFD700), Color(0xFFFFA500)],
+                                  ),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(Icons.star_rounded, color: Colors.white, size: 10),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      'Direct Invite',
+                                      style: GoogleFonts.inter(
+                                        fontSize: 10,
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ],
                         ),
                       ],
