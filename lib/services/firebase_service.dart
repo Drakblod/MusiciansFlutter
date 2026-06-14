@@ -274,6 +274,35 @@ class FirebaseService {
     await _dbRef('bandconversations/$bandNameKey/members/$userId').set(true);
   }
 
+  Future<void> updateBandAsync(String bandId, Band band) async {
+    final updateData = {
+      'Name': band.name,
+      'EnsembleType': band.ensembleType,
+      'Genres': band.genres,
+      'Style_band': band.styleBand,
+      'Level': band.level,
+      'Location': band.location,
+      'RehearsalLocation': band.rehearsalLocation,
+      'RehearsalDayOfWeek': band.rehearsalDayOfWeek,
+      'RehearsalStartTime': band.rehearsalStartTime,
+      'RehearsalEndTime': band.rehearsalEndTime,
+      'About': band.about,
+      'Description': band.description,
+    };
+
+    // 1. Update root band reference
+    await _dbRef('Bands/$bandId').update(updateData);
+
+    // 2. Sync updates to user-specific band lists for all members
+    final members = await getBandMembersAsync(bandId);
+    for (final member in members) {
+      final userId = member.userId;
+      if (userId != null) {
+        await _dbRef('users/$userId/Bands/$bandId').update(updateData);
+      }
+    }
+  }
+
   Future<List<BandMember>> getBandMembersAsync(String bandId) async {
     final snapshot = await _dbRef('Bands/$bandId/Members_band').get();
     final List<BandMember> members = [];

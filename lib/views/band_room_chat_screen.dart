@@ -14,6 +14,7 @@ import '../widgets/custom_top_bar.dart';
 import '../widgets/gradient_scaffold.dart';
 import 'create_event_page.dart';
 import 'event_details_page.dart';
+import 'edit_band_info_screen.dart';
 
 class BandRoomChatScreen extends StatefulWidget {
   const BandRoomChatScreen({super.key});
@@ -148,6 +149,108 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
         curve: Curves.easeOut,
       );
     }
+  }
+
+  void _showLeaderSettingsSheet(BuildContext context, String bandId) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFF0F0C20).withOpacity(0.95),
+            borderRadius: const BorderRadius.only(
+              topLeft: Radius.circular(24),
+              topRight: Radius.circular(24),
+            ),
+            border: const Border(
+              top: BorderSide(color: Color(0xFF2E2A4E), width: 1.5),
+            ),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+          child: SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.white24,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  'Band Room Settings',
+                  style: GoogleFonts.outfit(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                
+                // Edit Band Info option
+                ListTile(
+                  leading: const Icon(Icons.edit_outlined, color: AppTheme.primaryAccent),
+                  title: Text(
+                    'Edit Band Info',
+                    style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w600),
+                  ),
+                  subtitle: Text(
+                    'Change band name, rehearsal times, details',
+                    style: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 12),
+                  ),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  onTap: () async {
+                    Navigator.pop(context); // Close bottom sheet
+                    if (_activeBand != null) {
+                      final updated = await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => EditBandInfoScreen(band: _activeBand!),
+                        ),
+                      );
+                      if (updated == true) {
+                        _initBand(bandId); // reload updated details in band room
+                      }
+                    }
+                  },
+                ),
+                const Divider(color: Color(0xFF2E2A4E), height: 16),
+
+                // Manage Sub Requests option
+                ListTile(
+                  leading: const Icon(Icons.people_outline, color: AppTheme.primaryAccent),
+                  title: Text(
+                    'Manage Sub Requests',
+                    style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w600),
+                  ),
+                  subtitle: Text(
+                    'View and post substitute requests',
+                    style: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 12),
+                  ),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  onTap: () {
+                    Navigator.pop(context); // Close bottom sheet
+                    Navigator.pushNamed(
+                      context,
+                      '/sub-request-responses',
+                      arguments: {'bandId': bandId},
+                    );
+                  },
+                ),
+                const SizedBox(height: 12),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   void _sendMessage() async {
@@ -547,11 +650,21 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                   final appState = Provider.of<AppState>(context, listen: false);
                   final bandId = appState.activeBandId;
                   if (bandId != null) {
-                    Navigator.pushNamed(
-                      context,
-                      '/sub-request-responses',
-                      arguments: {'bandId': bandId},
+                    final currentUserId = appState.currentUserId;
+                    final currentUserMember = _members.firstWhere(
+                      (m) => m.userId == currentUserId,
+                      orElse: () => BandMember(role: 'Member'),
                     );
+                    final userRole = currentUserMember.role;
+                    if (userRole == 'Leader') {
+                      _showLeaderSettingsSheet(context, bandId);
+                    } else {
+                      Navigator.pushNamed(
+                        context,
+                        '/sub-request-responses',
+                        arguments: {'bandId': bandId},
+                      );
+                    }
                   }
                 },
                 child: const Icon(Icons.settings_outlined, color: Colors.white, size: 24),
