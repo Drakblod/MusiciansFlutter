@@ -916,6 +916,7 @@ class FirebaseService {
         urls.add(url);
       } catch (e) {
         print("[FirebaseService] Error uploading image: $e");
+        rethrow;
       }
     }
     return urls;
