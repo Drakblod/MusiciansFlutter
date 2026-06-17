@@ -13,6 +13,11 @@ class UserProfile {
   final String? history;
   final String? projects;
   final String? profilePictureUrl;
+  final double? latitude;
+  final double? longitude;
+  final String? city;
+  final String? country;
+  final int? locationUpdatedAt;
 
   UserProfile({
     this.userType,
@@ -29,6 +34,11 @@ class UserProfile {
     this.history,
     this.projects,
     this.profilePictureUrl,
+    this.latitude,
+    this.longitude,
+    this.city,
+    this.country,
+    this.locationUpdatedAt,
   });
 
   factory UserProfile.fromJson(Map<dynamic, dynamic> json) {
@@ -47,6 +57,11 @@ class UserProfile {
       history: json['History']?.toString(),
       projects: json['Projects']?.toString(),
       profilePictureUrl: json['ProfilePictureUrl']?.toString(),
+      latitude: json['Latitude'] is num ? (json['Latitude'] as num).toDouble() : null,
+      longitude: json['Longitude'] is num ? (json['Longitude'] as num).toDouble() : null,
+      city: json['City']?.toString(),
+      country: json['Country']?.toString(),
+      locationUpdatedAt: json['LocationUpdatedAt'] is int ? json['LocationUpdatedAt'] as int : null,
     );
   }
 
@@ -66,6 +81,11 @@ class UserProfile {
       'History': history,
       'Projects': projects,
       'ProfilePictureUrl': profilePictureUrl,
+      'Latitude': latitude,
+      'Longitude': longitude,
+      'City': city,
+      'Country': country,
+      'LocationUpdatedAt': locationUpdatedAt,
     };
   }
 

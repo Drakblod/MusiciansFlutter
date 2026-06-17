@@ -5,6 +5,7 @@ import '../providers/app_state.dart';
 import '../theme/app_theme.dart';
 import '../models/user_profile.dart';
 import '../widgets/gradient_scaffold.dart';
+import '../services/location_service.dart';
 import '../widgets/custom_top_bar.dart';
 import '../widgets/animated_tap_detector.dart';
 
@@ -26,6 +27,67 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   bool _isSaving = false;
   bool _showAllInstruments = false;
   bool _showAllGenres = false;
+  bool _isFetchingLocation = false;
+
+  Future<void> _testLocation() async {
+    setState(() {
+      _isFetchingLocation = true;
+    });
+
+    try {
+      final appState = Provider.of<AppState>(context, listen: false);
+      final userId = appState.currentUserId;
+      if (userId == null) {
+        throw Exception("User not logged in");
+      }
+
+      final locationService = LocationService();
+      final result = await locationService.getCurrentLocationAsync();
+
+      await appState.firebaseService.updateCurrentUserLocationAsync(
+        userId,
+        result.latitude,
+        result.longitude,
+        result.displayName,
+        result.city,
+        result.country,
+      );
+
+      await appState.refreshProfile();
+
+      if (mounted) {
+        setState(() {
+          _locationController.text = result.displayName;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result.displayName),
+            backgroundColor: AppTheme.success,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        String errMsg = e.toString();
+        if (errMsg.startsWith("Exception: ")) {
+          errMsg = errMsg.substring(11);
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Location Error: $errMsg"),
+            backgroundColor: AppTheme.danger,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isFetchingLocation = false;
+        });
+      }
+    }
+  }
 
   final List<String> _roles = [
     "BANDLEADER",
@@ -351,6 +413,39 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   return null;
                 },
               ),
+              const SizedBox(height: 10),
+              // Test Location Button
+              _isFetchingLocation
+                  ? const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 8.0),
+                      child: Center(
+                        child: SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(
+                            color: AppTheme.primaryAccent,
+                            strokeWidth: 2.5,
+                          ),
+                        ),
+                      ),
+                    )
+                  : TextButton.icon(
+                      onPressed: _testLocation,
+                      icon: const Icon(Icons.my_location, color: AppTheme.primaryAccent, size: 18),
+                      label: Text(
+                        'Test Location',
+                        style: GoogleFonts.inter(
+                          color: AppTheme.primaryAccent,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      style: TextButton.styleFrom(
+                        padding: EdgeInsets.zero,
+                        minimumSize: const Size(0, 0),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                    ),
               const SizedBox(height: 20),
 
               // About Me

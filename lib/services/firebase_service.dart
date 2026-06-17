@@ -1104,5 +1104,24 @@ class FirebaseService {
     }
     await _dbRef('bandconversations/$bandId/members/$userId').set(true);
   }
+
+  Future<void> updateCurrentUserLocationAsync(
+    String userId,
+    double lat,
+    double lng,
+    String locationStr,
+    String city,
+    String country,
+  ) async {
+    final updateData = {
+      'Latitude': lat,
+      'Longitude': lng,
+      'Location': locationStr,
+      'City': city,
+      'Country': country,
+      'LocationUpdatedAt': DateTime.now().millisecondsSinceEpoch,
+    };
+    await _dbRef('users/$userId/info').update(updateData);
+  }
 }
 
