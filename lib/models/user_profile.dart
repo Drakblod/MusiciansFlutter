@@ -13,6 +13,9 @@ class UserProfile {
   final String? history;
   final String? projects;
   final String? profilePictureUrl;
+  final String? spotifyUrl;
+  final String? youtubeUrl;
+  final String? audioSnippetUrl;
 
   UserProfile({
     this.userType,
@@ -29,6 +32,9 @@ class UserProfile {
     this.history,
     this.projects,
     this.profilePictureUrl,
+    this.spotifyUrl,
+    this.youtubeUrl,
+    this.audioSnippetUrl,
   });
 
   factory UserProfile.fromJson(Map<dynamic, dynamic> json) {
@@ -47,6 +53,9 @@ class UserProfile {
       history: json['History']?.toString(),
       projects: json['Projects']?.toString(),
       profilePictureUrl: json['ProfilePictureUrl']?.toString(),
+      spotifyUrl: json['SpotifyUrl']?.toString(),
+      youtubeUrl: json['YoutubeUrl']?.toString(),
+      audioSnippetUrl: json['AudioSnippetUrl']?.toString(),
     );
   }
 
@@ -66,6 +75,9 @@ class UserProfile {
       'History': history,
       'Projects': projects,
       'ProfilePictureUrl': profilePictureUrl,
+      'SpotifyUrl': spotifyUrl,
+      'YoutubeUrl': youtubeUrl,
+      'AudioSnippetUrl': audioSnippetUrl,
     };
   }
 

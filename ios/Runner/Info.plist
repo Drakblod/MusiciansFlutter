@@ -53,5 +53,10 @@
 	<string>Allow access to photo library to upload instrument images to the marketplace.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Allow access to camera to take photos of your instruments for the marketplace.</string>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>spotify</string>
+		<string>youtube</string>
+	</array>
 </dict>
 </plist>

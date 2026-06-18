@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../providers/app_state.dart';
 import '../theme/app_theme.dart';
 import '../models/user_profile.dart';
 import '../widgets/animated_tap_detector.dart';
 import '../widgets/custom_top_bar.dart';
 import '../widgets/gradient_scaffold.dart';
+import '../widgets/audio_snippet_player.dart';
 
 class ProfileTabScreen extends StatefulWidget {
   const ProfileTabScreen({super.key});
@@ -23,6 +25,33 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
   void initState() {
     super.initState();
     _loadFavorites();
+  }
+
+  Future<void> _launchUrl(String urlString) async {
+    try {
+      final uri = Uri.parse(urlString.trim());
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Could not launch link: $urlString'),
+              backgroundColor: AppTheme.danger,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Invalid link: $urlString'),
+            backgroundColor: AppTheme.danger,
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _loadFavorites() async {
@@ -137,6 +166,61 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                           ),
                         ],
                       ),
+                      if (user.spotifyUrl != null || user.youtubeUrl != null) ...[
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            if (user.spotifyUrl != null && user.spotifyUrl!.isNotEmpty)
+                              GestureDetector(
+                                onTap: () => _launchUrl(user.spotifyUrl!),
+                                child: Container(
+                                  margin: const EdgeInsets.only(right: 8),
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: Colors.green.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(color: Colors.green.withOpacity(0.3)),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(Icons.music_note, color: Colors.green, size: 12),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        'Spotify',
+                                        style: GoogleFonts.inter(fontSize: 10, color: Colors.green, fontWeight: FontWeight.bold),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            if (user.youtubeUrl != null && user.youtubeUrl!.isNotEmpty)
+                              GestureDetector(
+                                onTap: () => _launchUrl(user.youtubeUrl!),
+                                child: Container(
+                                  margin: const EdgeInsets.only(right: 8),
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: Colors.red.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(color: Colors.red.withOpacity(0.3)),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(Icons.play_circle_fill, color: Colors.red, size: 12),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        'YouTube',
+                                        style: GoogleFonts.inter(fontSize: 10, color: Colors.red, fontWeight: FontWeight.bold),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -189,6 +273,19 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
               ),
             ),
           ),
+          if (user.audioSnippetUrl != null && user.audioSnippetUrl!.isNotEmpty) ...[
+            const SizedBox(height: 24),
+            Text(
+              'Audio Snippet',
+              style: GoogleFonts.outfit(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+            const SizedBox(height: 10),
+            AudioSnippetPlayer(audioUrl: user.audioSnippetUrl!),
+          ],
           const SizedBox(height: 24),
 
           // 3. Bands / Rehearsals section

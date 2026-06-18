@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io' show File;
+import 'dart:typed_data' show Uint8List;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
@@ -92,6 +93,9 @@ class FirebaseService {
       'History': profile.history,
       'Projects': profile.projects,
       'ProfilePictureUrl': profile.profilePictureUrl,
+      'SpotifyUrl': profile.spotifyUrl,
+      'YoutubeUrl': profile.youtubeUrl,
+      'AudioSnippetUrl': profile.audioSnippetUrl,
     };
     await _dbRef('users/$userId/info').set(infoMap);
     await _dbRef('users/$userId/DisplayName').set(profile.displayName);
@@ -120,6 +124,9 @@ class FirebaseService {
         history: infoMap['History']?.toString(),
         projects: infoMap['Projects']?.toString(),
         profilePictureUrl: infoMap['ProfilePictureUrl']?.toString(),
+        spotifyUrl: infoMap['SpotifyUrl']?.toString(),
+        youtubeUrl: infoMap['YoutubeUrl']?.toString(),
+        audioSnippetUrl: infoMap['AudioSnippetUrl']?.toString(),
       );
     }
     return null;
@@ -150,11 +157,39 @@ class FirebaseService {
             history: infoMap['History']?.toString(),
             projects: infoMap['Projects']?.toString(),
             profilePictureUrl: infoMap['ProfilePictureUrl']?.toString(),
+            spotifyUrl: infoMap['SpotifyUrl']?.toString(),
+            youtubeUrl: infoMap['YoutubeUrl']?.toString(),
+            audioSnippetUrl: infoMap['AudioSnippetUrl']?.toString(),
           ));
         }
       });
     }
     return users;
+  }
+
+  Future<String> uploadAudioSnippetAsync(String userId, Uint8List? bytes, String? path) async {
+    try {
+      final ref = FirebaseStorage.instance
+          .ref()
+          .child('profileAudio')
+          .child(userId)
+          .child('snippet_${DateTime.now().millisecondsSinceEpoch}.mp3');
+
+      UploadTask uploadTask;
+      if (kIsWeb) {
+        if (bytes == null) throw Exception("Audio bytes are null for Web upload");
+        uploadTask = ref.putData(bytes, SettableMetadata(contentType: 'audio/mpeg'));
+      } else {
+        if (path == null) throw Exception("Audio file path is null for Mobile upload");
+        uploadTask = ref.putFile(File(path));
+      }
+      final snapshot = await uploadTask;
+      final url = await snapshot.ref.getDownloadURL();
+      return url;
+    } catch (e) {
+      print("[FirebaseService] Error uploading audio snippet: $e");
+      rethrow;
+    }
   }
 
   List<String> _parseList(dynamic val) {

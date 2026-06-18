@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:file_picker/file_picker.dart';
 import '../providers/app_state.dart';
 import '../theme/app_theme.dart';
 import '../models/user_profile.dart';
@@ -20,12 +21,18 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   final _nameController = TextEditingController();
   final _locationController = TextEditingController();
   final _aboutController = TextEditingController();
+  final _spotifyController = TextEditingController();
+  final _youtubeController = TextEditingController();
   
   List<String> _selectedInstruments = [];
   List<String> _selectedGenres = [];
   bool _isSaving = false;
   bool _showAllInstruments = false;
   bool _showAllGenres = false;
+
+  String? _audioSnippetUrl;
+  String? _pickedAudioFileName;
+  bool _isUploadingAudio = false;
 
   final List<String> _roles = [
     "BANDLEADER",
@@ -132,6 +139,19 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       _nameController.text = user.displayName ?? '';
       _locationController.text = user.location ?? '';
       _aboutController.text = user.about ?? '';
+      _spotifyController.text = user.spotifyUrl ?? '';
+      _youtubeController.text = user.youtubeUrl ?? '';
+      _audioSnippetUrl = user.audioSnippetUrl;
+      if (user.audioSnippetUrl != null) {
+        // extract file name or use a default label
+        try {
+          final uri = Uri.parse(user.audioSnippetUrl!);
+          final name = uri.pathSegments.last;
+          _pickedAudioFileName = name.contains('/') ? name.split('/').last : name;
+        } catch (_) {
+          _pickedAudioFileName = 'audio_snippet.mp3';
+        }
+      }
       
       _selectedInstruments = List<String>.from(user.instruments);
       final role = user.userType ?? '';
@@ -147,7 +167,83 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _nameController.dispose();
     _locationController.dispose();
     _aboutController.dispose();
+    _spotifyController.dispose();
+    _youtubeController.dispose();
     super.dispose();
+  }
+
+  String? _validateUrl(String? value, String platform) {
+    if (value == null || value.trim().isEmpty) return null;
+    final url = value.trim();
+    final uri = Uri.tryParse(url);
+    if (uri == null || !uri.hasAbsolutePath || !(uri.scheme == 'http' || uri.scheme == 'https' || uri.scheme == 'spotify' || uri.scheme == 'youtube')) {
+      return 'Please enter a valid URL (starting with http:// or https://)';
+    }
+    if (platform == 'Spotify' && !url.toLowerCase().contains('spotify.com') && !url.toLowerCase().contains('spotify:')) {
+      return 'Please enter a valid Spotify link';
+    }
+    if (platform == 'YouTube' && !url.toLowerCase().contains('youtube.com') && !url.toLowerCase().contains('youtu.be') && !url.toLowerCase().contains('youtube:')) {
+      return 'Please enter a valid YouTube link';
+    }
+    return null;
+  }
+
+  Future<void> _pickAndUploadAudio() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['mp3'],
+      );
+
+      if (result != null) {
+        final file = result.files.single;
+        setState(() {
+          _isUploadingAudio = true;
+          _pickedAudioFileName = file.name;
+        });
+
+        final appState = Provider.of<AppState>(context, listen: false);
+        final userId = appState.currentUserProfile?.userId;
+        if (userId == null) {
+          throw Exception("User is not logged in");
+        }
+
+        // Upload to storage
+        final url = await appState.firebaseService.uploadAudioSnippetAsync(
+          userId,
+          file.bytes,
+          file.path,
+        );
+
+        setState(() {
+          _audioSnippetUrl = url;
+        });
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Audio snippet uploaded successfully!'),
+              backgroundColor: AppTheme.success,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to upload audio: $e'),
+            backgroundColor: AppTheme.danger,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isUploadingAudio = false;
+        });
+      }
+    }
   }
 
   void _toggleGenre(String genre) {
@@ -198,6 +294,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           profilePictureUrl: user.profilePictureUrl,
           genres: _selectedGenres,
           instruments: _selectedInstruments,
+          spotifyUrl: _spotifyController.text.trim().isEmpty ? null : _spotifyController.text.trim(),
+          youtubeUrl: _youtubeController.text.trim().isEmpty ? null : _youtubeController.text.trim(),
+          audioSnippetUrl: _audioSnippetUrl,
         );
 
         await appState.firebaseService.saveUserProfileAsync(user.userId ?? '', updatedProfile);
@@ -424,6 +523,182 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   minimumSize: const Size(0, 0),
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
+              ),
+              const SizedBox(height: 40),
+
+              // Social Links Section
+              Text(
+                'SOCIAL LINKS',
+                style: GoogleFonts.outfit(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                  letterSpacing: 1.2,
+                ),
+              ),
+              const SizedBox(height: 16),
+              
+              // Spotify URL
+              Text(
+                'Spotify Profile or Track Link',
+                style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
+              ),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: _spotifyController,
+                style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
+                decoration: const InputDecoration(
+                  hintText: 'https://open.spotify.com/artist/...',
+                  prefixIcon: Icon(Icons.music_note, color: Colors.green),
+                ),
+                validator: (value) => _validateUrl(value, 'Spotify'),
+              ),
+              const SizedBox(height: 20),
+
+              // YouTube URL
+              Text(
+                'YouTube Channel or Video Link',
+                style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
+              ),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: _youtubeController,
+                style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
+                decoration: const InputDecoration(
+                  hintText: 'https://www.youtube.com/...',
+                  prefixIcon: Icon(Icons.play_circle_fill, color: Colors.red),
+                ),
+                validator: (value) => _validateUrl(value, 'YouTube'),
+              ),
+              const SizedBox(height: 32),
+
+              // Audio Snippet Section
+              Text(
+                'AUDIO SNIPPET',
+                style: GoogleFonts.outfit(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                  letterSpacing: 1.2,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Upload a short MP3 snippet of your own music to play on your profile.',
+                style: GoogleFonts.inter(
+                  fontSize: 13,
+                  color: AppTheme.textSecondary,
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppTheme.cardBackground,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
+                ),
+                child: _isUploadingAudio
+                    ? Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const CircularProgressIndicator(color: AppTheme.primaryAccent),
+                          const SizedBox(height: 12),
+                          Text(
+                            'Uploading ${_pickedAudioFileName ?? "audio snippet"}...',
+                            style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
+                          ),
+                        ],
+                      )
+                    : _audioSnippetUrl != null
+                        ? Row(
+                            children: [
+                              const Icon(Icons.audiotrack_rounded, color: AppTheme.primaryAccent, size: 36),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      _pickedAudioFileName ?? 'audio_snippet.mp3',
+                                      style: GoogleFonts.inter(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 14,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'Audio snippet loaded',
+                                      style: GoogleFonts.inter(
+                                        color: AppTheme.success,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.edit_rounded, color: AppTheme.primaryAccent),
+                                onPressed: _pickAndUploadAudio,
+                                tooltip: 'Change snippet',
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.delete_forever_rounded, color: AppTheme.danger),
+                                onPressed: () {
+                                  setState(() {
+                                    _audioSnippetUrl = null;
+                                    _pickedAudioFileName = null;
+                                  });
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Audio snippet removed from profile (save to apply changes)'),
+                                      backgroundColor: AppTheme.warning,
+                                    ),
+                                  );
+                                },
+                                tooltip: 'Remove snippet',
+                              ),
+                            ],
+                          )
+                        : InkWell(
+                            onTap: _pickAndUploadAudio,
+                            borderRadius: BorderRadius.circular(12),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 16.0),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(
+                                    Icons.cloud_upload_outlined,
+                                    color: AppTheme.textSecondary,
+                                    size: 40,
+                                  ),
+                                  const SizedBox(height: 12),
+                                  Text(
+                                    'Upload MP3 Snippet',
+                                    style: GoogleFonts.inter(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'Only MP3 files supported',
+                                    style: GoogleFonts.inter(
+                                      color: AppTheme.textMuted,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
               ),
               const SizedBox(height: 40),
 

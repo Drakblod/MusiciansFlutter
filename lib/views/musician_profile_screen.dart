@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../providers/app_state.dart';
 import '../theme/app_theme.dart';
 import '../models/user_profile.dart';
 import '../widgets/gradient_scaffold.dart';
 import '../widgets/custom_top_bar.dart';
 import '../widgets/animated_tap_detector.dart';
+import '../widgets/audio_snippet_player.dart';
 
 class MusicianProfileScreen extends StatefulWidget {
   final UserProfile musician;
@@ -47,6 +49,33 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
       _isFavorite = !_isFavorite;
     });
     await appState.firebaseService.toggleFavoriteAsync(widget.musician.userId ?? '', _isFavorite);
+  }
+
+  Future<void> _launchUrl(String urlString) async {
+    try {
+      final uri = Uri.parse(urlString.trim());
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Could not launch link: $urlString'),
+              backgroundColor: AppTheme.danger,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Invalid link: $urlString'),
+            backgroundColor: AppTheme.danger,
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _openChat() async {
@@ -185,6 +214,40 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
                       ),
                     ],
                   ),
+                  if (widget.musician.spotifyUrl != null || widget.musician.youtubeUrl != null) ...[
+                    const SizedBox(height: 12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        if (widget.musician.spotifyUrl != null && widget.musician.spotifyUrl!.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                            child: IconButton(
+                              icon: const Icon(Icons.music_note, color: Colors.green, size: 24),
+                              onPressed: () => _launchUrl(widget.musician.spotifyUrl!),
+                              style: IconButton.styleFrom(
+                                backgroundColor: AppTheme.inputBackground,
+                                side: const BorderSide(color: Color(0xFF2E2A4E)),
+                                padding: const EdgeInsets.all(8),
+                              ),
+                            ),
+                          ),
+                        if (widget.musician.youtubeUrl != null && widget.musician.youtubeUrl!.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                            child: IconButton(
+                              icon: const Icon(Icons.play_circle_fill, color: Colors.red, size: 24),
+                              onPressed: () => _launchUrl(widget.musician.youtubeUrl!),
+                              style: IconButton.styleFrom(
+                                backgroundColor: AppTheme.inputBackground,
+                                side: const BorderSide(color: Color(0xFF2E2A4E)),
+                                padding: const EdgeInsets.all(8),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
                   const SizedBox(height: 16),
 
                   // Genres
@@ -253,6 +316,19 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
                       ),
                     ),
                   ),
+                  if (widget.musician.audioSnippetUrl != null && widget.musician.audioSnippetUrl!.isNotEmpty) ...[
+                    const SizedBox(height: 24),
+                    Text(
+                      'Audio Snippet',
+                      style: GoogleFonts.outfit(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    AudioSnippetPlayer(audioUrl: widget.musician.audioSnippetUrl!),
+                  ],
                   const SizedBox(height: 24),
 
                   // Skills Section
