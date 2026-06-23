@@ -1407,29 +1407,51 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                       const SizedBox(height: 8),
                       Row(
                         children: [
-                          Radio<String>(
-                            value: 'News',
-                            groupValue: type,
-                            activeColor: AppTheme.primaryAccent,
-                            onChanged: (val) {
-                              if (val != null) {
-                                setDialogState(() => type = val);
-                              }
-                            },
+                          Expanded(
+                            child: InkWell(
+                              onTap: () => setDialogState(() => type = 'News'),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                decoration: BoxDecoration(
+                                  color: type == 'News' ? AppTheme.primaryAccent.withOpacity(0.15) : AppTheme.inputBackground,
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                    color: type == 'News' ? AppTheme.primaryAccent : const Color(0xFF2E2A4E),
+                                    width: 1.5,
+                                  ),
+                                ),
+                                child: const Center(
+                                  child: Text(
+                                    'News Update',
+                                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                                  ),
+                                ),
+                              ),
+                            ),
                           ),
-                          const Text('News Update', style: TextStyle(color: Colors.white)),
-                          const SizedBox(width: 20),
-                          Radio<String>(
-                            value: 'Gig',
-                            groupValue: type,
-                            activeColor: AppTheme.warning,
-                            onChanged: (val) {
-                              if (val != null) {
-                                setDialogState(() => type = val);
-                              }
-                            },
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: InkWell(
+                              onTap: () => setDialogState(() => type = 'Gig'),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                decoration: BoxDecoration(
+                                  color: type == 'Gig' ? AppTheme.warning.withOpacity(0.15) : AppTheme.inputBackground,
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                    color: type == 'Gig' ? AppTheme.warning : const Color(0xFF2E2A4E),
+                                    width: 1.5,
+                                  ),
+                                ),
+                                child: const Center(
+                                  child: Text(
+                                    'Gig / Booking',
+                                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                                  ),
+                                ),
+                              ),
+                            ),
                           ),
-                          const Text('Gig / Booking', style: TextStyle(color: Colors.white)),
                         ],
                       ),
                       const SizedBox(height: 16),
