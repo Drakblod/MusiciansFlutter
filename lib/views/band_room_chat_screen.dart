@@ -1109,7 +1109,11 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
             itemBuilder: (context, index) {
               final member = _members[index];
               return AnimatedTapDetector(
-                onTap: member.userId != null ? () { _viewMemberProfile(member.userId!); } : null,
+                onTap: () {
+                  if (member.userId != null) {
+                    _viewMemberProfile(member.userId!);
+                  }
+                },
                 child: Container(
                   margin: const EdgeInsets.only(bottom: 12),
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
