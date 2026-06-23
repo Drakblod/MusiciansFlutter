@@ -38,11 +38,13 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
 
   StreamSubscription<List<Message>>? _chatSubscription;
   StreamSubscription<List<BandEvent>>? _bandEventsSubscription;
+  StreamSubscription? _gigsNewsSubscription;
+  List<Map<String, dynamic>> _gigsNews = [];
   String? _loadedBandId;
 
   @override
   void initState() {
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 5, vsync: this);
     super.initState();
   }
 
@@ -63,6 +65,7 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
     _scrollController.dispose();
     _chatSubscription?.cancel();
     _bandEventsSubscription?.cancel();
+    _gigsNewsSubscription?.cancel();
     super.dispose();
   }
 
@@ -72,6 +75,8 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
     _chatSubscription = null;
     _bandEventsSubscription?.cancel();
     _bandEventsSubscription = null;
+    _gigsNewsSubscription?.cancel();
+    _gigsNewsSubscription = null;
 
     if (bandId == null) {
       // If still no band selected, try to load user bands to see if we can set one
@@ -129,6 +134,16 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
           if (mounted) {
             setState(() {
               _bandEvents = events;
+            });
+          }
+        });
+
+        _gigsNewsSubscription = appState.firebaseService
+            .subscribeToGigsNews(bandId)
+            .listen((gigsNews) {
+          if (mounted) {
+            setState(() {
+              _gigsNews = gigsNews;
             });
           }
         });
@@ -717,6 +732,7 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
           labelStyle: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 13),
           tabs: const [
             Tab(text: 'Chat'),
+            Tab(text: 'Gigs/News'),
             Tab(text: 'Files'),
             Tab(text: 'Members'),
             Tab(text: 'Events'),
@@ -729,6 +745,7 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
             controller: _tabController,
             children: [
               _buildChatTab(),
+              _buildGigsNewsTab(),
               _buildFilesTab(),
               _buildMembersTab(),
               _buildEventsTab(),
@@ -1148,6 +1165,370 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildGigsNewsTab() {
+    final appState = Provider.of<AppState>(context, listen: false);
+    final bandId = appState.activeBandId;
+    final selfId = appState.currentUserId;
+
+    final currentMember = _members.firstWhere(
+      (m) => m.userId == selfId,
+      orElse: () => BandMember(role: 'Member'),
+    );
+    final isLeaderOrAdmin = currentMember.role == 'Leader' || currentMember.role == 'Admin';
+
+    return Column(
+      children: [
+        if (isLeaderOrAdmin && bandId != null)
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: AnimatedTapDetector(
+              onTap: () => _showPostGigsNewsDialog(bandId),
+              child: Container(
+                height: 50,
+                decoration: BoxDecoration(
+                  gradient: AppTheme.primaryGradient,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Center(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.add_comment_outlined, color: Colors.white),
+                      SizedBox(width: 8),
+                      Text(
+                        "Post Gig or News",
+                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        Expanded(
+          child: _gigsNews.isEmpty
+              ? const Center(
+                  child: Text(
+                    "No news or gigs posted yet.",
+                    style: TextStyle(color: AppTheme.textSecondary),
+                  ),
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  itemCount: _gigsNews.length,
+                  physics: const BouncingScrollPhysics(),
+                  itemBuilder: (context, index) {
+                    final post = _gigsNews[index];
+                    final isGig = post['type'] == 'Gig';
+                    final dateStr = post['timestamp'] != null
+                        ? DateTime.fromMillisecondsSinceEpoch(post['timestamp'] as int).toLocal().toString().substring(0, 16)
+                        : '';
+
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 16),
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: AppTheme.cardBackground,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: isGig ? AppTheme.warning.withOpacity(0.3) : const Color(0xFF231F45),
+                          width: 1,
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: (isGig ? AppTheme.warning : AppTheme.primaryAccent).withOpacity(0.15),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  isGig ? 'GIG' : 'NEWS',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                    color: isGig ? AppTheme.warning : AppTheme.secondaryAccent,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  post['title'] ?? 'Untitled',
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                              if (isLeaderOrAdmin && bandId != null && post['id'] != null)
+                                IconButton(
+                                  icon: const Icon(Icons.delete_outline_rounded, color: AppTheme.danger, size: 20),
+                                  onPressed: () => _deleteGigsNewsPost(bandId, post['id']!),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          Text(
+                            post['content'] ?? '',
+                            style: GoogleFonts.inter(
+                              fontSize: 14,
+                              color: AppTheme.textSecondary,
+                              height: 1.4,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                'By: ${post['authorName'] ?? 'Leader'}',
+                                style: GoogleFonts.inter(
+                                  fontSize: 11,
+                                  color: AppTheme.textMuted,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              Text(
+                                dateStr,
+                                style: GoogleFonts.inter(
+                                  fontSize: 11,
+                                  color: AppTheme.textMuted,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _deleteGigsNewsPost(String bandId, String postId) async {
+    final appState = Provider.of<AppState>(context, listen: false);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppTheme.cardBackground,
+        title: const Text('Delete Post?'),
+        content: const Text('Are you sure you want to delete this post?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel', style: TextStyle(color: Colors.white)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete', style: TextStyle(color: AppTheme.danger)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        await appState.firebaseService.deleteGigsNewsAsync(bandId, postId);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Post deleted successfully.'),
+              backgroundColor: AppTheme.success,
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to delete post: $e'),
+              backgroundColor: AppTheme.danger,
+            ),
+          );
+        }
+      }
+    }
+  }
+
+  void _showPostGigsNewsDialog(String bandId) {
+    final titleController = TextEditingController();
+    final contentController = TextEditingController();
+    String type = 'News';
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return Dialog(
+              backgroundColor: Colors.transparent,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0F0C20).withOpacity(0.95),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: const Color(0xFF2E2A4E), width: 1.5),
+                ),
+                padding: const EdgeInsets.all(20),
+                width: MediaQuery.of(context).size.width * 0.9,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'POST GIG / NEWS',
+                        style: GoogleFonts.outfit(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      Text(
+                        'Post Type',
+                        style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Radio<String>(
+                            value: 'News',
+                            groupValue: type,
+                            activeColor: AppTheme.primaryAccent,
+                            onChanged: (val) {
+                              if (val != null) {
+                                setDialogState(() => type = val);
+                              }
+                            },
+                          ),
+                          const Text('News Update', style: TextStyle(color: Colors.white)),
+                          const SizedBox(width: 20),
+                          Radio<String>(
+                            value: 'Gig',
+                            groupValue: type,
+                            activeColor: AppTheme.warning,
+                            onChanged: (val) {
+                              if (val != null) {
+                                setDialogState(() => type = val);
+                              }
+                            },
+                          ),
+                          const Text('Gig / Booking', style: TextStyle(color: Colors.white)),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Title',
+                        style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
+                      ),
+                      const SizedBox(height: 8),
+                      TextFormField(
+                        controller: titleController,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: const InputDecoration(
+                          hintText: 'e.g. Rehearsal Update or Gig Booking',
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Content',
+                        style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
+                      ),
+                      const SizedBox(height: 8),
+                      TextFormField(
+                        controller: contentController,
+                        style: const TextStyle(color: Colors.white),
+                        maxLines: 4,
+                        decoration: const InputDecoration(
+                          hintText: 'Provide all the details for the members...',
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context),
+                            child: const Text('Cancel', style: TextStyle(color: AppTheme.textSecondary)),
+                          ),
+                          const SizedBox(width: 12),
+                          ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: type == 'Gig' ? AppTheme.warning : AppTheme.primaryAccent,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                            ),
+                            onPressed: () async {
+                              final title = titleController.text.trim();
+                              final content = contentController.text.trim();
+                              if (title.isEmpty || content.isEmpty) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Please fill out all fields'),
+                                    backgroundColor: AppTheme.danger,
+                                  ),
+                                );
+                                return;
+                              }
+
+                              final appState = Provider.of<AppState>(context, listen: false);
+                              final authorName = appState.currentUserProfile?.displayName ?? 'Leader';
+
+                              try {
+                                await appState.firebaseService.postGigsNewsAsync(
+                                  bandId,
+                                  {
+                                    'title': title,
+                                    'content': content,
+                                    'type': type,
+                                    'authorName': authorName,
+                                  },
+                                );
+                                if (context.mounted) {
+                                  Navigator.pop(context);
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Post added successfully!'),
+                                      backgroundColor: AppTheme.success,
+                                    ),
+                                  );
+                                }
+                              } catch (e) {
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('Failed to post: $e'),
+                                      backgroundColor: AppTheme.danger,
+                                    ),
+                                  );
+                                }
+                              }
+                            },
+                            child: const Text('Post', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 

@@ -1139,5 +1139,37 @@ class FirebaseService {
     }
     await _dbRef('bandconversations/$bandId/members/$userId').set(true);
   }
+
+  Future<void> postGigsNewsAsync(String bandId, Map<String, dynamic> data) async {
+    final ref = _dbRef('Bands/$bandId/GigsNews').push();
+    final updatedData = {
+      ...data,
+      'id': ref.key,
+      'timestamp': DateTime.now().millisecondsSinceEpoch,
+    };
+    await ref.set(updatedData);
+  }
+
+  Stream<List<Map<String, dynamic>>> subscribeToGigsNews(String bandId) {
+    return _dbRef('Bands/$bandId/GigsNews').onValue.map((event) {
+      final List<Map<String, dynamic>> list = [];
+      final data = event.snapshot.value;
+      if (data is Map) {
+        data.forEach((k, v) {
+          if (v is Map) {
+            final map = Map<String, dynamic>.from(v);
+            map['id'] = k.toString();
+            list.add(map);
+          }
+        });
+      }
+      list.sort((a, b) => (b['timestamp'] as num? ?? 0).compareTo(a['timestamp'] as num? ?? 0));
+      return list;
+    });
+  }
+
+  Future<void> deleteGigsNewsAsync(String bandId, String postId) async {
+    await _dbRef('Bands/$bandId/GigsNews/$postId').remove();
+  }
 }
 
