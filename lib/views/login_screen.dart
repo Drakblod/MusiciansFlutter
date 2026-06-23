@@ -96,7 +96,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
                 Center(
                   child: Text(
-                    'Musicians Only',
+                    'Musicians',
                     style: GoogleFonts.outfit(
                       fontSize: 28,
                       fontWeight: FontWeight.bold,

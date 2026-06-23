@@ -1007,6 +1007,44 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
     );
   }
 
+  Future<void> _viewMemberProfile(String userId) async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(color: AppTheme.primaryAccent),
+      ),
+    );
+
+    try {
+      final appState = Provider.of<AppState>(context, listen: false);
+      final profile = await appState.firebaseService.getUserProfileAsync(userId);
+      if (mounted) {
+        Navigator.pop(context); // Dismiss loader
+        if (profile != null) {
+          Navigator.pushNamed(context, '/profile-detail', arguments: profile);
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Could not load user profile.'),
+              backgroundColor: AppTheme.danger,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context); // Dismiss loader
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error loading profile: $e'),
+            backgroundColor: AppTheme.danger,
+          ),
+        );
+      }
+    }
+  }
+
   Widget _buildMembersTab() {
     final appState = Provider.of<AppState>(context, listen: false);
     final bandId = appState.activeBandId;
@@ -1053,54 +1091,57 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
             itemCount: _members.length,
             itemBuilder: (context, index) {
               final member = _members[index];
-              return Container(
-                margin: const EdgeInsets.only(bottom: 12),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                decoration: BoxDecoration(
-                  color: AppTheme.cardBackground,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFF231F45), width: 1),
-                ),
-                child: Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 20,
-                      backgroundColor: AppTheme.primaryAccent.withOpacity(0.3),
-                      child: Text(
-                        (member.nickname ?? 'M').substring(0, 1).toUpperCase(),
-                        style: const TextStyle(color: Colors.white),
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            member.nickname ?? 'Unknown Member',
-                            style: GoogleFonts.outfit(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            member.role ?? 'Member',
-                            style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (member.role == 'Leader')
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: AppTheme.primaryAccent.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
+              return AnimatedTapDetector(
+                onTap: member.userId != null ? () { _viewMemberProfile(member.userId!); } : null,
+                child: Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: AppTheme.cardBackground,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFF231F45), width: 1),
+                  ),
+                  child: Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 20,
+                        backgroundColor: AppTheme.primaryAccent.withOpacity(0.3),
                         child: Text(
-                          'Leader',
-                          style: GoogleFonts.inter(fontSize: 10, color: AppTheme.primaryAccent, fontWeight: FontWeight.bold),
+                          (member.nickname ?? 'M').substring(0, 1).toUpperCase(),
+                          style: const TextStyle(color: Colors.white),
                         ),
                       ),
-                  ],
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              member.nickname ?? 'Unknown Member',
+                              style: GoogleFonts.outfit(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              member.role ?? 'Member',
+                              style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (member.role == 'Leader')
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: AppTheme.primaryAccent.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            'Leader',
+                            style: GoogleFonts.inter(fontSize: 10, color: AppTheme.primaryAccent, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
               );
             },
