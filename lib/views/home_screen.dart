@@ -316,6 +316,20 @@ class HomeScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 30),
+          Align(
+            alignment: Alignment.bottomRight,
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 10, right: 10),
+              child: Text(
+                '1.60',
+                style: GoogleFonts.inter(
+                  color: AppTheme.textSecondary.withOpacity(0.5),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w400,
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );
