@@ -945,26 +945,19 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
   }
 
   Future<void> _launchUrl(String urlString) async {
-    final uri = Uri.parse(urlString);
+    final uri = Uri.parse(urlString.trim());
     try {
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Could not open file URL.'),
-              backgroundColor: AppTheme.warning,
-            ),
-          );
-        }
+      final success = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!success) {
+        // Fallback to default launching mode
+        await launchUrl(uri);
       }
     } catch (e) {
       debugPrint('Could not launch $urlString: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error launching file: $e'),
+            content: Text('Error opening file: $e'),
             backgroundColor: AppTheme.danger,
           ),
         );

@@ -30,23 +30,15 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
   Future<void> _launchUrl(String urlString) async {
     try {
       final uri = Uri.parse(urlString.trim());
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Could not launch link: $urlString'),
-              backgroundColor: AppTheme.danger,
-            ),
-          );
-        }
+      final success = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!success) {
+        await launchUrl(uri);
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Invalid link: $urlString'),
+            content: Text('Could not launch link: $urlString'),
             backgroundColor: AppTheme.danger,
           ),
         );
