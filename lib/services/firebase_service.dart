@@ -837,31 +837,64 @@ class FirebaseService {
     await msgRef.set(message.toJson());
   }
 
-  Future<Map<String, String>> getBandFilesAsync(String bandId) async {
+  Future<Map<String, Map<String, String>>> getBandFilesAsync(String bandId) async {
     final snapshot = await _dbRef('files/$bandId').get();
-    final Map<String, String> files = {};
+    final Map<String, Map<String, String>> files = {};
     if (snapshot.exists && snapshot.value is Map) {
       (snapshot.value as Map).forEach((k, v) {
         if (v is Map) {
-          final fileName = v['FileName']?.toString() ?? v['fileName']?.toString() ?? 'Shared File';
-          files[k.toString()] = fileName;
+          final fileName = v['FileName']?.toString() ?? v['fileName']?.toString() ?? 'Uploaded File';
+          final fileUrl = v['FileUrl']?.toString() ?? v['fileUrl']?.toString() ?? '';
+          files[k.toString()] = {
+            'FileName': fileName,
+            'FileUrl': fileUrl,
+          };
         } else if (v is String) {
-          files[k.toString()] = v;
+          files[k.toString()] = {
+            'FileName': v,
+            'FileUrl': '',
+          };
         }
       });
     }
     return files;
   }
 
-  Future<void> addBandFileAsync(String bandId, String fileName) async {
+  Future<void> addBandFileAsync(String bandId, String fileName, String fileUrl) async {
     final ref = _dbRef('files/$bandId').push();
     await ref.set({
       'FileName': fileName,
+      'FileUrl': fileUrl,
     });
   }
 
   Future<void> removeBandFileAsync(String bandId, String fileId) async {
     await _dbRef('files/$bandId/$fileId').remove();
+  }
+
+  Future<String> uploadBandFileAsync(String bandId, Uint8List? bytes, String? path, String fileName) async {
+    try {
+      final ref = FirebaseStorage.instance
+          .ref()
+          .child('bandFiles')
+          .child(bandId)
+          .child('${DateTime.now().millisecondsSinceEpoch}_$fileName');
+
+      UploadTask uploadTask;
+      if (kIsWeb) {
+        if (bytes == null) throw Exception("File bytes are null for Web upload");
+        uploadTask = ref.putData(bytes);
+      } else {
+        if (path == null) throw Exception("File path is null for Mobile upload");
+        uploadTask = ref.putFile(File(path));
+      }
+      final snapshot = await uploadTask;
+      final url = await snapshot.ref.getDownloadURL();
+      return url;
+    } catch (e) {
+      print("[FirebaseService] Error uploading band file: $e");
+      rethrow;
+    }
   }
 
   Future<void> savePushTokenAsync(String token) async {

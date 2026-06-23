@@ -1,8 +1,11 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../providers/app_state.dart';
 import '../theme/app_theme.dart';
 import '../models/band.dart';
@@ -31,7 +34,7 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
 
   Band? _activeBand;
   List<BandMember> _members = [];
-  Map<String, String> _files = {};
+  Map<String, Map<String, String>> _files = {};
   List<Message> _chatMessages = [];
   List<BandEvent> _bandEvents = [];
   bool _isLoading = true;
@@ -288,82 +291,84 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
     }
   }
 
-  Future<void> _showAddFileDialog(String bandId) async {
-    final controller = TextEditingController();
-    final appState = Provider.of<AppState>(context, listen: false);
+  Future<void> _pickAndUploadBandFile(String bandId) async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.any,
+      );
 
-    await showDialog(
-      context: context,
-      builder: (context) {
-        return Dialog(
-          backgroundColor: Colors.transparent,
-          child: Container(
-            decoration: BoxDecoration(
-              color: const Color(0xFF0F0C20).withOpacity(0.95),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: const Color(0xFF2E2A4E), width: 1.5),
-            ),
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  "Share a File",
-                  style: GoogleFonts.outfit(
-                    fontSize: 20,
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
+      if (result != null) {
+        final file = result.files.single;
+        
+        // Show loader dialog
+        if (!mounted) return;
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => Center(
+            child: Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: AppTheme.cardBackground,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFF2E2A4E)),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const CircularProgressIndicator(color: AppTheme.primaryAccent),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Uploading ${file.name}...',
+                    style: const TextStyle(color: Colors.white, fontSize: 14, decoration: TextDecoration.none),
                   ),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: controller,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: const InputDecoration(
-                    hintText: "Enter file name (e.g. Setlist.pdf)",
-                    hintStyle: TextStyle(color: AppTheme.textSecondary),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text("Cancel", style: TextStyle(color: AppTheme.textSecondary)),
-                    ),
-                    const SizedBox(width: 12),
-                    ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppTheme.primaryAccent,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
-                      onPressed: () async {
-                        final name = controller.text.trim();
-                        if (name.isNotEmpty) {
-                          await appState.firebaseService.addBandFileAsync(bandId, name);
-                          final files = await appState.firebaseService.getBandFilesAsync(bandId);
-                          setState(() {
-                            _files = files;
-                          });
-                        }
-                        if (context.mounted) {
-                          Navigator.pop(context);
-                        }
-                      },
-                      child: const Text("Share", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                    ),
-                  ],
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         );
-      },
-    );
+
+        final appState = Provider.of<AppState>(context, listen: false);
+        
+        // Upload to storage
+        final url = await appState.firebaseService.uploadBandFileAsync(
+          bandId,
+          file.bytes,
+          file.path,
+          file.name,
+        );
+
+        // Save metadata to RTDB
+        await appState.firebaseService.addBandFileAsync(bandId, file.name, url);
+        
+        // Refresh files list
+        final files = await appState.firebaseService.getBandFilesAsync(bandId);
+
+        if (mounted) {
+          Navigator.pop(context); // Dismiss loader
+          setState(() {
+            _files = files;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('File "${file.name}" uploaded successfully!'),
+              backgroundColor: AppTheme.success,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        // Attempt to dismiss dialog if showing
+        try { Navigator.pop(context); } catch (_) {}
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to upload file: $e'),
+            backgroundColor: AppTheme.danger,
+          ),
+        );
+      }
+    }
   }
 
   void _showBandSelectorBottomSheet(
@@ -939,6 +944,34 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
     );
   }
 
+  Future<void> _launchUrl(String urlString) async {
+    final uri = Uri.parse(urlString);
+    try {
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Could not open file URL.'),
+              backgroundColor: AppTheme.warning,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('Could not launch $urlString: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error launching file: $e'),
+            backgroundColor: AppTheme.danger,
+          ),
+        );
+      }
+    }
+  }
+
   Widget _buildFilesTab() {
     final appState = Provider.of<AppState>(context, listen: false);
     final bandId = appState.activeBandId;
@@ -950,7 +983,7 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
           child: _files.isEmpty
               ? const Center(
                   child: Text(
-                    "No files shared yet.",
+                    "No files uploaded yet.",
                     style: TextStyle(color: AppTheme.textSecondary),
                   ),
                 )
@@ -959,36 +992,53 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                   itemCount: _files.length,
                   itemBuilder: (context, index) {
                     final fileId = _files.keys.elementAt(index);
-                    final fileName = _files[fileId];
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: AppTheme.cardBackground,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFF231F45), width: 1),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.insert_drive_file_outlined, color: AppTheme.primaryAccent, size: 28),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Text(
-                              fileName ?? 'Shared File',
-                              style: GoogleFonts.inter(fontSize: 14, color: Colors.white, fontWeight: FontWeight.w500),
+                    final fileData = _files[fileId] ?? {};
+                    final fileName = fileData['FileName'] ?? 'Uploaded File';
+                    final fileUrl = fileData['FileUrl'] ?? '';
+
+                    return AnimatedTapDetector(
+                      onTap: () {
+                        if (fileUrl.isNotEmpty) {
+                          _launchUrl(fileUrl);
+                        } else {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('This file has no download URL.'),
+                              backgroundColor: AppTheme.warning,
                             ),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 20),
-                            onPressed: () async {
-                              await appState.firebaseService.removeBandFileAsync(bandId, fileId);
-                              final files = await appState.firebaseService.getBandFilesAsync(bandId);
-                              setState(() {
-                                _files = files;
-                              });
-                            },
-                          ),
-                        ],
+                          );
+                        }
+                      },
+                      child: Container(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: AppTheme.cardBackground,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFF231F45), width: 1),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.insert_drive_file_outlined, color: AppTheme.primaryAccent, size: 28),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Text(
+                                fileName,
+                                style: GoogleFonts.inter(fontSize: 14, color: Colors.white, fontWeight: FontWeight.w500),
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 20),
+                              onPressed: () async {
+                                await appState.firebaseService.removeBandFileAsync(bandId, fileId);
+                                final files = await appState.firebaseService.getBandFilesAsync(bandId);
+                                setState(() {
+                                  _files = files;
+                                });
+                              },
+                            ),
+                          ],
+                        ),
                       ),
                     );
                   },
@@ -997,7 +1047,7 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
         Padding(
           padding: const EdgeInsets.all(16.0),
           child: AnimatedTapDetector(
-            onTap: () => _showAddFileDialog(bandId),
+            onTap: () => _pickAndUploadBandFile(bandId),
             child: Container(
               height: 50,
               decoration: BoxDecoration(
@@ -1011,7 +1061,7 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                     Icon(Icons.add, color: Colors.white),
                     SizedBox(width: 8),
                     Text(
-                      "Share a File",
+                      "Upload a File",
                       style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                     ),
                   ],
