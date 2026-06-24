@@ -442,45 +442,7 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                   ),
                   const SizedBox(width: 8),
 
-                  // Maybe
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () => _respond('maybe'),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        decoration: BoxDecoration(
-                          color: userResponse == 'maybe'
-                              ? AppTheme.warning.withOpacity(0.2)
-                              : AppTheme.cardBackground,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: userResponse == 'maybe' ? AppTheme.warning : const Color(0xFF2E2A4E),
-                            width: 1.5,
-                          ),
-                        ),
-                        child: Column(
-                          children: [
-                            Icon(
-                              Icons.help_outline_rounded,
-                              color: userResponse == 'maybe' ? AppTheme.warning : AppTheme.textSecondary,
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Maybe',
-                              style: GoogleFonts.inter(
-                                fontSize: 13,
-                                color: userResponse == 'maybe' ? Colors.white : AppTheme.textSecondary,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-
-                  // Cannot Attend
+                  // Declined
                   Expanded(
                     child: GestureDetector(
                       onTap: () => _respond('declined'),
@@ -508,6 +470,44 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                               style: GoogleFonts.inter(
                                 fontSize: 13,
                                 color: userResponse == 'declined' ? Colors.white : AppTheme.textSecondary,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+
+                  // Maybe
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => _respond('maybe'),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        decoration: BoxDecoration(
+                          color: userResponse == 'maybe'
+                              ? AppTheme.textSecondary.withOpacity(0.2)
+                              : AppTheme.cardBackground,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: userResponse == 'maybe' ? AppTheme.textSecondary : const Color(0xFF2E2A4E),
+                            width: 1.5,
+                          ),
+                        ),
+                        child: Column(
+                          children: [
+                            Icon(
+                              Icons.help_outline_rounded,
+                              color: userResponse == 'maybe' ? AppTheme.textSecondary : AppTheme.textSecondary,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Maybe',
+                              style: GoogleFonts.inter(
+                                fontSize: 13,
+                                color: userResponse == 'maybe' ? Colors.white : AppTheme.textSecondary,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
@@ -689,8 +689,8 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                 child: Column(
                   children: [
                     _buildResponseGroup('Attending (${attendingList.length})', attendingList, AppTheme.success),
-                    _buildResponseGroup('Maybe (${maybeList.length})', maybeList, AppTheme.warning),
-                    _buildResponseGroup('Cannot Attend (${declinedList.length})', declinedList, AppTheme.danger),
+                    _buildResponseGroup('Declined (${declinedList.length})', declinedList, AppTheme.danger),
+                    _buildResponseGroup('Maybe (${maybeList.length})', maybeList, AppTheme.textSecondary),
                     _buildResponseGroup('No Response (${noResponseList.length})', noResponseList, AppTheme.textSecondary),
                   ],
                 ),
