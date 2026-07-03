@@ -99,7 +99,9 @@ class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
             child: userProfile?.profilePictureUrl == null ||
                     userProfile!.profilePictureUrl!.isEmpty
                 ? Text(
-                    (userProfile?.displayName ?? 'U').substring(0, 1).toUpperCase(),
+                    (userProfile?.displayName != null && userProfile!.displayName!.isNotEmpty)
+                        ? userProfile.displayName!.substring(0, 1).toUpperCase()
+                        : 'U',
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 14,

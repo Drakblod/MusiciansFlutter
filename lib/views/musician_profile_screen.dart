@@ -143,7 +143,9 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
                               ),
                             )
                           : Text(
-                              (widget.musician.displayName ?? 'U').substring(0, 1).toUpperCase(),
+                              (widget.musician.displayName != null && widget.musician.displayName!.isNotEmpty)
+                                  ? widget.musician.displayName!.substring(0, 1).toUpperCase()
+                                  : 'U',
                               style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 44,

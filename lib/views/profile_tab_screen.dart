@@ -24,7 +24,9 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
   @override
   void initState() {
     super.initState();
-    _loadFavorites();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadFavorites();
+    });
   }
 
   Future<void> _launchUrl(String urlString) async {
@@ -110,7 +112,9 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                       : null,
                   child: user.profilePictureUrl == null || user.profilePictureUrl!.isEmpty
                       ? Text(
-                          (user.displayName ?? 'U').substring(0, 1).toUpperCase(),
+                          (user.displayName != null && user.displayName!.isNotEmpty)
+                              ? user.displayName!.substring(0, 1).toUpperCase()
+                              : 'U',
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 28,
@@ -399,7 +403,9 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                                   : null,
                               child: musician.profilePictureUrl == null || musician.profilePictureUrl!.isEmpty
                                   ? Text(
-                                      (musician.displayName ?? 'U').substring(0, 1).toUpperCase(),
+                                      (musician.displayName != null && musician.displayName!.isNotEmpty)
+                                          ? musician.displayName!.substring(0, 1).toUpperCase()
+                                          : 'U',
                                       style: const TextStyle(color: Colors.white),
                                     )
                                   : null,

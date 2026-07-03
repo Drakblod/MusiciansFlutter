@@ -17,7 +17,7 @@ class AudioSnippetPlayer extends StatefulWidget {
 }
 
 class _AudioSnippetPlayerState extends State<AudioSnippetPlayer> {
-  late AudioPlayer _audioPlayer;
+  AudioPlayer? _audioPlayer;
   PlayerState _playerState = PlayerState.stopped;
   Duration _duration = Duration.zero;
   Duration _position = Duration.zero;
@@ -36,59 +36,60 @@ class _AudioSnippetPlayerState extends State<AudioSnippetPlayer> {
   }
 
   Future<void> _initPlayer() async {
-    _audioPlayer = AudioPlayer();
-    
-    // Set release mode to keep resource
-    await _audioPlayer.setReleaseMode(ReleaseMode.stop);
-
-    // Listen to changes
-    _durationSubscription = _audioPlayer.onDurationChanged.listen((d) {
-      if (mounted) {
-        setState(() {
-          _duration = d;
-          _isLoading = false;
-        });
-      }
-    });
-
-    _positionSubscription = _audioPlayer.onPositionChanged.listen((p) {
-      if (mounted) {
-        setState(() {
-          _position = p;
-        });
-      }
-    });
-
-    _playerStateSubscription = _audioPlayer.onPlayerStateChanged.listen((s) {
-      if (mounted) {
-        setState(() {
-          _playerState = s;
-        });
-      }
-    });
-
-    _playerCompleteSubscription = _audioPlayer.onPlayerComplete.listen((event) {
-      if (mounted) {
-        setState(() {
-          _position = Duration.zero;
-          _playerState = PlayerState.completed;
-        });
-      }
-    });
-
     try {
-      await _audioPlayer.setSource(UrlSource(widget.audioUrl));
+      final player = AudioPlayer();
+      _audioPlayer = player;
+      
+      // Set release mode to keep resource
+      await player.setReleaseMode(ReleaseMode.stop);
+
+      // Listen to changes
+      _durationSubscription = player.onDurationChanged.listen((d) {
+        if (mounted) {
+          setState(() {
+            _duration = d;
+            _isLoading = false;
+          });
+        }
+      });
+
+      _positionSubscription = player.onPositionChanged.listen((p) {
+        if (mounted) {
+          setState(() {
+            _position = p;
+          });
+        }
+      });
+
+      _playerStateSubscription = player.onPlayerStateChanged.listen((s) {
+        if (mounted) {
+          setState(() {
+            _playerState = s;
+          });
+        }
+      });
+
+      _playerCompleteSubscription = player.onPlayerComplete.listen((event) {
+        if (mounted) {
+          setState(() {
+            _position = Duration.zero;
+            _playerState = PlayerState.completed;
+          });
+        }
+      });
+
+      await player.setSource(UrlSource(widget.audioUrl));
       if (mounted) {
         setState(() {
           _isLoading = false;
         });
       }
-    } catch (e) {
-      debugPrint("[AudioSnippetPlayer] Error setting source: $e");
+    } catch (e, stack) {
+      debugPrint("[AudioSnippetPlayer] Error initializing AudioPlayer: $e\n$stack");
       if (mounted) {
         setState(() {
           _isLoading = false;
-          _errorMessage = "Failed to load audio snippet";
+          _errorMessage = "Audio playback is not supported on this platform";
         });
       }
     }
@@ -100,17 +101,21 @@ class _AudioSnippetPlayerState extends State<AudioSnippetPlayer> {
     _positionSubscription?.cancel();
     _playerStateSubscription?.cancel();
     _playerCompleteSubscription?.cancel();
-    _audioPlayer.dispose();
+    try {
+      _audioPlayer?.dispose();
+    } catch (e) {
+      debugPrint("[AudioSnippetPlayer] Error disposing AudioPlayer: $e");
+    }
     super.dispose();
   }
 
   Future<void> _togglePlayback() async {
-    if (_errorMessage != null) return;
+    if (_errorMessage != null || _audioPlayer == null) return;
     try {
       if (_playerState == PlayerState.playing) {
-        await _audioPlayer.pause();
+        await _audioPlayer!.pause();
       } else {
-        await _audioPlayer.play(UrlSource(widget.audioUrl));
+        await _audioPlayer!.play(UrlSource(widget.audioUrl));
       }
     } catch (e) {
       if (mounted) {
@@ -245,11 +250,11 @@ class _AudioSnippetPlayerState extends State<AudioSnippetPlayer> {
                                   ? _duration.inMilliseconds.toDouble()
                                   : 1.0,
                             ),
-                        onChanged: _isLoading
+                        onChanged: _isLoading || _audioPlayer == null
                             ? null
                             : (value) async {
                                 final duration = Duration(milliseconds: value.toInt());
-                                await _audioPlayer.seek(duration);
+                                await _audioPlayer!.seek(duration);
                               },
                       ),
                     ),

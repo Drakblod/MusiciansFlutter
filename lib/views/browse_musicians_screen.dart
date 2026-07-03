@@ -355,7 +355,9 @@ class _BrowseMusiciansScreenState extends State<BrowseMusiciansScreen> {
                       child: user.profilePictureUrl == null ||
                               user.profilePictureUrl!.isEmpty
                           ? Text(
-                              (user.displayName ?? 'U').substring(0, 1).toUpperCase(),
+                              (user.displayName != null && user.displayName!.isNotEmpty)
+                                  ? user.displayName!.substring(0, 1).toUpperCase()
+                                  : 'U',
                               style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 24,
