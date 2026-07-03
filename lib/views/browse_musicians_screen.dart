@@ -21,8 +21,8 @@ class _BrowseMusiciansScreenState extends State<BrowseMusiciansScreen> {
   String _selectedCategory = 'All';
   List<UserProfile> _allMusicians = [];
   List<UserProfile> _filteredMusicians = [];
-  bool _isLoading = true;
   bool _showAllInstruments = false;
+  Set<String> _favoriteUserIds = {};
 
   final List<String> _categories = [
     "All",
@@ -97,16 +97,13 @@ class _BrowseMusiciansScreenState extends State<BrowseMusiciansScreen> {
     try {
       final appState = Provider.of<AppState>(context, listen: false);
       
+      final favIds = await appState.firebaseService.getFavoriteUserIdsAsync();
+      _favoriteUserIds = favIds.toSet();
+
       List<UserProfile> users;
       if (widget.favoritesOnly) {
-        final favIds = await appState.firebaseService.getFavoriteUserIdsAsync();
-        users = [];
-        for (final id in favIds) {
-          final profile = await appState.firebaseService.getUserProfileAsync(id);
-          if (profile != null) {
-            users.add(profile);
-          }
-        }
+        final allUsers = await appState.firebaseService.getAllUsersAsync();
+        users = allUsers.where((u) => u.userId != null && _favoriteUserIds.contains(u.userId)).toList();
       } else {
         users = await appState.firebaseService.getAllUsersAsync();
       }
@@ -399,16 +396,27 @@ class _BrowseMusiciansScreenState extends State<BrowseMusiciansScreen> {
                               color: Colors.white,
                             ),
                           ),
-                          // Favorite Icon
-                          FutureBuilder<bool>(
-                            future: appState.firebaseService.isFavoriteAsync(user.userId ?? ''),
-                            builder: (context, snapshot) {
-                              final isFav = snapshot.data ?? false;
+                           // Favorite Icon
+                          Builder(
+                            builder: (context) {
+                              final isFav = _favoriteUserIds.contains(user.userId ?? '');
                               return GestureDetector(
                                 onTap: () async {
+                                  final targetId = user.userId ?? '';
+                                  final nextFav = !isFav;
                                   await appState.firebaseService
-                                      .toggleFavoriteAsync(user.userId ?? '', !isFav);
-                                  setState(() {}); // trigger rebuild of this star icon
+                                      .toggleFavoriteAsync(targetId, nextFav);
+                                  setState(() {
+                                    if (nextFav) {
+                                      _favoriteUserIds.add(targetId);
+                                    } else {
+                                      _favoriteUserIds.remove(targetId);
+                                      if (widget.favoritesOnly) {
+                                        _allMusicians.removeWhere((u) => u.userId == targetId);
+                                        _applyFilters();
+                                      }
+                                    }
+                                  });
                                 },
                                 child: Icon(
                                   isFav ? Icons.star_rounded : Icons.star_border_rounded,

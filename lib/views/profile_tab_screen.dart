@@ -50,17 +50,14 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
     setState(() => _isLoadingFavorites = true);
     try {
       final appState = Provider.of<AppState>(context, listen: false);
+      final favoriteUserIds = await appState.firebaseService.getFavoriteUserIdsAsync();
+      final setOfFavorites = favoriteUserIds.toSet();
+      
       final allUsers = await appState.firebaseService.getAllUsersAsync();
       
-      final List<UserProfile> favList = [];
-      for (var user in allUsers) {
-        if (user.userId != null) {
-          final isFav = await appState.firebaseService.isFavoriteAsync(user.userId!);
-          if (isFav) {
-            favList.add(user);
-          }
-        }
-      }
+      final List<UserProfile> favList = allUsers
+          .where((user) => user.userId != null && setOfFavorites.contains(user.userId))
+          .toList();
 
       if (mounted) {
         setState(() {
