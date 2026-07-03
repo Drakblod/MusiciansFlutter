@@ -21,6 +21,7 @@ class _BrowseMusiciansScreenState extends State<BrowseMusiciansScreen> {
   String _selectedCategory = 'All';
   List<UserProfile> _allMusicians = [];
   List<UserProfile> _filteredMusicians = [];
+  bool _isLoading = true;
   bool _showAllInstruments = false;
   Set<String> _favoriteUserIds = {};
 
