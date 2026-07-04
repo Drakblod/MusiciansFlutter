@@ -669,13 +669,13 @@ class _FindSubScreenState extends State<FindSubScreen> {
                       ),
                       child: Center(
                         child: Text(
-                          'Permanent Member',
+                          'Member',
                           style: GoogleFonts.inter(
                             fontSize: 14,
                             fontWeight: FontWeight.bold,
                             color: _selectedRole == 'Member'
                                 ? Colors.white
-                                : AppTheme.textSecondary,
+                               : AppTheme.textSecondary,
                           ),
                         ),
                       ),
