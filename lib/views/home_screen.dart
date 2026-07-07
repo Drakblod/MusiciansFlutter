@@ -686,7 +686,7 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
   String _getShortLabel(String id, String fullTitle) {
     switch (id) {
       case 'find_musicians':
-        return 'Find Subs';
+        return 'Find Musicians/Vocalist';
       case 'browse_musicians':
         return 'Browse';
       case 'find_gigs':
@@ -748,7 +748,7 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
               ),
-              maxLines: 1,
+              maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
           ],
@@ -922,22 +922,27 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // 1. Full-width Branded Header under the toolbar
-          AspectRatio(
-            aspectRatio: 3.65625,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                Image.asset(
-                  'assets/images/header_base.png',
-                  width: double.infinity,
-                  fit: BoxFit.cover,
-                ),
-                Image.asset(
-                  'assets/images/header_m.png',
-                  width: 48,
-                  fit: BoxFit.contain,
-                ),
-              ],
+          ConstrainedBox(
+            constraints: const BoxConstraints(
+              maxHeight: 120,
+            ),
+            child: AspectRatio(
+              aspectRatio: 3.65625,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  Image.asset(
+                    'assets/images/header_base.png',
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                  ),
+                  Image.asset(
+                    'assets/images/header_m.png',
+                    width: 48,
+                    fit: BoxFit.contain,
+                  ),
+                ],
+              ),
             ),
           ),
 
