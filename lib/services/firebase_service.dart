@@ -1204,5 +1204,32 @@ class FirebaseService {
   Future<void> deleteGigsNewsAsync(String bandId, String postId) async {
     await _dbRef('Bands/$bandId/GigsNews/$postId').remove();
   }
+
+  // ==========================================
+  // 12. Button Click Tracking Metrics
+  // ==========================================
+
+  Future<Map<String, int>> getButtonClicksAsync(String userId) async {
+    final snapshot = await _dbRef('users/$userId/metrics/buttonClicks').get();
+    if (!snapshot.exists || snapshot.value == null) {
+      return {};
+    }
+    final Map<String, int> result = {};
+    if (snapshot.value is Map) {
+      final map = snapshot.value as Map;
+      map.forEach((key, value) {
+        if (value is int) {
+          result[key.toString()] = value;
+        } else if (value is num) {
+          result[key.toString()] = value.toInt();
+        }
+      });
+    }
+    return result;
+  }
+
+  Future<void> saveButtonClickAsync(String userId, String buttonId, int count) async {
+    await _dbRef('users/$userId/metrics/buttonClicks/$buttonId').set(count);
+  }
 }
 

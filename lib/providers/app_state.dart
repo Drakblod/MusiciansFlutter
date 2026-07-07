@@ -13,6 +13,7 @@ class AppState extends ChangeNotifier {
   bool _hasUnreadMessages = false;
   bool _isLoading = true;
   int _currentTab = 0;
+  Map<String, int> _buttonClicks = {};
 
   StreamSubscription<bool>? _unreadSubscription;
 
@@ -29,6 +30,7 @@ class AppState extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get currentUserId => firebaseService.currentUserId;
   int get currentTab => _currentTab;
+  Map<String, int> get buttonClicks => _buttonClicks;
 
   void setTab(int index) {
     _currentTab = index;
@@ -53,6 +55,7 @@ class AppState extends ChangeNotifier {
         unawaited(firebaseService.initializePushNotifications());
       }
       if (currentUserId != null) {
+        await _loadButtonClicks();
         final bands = await firebaseService.getUserBandsAsync(currentUserId!);
         if (bands.isNotEmpty && _activeBandId == null) {
           final firstBandId = bands.keys.first;
@@ -123,6 +126,7 @@ class AppState extends ChangeNotifier {
       _activeBandId = null;
       _activeBandName = null;
       _hasUnreadMessages = false;
+      _buttonClicks = {};
     } catch (e) {
       debugPrint("Error on logout: $e");
     } finally {
@@ -151,6 +155,30 @@ class AppState extends ChangeNotifier {
         }
       }
       notifyListeners();
+    }
+  }
+
+  Future<void> _loadButtonClicks() async {
+    if (currentUserId != null) {
+      try {
+        final clicks = await firebaseService.getButtonClicksAsync(currentUserId!);
+        _buttonClicks = clicks;
+      } catch (e) {
+        debugPrint("Error loading button clicks: $e");
+      }
+    }
+  }
+
+  Future<void> trackButtonClick(String buttonId) async {
+    if (currentUserId == null) return;
+    final currentCount = _buttonClicks[buttonId] ?? 0;
+    final newCount = currentCount + 1;
+    _buttonClicks[buttonId] = newCount;
+    notifyListeners();
+    try {
+      await firebaseService.saveButtonClickAsync(currentUserId!, buttonId, newCount);
+    } catch (e) {
+      debugPrint("Error saving button click: $e");
     }
   }
 

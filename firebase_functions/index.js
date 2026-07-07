@@ -229,3 +229,115 @@ exports.sendSubRequestNotification = onValueCreated({
     return null;
   }
 });
+
+/**
+ * HTTPS Triggered function to compile app usage metrics for investors.
+ */
+exports.getAppMetrics = functions.https.onRequest(async (req, res) => {
+  // CORS support
+  res.set('Access-Control-Allow-Origin', '*');
+  if (req.method === 'OPTIONS') {
+    res.set('Access-Control-Allow-Methods', 'GET');
+    res.set('Access-Control-Allow-Headers', 'Content-Type');
+    res.status(204).send('');
+    return;
+  }
+
+  try {
+    const db = admin.database();
+
+    // 1. Fetch Users
+    const usersSnapshot = await db.ref('/users').once('value');
+    const usersData = usersSnapshot.val() || {};
+    const totalUsers = Object.keys(usersData).length;
+
+    // 2. Fetch Bands
+    const bandsSnapshot = await db.ref('/Bands').once('value');
+    const bandsData = bandsSnapshot.val() || {};
+    const totalBands = Object.keys(bandsData).length;
+
+    // Calculate total events inside Bands
+    let totalEvents = 0;
+    Object.keys(bandsData).forEach(bandId => {
+      const band = bandsData[bandId];
+      if (band && band.Events) {
+        totalEvents += Object.keys(band.Events).length;
+      }
+    });
+
+    // 3. Fetch Sub Requests
+    const subReqSnapshot = await db.ref('/SubRequests').once('value');
+    const subReqData = subReqSnapshot.val() || {};
+    const totalSubRequests = Object.keys(subReqData).length;
+
+    // 4. Fetch Marketplace Listings
+    const marketSnapshot = await db.ref('/marketplaceListings').once('value');
+    const marketData = marketSnapshot.val() || {};
+    const totalMarketplaceItems = Object.keys(marketData).length;
+
+    // 5. Calculate Activity & Engagement
+    let usersWithAudio = 0;
+    let totalBandsJoined = 0;
+    const globalButtonClicks = {
+      find_musicians: 0,
+      browse_musicians: 0,
+      find_gigs: 0,
+      band_room: 0,
+      marketplace: 0
+    };
+
+    Object.keys(usersData).forEach(userId => {
+      const u = usersData[userId];
+      if (!u) return;
+
+      const info = u.info || {};
+      if (info.AudioSnippetUrl) {
+        usersWithAudio++;
+      }
+      if (u.Bands) {
+        totalBandsJoined += Object.keys(u.Bands).length;
+      }
+
+      // Sum button click metrics
+      const metrics = u.metrics || {};
+      const clicks = metrics.buttonClicks || {};
+      Object.keys(clicks).forEach(buttonId => {
+        if (globalButtonClicks[buttonId] !== undefined) {
+          globalButtonClicks[buttonId] += clicks[buttonId];
+        } else {
+          globalButtonClicks[buttonId] = clicks[buttonId];
+        }
+      });
+    });
+
+    const metricsPayload = {
+      timestamp: new Date().toISOString(),
+      summary: {
+        totalUsers,
+        totalBands,
+        totalEvents,
+        totalSubRequests,
+        totalMarketplaceItems
+      },
+      engagement: {
+        usersWithAudio,
+        averageBandsPerUser: totalUsers > 0 ? (totalBandsJoined / totalUsers).toFixed(2) : '0',
+        audioSnippetAdoptionRate: totalUsers > 0 ? `${((usersWithAudio / totalUsers) * 100).toFixed(1)}%` : '0%'
+      },
+      featureUsage: {
+        findMusicians: globalButtonClicks.find_musicians,
+        browseMusicians: globalButtonClicks.browse_musicians,
+        findGigs: globalButtonClicks.find_gigs,
+        bandRoom: globalButtonClicks.band_room,
+        marketplace: globalButtonClicks.marketplace
+      },
+      activityScore: totalEvents + totalSubRequests + totalMarketplaceItems
+    };
+
+    res.status(200).json(metricsPayload);
+  } catch (error) {
+    console.error('Error compiling metrics:', error);
+    res.status(500).send('Internal Server Error compiling metrics: ' + error.message);
+  }
+});
+

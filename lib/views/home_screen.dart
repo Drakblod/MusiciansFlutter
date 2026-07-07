@@ -205,6 +205,85 @@ class HomeScreen extends StatelessWidget {
     final profile = appState.currentUserProfile;
     final userName = profile?.displayName ?? profile?.nickname ?? 'AlexHill';
 
+    // 1. Define all possible action items on the home screen
+    final List<HomeActionItem> actionItems = [
+      HomeActionItem(
+        id: 'find_musicians',
+        icon: Icons.people_outline_rounded,
+        title: 'Find Musicians',
+        subtitle: 'Find and connect with talented musicians near you',
+        onTap: () {
+          appState.trackButtonClick('find_musicians');
+          final isProducer = profile?.instruments.contains('PRODUCER') == true ||
+              profile?.userType == 'PRODUCER';
+          if (isProducer) {
+            Navigator.pushNamed(context, '/producer-search');
+          } else {
+            _handleBandNavigation(context, appState, '/find-sub');
+          }
+        },
+      ),
+      HomeActionItem(
+        id: 'browse_musicians',
+        icon: Icons.search_rounded,
+        title: 'Browse Musicians',
+        subtitle: 'Explore profiles and discover new collaborators',
+        onTap: () {
+          appState.trackButtonClick('browse_musicians');
+          Navigator.pushNamed(context, '/browse-musicians');
+        },
+      ),
+      HomeActionItem(
+        id: 'find_gigs',
+        icon: Icons.local_activity_outlined,
+        title: 'Find Gigs',
+        subtitle: 'Find gigs and opportunities in your area',
+        onTap: () {
+          appState.trackButtonClick('find_gigs');
+          Navigator.pushNamed(context, '/find-gigs');
+        },
+      ),
+      HomeActionItem(
+        id: 'band_room',
+        icon: Icons.groups_outlined,
+        title: 'Band Room',
+        subtitle: 'Manage your band, chat and organize everything',
+        onTap: () {
+          appState.trackButtonClick('band_room');
+          _handleBandNavigation(context, appState, '/band-room');
+        },
+      ),
+      HomeActionItem(
+        id: 'marketplace',
+        icon: Icons.storefront_outlined,
+        title: 'Marketplace',
+        subtitle: 'Buy, sell, or rent gear and spaces, or offer music services',
+        onTap: () {
+          appState.trackButtonClick('marketplace');
+          Navigator.pushNamed(context, '/marketplace');
+        },
+      ),
+    ];
+
+    // 2. Sort the action items based on user's click metrics
+    final clicks = appState.buttonClicks;
+    final Map<String, int> defaultOrder = {
+      'find_musicians': 0,
+      'browse_musicians': 1,
+      'find_gigs': 2,
+      'band_room': 3,
+      'marketplace': 4,
+    };
+
+    actionItems.sort((a, b) {
+      final clicksA = clicks[a.id] ?? 0;
+      final clicksB = clicks[b.id] ?? 0;
+      if (clicksA != clicksB) {
+        return clicksB.compareTo(clicksA); // Descending (most clicked first)
+      }
+      return (defaultOrder[a.id] ?? 0).compareTo(defaultOrder[b.id] ?? 0); // Stable default order
+    });
+
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
       child: Column(
@@ -237,61 +316,18 @@ class HomeScreen extends StatelessWidget {
           ),
           const SizedBox(height: 30),
 
-          // Action Cards List
-          _buildActionCard(
-            context,
-            icon: Icons.people_outline_rounded,
-            title: 'Find Musicians',
-            subtitle: 'Find and connect with talented musicians near you',
-            onTap: () {
-              final isProducer = profile?.instruments.contains('PRODUCER') == true ||
-                  profile?.userType == 'PRODUCER';
-              if (isProducer) {
-                Navigator.pushNamed(context, '/producer-search');
-              } else {
-                _handleBandNavigation(context, appState, '/find-sub');
-              }
-            },
-          ),
-          const SizedBox(height: 16),
-          _buildActionCard(
-            context,
-            icon: Icons.search_rounded,
-            title: 'Browse Musicians',
-            subtitle: 'Explore profiles and discover new collaborators',
-            onTap: () {
-              Navigator.pushNamed(context, '/browse-musicians');
-            },
-          ),
-          const SizedBox(height: 16),
-          _buildActionCard(
-            context,
-            icon: Icons.local_activity_outlined,
-            title: 'Find Gigs',
-            subtitle: 'Find gigs and opportunities in your area',
-            onTap: () {
-              Navigator.pushNamed(context, '/find-gigs');
-            },
-          ),
-          const SizedBox(height: 16),
-          _buildActionCard(
-            context,
-            icon: Icons.groups_outlined,
-            title: 'Band Room',
-            subtitle: 'Manage your band, chat and organize everything',
-            onTap: () => _handleBandNavigation(context, appState, '/band-room'),
-          ),
-          const SizedBox(height: 16),
-          _buildActionCard(
-            context,
-            icon: Icons.storefront_outlined,
-            title: 'Marketplace',
-            subtitle: 'Buy, sell, or rent gear and spaces, or offer music services',
-            onTap: () {
-              Navigator.pushNamed(context, '/marketplace');
-            },
-          ),
-          const SizedBox(height: 40),
+          // Action Cards List (Dynamically sorted)
+          ...actionItems.expand((item) => [
+            _buildActionCard(
+              context,
+              icon: item.icon,
+              title: item.title,
+              subtitle: item.subtitle,
+              onTap: item.onTap,
+            ),
+            const SizedBox(height: 16),
+          ]).toList(),
+          const SizedBox(height: 24), // Extra spacing to reach total height 40 before Logout
 
           // Logout Button
           Center(
@@ -398,4 +434,21 @@ class HomeScreen extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Helper model for home screen action items representation
+class HomeActionItem {
+  final String id;
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  HomeActionItem({
+    required this.id,
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
 }
