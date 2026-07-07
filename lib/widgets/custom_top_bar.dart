@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../providers/app_state.dart';
 import '../theme/app_theme.dart';
 import 'animated_tap_detector.dart';
+import '../views/home_screen.dart';
 
 class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
   final String title;
@@ -131,20 +132,29 @@ class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
   }
 
   Widget _buildHomeLogo(BuildContext context, AppState appState) {
+    const useExperimental = HomeScreen.useExperimentalHomeView;
+
     return AnimatedTapDetector(
       onTap: () {
         Navigator.of(context).popUntil((route) => route.isFirst);
         appState.setTab(0); // Switch root screen to Home tab
       },
       child: Center(
-        child: Text(
-          'm',
-          style: GoogleFonts.outfit(
-            fontSize: 28,
-            fontWeight: FontWeight.bold,
-            color: AppTheme.primaryAccent,
-          ),
-        ),
+        child: useExperimental
+            ? Image.asset(
+                'assets/images/header_m.png',
+                width: 24,
+                height: 24,
+                fit: BoxFit.contain,
+              )
+            : Text(
+                'm',
+                style: GoogleFonts.outfit(
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                  color: AppTheme.primaryAccent,
+                ),
+              ),
       ),
     );
   }

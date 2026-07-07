@@ -291,89 +291,91 @@ class HomeScreen extends StatelessWidget {
       return (defaultOrder[a.id] ?? 0).compareTo(defaultOrder[b.id] ?? 0); // Stable default order
     });
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const SizedBox(height: 10),
-          Text(
-            'Good evening,',
-            style: GoogleFonts.inter(
-              fontSize: 18,
-              color: AppTheme.textSecondary,
+    return SafeArea(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 10),
+            Text(
+              'Good evening,',
+              style: GoogleFonts.inter(
+                fontSize: 18,
+                color: AppTheme.textSecondary,
+              ),
             ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            userName,
-            style: GoogleFonts.outfit(
-              fontSize: 34,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
+            const SizedBox(height: 4),
+            Text(
+              userName,
+              style: GoogleFonts.outfit(
+                fontSize: 34,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
             ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            "Let's make some music happen.",
-            style: GoogleFonts.inter(
-              fontSize: 14,
-              color: AppTheme.textSecondary,
+            const SizedBox(height: 4),
+            Text(
+              "Let's make some music happen.",
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                color: AppTheme.textSecondary,
+              ),
             ),
-          ),
-          const SizedBox(height: 30),
+            const SizedBox(height: 30),
 
-          // Action Cards List (Dynamically sorted)
-          ...actionItems.expand((item) => [
-            _buildActionCard(
-              context,
-              icon: item.icon,
-              title: item.title,
-              subtitle: item.subtitle,
-              onTap: item.onTap,
-            ),
-            const SizedBox(height: 16),
-          ]).toList(),
-          const SizedBox(height: 24), // Extra spacing to reach total height 40 before Logout
+            // Action Cards List (Dynamically sorted)
+            ...actionItems.expand((item) => [
+              _buildActionCard(
+                context,
+                icon: item.icon,
+                title: item.title,
+                subtitle: item.subtitle,
+                onTap: item.onTap,
+              ),
+              const SizedBox(height: 16),
+            ]).toList(),
+            const SizedBox(height: 24), // Extra spacing to reach total height 40 before Logout
 
-          // Logout Button
-          Center(
-            child: AnimatedTapDetector(
-              onTap: () async {
-                await appState.logout();
-                if (context.mounted) {
-                  Navigator.pushReplacementNamed(context, '/login');
-                }
-              },
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
-                child: Text(
-                  'Logout',
-                  style: GoogleFonts.inter(
-                    color: AppTheme.primaryAccent,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
+            // Logout Button
+            Center(
+              child: AnimatedTapDetector(
+                onTap: () async {
+                  await appState.logout();
+                  if (context.mounted) {
+                    Navigator.pushReplacementNamed(context, '/login');
+                  }
+                },
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
+                  child: Text(
+                    'Logout',
+                    style: GoogleFonts.inter(
+                      color: AppTheme.primaryAccent,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-          const SizedBox(height: 30),
-          Align(
-            alignment: Alignment.bottomRight,
-            child: Padding(
-              padding: const EdgeInsets.only(bottom: 10, right: 10),
-              child: Text(
-                '1.61',
-                style: GoogleFonts.inter(
-                  color: AppTheme.textSecondary.withOpacity(0.5),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w400,
+            const SizedBox(height: 30),
+            Align(
+              alignment: Alignment.bottomRight,
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 10, right: 10),
+                child: Text(
+                  '1.61',
+                  style: GoogleFonts.inter(
+                    color: AppTheme.textSecondary.withOpacity(0.5),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w400,
+                  ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -917,158 +919,156 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
     final top3 = allActions.take(3).toList();
     final remaining = allActions.skip(3).toList();
 
-    return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // 1. Full-width Branded Header under the toolbar
-          ConstrainedBox(
-            constraints: const BoxConstraints(
-              maxHeight: 120,
-            ),
-            child: AspectRatio(
-              aspectRatio: 3.65625,
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  Image.asset(
-                    'assets/images/header_base.png',
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                  ),
-                  Image.asset(
-                    'assets/images/header_m.png',
-                    width: 48,
-                    fit: BoxFit.contain,
-                  ),
-                ],
-              ),
+    return Stack(
+      children: [
+        // 1. Full-width Branded Header background extending behind the toolbar
+        Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          child: SizedBox(
+            height: 140, // Height is perfect to cover the CustomTopBar + safe status area
+            child: Image.asset(
+              'assets/images/header_base.png',
+              fit: BoxFit.cover,
             ),
           ),
+        ),
 
-          // 2. Padded Layout content
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+        // 2. Scrollable layout content safely underneath the toolbar
+        SafeArea(
+          bottom: false,
+          child: SingleChildScrollView(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const SizedBox(height: 10),
-                Text(
-                  'Good evening,',
-                  style: GoogleFonts.inter(
-                    fontSize: 18,
-                    color: AppTheme.textSecondary,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  userName,
-                  style: GoogleFonts.outfit(
-                    fontSize: 34,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  "Let's make some music happen.",
-                  style: GoogleFonts.inter(
-                    fontSize: 14,
-                    color: AppTheme.textSecondary,
-                  ),
-                ),
-                const SizedBox(height: 24),
+                // Top margin to offset content below the transparent CustomTopBar
+                const SizedBox(height: 15),
 
-                // Quick Access Title
-                Center(
-                  child: Text(
-                    'QUICK ACCESS',
-                    style: GoogleFonts.outfit(
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                      color: AppTheme.primaryAccent,
-                      letterSpacing: 1.5,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                // 3 Bubble Buttons
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: top3.map((item) => _buildBubbleButton(context, item)).toList(),
-                ),
-                const SizedBox(height: 32),
-
-                // Remaining Cards List
-                ...remaining.expand((item) => [
-                  _buildActionCard(
-                    context,
-                    icon: item.icon,
-                    title: item.title,
-                    subtitle: item.subtitle,
-                    onTap: item.onTap,
-                  ),
-                  const SizedBox(height: 16),
-                ]).toList(),
-                const SizedBox(height: 24),
-
-                // Logout Button
-                Center(
-                  child: AnimatedTapDetector(
-                    onTap: () async {
-                      await appState.logout();
-                      if (context.mounted) {
-                        Navigator.pushReplacementNamed(context, '/login');
-                      }
-                    },
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
-                      child: Text(
-                        'Logout',
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Good evening,',
                         style: GoogleFonts.inter(
-                          color: AppTheme.primaryAccent,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
+                          fontSize: 18,
+                          color: AppTheme.textSecondary,
                         ),
                       ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 30),
-                Align(
-                  alignment: Alignment.bottomRight,
-                  child: Padding(
-                    padding: const EdgeInsets.only(bottom: 10, right: 10),
-                    child: GestureDetector(
-                      onLongPress: () async {
-                        await HomeUsageTracker.resetClicks();
-                        _loadUsageData();
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Quick Access metrics reset successfully!'),
-                              duration: Duration(seconds: 2),
+                      const SizedBox(height: 4),
+                      Text(
+                        userName,
+                        style: GoogleFonts.outfit(
+                          fontSize: 34,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        "Let's make some music happen.",
+                        style: GoogleFonts.inter(
+                          fontSize: 14,
+                          color: AppTheme.textSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+
+                      // Quick Access Title
+                      Center(
+                        child: Text(
+                          'QUICK ACCESS',
+                          style: GoogleFonts.outfit(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: AppTheme.primaryAccent,
+                            letterSpacing: 1.5,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // 3 Bubble Buttons
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: top3.map((item) => _buildBubbleButton(context, item)).toList(),
+                      ),
+                      const SizedBox(height: 32),
+
+                      // Remaining Cards List
+                      ...remaining.expand((item) => [
+                        _buildActionCard(
+                          context,
+                          icon: item.icon,
+                          title: item.title,
+                          subtitle: item.subtitle,
+                          onTap: item.onTap,
+                        ),
+                        const SizedBox(height: 16),
+                      ]).toList(),
+                      const SizedBox(height: 24),
+
+                      // Logout Button
+                      Center(
+                        child: AnimatedTapDetector(
+                          onTap: () async {
+                            await appState.logout();
+                            if (context.mounted) {
+                              Navigator.pushReplacementNamed(context, '/login');
+                            }
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
+                            child: Text(
+                              'Logout',
+                              style: GoogleFonts.inter(
+                                color: AppTheme.primaryAccent,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
-                          );
-                        }
-                      },
-                      child: Text(
-                        '1.61',
-                        style: GoogleFonts.inter(
-                          color: AppTheme.textSecondary.withOpacity(0.5),
-                          fontSize: 12,
-                          fontWeight: FontWeight.w400,
+                          ),
                         ),
                       ),
-                    ),
+                      const SizedBox(height: 30),
+                      Align(
+                        alignment: Alignment.bottomRight,
+                        child: Padding(
+                          padding: const EdgeInsets.only(bottom: 10, right: 10),
+                          child: GestureDetector(
+                            onLongPress: () async {
+                              await HomeUsageTracker.resetClicks();
+                              _loadUsageData();
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Quick Access metrics reset successfully!'),
+                                    duration: Duration(seconds: 2),
+                                  ),
+                                );
+                              }
+                            },
+                            child: Text(
+                              '1.61',
+                              style: GoogleFonts.inter(
+                                color: AppTheme.textSecondary.withOpacity(0.5),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w400,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

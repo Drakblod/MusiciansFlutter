@@ -12,9 +12,8 @@ class MainNavigationWrapper extends StatelessWidget {
       appBar: CustomTopBar(
         showBack: false,
       ),
-      body: SafeArea(
-        child: HomeScreen(),
-      ),
+      extendBodyBehindAppBar: true,
+      body: HomeScreen(),
     );
   }
 }
