@@ -233,7 +233,7 @@ exports.sendSubRequestNotification = onValueCreated({
 /**
  * HTTPS Triggered function to compile app usage metrics for investors.
  */
-exports.getAppMetrics = functions.https.onRequest(async (req, res) => {
+exports.getAppMetrics = functions.region('europe-west1').https.onRequest(async (req, res) => {
   // CORS support
   res.set('Access-Control-Allow-Origin', '*');
   if (req.method === 'OPTIONS') {
