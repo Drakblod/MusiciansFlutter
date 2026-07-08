@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../widgets/custom_top_bar.dart';
 import '../widgets/gradient_scaffold.dart';
+import '../config/feature_toggles.dart';
 import 'home_screen.dart';
 
 class MainNavigationWrapper extends StatelessWidget {
@@ -8,10 +9,14 @@ class MainNavigationWrapper extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const useExperimental = FeatureToggles.useExperimentalHomeView;
+
     return const GradientScaffold(
-      appBar: CustomTopBar(
-        showBack: false,
-      ),
+      appBar: useExperimental
+          ? null
+          : CustomTopBar(
+              showBack: false,
+            ),
       extendBodyBehindAppBar: true,
       body: HomeScreen(),
     );

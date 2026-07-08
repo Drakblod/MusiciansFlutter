@@ -5,10 +5,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../providers/app_state.dart';
 import '../theme/app_theme.dart';
 import '../widgets/animated_tap_detector.dart';
+import '../widgets/custom_top_bar.dart';
+import '../config/feature_toggles.dart';
 
 class HomeScreen extends StatelessWidget {
-  static const bool useExperimentalHomeView = true;
-
   const HomeScreen({super.key});
 
   Future<void> _handleBandNavigation(
@@ -204,7 +204,7 @@ class HomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (useExperimentalHomeView) {
+    if (FeatureToggles.useExperimentalHomeView) {
       return const ExperimentalHomeViewContent();
     }
 
@@ -908,11 +908,12 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
     };
 
     allActions.sort((a, b) {
-      final clicksA = _localClicks[a.id] ?? 0;
-      final clicksB = _localClicks[b.id] ?? 0;
-      if (clicksA != clicksB) {
-        return clicksB.compareTo(clicksA);
-      }
+      // Paused dynamic click-based sorting temporarily to prevent shifting buttons during testing
+      // final clicksA = _localClicks[a.id] ?? 0;
+      // final clicksB = _localClicks[b.id] ?? 0;
+      // if (clicksA != clicksB) {
+      //   return clicksB.compareTo(clicksA);
+      // }
       return (defaultOrder[a.id] ?? 0).compareTo(defaultOrder[b.id] ?? 0);
     });
 
@@ -942,9 +943,8 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Top margin to offset content below the transparent CustomTopBar
-                const SizedBox(height: 15),
-
+                // Top margin to offset content below the transparent CustomTopBar (app bar is 60px height)
+                const SizedBox(height: 60),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                   child: Column(
@@ -1066,6 +1066,17 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
                 ),
               ],
             ),
+          ),
+        ),
+
+        // 3. Transparent Top Bar layered on top of the glowing header background
+        const Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          child: CustomTopBar(
+            showBack: false,
+            transparent: true,
           ),
         ),
       ],

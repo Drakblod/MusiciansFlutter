@@ -5,16 +5,18 @@ import 'package:google_fonts/google_fonts.dart';
 import '../providers/app_state.dart';
 import '../theme/app_theme.dart';
 import 'animated_tap_detector.dart';
-import '../views/home_screen.dart';
+import '../config/feature_toggles.dart';
 
 class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
   final String title;
   final bool showBack;
+  final bool transparent;
 
   const CustomTopBar({
     super.key,
     this.title = '',
     this.showBack = false,
+    this.transparent = false,
   });
 
   @override
@@ -27,13 +29,23 @@ class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
 
     return ClipRect(
       child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        filter: transparent
+            ? ImageFilter.blur(sigmaX: 0, sigmaY: 0)
+            : ImageFilter.blur(sigmaX: 10, sigmaY: 10),
         child: Container(
-          decoration: const BoxDecoration(
-            color: Color(0xCC0F0C22), // 80% opacity dark-violet
-            border: Border(
-              bottom: BorderSide(color: Color(0xFF231F45), width: 1.5),
-            ),
+          decoration: BoxDecoration(
+            color: transparent ? Colors.transparent : const Color(0xCC0F0C22),
+            image: (FeatureToggles.useExperimentalHomeView && !transparent)
+                ? const DecorationImage(
+                    image: AssetImage('assets/images/header_base.png'),
+                    fit: BoxFit.cover,
+                  )
+                : null,
+            border: transparent
+                ? null
+                : const Border(
+                    bottom: BorderSide(color: Color(0xFF231F45), width: 1.5),
+                  ),
           ),
           child: SafeArea(
             bottom: false,
@@ -132,15 +144,13 @@ class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
   }
 
   Widget _buildHomeLogo(BuildContext context, AppState appState) {
-    const useExperimental = HomeScreen.useExperimentalHomeView;
-
     return AnimatedTapDetector(
       onTap: () {
         Navigator.of(context).popUntil((route) => route.isFirst);
         appState.setTab(0); // Switch root screen to Home tab
       },
       child: Center(
-        child: useExperimental
+        child: FeatureToggles.useExperimentalHomeView
             ? Image.asset(
                 'assets/images/header_m.png',
                 width: 24,
