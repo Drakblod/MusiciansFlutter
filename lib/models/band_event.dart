@@ -24,6 +24,51 @@ class EventResponse {
   }
 }
 
+class ExternalInvitee {
+  final String userId;
+  final String status; // 'pending', 'attending', 'maybe', 'declined'
+  final String? instrument;
+  final int invitedAt; // epoch millis
+  final String? source; // e.g. 'subRequest'
+  final String? subRequestId;
+  final String? displayName;
+
+  ExternalInvitee({
+    required this.userId,
+    required this.status,
+    this.instrument,
+    required this.invitedAt,
+    this.source,
+    this.subRequestId,
+    this.displayName,
+  });
+
+  factory ExternalInvitee.fromJson(Map<dynamic, dynamic> json, String userId) {
+    return ExternalInvitee(
+      userId: userId,
+      status: json['status']?.toString() ?? 'pending',
+      instrument: json['instrument']?.toString(),
+      invitedAt: json['invitedAt'] is int
+          ? json['invitedAt'] as int
+          : int.tryParse(json['invitedAt']?.toString() ?? '') ?? DateTime.now().millisecondsSinceEpoch,
+      source: json['source']?.toString(),
+      subRequestId: json['subRequestId']?.toString(),
+      displayName: json['displayName']?.toString(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'status': status,
+      'instrument': instrument,
+      'invitedAt': invitedAt,
+      'source': source,
+      'subRequestId': subRequestId,
+      'displayName': displayName,
+    };
+  }
+}
+
 class BandEvent {
   final String? id;
   final String title;
@@ -38,6 +83,14 @@ class BandEvent {
   final int updatedAt; // epoch millis
   final bool requireResponse;
   final Map<String, EventResponse> responses;
+  final bool isLocked;
+  final int? lockedAt;
+  final String? lockedBy;
+  final bool creatorThresholdNotified;
+  final bool sentReminder48h;
+  final bool sentReminder72h;
+  final bool sentReminder84h;
+  final Map<String, ExternalInvitee> externalInvitees;
 
   BandEvent({
     this.id,
@@ -53,6 +106,14 @@ class BandEvent {
     required this.updatedAt,
     required this.requireResponse,
     this.responses = const {},
+    this.isLocked = false,
+    this.lockedAt,
+    this.lockedBy,
+    this.creatorThresholdNotified = false,
+    this.sentReminder48h = false,
+    this.sentReminder72h = false,
+    this.sentReminder84h = false,
+    this.externalInvitees = const {},
   });
 
   factory BandEvent.fromJson(Map<dynamic, dynamic> json, String keyId) {
@@ -62,6 +123,16 @@ class BandEvent {
       responsesRaw.forEach((k, v) {
         if (v is Map) {
           parsedResponses[k.toString()] = EventResponse.fromJson(v);
+        }
+      });
+    }
+
+    final Map<String, ExternalInvitee> parsedExternalInvitees = {};
+    final externalInviteesRaw = json['externalInvitees'];
+    if (externalInviteesRaw is Map) {
+      externalInviteesRaw.forEach((k, v) {
+        if (v is Map) {
+          parsedExternalInvitees[k.toString()] = ExternalInvitee.fromJson(v, k.toString());
         }
       });
     }
@@ -84,6 +155,16 @@ class BandEvent {
           : int.tryParse(json['updatedAt']?.toString() ?? '') ?? 0,
       requireResponse: json['requireResponse'] == true,
       responses: parsedResponses,
+      isLocked: json['isLocked'] == true,
+      lockedAt: json['lockedAt'] is int
+          ? json['lockedAt'] as int
+          : int.tryParse(json['lockedAt']?.toString() ?? ''),
+      lockedBy: json['lockedBy']?.toString(),
+      creatorThresholdNotified: json['creatorThresholdNotified'] == true,
+      sentReminder48h: json['sentReminder48h'] == true,
+      sentReminder72h: json['sentReminder72h'] == true,
+      sentReminder84h: json['sentReminder84h'] == true,
+      externalInvitees: parsedExternalInvitees,
     );
   }
 
@@ -91,6 +172,11 @@ class BandEvent {
     final Map<String, dynamic> responsesMap = {};
     responses.forEach((k, v) {
       responsesMap[k] = v.toJson();
+    });
+
+    final Map<String, dynamic> externalInviteesMap = {};
+    externalInvitees.forEach((k, v) {
+      externalInviteesMap[k] = v.toJson();
     });
 
     return {
@@ -106,6 +192,14 @@ class BandEvent {
       'updatedAt': updatedAt,
       'requireResponse': requireResponse,
       'Responses': responsesMap,
+      'isLocked': isLocked,
+      'lockedAt': lockedAt,
+      'lockedBy': lockedBy,
+      'creatorThresholdNotified': creatorThresholdNotified,
+      'sentReminder48h': sentReminder48h,
+      'sentReminder72h': sentReminder72h,
+      'sentReminder84h': sentReminder84h,
+      'externalInvitees': externalInviteesMap,
     };
   }
 }

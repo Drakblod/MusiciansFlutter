@@ -17,6 +17,12 @@ import '../models/listing.dart';
 import '../models/band_event.dart';
 
 class FirebaseService {
+  static final StreamController<Map<String, dynamic>> _notificationClickStreamController =
+      StreamController<Map<String, dynamic>>.broadcast();
+
+  static Stream<Map<String, dynamic>> get notificationClickStream =>
+      _notificationClickStreamController.stream;
+
   static const String databaseUrl =
       "https://musiciansapp-35f70-default-rtdb.europe-west1.firebasedatabase.app";
 
@@ -355,7 +361,7 @@ class FirebaseService {
   // 5. Substitute Requests
   // ==========================================
 
-  Future<void> saveSubRequestAsync(SubRequest request) async {
+  Future<String?> saveSubRequestAsync(SubRequest request) async {
     final newRef = _dbRef('SubRequests').push();
     final key = newRef.key;
     if (key != null) {
@@ -377,6 +383,8 @@ class FirebaseService {
         latitude: request.latitude,
         longitude: request.longitude,
         targetUserIds: request.targetUserIds,
+        eventId: request.eventId,
+        bandId: request.bandId,
       );
       
       // Save in root SubRequests
@@ -386,7 +394,9 @@ class FirebaseService {
       if (currentUserId != null) {
         await _dbRef('users/$currentUserId/SubRequests/$key').set(updated.toJson());
       }
+      return key;
     }
+    return null;
   }
 
   Future<List<SubRequest>> getAllSubRequestsAsync() async {
@@ -435,6 +445,31 @@ class FirebaseService {
 
   Future<void> addResponseToSubRequestAsync(String subRequestId, String userId) async {
     await _dbRef('SubRequests/$subRequestId/Responses/$userId').set(true);
+
+    try {
+      final snapshot = await _dbRef('SubRequests/$subRequestId').get();
+      if (snapshot.exists && snapshot.value is Map) {
+        final subRequest = SubRequest.fromJson(snapshot.value as Map, subRequestId);
+        final bandId = subRequest.bandId;
+        final eventId = subRequest.eventId;
+        if (bandId != null && eventId != null && bandId.isNotEmpty && eventId.isNotEmpty) {
+          final profile = await getUserProfileAsync(userId);
+          final invitee = ExternalInvitee(
+            userId: userId,
+            status: 'pending',
+            instrument: profile?.instruments.isNotEmpty == true ? profile?.instruments.first : profile?.userType,
+            invitedAt: DateTime.now().millisecondsSinceEpoch,
+            source: 'subRequest',
+            subRequestId: subRequestId,
+            displayName: profile?.displayName ?? profile?.nickname,
+          );
+          await _dbRef('Bands/$bandId/Events/$eventId/externalInvitees/$userId').set(invitee.toJson());
+          await _dbRef('Bands/$bandId/Events/$eventId/updatedAt').set(DateTime.now().millisecondsSinceEpoch);
+        }
+      }
+    } catch (e) {
+      print("[FirebaseService] Error in addResponseToSubRequestAsync linking event: $e");
+    }
   }
 
   Future<bool> deleteSubRequestAsync(String creatorId, String subRequestId) async {
@@ -948,9 +983,18 @@ class FirebaseService {
         print("PUSH: NOTIFICATION RECEIVED: ${message.data}");
       });
 
-      // Opened from background/terminated listener
+      // Opened from background listener
       FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
         print("PUSH: NOTIFICATION OPENED: ${message.data}");
+        _notificationClickStreamController.add(message.data);
+      });
+
+      // Handle terminated app launch from notification
+      FirebaseMessaging.instance.getInitialMessage().then((RemoteMessage? message) {
+        if (message != null) {
+          print("PUSH: TERMINATED APP LAUNCH FROM NOTIFICATION: ${message.data}");
+          _notificationClickStreamController.add(message.data);
+        }
       });
     } catch (e) {
       print("PUSH: ERROR Initializing: $e");
@@ -1230,6 +1274,69 @@ class FirebaseService {
 
   Future<void> saveButtonClickAsync(String userId, String buttonId, int count) async {
     await _dbRef('users/$userId/metrics/buttonClicks/$buttonId').set(count);
+  }
+
+  Future<BandEvent?> getBandEventOnceAsync(String bandId, String eventId) async {
+    final snapshot = await _dbRef('Bands/$bandId/Events/$eventId').get();
+    if (snapshot.exists && snapshot.value is Map) {
+      return BandEvent.fromJson(snapshot.value as Map, eventId);
+    }
+    return null;
+  }
+
+  Future<void> addExternalInviteesToEventAsync(
+    String bandId,
+    String eventId,
+    List<String> userIds, {
+    String? subRequestId,
+  }) async {
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    final updates = <String, dynamic>{};
+    for (final uid in userIds) {
+      final profile = await getUserProfileAsync(uid);
+      final invitee = ExternalInvitee(
+        userId: uid,
+        status: 'pending',
+        instrument: profile?.instruments.isNotEmpty == true ? profile?.instruments.first : profile?.userType,
+        invitedAt: timestamp,
+        source: subRequestId != null ? 'subRequest' : null,
+        subRequestId: subRequestId,
+        displayName: profile?.displayName ?? profile?.nickname,
+      );
+      updates['Bands/$bandId/Events/$eventId/externalInvitees/$uid'] = invitee.toJson();
+    }
+    updates['Bands/$bandId/Events/$eventId/updatedAt'] = timestamp;
+    await _dbRef().update(updates);
+  }
+
+  Future<void> updateExternalInviteeResponseAsync(
+    String bandId,
+    String eventId,
+    String userId,
+    String status,
+  ) async {
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    await _dbRef('Bands/$bandId/Events/$eventId/externalInvitees/$userId/status').set(status);
+    await _dbRef('Bands/$bandId/Events/$eventId/updatedAt').set(timestamp);
+  }
+
+  Future<void> lockBandEventAsync(String bandId, String eventId) async {
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    final userId = currentUserId ?? '';
+    await _dbRef('Bands/$bandId/Events/$eventId').update({
+      'isLocked': true,
+      'lockedAt': timestamp,
+      'lockedBy': userId,
+      'updatedAt': timestamp,
+    });
+  }
+
+  Future<String?> getUserBandRoleAsync(String bandId, String userId) async {
+    final snapshot = await _dbRef('Bands/$bandId/Members_band/$userId/Role').get();
+    if (snapshot.exists) {
+      return snapshot.value?.toString();
+    }
+    return null;
   }
 }
 

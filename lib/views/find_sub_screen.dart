@@ -12,7 +12,10 @@ import '../widgets/gradient_scaffold.dart';
 import '../widgets/animated_tap_detector.dart';
 
 class FindSubScreen extends StatefulWidget {
-  const FindSubScreen({super.key});
+  final String? eventId;
+  final String? bandId;
+
+  const FindSubScreen({super.key, this.eventId, this.bandId});
 
   @override
   State<FindSubScreen> createState() => _FindSubScreenState();
@@ -137,7 +140,41 @@ class _FindSubScreenState extends State<FindSubScreen> {
         _locationController.text = 'Stockholm, Sweden';
       }
       _loadBandInfo();
+      _loadFavorites().then((_) {
+        _loadEventDetails();
+      });
     });
+  }
+
+  void _loadEventDetails() async {
+    if (widget.eventId == null || widget.bandId == null) return;
+    try {
+      final appState = Provider.of<AppState>(context, listen: false);
+      final event = await appState.firebaseService.getBandEventOnceAsync(widget.bandId!, widget.eventId!);
+      if (event != null && mounted) {
+        setState(() {
+          _locationController.text = event.location;
+          final start = DateTime.tryParse(event.startDateTime) ?? DateTime.now();
+          _selectedDate = start;
+          _startTime = TimeOfDay.fromDateTime(start);
+          final end = DateTime.tryParse(event.endDateTime) ?? start.add(const Duration(hours: 2));
+          _endTime = TimeOfDay.fromDateTime(end);
+          _messageController.text = "Need substitute for event: ${event.title}\nDescription: ${event.description}";
+          
+          final lowerTitle = event.title.toLowerCase();
+          for (final inst in _instruments) {
+            if (lowerTitle.contains(inst.toLowerCase())) {
+              _selectedInstrument = inst;
+              break;
+            }
+          }
+          
+          _updateFilteredFavorites();
+        });
+      }
+    } catch (e) {
+      debugPrint("Error loading event context: $e");
+    }
   }
 
   Map<String, double>? _resolveCoordinates(String location) {
@@ -337,9 +374,23 @@ class _FindSubScreenState extends State<FindSubScreen> {
                 .map((e) => e.key)
                 .toList()
             : null,
+        eventId: widget.eventId,
+        bandId: widget.bandId,
       );
 
-      await appState.firebaseService.saveSubRequestAsync(request);
+      final subRequestId = await appState.firebaseService.saveSubRequestAsync(request);
+
+      if (widget.eventId != null && widget.bandId != null && subRequestId != null) {
+        final targets = request.targetUserIds;
+        if (targets != null && targets.isNotEmpty) {
+          await appState.firebaseService.addExternalInviteesToEventAsync(
+            widget.bandId!,
+            widget.eventId!,
+            targets,
+            subRequestId: subRequestId,
+          );
+        }
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

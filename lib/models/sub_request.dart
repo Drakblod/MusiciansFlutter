@@ -23,6 +23,8 @@ class SubRequest {
   final double? latitude;
   final double? longitude;
   final List<String>? targetUserIds;
+  final String? eventId;
+  final String? bandId;
 
   SubRequest({
     this.id,
@@ -49,6 +51,8 @@ class SubRequest {
     this.latitude,
     this.longitude,
     this.targetUserIds,
+    this.eventId,
+    this.bandId,
   });
 
   factory SubRequest.fromJson(Map<dynamic, dynamic> json, String keyId) {
@@ -100,6 +104,8 @@ class SubRequest {
       latitude: parsedLat,
       longitude: parsedLng,
       targetUserIds: parsedTargetUserIds,
+      eventId: json['eventId']?.toString(),
+      bandId: json['bandId']?.toString(),
     );
   }
 
@@ -128,6 +134,8 @@ class SubRequest {
       'Latitude': latitude,
       'Longitude': longitude,
       'TargetUserIds': targetUserIds,
+      'eventId': eventId,
+      'bandId': bandId,
     };
   }
 }

@@ -11,6 +11,7 @@ import '../models/user_profile.dart';
 import '../widgets/gradient_scaffold.dart';
 import '../widgets/custom_top_bar.dart';
 import '../widgets/animated_tap_detector.dart';
+import 'find_sub_screen.dart';
 
 class EventDetailsPage extends StatefulWidget {
   final String bandId;
@@ -83,6 +84,26 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
         }
       }));
 
+      // Cache external invitee profiles
+      final extUserIds = _event?.externalInvitees.keys.toList() ?? [];
+      await Future.wait(extUserIds.map((userId) async {
+        if (!profiles.containsKey(userId)) {
+          final profile = await appState.firebaseService.getUserProfileAsync(userId);
+          if (profile != null) {
+            profiles[userId] = profile;
+          }
+        }
+      }));
+
+      // Cache locker profile
+      final lockedBy = _event?.lockedBy;
+      if (lockedBy != null && !profiles.containsKey(lockedBy)) {
+        final profile = await appState.firebaseService.getUserProfileAsync(lockedBy);
+        if (profile != null) {
+          profiles[lockedBy] = profile;
+        }
+      }
+
       // Determine current user's role
       final currentUserId = appState.currentUserId;
       final currentMember = members.firstWhere(
@@ -148,13 +169,33 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
     final userId = appState.currentUserId;
     if (userId == null || _event == null) return;
 
-    try {
-      await appState.firebaseService.updateEventResponseAsync(
-        widget.bandId,
-        widget.eventId,
-        userId,
-        status,
+    if (_event!.isLocked) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("This event is locked and responses can no longer be changed."),
+          backgroundColor: AppTheme.danger,
+        ),
       );
+      return;
+    }
+
+    try {
+      final isExternal = _event!.externalInvitees.containsKey(userId);
+      if (isExternal) {
+        await appState.firebaseService.updateExternalInviteeResponseAsync(
+          widget.bandId,
+          widget.eventId,
+          userId,
+          status,
+        );
+      } else {
+        await appState.firebaseService.updateEventResponseAsync(
+          widget.bandId,
+          widget.eventId,
+          userId,
+          status,
+        );
+      }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -300,7 +341,53 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
       }
     }
 
-    final userResponse = currentUserId != null ? event.responses[currentUserId]?.status : null;
+    final extAttendingList = <String>[];
+    final extMaybeList = <String>[];
+    final extDeclinedList = <String>[];
+    final extPendingList = <String>[];
+
+    // Process external invitees attending for instrument coverage and response groups
+    event.externalInvitees.forEach((userId, invitee) {
+      final name = invitee.displayName ?? _cachedProfiles[userId]?.displayName ?? _cachedProfiles[userId]?.nickname ?? 'Unknown Guest';
+      final status = invitee.status;
+      if (status == 'attending') {
+        extAttendingList.add(name);
+      } else if (status == 'maybe') {
+        extMaybeList.add(name);
+      } else if (status == 'declined') {
+        extDeclinedList.add(name);
+      } else {
+        extPendingList.add(name);
+      }
+
+      if (invitee.status == 'attending') {
+        final profile = _cachedProfiles[userId];
+        List<String> insts = [];
+        if (invitee.instrument != null && invitee.instrument!.isNotEmpty) {
+          insts = [invitee.instrument!];
+        } else if (profile != null && profile.instruments.isNotEmpty) {
+          insts = profile.instruments;
+        } else if (profile != null && profile.userType != null && profile.userType!.isNotEmpty) {
+          insts = [profile.userType!];
+        } else {
+          insts = ['Other'];
+        }
+
+        for (var inst in insts) {
+          final normalized = inst.trim();
+          if (normalized.isEmpty) continue;
+
+          instrumentTotal[normalized] = (instrumentTotal[normalized] ?? 0) + 1;
+          instrumentAttending[normalized] = (instrumentAttending[normalized] ?? 0) + 1;
+        }
+      }
+    });
+
+    final userResponse = currentUserId != null
+        ? (event.responses.containsKey(currentUserId)
+            ? event.responses[currentUserId]?.status
+            : event.externalInvitees[currentUserId]?.status)
+        : null;
 
     return GradientScaffold(
       appBar: CustomTopBar(
@@ -311,6 +398,48 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
         child: ListView(
           padding: const EdgeInsets.all(20),
           children: [
+            if (event.isLocked) ...[
+              Container(
+                margin: const EdgeInsets.only(bottom: 20),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: AppTheme.danger.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppTheme.danger.withOpacity(0.5), width: 1.5),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.lock_rounded, color: AppTheme.danger, size: 20),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Event Locked',
+                            style: GoogleFonts.inter(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            event.lockedAt != null
+                                ? 'Locked by ${_cachedProfiles[event.lockedBy]?.displayName ?? _cachedProfiles[event.lockedBy]?.nickname ?? "Organizer"} on ${DateFormat('MMM d, yyyy HH:mm').format(DateTime.fromMillisecondsSinceEpoch(event.lockedAt!))}'
+                                : 'Responses can no longer be modified.',
+                            style: GoogleFonts.inter(
+                              fontSize: 11,
+                              color: AppTheme.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             // 1. Header Information Card
             Container(
               padding: const EdgeInsets.all(16),
@@ -695,7 +824,142 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                   ],
                 ),
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 20),
+
+              // External Invitees Summary List
+              if (event.externalInvitees.isNotEmpty) ...[
+                Text(
+                  'EXTERNAL INVITEES',
+                  style: GoogleFonts.outfit(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.primaryAccent,
+                    letterSpacing: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Container(
+                  decoration: BoxDecoration(
+                    color: AppTheme.cardBackground,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
+                  ),
+                  child: Column(
+                    children: [
+                      _buildResponseGroup('Guest Attending (${extAttendingList.length})', extAttendingList, AppTheme.success),
+                      _buildResponseGroup('Guest Maybe (${extMaybeList.length})', extMaybeList, AppTheme.textSecondary),
+                      _buildResponseGroup('Guest Declined (${extDeclinedList.length})', extDeclinedList, AppTheme.danger),
+                      _buildResponseGroup('Guest Pending (${extPendingList.length})', extPendingList, Colors.grey),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+              ],
+              const SizedBox(height: 12),
+            ],
+
+            // Creator Actions Section
+            if (currentUserId == event.createdBy || _isAdmin) ...[
+              const SizedBox(height: 20),
+              Text(
+                'CREATOR ACTIONS',
+                style: GoogleFonts.outfit(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: AppTheme.primaryAccent,
+                  letterSpacing: 1.5,
+                ),
+              ),
+              const SizedBox(height: 10),
+              if (!event.isLocked)
+                AnimatedTapDetector(
+                  onTap: () async {
+                    final confirmed = await showDialog<bool>(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        backgroundColor: const Color(0xFF0F0C20),
+                        title: Text("Lock Event", style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold)),
+                        content: Text("Are you sure you want to lock this event? Once locked, members can no longer change their RSVP status.", style: GoogleFonts.inter(color: AppTheme.textSecondary)),
+                        actions: [
+                          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancel", style: TextStyle(color: AppTheme.textSecondary))),
+                          ElevatedButton(
+                            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryAccent),
+                            onPressed: () => Navigator.pop(context, true),
+                            child: const Text("Lock", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (confirmed == true && mounted) {
+                      try {
+                        await appState.firebaseService.lockBandEventAsync(widget.bandId, widget.eventId);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text("Event locked successfully"), backgroundColor: AppTheme.success),
+                        );
+                      } catch (e) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text("Failed to lock event: $e"), backgroundColor: AppTheme.danger),
+                        );
+                      }
+                    }
+                  },
+                  child: Container(
+                    height: 50,
+                    margin: const EdgeInsets.only(bottom: 12),
+                    decoration: BoxDecoration(
+                      color: AppTheme.cardBackground,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppTheme.primaryAccent, width: 1.5),
+                    ),
+                    child: Center(
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.lock_outline, color: AppTheme.primaryAccent),
+                          const SizedBox(width: 8),
+                          Text(
+                            "Lock Event Responses",
+                            style: GoogleFonts.inter(color: AppTheme.primaryAccent, fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              AnimatedTapDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => FindSubScreen(
+                        eventId: widget.eventId,
+                        bandId: widget.bandId,
+                      ),
+                    ),
+                  );
+                },
+                child: Container(
+                  height: 50,
+                  margin: const EdgeInsets.only(bottom: 24),
+                  decoration: BoxDecoration(
+                    gradient: AppTheme.primaryGradient,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Center(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.search, color: Colors.white),
+                        const SizedBox(width: 8),
+                        Text(
+                          "Find Substitute Musician",
+                          style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
             ],
 
             // 6. Delete Event Button for Admins

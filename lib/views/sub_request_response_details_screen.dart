@@ -137,6 +137,19 @@ class _SubRequestResponseDetailsScreenState
         message,
       );
 
+      // If connected to event, update external invitee status to attending
+      if (widget.subRequest.bandId != null &&
+          widget.subRequest.eventId != null &&
+          widget.subRequest.bandId!.isNotEmpty &&
+          widget.subRequest.eventId!.isNotEmpty) {
+        await appState.firebaseService.updateExternalInviteeResponseAsync(
+          widget.subRequest.bandId!,
+          widget.subRequest.eventId!,
+          selectedSub.userId,
+          'attending',
+        );
+      }
+
       // 4. Remove sub request globally and locally
       await appState.firebaseService.deleteSubRequestAsync(currentUserId, reqId);
 

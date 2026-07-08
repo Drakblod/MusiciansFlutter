@@ -3,6 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import '../services/firebase_service.dart';
 import '../models/user_profile.dart';
+import '../main.dart';
+import '../models/band_event.dart';
+import '../models/sub_request.dart';
+import '../views/event_details_page.dart';
+import '../views/sub_request_details_screen.dart';
 
 class AppState extends ChangeNotifier {
   final FirebaseService firebaseService = FirebaseService();
@@ -14,13 +19,77 @@ class AppState extends ChangeNotifier {
   bool _isLoading = true;
   int _currentTab = 0;
   Map<String, int> _buttonClicks = {};
+  Map<String, dynamic>? _pendingNotificationPayload;
 
   StreamSubscription<bool>? _unreadSubscription;
 
   AppState() {
+    _listenToNotifications();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initializeAuthListener();
     });
+  }
+
+  void _listenToNotifications() {
+    FirebaseService.notificationClickStream.listen((data) {
+      if (firebaseService.isLoggedIn && _currentUserProfile != null) {
+        _navigateToNotification(data);
+      } else {
+        _pendingNotificationPayload = data;
+      }
+    });
+  }
+
+  void handlePendingNotification() {
+    if (_pendingNotificationPayload != null && firebaseService.isLoggedIn && _currentUserProfile != null) {
+      final payload = _pendingNotificationPayload!;
+      _pendingNotificationPayload = null;
+      Future.delayed(const Duration(milliseconds: 500), () {
+        _navigateToNotification(payload);
+      });
+    }
+  }
+
+  void _navigateToNotification(Map<String, dynamic> data) async {
+    final type = data['type']?.toString();
+    if (MyApp.navigatorKey.currentState == null) return;
+
+    if (type == 'event_invite' || type == 'event_reminder' || type == 'event_threshold') {
+      final bandId = data['bandId']?.toString();
+      final eventId = data['eventId']?.toString();
+      if (bandId != null && eventId != null) {
+        final event = await firebaseService.getBandEventOnceAsync(bandId, eventId);
+        if (event != null && MyApp.navigatorKey.currentState != null) {
+          MyApp.navigatorKey.currentState!.push(
+            MaterialPageRoute(
+              builder: (context) => EventDetailsPage(
+                bandId: bandId,
+                eventId: eventId,
+                initialEvent: event,
+              ),
+            ),
+          );
+        }
+      }
+    } else if (type == 'sub_request_invite') {
+      final subRequestId = data['subRequestId']?.toString();
+      if (subRequestId != null) {
+        final list = await firebaseService.getAllSubRequestsAsync();
+        final subRequest = list.firstWhere(
+          (r) => (r.subRequestId ?? r.id) == subRequestId,
+          orElse: () => SubRequest(id: subRequestId),
+        );
+        if (MyApp.navigatorKey.currentState != null) {
+          MyApp.navigatorKey.currentState!.push(
+            MaterialPageRoute(
+              builder: (context) => SubRequestDetailsScreen(
+                subRequest: subRequest,
+              ),
+            ),
+          );
+        }
+      }
+    }
   }
 
   UserProfile? get currentUserProfile => _currentUserProfile;
@@ -63,6 +132,7 @@ class AppState extends ChangeNotifier {
           _activeBandName = bands[firstBandId];
         }
       }
+      handlePendingNotification();
     } catch (e) {
       debugPrint("Error loading profile: $e");
     } finally {

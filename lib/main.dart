@@ -74,6 +74,8 @@ void main() async {
 }
 
 class MyApp extends StatelessWidget {
+  static final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
   const MyApp({super.key});
 
   @override
@@ -81,6 +83,7 @@ class MyApp extends StatelessWidget {
     return ChangeNotifierProvider<AppState>(
       create: (_) => AppState(),
       child: MaterialApp(
+        navigatorKey: navigatorKey,
         title: 'Musicians Only',
         theme: AppTheme.darkTheme,
         debugShowCheckedModeBanner: false,
