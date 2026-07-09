@@ -737,7 +737,7 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
           labelStyle: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 13),
           tabs: const [
             Tab(text: 'Chat'),
-            Tab(text: 'Gigs/News'),
+            Tab(text: 'Gigs/Info'),
             Tab(text: 'Files'),
             Tab(text: 'Members'),
             Tab(text: 'Events'),
@@ -845,8 +845,26 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
     );
   }
 
+  String _getSenderName(Message msg) {
+    if (msg.senderName != null && msg.senderName!.isNotEmpty && msg.senderName != 'Unknown') {
+      return msg.senderName!;
+    }
+    final senderId = msg.senderId;
+    if (senderId != null) {
+      final member = _members.firstWhere(
+        (m) => m.userId == senderId,
+        orElse: () => BandMember(),
+      );
+      if (member.nickname != null && member.nickname!.isNotEmpty) {
+        return member.nickname!;
+      }
+    }
+    return 'Member';
+  }
+
   Widget _buildChatBubble(Message msg) {
     final isMe = msg.isCurrentUserSender;
+    final senderName = _getSenderName(msg);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
@@ -859,7 +877,7 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
               radius: 16,
               backgroundColor: AppTheme.primaryAccent.withOpacity(0.3),
               child: Text(
-                (msg.senderName ?? 'M').substring(0, 1).toUpperCase(),
+                senderName.isNotEmpty ? senderName.substring(0, 1).toUpperCase() : 'M',
                 style: const TextStyle(fontSize: 11, color: Colors.white),
               ),
             ),
@@ -873,7 +891,7 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                   Padding(
                     padding: const EdgeInsets.only(left: 4, bottom: 4),
                     child: Text(
-                      msg.senderName ?? 'Member',
+                      senderName,
                       style: GoogleFonts.inter(
                         fontSize: 12,
                         color: AppTheme.primaryAccent,
