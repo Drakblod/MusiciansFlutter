@@ -771,7 +771,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
                   ),
                 ),
               ],
-            ),),
+            ),
             const SizedBox(height: 20),
 
             // Instrument Picker Dropdown
