@@ -657,8 +657,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
                 letterSpacing: 1.5,
               ),
             ),
-            const SizedBox(height: 10),
-            Row(
+            const SizedBox(height: 10),            Row(
               children: [
                 Expanded(
                   child: GestureDetector(
@@ -668,12 +667,12 @@ class _FindSubScreenState extends State<FindSubScreen> {
                       });
                     },
                     child: Container(
-                      height: 50,
+                      height: 48,
                       decoration: BoxDecoration(
                         color: _selectedRole == 'Substitute'
                             ? AppTheme.primaryAccent.withOpacity(0.12)
                             : AppTheme.cardBackground,
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(10),
                         border: Border.all(
                           color: _selectedRole == 'Substitute'
                               ? AppTheme.primaryAccent
@@ -685,7 +684,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
                         child: Text(
                           'Substitute',
                           style: GoogleFonts.inter(
-                            fontSize: 14,
+                            fontSize: 12,
                             fontWeight: FontWeight.bold,
                             color: _selectedRole == 'Substitute'
                                 ? Colors.white
@@ -696,23 +695,23 @@ class _FindSubScreenState extends State<FindSubScreen> {
                     ),
                   ),
                 ),
-                const SizedBox(width: 16),
+                const SizedBox(width: 8),
                 Expanded(
                   child: GestureDetector(
                     onTap: () {
                       setState(() {
-                        _selectedRole = 'Member';
+                        _selectedRole = 'New member';
                       });
                     },
                     child: Container(
-                      height: 50,
+                      height: 48,
                       decoration: BoxDecoration(
-                        color: _selectedRole == 'Member'
+                        color: _selectedRole == 'New member'
                             ? AppTheme.primaryAccent.withOpacity(0.12)
                             : AppTheme.cardBackground,
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(10),
                         border: Border.all(
-                          color: _selectedRole == 'Member'
+                          color: _selectedRole == 'New member'
                               ? AppTheme.primaryAccent
                               : const Color(0xFF2E2A4E),
                           width: 1.5,
@@ -720,13 +719,51 @@ class _FindSubScreenState extends State<FindSubScreen> {
                       ),
                       child: Center(
                         child: Text(
-                          'Member',
+                          'New member',
                           style: GoogleFonts.inter(
-                            fontSize: 14,
+                            fontSize: 12,
                             fontWeight: FontWeight.bold,
-                            color: _selectedRole == 'Member'
+                            color: _selectedRole == 'New member'
                                 ? Colors.white
-                               : AppTheme.textSecondary,
+                                : AppTheme.textSecondary,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _selectedRole = 'Session Musician';
+                      });
+                    },
+                    child: Container(
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: _selectedRole == 'Session Musician'
+                            ? AppTheme.primaryAccent.withOpacity(0.12)
+                            : AppTheme.cardBackground,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: _selectedRole == 'Session Musician'
+                              ? AppTheme.primaryAccent
+                              : const Color(0xFF2E2A4E),
+                          width: 1.5,
+                        ),
+                      ),
+                      child: Center(
+                        child: Text(
+                          'Session Musician',
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.inter(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: _selectedRole == 'Session Musician'
+                                ? Colors.white
+                                : AppTheme.textSecondary,
                           ),
                         ),
                       ),
@@ -734,7 +771,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
                   ),
                 ),
               ],
-            ),
+            ),),
             const SizedBox(height: 20),
 
             // Instrument Picker Dropdown
