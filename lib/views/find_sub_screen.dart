@@ -572,7 +572,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'FIND A MUSICIAN',
+              'FIND A MUSICIAN/VOCALIST',
               style: GoogleFonts.outfit(
                 fontSize: 26,
                 fontWeight: FontWeight.bold,
@@ -773,15 +773,6 @@ class _FindSubScreenState extends State<FindSubScreen> {
             ),
             const SizedBox(height: 24),
 
-            // Location Input
-            TextField(
-              controller: _locationController,
-              decoration: const InputDecoration(
-                hintText: 'Location (e.g. Stockholm, Gothenburg, Malmö)',
-                prefixIcon: Icon(Icons.location_on_rounded, color: AppTheme.textSecondary),
-              ),
-            ),
-            const SizedBox(height: 24),
             // Gig/Rehearsal Details card
             Container(
               padding: const EdgeInsets.all(20),
@@ -806,6 +797,19 @@ class _FindSubScreenState extends State<FindSubScreen> {
                         ),
                       ),
                     ],
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Location / Address',
+                    style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _locationController,
+                    decoration: const InputDecoration(
+                      hintText: 'Location (e.g. Stockholm, Gothenburg, Malmö)',
+                      prefixIcon: Icon(Icons.location_on_rounded, color: AppTheme.textSecondary),
+                    ),
                   ),
                   const SizedBox(height: 16),
                   Text(
