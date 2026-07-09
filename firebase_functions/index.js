@@ -341,3 +341,245 @@ exports.getAppMetrics = functions.region('europe-west1').https.onRequest(async (
   }
 });
 
+/**
+ * Triggered when a member responds to an event under /Bands/{bandId}/Events/{eventId}/Responses/{userId}.
+ * Sends a push notification to the event creator when 70% or more of invited members have responded.
+ */
+exports.onEventResponseChanged = functions.database
+  .ref('/Bands/{bandId}/Events/{eventId}/Responses/{userId}')
+  .onWrite(async (change, context) => {
+    const bandId = context.params.bandId;
+    const eventId = context.params.eventId;
+
+    try {
+      // 1. Fetch the event details
+      const eventRef = admin.database().ref(`/Bands/${bandId}/Events/${eventId}`);
+      const eventSnapshot = await eventRef.once('value');
+      const eventData = eventSnapshot.val();
+
+      if (!eventData) {
+        console.log(`Event ${eventId} not found under band ${bandId}`);
+        return null;
+      }
+
+      // Exit early if creatorThresholdNotified is already true or event is locked
+      if (eventData.creatorThresholdNotified === true || eventData.isLocked === true) {
+        console.log(`Event ${eventId} threshold already notified or event is locked.`);
+        return null;
+      }
+
+      // 2. Fetch the band members
+      const membersRef = admin.database().ref(`/Bands/${bandId}/Members_band`);
+      const membersSnapshot = await membersRef.once('value');
+      const members = membersSnapshot.val();
+      if (!members) {
+        console.log(`No members found for band ${bandId}`);
+        return null;
+      }
+
+      const totalMembersCount = Object.keys(members).length;
+      if (totalMembersCount === 0) return null;
+
+      // 3. Count responses
+      const responses = eventData.Responses || {};
+      const totalResponsesCount = Object.keys(responses).length;
+
+      const responseRate = totalResponsesCount / totalMembersCount;
+      console.log(`Event ${eventId} response count: ${totalResponsesCount}/${totalMembersCount} (${(responseRate * 100).toFixed(1)}%)`);
+
+      // 4. If response rate is >= 70% (0.70)
+      if (responseRate >= 0.70) {
+        const creatorId = eventData.createdBy;
+        if (!creatorId) {
+          console.log(`No creatorId found on event ${eventId}`);
+          return null;
+        }
+
+        // Fetch creator push token
+        const tokenSnapshot = await admin.database().ref(`/users/${creatorId}/info/PushToken`).once('value');
+        const token = tokenSnapshot.val();
+
+        if (token && token.trim().length > 0) {
+          const message = {
+            token: token,
+            notification: {
+              title: `📈 Event RSVP Milestone!`,
+              body: `70% or more of invited members have responded to your event: "${eventData.title}"`,
+            },
+            data: {
+              click_action: 'FLUTTER_NOTIFICATION_CLICK',
+              bandId: bandId,
+              eventId: eventId,
+              type: 'event_threshold',
+            },
+            android: {
+              notification: {
+                sound: 'guitarsound',
+                channelId: 'event_notifications',
+              },
+            },
+            apns: {
+              payload: {
+                aps: {
+                  sound: 'guitarsound.caf',
+                },
+              },
+            },
+          };
+
+          await admin.messaging().send(message);
+          console.log(`Sent threshold push notification to creator ${creatorId}`);
+        }
+
+        // Update database to prevent repeated notifications
+        await eventRef.child('creatorThresholdNotified').set(true);
+      }
+
+      return null;
+    } catch (error) {
+      console.error('Error in onEventResponseChanged trigger:', error);
+      return null;
+    }
+  });
+
+/**
+ * Scheduled cron job running every hour to send automatic RSVP reminders
+ * to members who have not responded after 48h, 72h, and 84h.
+ */
+exports.checkEventReminders = functions.pubsub
+  .schedule('every 1 hours')
+  .onRun(async (context) => {
+    try {
+      const now = Date.now();
+      const bandsRef = admin.database().ref('/Bands');
+      const bandsSnapshot = await bandsRef.once('value');
+      const bands = bandsSnapshot.val();
+
+      if (!bands) {
+        console.log('No bands found for reminders check.');
+        return null;
+      }
+
+      const bandIds = Object.keys(bands);
+
+      for (const bandId of bandIds) {
+        const eventsRef = admin.database().ref(`/Bands/${bandId}/Events`);
+        const eventsSnapshot = await eventsRef.once('value');
+        const events = eventsSnapshot.val();
+
+        if (!events) continue;
+
+        const eventIds = Object.keys(events);
+
+        for (const eventId of eventIds) {
+          const event = events[eventId];
+          if (!event) continue;
+
+          // Skip if locked
+          if (event.isLocked === true) continue;
+
+          // Skip if in the past
+          if (event.startDateTime) {
+            const startDate = new Date(event.startDateTime);
+            if (startDate.getTime() <= now) {
+              console.log(`Event ${eventId} has already started/passed. Skipping.`);
+              continue;
+            }
+          }
+
+          // Calculate hours elapsed since creation
+          const createdAt = event.createdAt;
+          if (!createdAt) continue;
+
+          const hoursElapsed = (now - createdAt) / (1000 * 60 * 60);
+          console.log(`Event ${eventId} created ${hoursElapsed.toFixed(1)} hours ago.`);
+
+          let send48 = false;
+          let send72 = false;
+          let send84 = false;
+
+          // Check flags using the exact model names
+          if (hoursElapsed >= 48 && hoursElapsed < 72 && !event.sentReminder48h) {
+            send48 = true;
+          } else if (hoursElapsed >= 72 && hoursElapsed < 84 && !event.sentReminder72h) {
+            send72 = true;
+          } else if (hoursElapsed >= 84 && !event.sentReminder84h) {
+            send84 = true;
+          }
+
+          if (send48 || send72 || send84) {
+            console.log(`Triggering reminder for event ${eventId} (48h: ${send48}, 72h: ${send72}, 84h: ${send84})`);
+
+            // Fetch band members
+            const membersRef = admin.database().ref(`/Bands/${bandId}/Members_band`);
+            const membersSnapshot = await membersRef.once('value');
+            const members = membersSnapshot.val() || {};
+            const memberIds = Object.keys(members);
+
+            // Get users who have NOT responded yet (not present in Responses)
+            const responses = event.Responses || {};
+            const nonRespondedMemberIds = memberIds.filter(userId => !responses[userId]);
+
+            if (nonRespondedMemberIds.length > 0) {
+              const recipients = [];
+              const tokenPromises = nonRespondedMemberIds.map(async (userId) => {
+                const tokenSnapshot = await admin.database().ref(`/users/${userId}/info/PushToken`).once('value');
+                const token = tokenSnapshot.val();
+                if (token && token.trim().length > 0) {
+                  recipients.push({ userId, token });
+                }
+              });
+
+              await Promise.all(tokenPromises);
+
+              if (recipients.length > 0) {
+                const messages = recipients.map(r => ({
+                  token: r.token,
+                  notification: {
+                    title: `⏰ RSVP Reminder: ${event.title}`,
+                    body: `Please RSVP to the upcoming ${event.eventType.toLowerCase()}! Let the band know if you can make it.`,
+                  },
+                  data: {
+                    click_action: 'FLUTTER_NOTIFICATION_CLICK',
+                    bandId: bandId,
+                    eventId: eventId,
+                    type: 'event_reminder',
+                  },
+                  android: {
+                    notification: {
+                      sound: 'guitarsound',
+                      channelId: 'event_notifications',
+                    },
+                  },
+                  apns: {
+                    payload: {
+                      aps: {
+                        sound: 'guitarsound.caf',
+                      },
+                    },
+                  },
+                }));
+
+                const dispatchRes = await admin.messaging().sendEach(messages);
+                console.log(`Dispatched ${dispatchRes.successCount} reminders for event ${eventId}`);
+              }
+            }
+
+            // Update database flags using the exact model names
+            const updateObj = {};
+            if (send48) updateObj['sentReminder48h'] = true;
+            if (send72) updateObj['sentReminder72h'] = true;
+            if (send84) updateObj['sentReminder84h'] = true;
+
+            await admin.database().ref(`/Bands/${bandId}/Events/${eventId}`).update(updateObj);
+          }
+        }
+      }
+      return null;
+    } catch (err) {
+      console.error('Error in checkEventReminders scheduler:', err);
+      return null;
+    }
+  });
+
+

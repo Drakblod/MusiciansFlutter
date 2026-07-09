@@ -1,0 +1,28 @@
+{
+  "rules": {
+    ".read": "auth != null",
+    ".write": "auth != null",
+    "Bands": {
+      "$bandId": {
+        "Events": {
+          "$eventId": {
+            // Only Leader or Admin can create, modify, or delete events
+            ".write": "root.child('Bands').child($bandId).child('Members_band').child(auth.uid).child('Role').val() == 'Leader' || root.child('Bands').child($bandId).child('Members_band').child(auth.uid).child('Role').val() == 'Admin'",
+            "Responses": {
+              "$userId": {
+                // A member can write their own response, but only if the event is not locked
+                ".write": "auth.uid == $userId && root.child('Bands').child($bandId).child('Events').child($eventId).child('isLocked').val() != true"
+              }
+            },
+            "externalInvitees": {
+              "$userId": {
+                // Guests can update their own response if not locked, and Leaders/Admins can invite/update them
+                ".write": "(auth.uid == $userId && root.child('Bands').child($bandId).child('Events').child($eventId).child('isLocked').val() != true) || root.child('Bands').child($bandId).child('Members_band').child(auth.uid).child('Role').val() == 'Leader' || root.child('Bands').child($bandId).child('Members_band').child(auth.uid).child('Role').val() == 'Admin'"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
