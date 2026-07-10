@@ -688,9 +688,9 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
   String _getShortLabel(String id, String fullTitle) {
     switch (id) {
       case 'find_musicians':
-        return 'Find Musician/Vocalist';
+        return 'Find\nMusician/Vocalist';
       case 'browse_musicians':
-        return 'Browse';
+        return 'Profiles';
       case 'find_gigs':
         return 'Find Gigs';
       case 'band_room':
@@ -706,57 +706,71 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
     }
   }
 
-  Widget _buildBubbleButton(BuildContext context, HomeActionItem item) {
+  Widget _buildCustomBubble(BuildContext context, HomeActionItem item, {required bool isCenter}) {
+    final double size = isCenter ? 124 : 102;
+    final double iconSize = isCenter ? 36 : 28;
+    final double fontSize = isCenter ? 10.5 : 9.5;
+
     return AnimatedTapDetector(
       onTap: item.onTap,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 58,
-            height: 58,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: const LinearGradient(
-                colors: [
-                  Color(0xFF1E1A3C),
-                  Color(0xFF120E2C),
-                ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              border: Border.all(
-                color: const Color(0xFF6B3A9A).withOpacity(0.5),
-                width: 1.5,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFF6B3A9A).withOpacity(0.2),
-                  blurRadius: 10,
-                  spreadRadius: 1,
-                  offset: const Offset(0, 4),
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: const RadialGradient(
+            colors: [
+              Color(0xFF2E1756), // Dark purple center
+              Color(0xFF0D0822), // Deep black-purple edge
+            ],
+            center: Alignment.center,
+            radius: 0.85,
+          ),
+          border: Border.all(
+            color: const Color(0xFFE5A9FF).withOpacity(0.9), // Bright glowing edge border
+            width: 1.5,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFFC066F6).withOpacity(0.55),
+              blurRadius: isCenter ? 26 : 20,
+              spreadRadius: 1,
+            ),
+          ],
+        ),
+        child: Container(
+          margin: const EdgeInsets.all(4), // Space between outer and inner ring
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: const Color(0xFFC066F6).withOpacity(0.25), // Subtle inner ring
+              width: 1,
+            ),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  item.icon,
+                  color: Colors.white,
+                  size: iconSize,
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  _getShortLabel(item.id, item.title),
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.inter(
+                    color: Colors.white.withOpacity(0.95),
+                    fontSize: fontSize,
+                    fontWeight: FontWeight.bold,
+                    height: 1.2,
+                  ),
                 ),
               ],
             ),
-            child: Icon(
-              item.icon,
-              color: AppTheme.primaryAccent,
-              size: 24,
-            ),
           ),
-          const SizedBox(height: 8),
-          Text(
-            _getShortLabel(item.id, item.title),
-              textAlign: TextAlign.center,
-              style: GoogleFonts.inter(
-                color: Colors.white,
-                fontSize: 10,
-                fontWeight: FontWeight.w600,
-              ),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
         ),
       ),
     );
@@ -936,8 +950,12 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
       return (defaultOrder[a.id] ?? 0).compareTo(defaultOrder[b.id] ?? 0);
     });
 
-    final topBubbleActions = allActions.take(5).toList();
-    final remainingCardActions = allActions.skip(5).toList();
+    final browseMusicians = allActions.firstWhere((item) => item.id == 'browse_musicians');
+    final findGigs = allActions.firstWhere((item) => item.id == 'find_gigs');
+    final findMusician = allActions.firstWhere((item) => item.id == 'find_musicians');
+
+    final topBubbleActions = [browseMusicians, findGigs, findMusician];
+    final remainingCardActions = allActions.where((item) => !topBubbleActions.contains(item)).toList();
 
     return Stack(
       children: [
@@ -1009,10 +1027,34 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
                       ),
                       const SizedBox(height: 16),
 
-                      // Quick Access Bubble Buttons
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: topBubbleActions.map((item) => Expanded(child: _buildBubbleButton(context, item))).toList(),
+                      // Curved/glow background behind the bubble row
+                      Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          Positioned.fill(
+                            child: CustomPaint(
+                              painter: NeonArcPainter(),
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 24),
+                            child: SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              physics: const BouncingScrollPhysics(),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  _buildCustomBubble(context, browseMusicians, isCenter: false),
+                                  const SizedBox(width: 18),
+                                  _buildCustomBubble(context, findGigs, isCenter: true),
+                                  const SizedBox(width: 18),
+                                  _buildCustomBubble(context, findMusician, isCenter: false),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 32),
 
@@ -1127,4 +1169,36 @@ class HomeUsageTracker {
       await prefs.remove('$_prefix$id');
     }
   }
+}
+
+class NeonArcPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = const Color(0xFFC066F6).withOpacity(0.4)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3); // Blur for neon glow
+
+    final shadowPaint = Paint()
+      ..color = const Color(0xFFC066F6).withOpacity(0.15)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 8
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10);
+
+    final path = Path()
+      ..moveTo(0, size.height * 0.65)
+      ..quadraticBezierTo(
+        size.width / 2,
+        size.height * 0.98,
+        size.width,
+        size.height * 0.65,
+      );
+
+    canvas.drawPath(path, shadowPaint);
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
