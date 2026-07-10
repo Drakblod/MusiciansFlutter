@@ -737,10 +737,10 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
           labelStyle: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 13),
           tabs: const [
             Tab(text: 'Chat'),
-            Tab(text: 'Gigs/Info'),
             Tab(text: 'Files'),
+            Tab(text: 'Calendar'),
+            Tab(text: 'Gigs/Info'),
             Tab(text: 'Members'),
-            Tab(text: 'Events'),
           ],
         ),
 
@@ -750,10 +750,10 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
             controller: _tabController,
             children: [
               _buildChatTab(),
-              _buildGigsNewsTab(),
               _buildFilesTab(),
-              _buildMembersTab(),
               _buildEventsTab(),
+              _buildGigsNewsTab(),
+              _buildMembersTab(),
             ],
           ),
         ),

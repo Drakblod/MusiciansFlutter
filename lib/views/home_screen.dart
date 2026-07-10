@@ -688,7 +688,7 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
   String _getShortLabel(String id, String fullTitle) {
     switch (id) {
       case 'find_musicians':
-        return 'Find Musicians/Vocalist';
+        return 'Find Musician/Vocalist';
       case 'browse_musicians':
         return 'Browse';
       case 'find_gigs':
@@ -697,57 +697,60 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
         return 'Band Room';
       case 'marketplace':
         return 'Market';
+      case 'collabs':
+        return 'Collabs';
+      case 'event_calendar':
+        return 'Event Calendar';
       default:
         return fullTitle;
     }
   }
 
   Widget _buildBubbleButton(BuildContext context, HomeActionItem item) {
-    return Expanded(
-      child: AnimatedTapDetector(
-        onTap: item.onTap,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 70,
-              height: 70,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: const LinearGradient(
-                  colors: [
-                    Color(0xFF1E1A3C),
-                    Color(0xFF120E2C),
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                border: Border.all(
-                  color: const Color(0xFF6B3A9A).withOpacity(0.5),
-                  width: 1.5,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFF6B3A9A).withOpacity(0.2),
-                    blurRadius: 10,
-                    spreadRadius: 1,
-                    offset: const Offset(0, 4),
-                  ),
+    return AnimatedTapDetector(
+      onTap: item.onTap,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 58,
+            height: 58,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: const LinearGradient(
+                colors: [
+                  Color(0xFF1E1A3C),
+                  Color(0xFF120E2C),
                 ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
               ),
-              child: Icon(
-                item.icon,
-                color: AppTheme.primaryAccent,
-                size: 28,
+              border: Border.all(
+                color: const Color(0xFF6B3A9A).withOpacity(0.5),
+                width: 1.5,
               ),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF6B3A9A).withOpacity(0.2),
+                  blurRadius: 10,
+                  spreadRadius: 1,
+                  offset: const Offset(0, 4),
+                ),
+              ],
             ),
-            const SizedBox(height: 8),
-            Text(
-              _getShortLabel(item.id, item.title),
+            child: Icon(
+              item.icon,
+              color: AppTheme.primaryAccent,
+              size: 24,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            _getShortLabel(item.id, item.title),
               textAlign: TextAlign.center,
               style: GoogleFonts.inter(
                 color: Colors.white,
-                fontSize: 12,
+                fontSize: 10,
                 fontWeight: FontWeight.w600,
               ),
               maxLines: 2,
@@ -876,6 +879,20 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
         },
       ),
       HomeActionItem(
+        id: 'collabs',
+        icon: Icons.handshake_outlined,
+        title: 'Collabs',
+        subtitle: 'Collaborate with other musicians on projects',
+        onTap: () {},
+      ),
+      HomeActionItem(
+        id: 'event_calendar',
+        icon: Icons.calendar_today_outlined,
+        title: 'Event Calendar',
+        subtitle: 'View your upcoming events and schedule',
+        onTap: () {},
+      ),
+      HomeActionItem(
         id: 'band_room',
         icon: Icons.groups_outlined,
         title: 'Band Room',
@@ -903,8 +920,10 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
       'find_musicians': 0,
       'browse_musicians': 1,
       'find_gigs': 2,
-      'band_room': 3,
-      'marketplace': 4,
+      'collabs': 3,
+      'event_calendar': 4,
+      'band_room': 5,
+      'marketplace': 6,
     };
 
     allActions.sort((a, b) {
@@ -917,8 +936,8 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
       return (defaultOrder[a.id] ?? 0).compareTo(defaultOrder[b.id] ?? 0);
     });
 
-    final top3 = allActions.take(3).toList();
-    final remaining = allActions.skip(3).toList();
+    final topBubbleActions = allActions.take(5).toList();
+    final remainingCardActions = allActions.skip(5).toList();
 
     return Stack(
       children: [
@@ -990,15 +1009,15 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
                       ),
                       const SizedBox(height: 16),
 
-                      // 3 Bubble Buttons
+                      // Quick Access Bubble Buttons
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: top3.map((item) => _buildBubbleButton(context, item)).toList(),
+                        children: topBubbleActions.map((item) => Expanded(child: _buildBubbleButton(context, item))).toList(),
                       ),
                       const SizedBox(height: 32),
 
                       // Remaining Cards List
-                      ...remaining.expand((item) => [
+                      ...remainingCardActions.expand((item) => [
                         _buildActionCard(
                           context,
                           icon: item.icon,
