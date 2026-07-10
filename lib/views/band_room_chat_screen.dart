@@ -1014,7 +1014,7 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                               borderRadius: BorderRadius.circular(6),
                               border: Border(
                                 left: BorderSide(
-                                  color: isMe ? Colors.white75 : AppTheme.primaryAccent,
+                                  color: isMe ? Colors.white70 : AppTheme.primaryAccent,
                                   width: 3,
                                 ),
                               ),
