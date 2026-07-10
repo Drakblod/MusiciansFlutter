@@ -1013,19 +1013,7 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
                       ),
                       const SizedBox(height: 24),
 
-                      // Quick Access Title
-                      Center(
-                        child: Text(
-                          'QUICK ACCESS',
-                          style: GoogleFonts.outfit(
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold,
-                            color: AppTheme.primaryAccent,
-                            letterSpacing: 1.5,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
+
 
                       // Curved/glow background behind the bubble row
                       Stack(
