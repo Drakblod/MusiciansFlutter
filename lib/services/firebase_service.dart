@@ -853,8 +853,10 @@ class FirebaseService {
   Future<void> sendBandMessageAsync(
     String bandId,
     String text,
-    String senderName,
-  ) async {
+    String senderName, {
+    String? replyToText,
+    String? replyToSenderName,
+  }) async {
     final selfId = currentUserId;
     if (selfId == null) return;
 
@@ -867,6 +869,8 @@ class FirebaseService {
       text: text,
       timestamp: DateTime.now(),
       senderName: senderName,
+      replyToText: replyToText,
+      replyToSenderName: replyToSenderName,
     );
 
     await msgRef.set(message.toJson());

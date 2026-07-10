@@ -38,6 +38,7 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
   List<Message> _chatMessages = [];
   List<BandEvent> _bandEvents = [];
   bool _isLoading = true;
+  Message? _replyToMessage;
 
   StreamSubscription<List<Message>>? _chatSubscription;
   StreamSubscription<List<BandEvent>>? _bandEventsSubscription;
@@ -282,10 +283,22 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
     final userProfile = appState.currentUserProfile;
     final senderName = userProfile?.displayName ?? userProfile?.nickname ?? 'Unknown';
 
+    final replyText = _replyToMessage?.text;
+    final replySenderName = _replyToMessage?.senderName;
+
     _messageController.clear();
+    setState(() {
+      _replyToMessage = null;
+    });
 
     try {
-      await appState.firebaseService.sendBandMessageAsync(bandId, text, senderName);
+      await appState.firebaseService.sendBandMessageAsync(
+        bandId,
+        text,
+        senderName,
+        replyToText: replyText,
+        replyToSenderName: replySenderName,
+      );
     } catch (e) {
       debugPrint("Error sending band message: $e");
     }
@@ -792,51 +805,110 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
             color: Color(0xFF0C091D),
             border: Border(top: BorderSide(color: Color(0xFF1E1A3C), width: 1)),
           ),
-          child: Row(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Plus/Add Button
-              Container(
-                margin: const EdgeInsets.only(right: 12),
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: AppTheme.cardBackground,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: const Color(0xFF231F45), width: 1),
-                ),
-                child: const Icon(Icons.add, color: Colors.white, size: 20),
-              ),
-
-              // Message Input
-              Expanded(
-                child: TextField(
-                  controller: _messageController,
-                  style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
-                  decoration: InputDecoration(
-                    hintText: 'Type a message...',
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                    hintStyle: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 14),
-                    fillColor: const Color(0xFF141029),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(24),
-                      borderSide: BorderSide.none,
+              if (_replyToMessage != null)
+                Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1A153A),
+                    borderRadius: BorderRadius.circular(8),
+                    border: const Border(
+                      left: BorderSide(color: AppTheme.primaryAccent, width: 4),
                     ),
                   ),
-                  onSubmitted: (_) => _sendMessage(),
-                ),
-              ),
-              const SizedBox(width: 8),
-
-              // Send Button
-              AnimatedTapDetector(
-                onTap: _sendMessage,
-                child: Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: const BoxDecoration(
-                    color: AppTheme.primaryAccent,
-                    shape: BoxShape.circle,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Replying to ${_replyToMessage!.senderName ?? "Member"}',
+                              style: GoogleFonts.inter(
+                                color: AppTheme.primaryAccent,
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              _replyToMessage!.text ?? '',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.inter(
+                                color: AppTheme.textSecondary,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            _replyToMessage = null;
+                          });
+                        },
+                        child: const Icon(
+                          Icons.close,
+                          color: AppTheme.textSecondary,
+                          size: 18,
+                        ),
+                      ),
+                    ],
                   ),
-                  child: const Icon(Icons.send_rounded, color: Colors.white, size: 18),
                 ),
+              Row(
+                children: [
+                  // Plus/Add Button
+                  Container(
+                    margin: const EdgeInsets.only(right: 12),
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: AppTheme.cardBackground,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: const Color(0xFF231F45), width: 1),
+                    ),
+                    child: const Icon(Icons.add, color: Colors.white, size: 20),
+                  ),
+
+                  // Message Input
+                  Expanded(
+                    child: TextField(
+                      controller: _messageController,
+                      style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
+                      decoration: InputDecoration(
+                        hintText: 'Type a message...',
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        hintStyle: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 14),
+                        fillColor: const Color(0xFF141029),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(24),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                      onSubmitted: (_) => _sendMessage(),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+
+                  // Send Button
+                  AnimatedTapDetector(
+                    onTap: _sendMessage,
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: const BoxDecoration(
+                        color: AppTheme.primaryAccent,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.send_rounded, color: Colors.white, size: 18),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -883,6 +955,19 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
             ),
             const SizedBox(width: 10),
           ],
+          if (isMe) ...[
+            IconButton(
+              icon: const Icon(Icons.reply, size: 16, color: AppTheme.textMuted),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+              onPressed: () {
+                setState(() {
+                  _replyToMessage = msg;
+                });
+              },
+            ),
+            const SizedBox(width: 8),
+          ],
           Flexible(
             child: Column(
               crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
@@ -899,23 +984,75 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                       ),
                     ),
                   ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: isMe ? AppTheme.primaryAccent : const Color(0xFF1E1A3A),
-                    borderRadius: BorderRadius.only(
-                      topLeft: const Radius.circular(16),
-                      topRight: const Radius.circular(16),
-                      bottomLeft: Radius.circular(isMe ? 16 : 4),
-                      bottomRight: Radius.circular(isMe ? 4 : 16),
+                GestureDetector(
+                  onDoubleTap: () {
+                    setState(() {
+                      _replyToMessage = msg;
+                    });
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: isMe ? AppTheme.primaryAccent : const Color(0xFF1E1A3A),
+                      borderRadius: BorderRadius.only(
+                        topLeft: const Radius.circular(16),
+                        topRight: const Radius.circular(16),
+                        bottomLeft: Radius.circular(isMe ? 16 : 4),
+                        bottomRight: Radius.circular(isMe ? 4 : 16),
+                      ),
                     ),
-                  ),
-                  child: Text(
-                    msg.text ?? '',
-                    style: GoogleFonts.inter(
-                      fontSize: 14,
-                      color: Colors.white,
-                      height: 1.3,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (msg.replyToText != null) ...[
+                          Container(
+                            margin: const EdgeInsets.only(bottom: 6),
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withOpacity(0.18),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border(
+                                left: BorderSide(
+                                  color: isMe ? Colors.white75 : AppTheme.primaryAccent,
+                                  width: 3,
+                                ),
+                              ),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  msg.replyToSenderName ?? 'Member',
+                                  style: GoogleFonts.inter(
+                                    color: isMe ? Colors.white : AppTheme.primaryAccent,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  msg.replyToText!,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: GoogleFonts.inter(
+                                    color: Colors.white70,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                        Text(
+                          msg.text ?? '',
+                          style: GoogleFonts.inter(
+                            fontSize: 14,
+                            color: Colors.white,
+                            height: 1.3,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -931,32 +1068,25 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                             : '12:00',
                         style: GoogleFonts.inter(fontSize: 10, color: AppTheme.textMuted),
                       ),
-                      const SizedBox(width: 8),
-                      // Small Heart Reaction Like Mockup
-                      if (!isMe)
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF141029),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.favorite, color: Colors.redAccent, size: 10),
-                              const SizedBox(width: 2),
-                              Text(
-                                '2',
-                                style: GoogleFonts.inter(fontSize: 9, color: Colors.white),
-                              )
-                            ],
-                          ),
-                        )
                     ],
                   ),
                 ),
               ],
             ),
           ),
+          if (!isMe) ...[
+            const SizedBox(width: 8),
+            IconButton(
+              icon: const Icon(Icons.reply, size: 16, color: AppTheme.textMuted),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+              onPressed: () {
+                setState(() {
+                  _replyToMessage = msg;
+                });
+              },
+            ),
+          ],
         ],
       ),
     );

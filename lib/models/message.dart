@@ -7,6 +7,8 @@ class Message {
   final bool isRead;
   final String? senderName;
   final bool isCurrentUserSender;
+  final String? replyToText;
+  final String? replyToSenderName;
 
   Message({
     this.id,
@@ -17,6 +19,8 @@ class Message {
     this.isRead = false,
     this.senderName,
     this.isCurrentUserSender = false,
+    this.replyToText,
+    this.replyToSenderName,
   });
 
   factory Message.fromJson(Map<dynamic, dynamic> json, String keyId, {String? currentUserId}) {
@@ -36,11 +40,13 @@ class Message {
       isRead: json['IsRead'] == true,
       senderName: json['SenderName']?.toString(),
       isCurrentUserSender: currentUserId != null && senderIdStr == currentUserId,
+      replyToText: json['ReplyToText']?.toString(),
+      replyToSenderName: json['ReplyToSenderName']?.toString(),
     );
   }
 
   Map<String, dynamic> toJson() {
-    return {
+    final data = <String, dynamic>{
       'SenderId': senderId,
       'ReceiverId': receiverId,
       'Text': text,
@@ -48,6 +54,13 @@ class Message {
       'IsRead': isRead,
       'SenderName': senderName,
     };
+    if (replyToText != null) {
+      data['ReplyToText'] = replyToText;
+    }
+    if (replyToSenderName != null) {
+      data['ReplyToSenderName'] = replyToSenderName;
+    }
+    return data;
   }
 
   bool get isNew => !isRead;
