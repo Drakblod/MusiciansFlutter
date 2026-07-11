@@ -714,12 +714,19 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
               ..._members.take(3).map((m) {
                 return Padding(
                   padding: const EdgeInsets.only(right: 6),
-                  child: CircleAvatar(
-                    radius: 16,
-                    backgroundColor: AppTheme.primaryAccent.withOpacity(0.3),
-                    child: Text(
-                      (m.nickname ?? 'M').substring(0, 1).toUpperCase(),
-                      style: const TextStyle(fontSize: 12, color: Colors.white),
+                  child: GestureDetector(
+                    onTap: () {
+                      if (m.userId != null) {
+                        _navigateTo1on1Chat(m.userId!, m.nickname ?? 'Member');
+                      }
+                    },
+                    child: CircleAvatar(
+                      radius: 16,
+                      backgroundColor: AppTheme.primaryAccent.withOpacity(0.3),
+                      child: Text(
+                        (m.nickname ?? 'M').substring(0, 1).toUpperCase(),
+                        style: const TextStyle(fontSize: 12, color: Colors.white),
+                      ),
                     ),
                   ),
                 );
@@ -945,12 +952,19 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
         mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
         children: [
           if (!isMe) ...[
-            CircleAvatar(
-              radius: 16,
-              backgroundColor: AppTheme.primaryAccent.withOpacity(0.3),
-              child: Text(
-                senderName.isNotEmpty ? senderName.substring(0, 1).toUpperCase() : 'M',
-                style: const TextStyle(fontSize: 11, color: Colors.white),
+            GestureDetector(
+              onTap: () {
+                if (msg.senderId != null) {
+                  _navigateTo1on1Chat(msg.senderId!, senderName);
+                }
+              },
+              child: CircleAvatar(
+                radius: 16,
+                backgroundColor: AppTheme.primaryAccent.withOpacity(0.3),
+                child: Text(
+                  senderName.isNotEmpty ? senderName.substring(0, 1).toUpperCase() : 'M',
+                  style: const TextStyle(fontSize: 11, color: Colors.white),
+                ),
               ),
             ),
             const SizedBox(width: 10),
@@ -973,14 +987,21 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
               crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
               children: [
                 if (!isMe)
-                  Padding(
-                    padding: const EdgeInsets.only(left: 4, bottom: 4),
-                    child: Text(
-                      senderName,
-                      style: GoogleFonts.inter(
-                        fontSize: 12,
-                        color: AppTheme.primaryAccent,
-                        fontWeight: FontWeight.bold,
+                  GestureDetector(
+                    onTap: () {
+                      if (msg.senderId != null) {
+                        _navigateTo1on1Chat(msg.senderId!, senderName);
+                      }
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: 4, bottom: 4),
+                      child: Text(
+                        senderName,
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          color: AppTheme.primaryAccent,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                   ),
@@ -1215,6 +1236,43 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
     );
   }
 
+  Future<void> _navigateTo1on1Chat(String otherUserId, String otherUserName) async {
+    final appState = Provider.of<AppState>(context, listen: false);
+    final selfId = appState.currentUserId;
+    if (selfId == null || otherUserId == selfId) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(color: AppTheme.primaryAccent),
+      ),
+    );
+
+    try {
+      final convId = await appState.firebaseService.getOrCreateDirectConversationAsync(selfId, otherUserId);
+      if (mounted) {
+        Navigator.pop(context); // Dismiss loader
+        Navigator.pushNamed(
+          context,
+          '/chat-detail',
+          arguments: {
+            'conversationId': convId,
+            'receiverId': otherUserId,
+            'receiverName': otherUserName,
+          },
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context); // Dismiss loader
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to open chat: $e'), backgroundColor: AppTheme.danger),
+        );
+      }
+    }
+  }
+
   Future<void> _viewMemberProfile(String userId) async {
     showDialog(
       context: context,
@@ -1302,7 +1360,7 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
               return AnimatedTapDetector(
                 onTap: () {
                   if (member.userId != null) {
-                    _viewMemberProfile(member.userId!);
+                    _navigateTo1on1Chat(member.userId!, member.nickname ?? 'Member');
                   }
                 },
                 child: Container(
