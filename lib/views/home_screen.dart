@@ -243,7 +243,7 @@ class HomeScreen extends StatelessWidget {
       HomeActionItem(
         id: 'find_gigs',
         icon: Icons.local_activity_outlined,
-        title: 'Find Gigs',
+        title: 'Gigs list',
         subtitle: 'Find gigs and opportunities in your area',
         onTap: () {
           appState.trackButtonClick('find_gigs');
@@ -692,7 +692,7 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
       case 'browse_musicians':
         return 'Profiles';
       case 'find_gigs':
-        return 'Find Gigs';
+        return 'Gigs list';
       case 'band_room':
         return 'Band Room';
       case 'marketplace':
@@ -884,7 +884,7 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
       HomeActionItem(
         id: 'find_gigs',
         icon: Icons.local_activity_outlined,
-        title: 'Find Gigs',
+        title: 'Gigs list',
         subtitle: 'Find gigs and opportunities in your area',
         onTap: () async {
           await HomeUsageTracker.incrementClick('find_gigs');
