@@ -34,6 +34,8 @@ import 'views/create_listing_page.dart';
 import 'views/listing_details_page.dart';
 import 'views/my_listings_page.dart';
 import 'models/listing.dart';
+import 'models/collab_session.dart';
+import 'models/collab_studio.dart';
 import 'views/collabs_landing_screen.dart';
 import 'views/find_collabs_screen.dart';
 import 'views/find_studios_screen.dart';
