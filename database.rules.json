@@ -1,8 +1,12 @@
 {
   "rules": {
-    ".read": "auth != null",
-    ".write": "auth != null",
+    "users": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
     "Bands": {
+      ".read": "auth != null",
+      ".write": "auth != null",
       "$bandId": {
         "Events": {
           "$eventId": {
@@ -20,6 +24,67 @@
                 ".write": "(auth.uid == $userId && root.child('Bands').child($bandId).child('Events').child($eventId).child('isLocked').val() != true) || root.child('Bands').child($bandId).child('Members_band').child(auth.uid).child('Role').val() == 'Leader' || root.child('Bands').child($bandId).child('Members_band').child(auth.uid).child('Role').val() == 'Admin'"
               }
             }
+          }
+        }
+      }
+    },
+    "SubRequests": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "conversations": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "bandconversations": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "files": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "marketplaceListings": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "reportedListings": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "BandEvents": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "Collabs": {
+      "Sessions": {
+        ".read": "auth != null",
+        "$sessionId": {
+          ".write": "auth != null && (!data.exists() || data.child('CreatorId').val() == auth.uid)",
+          ".validate": "newData.hasChildren(['CreatorId', 'Title', 'Description', 'SessionType', 'IsDateFlexible', 'Status']) && (!data.exists() || data.child('CreatorId').val() == newData.child('CreatorId').val())"
+        }
+      },
+      "Studios": {
+        ".read": "auth != null",
+        "$studioId": {
+          ".write": "auth != null && (!data.exists() || data.child('CreatorId').val() == auth.uid)",
+          ".validate": "newData.hasChildren(['CreatorId', 'Name', 'Description', 'Location']) && (!data.exists() || data.child('CreatorId').val() == newData.child('CreatorId').val())"
+        }
+      },
+      "Applications": {
+        "$sessionId": {
+          "$applicantId": {
+            ".read": "auth != null && (auth.uid == $applicantId || root.child('Collabs').child('Sessions').child($sessionId).child('CreatorId').val() == auth.uid)",
+            ".write": "auth != null && (auth.uid == $applicantId || root.child('Collabs').child('Sessions').child($sessionId).child('CreatorId').val() == auth.uid)",
+            ".validate": "newData.exists() ? (
+              (!data.exists() ? (
+                newData.child('Status').val() == 'pending' &&
+                newData.child('CreatorId').val() == root.child('Collabs').child('Sessions').child($sessionId).child('CreatorId').val()
+              ) : (
+                (auth.uid == $applicantId && newData.child('Status').val() == data.child('Status').val() && newData.child('CreatorId').val() == data.child('CreatorId').val()) ||
+                (root.child('Collabs').child('Sessions').child($sessionId).child('CreatorId').val() == auth.uid && newData.child('CreatorId').val() == data.child('CreatorId').val() && (newData.child('Status').val() == 'accepted' || newData.child('Status').val() == 'declined' || newData.child('Status').val() == 'pending'))
+              ))
+            ) : true"
           }
         }
       }

@@ -15,6 +15,8 @@ import '../models/calendar_event.dart';
 import '../models/agreement.dart';
 import '../models/listing.dart';
 import '../models/band_event.dart';
+import '../models/collab_session.dart';
+import '../models/collab_studio.dart';
 
 class FirebaseService {
   static final StreamController<Map<String, dynamic>> _notificationClickStreamController =
@@ -102,6 +104,9 @@ class FirebaseService {
       'SpotifyUrl': profile.spotifyUrl,
       'YoutubeUrl': profile.youtubeUrl,
       'AudioSnippetUrl': profile.audioSnippetUrl,
+      'CollabRoles': profile.collabRoles,
+      'CollabRemote': profile.collabRemote,
+      'CollabBio': profile.collabBio,
     };
     await _dbRef('users/$userId/info').set(infoMap);
     await _dbRef('users/$userId/DisplayName').set(profile.displayName);
@@ -133,6 +138,9 @@ class FirebaseService {
         spotifyUrl: infoMap['SpotifyUrl']?.toString(),
         youtubeUrl: infoMap['YoutubeUrl']?.toString(),
         audioSnippetUrl: infoMap['AudioSnippetUrl']?.toString(),
+        collabRoles: _parseList(infoMap['CollabRoles']),
+        collabRemote: infoMap['CollabRemote'] == true,
+        collabBio: infoMap['CollabBio']?.toString(),
       );
     }
     return null;
@@ -166,6 +174,9 @@ class FirebaseService {
             spotifyUrl: infoMap['SpotifyUrl']?.toString(),
             youtubeUrl: infoMap['YoutubeUrl']?.toString(),
             audioSnippetUrl: infoMap['AudioSnippetUrl']?.toString(),
+            collabRoles: _parseList(infoMap['CollabRoles']),
+            collabRemote: infoMap['CollabRemote'] == true,
+            collabBio: infoMap['CollabBio']?.toString(),
           ));
         }
       });
@@ -1341,6 +1352,128 @@ class FirebaseService {
       return snapshot.value?.toString();
     }
     return null;
+  }
+
+  // ==========================================
+  // 10. Collabs MVP Methods
+  // ==========================================
+
+  // Studios
+  Future<void> saveCollabStudioAsync(CollabStudio studio) async {
+    final id = studio.id ?? _dbRef('Collabs/Studios').push().key;
+    if (id == null) return;
+    final updatedStudio = CollabStudio(
+      id: id,
+      name: studio.name,
+      description: studio.description,
+      location: studio.location,
+      genres: studio.genres,
+      facilities: studio.facilities,
+      contactInfo: studio.contactInfo,
+      creatorId: studio.creatorId,
+      createdAt: studio.createdAt == 0 ? DateTime.now().millisecondsSinceEpoch : studio.createdAt,
+      updatedAt: DateTime.now().millisecondsSinceEpoch,
+    );
+    await _dbRef('Collabs/Studios/$id').set(updatedStudio.toJson());
+  }
+
+  Future<void> deleteCollabStudioAsync(String studioId) async {
+    await _dbRef('Collabs/Studios/$studioId').remove();
+  }
+
+  Future<List<CollabStudio>> getCollabStudiosAsync() async {
+    final snapshot = await _dbRef('Collabs/Studios').get();
+    final List<CollabStudio> studios = [];
+    if (snapshot.exists && snapshot.value is Map) {
+      final data = snapshot.value as Map;
+      data.forEach((k, v) {
+        if (v is Map) {
+          studios.add(CollabStudio.fromJson(v, k.toString()));
+        }
+      });
+    }
+    return studios;
+  }
+
+  // Sessions
+  Future<void> saveCollabSessionAsync(CollabSession session) async {
+    final id = session.id ?? _dbRef('Collabs/Sessions').push().key;
+    if (id == null) return;
+    final updatedSession = CollabSession(
+      id: id,
+      title: session.title,
+      description: session.description,
+      sessionType: session.sessionType,
+      sessionCategory: session.sessionCategory,
+      isDateFlexible: session.isDateFlexible,
+      startDateTime: session.startDateTime,
+      location: session.location,
+      genres: session.genres,
+      lookingForRoles: session.lookingForRoles,
+      lookingForInstruments: session.lookingForInstruments,
+      creatorId: session.creatorId,
+      createdAt: session.createdAt == 0 ? DateTime.now().millisecondsSinceEpoch : session.createdAt,
+      updatedAt: DateTime.now().millisecondsSinceEpoch,
+      status: session.status,
+    );
+    await _dbRef('Collabs/Sessions/$id').set(updatedSession.toJson());
+  }
+
+  Future<void> deleteCollabSessionAsync(String sessionId) async {
+    await _dbRef('Collabs/Sessions/$sessionId').remove();
+    await _dbRef('Collabs/Applications/$sessionId').remove();
+  }
+
+  Future<List<CollabSession>> getCollabSessionsAsync() async {
+    final snapshot = await _dbRef('Collabs/Sessions').get();
+    final List<CollabSession> sessions = [];
+    if (snapshot.exists && snapshot.value is Map) {
+      final data = snapshot.value as Map;
+      data.forEach((k, v) {
+        if (v is Map) {
+          sessions.add(CollabSession.fromJson(v, k.toString()));
+        }
+      });
+    }
+    return sessions;
+  }
+
+  // Applications
+  Future<void> applyToCollabSessionAsync(String sessionId, String userId, CollabSessionApplication application) async {
+    await _dbRef('Collabs/Applications/$sessionId/$userId').set(application.toJson());
+  }
+
+  Future<List<CollabSessionApplication>> getCollabSessionApplicationsAsync(String sessionId) async {
+    final snapshot = await _dbRef('Collabs/Applications/$sessionId').get();
+    final List<CollabSessionApplication> apps = [];
+    if (snapshot.exists && snapshot.value is Map) {
+      final data = snapshot.value as Map;
+      data.forEach((k, v) {
+        if (v is Map) {
+          apps.add(CollabSessionApplication.fromJson(v, k.toString()));
+        }
+      });
+    }
+    return apps;
+  }
+
+  Future<CollabSessionApplication?> getCollabSessionApplicationAsync(String sessionId, String applicantId) async {
+    final snapshot = await _dbRef('Collabs/Applications/$sessionId/$applicantId').get();
+    if (snapshot.exists && snapshot.value is Map) {
+      return CollabSessionApplication.fromJson(snapshot.value as Map, applicantId);
+    }
+    return null;
+  }
+
+  Future<void> updateCollabApplicationStatusAsync(String sessionId, String applicantId, String status) async {
+    await _dbRef('Collabs/Applications/$sessionId/$applicantId/Status').set(status);
+  }
+
+  Future<void> cancelCollabSessionApplicationAsync(String sessionId, String applicantId) async {
+    final app = await getCollabSessionApplicationAsync(sessionId, applicantId);
+    if (app != null && app.status == 'pending') {
+      await _dbRef('Collabs/Applications/$sessionId/$applicantId').remove();
+    }
   }
 }
 

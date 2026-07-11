@@ -310,6 +310,81 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
                       ),
                     ),
                   ),
+                  if (widget.musician.collabRoles.isNotEmpty) ...[
+                    const SizedBox(height: 24),
+                    Text(
+                      'Collaboration Info',
+                      style: GoogleFonts.outfit(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: AppTheme.cardBackground,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: const Color(0xFF231F45), width: 1),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.handshake_outlined, color: AppTheme.primaryAccent, size: 18),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'Roles: ${widget.musician.collabRoles.map((r) => r[0].toUpperCase() + r.substring(1)).join(", ")}',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          Row(
+                            children: [
+                              Icon(
+                                widget.musician.collabRemote ? Icons.check_circle_outline : Icons.cancel_outlined,
+                                color: widget.musician.collabRemote ? AppTheme.success : AppTheme.danger,
+                                size: 18,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                widget.musician.collabRemote
+                                    ? 'Remote Collaboration Available'
+                                    : 'Remote Collaboration Unavailable',
+                                style: GoogleFonts.inter(
+                                  fontSize: 13,
+                                  color: AppTheme.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (widget.musician.collabBio != null && widget.musician.collabBio!.isNotEmpty) ...[
+                            const SizedBox(height: 12),
+                            const Divider(color: Color(0xFF231F45)),
+                            const SizedBox(height: 8),
+                            Text(
+                              widget.musician.collabBio!,
+                              style: GoogleFonts.inter(
+                                fontSize: 13,
+                                color: AppTheme.textSecondary,
+                                height: 1.5,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
                   if (widget.musician.audioSnippetUrl != null && widget.musician.audioSnippetUrl!.isNotEmpty) ...[
                     const SizedBox(height: 24),
                     Text(

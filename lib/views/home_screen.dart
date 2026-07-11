@@ -897,7 +897,11 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
         icon: Icons.handshake_outlined,
         title: 'Collabs',
         subtitle: 'Collaborate with other musicians on projects',
-        onTap: () {},
+        onTap: () async {
+          await HomeUsageTracker.incrementClick('collabs');
+          await Navigator.pushNamed(context, '/collabs');
+          _loadUsageData();
+        },
       ),
       HomeActionItem(
         id: 'event_calendar',

@@ -34,6 +34,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   String? _pickedAudioFileName;
   bool _isUploadingAudio = false;
 
+  List<String> _selectedCollabRoles = [];
+  bool _collabRemote = false;
+  final _collabBioController = TextEditingController();
+
   final List<String> _roles = [
     "BANDLEADER",
     "PRODUCER",
@@ -159,6 +163,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         _selectedInstruments.add(role);
       }
       _selectedGenres = List<String>.from(user.genres);
+      _selectedCollabRoles = List<String>.from(user.collabRoles);
+      _collabRemote = user.collabRemote;
+      _collabBioController.text = user.collabBio ?? '';
     }
   }
 
@@ -169,6 +176,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _aboutController.dispose();
     _spotifyController.dispose();
     _youtubeController.dispose();
+    _collabBioController.dispose();
     super.dispose();
   }
 
@@ -297,6 +305,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           spotifyUrl: _spotifyController.text.trim().isEmpty ? null : _spotifyController.text.trim(),
           youtubeUrl: _youtubeController.text.trim().isEmpty ? null : _youtubeController.text.trim(),
           audioSnippetUrl: _audioSnippetUrl,
+          collabRoles: _selectedCollabRoles,
+          collabRemote: _collabRemote,
+          collabBio: _collabBioController.text.trim().isEmpty ? null : _collabBioController.text.trim(),
         );
 
         await appState.firebaseService.saveUserProfileAsync(user.userId ?? '', updatedProfile);
@@ -699,6 +710,102 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                               ),
                             ),
                           ),
+              ),
+              // Collabs Section
+              const SizedBox(height: 30),
+              Text(
+                'COLLABORATION SETTINGS',
+                style: GoogleFonts.outfit(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: AppTheme.primaryAccent,
+                  letterSpacing: 1.2,
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // Collab Roles Checkboxes
+              Text(
+                'Collaboration Roles',
+                style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: ['Songwriter', 'Producer', 'Engineer'].map((role) {
+                  final key = role.toLowerCase();
+                  final isSelected = _selectedCollabRoles.contains(key);
+                  return ChoiceChip(
+                    label: Text(role),
+                    selected: isSelected,
+                    onSelected: (val) {
+                      setState(() {
+                        if (val) {
+                          _selectedCollabRoles.add(key);
+                        } else {
+                          _selectedCollabRoles.remove(key);
+                        }
+                      });
+                    },
+                    selectedColor: AppTheme.primaryAccent,
+                    backgroundColor: AppTheme.cardBackground,
+                    labelStyle: GoogleFonts.inter(
+                      fontSize: 12,
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                      color: Colors.white,
+                    ),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    side: BorderSide(color: isSelected ? AppTheme.primaryAccent : const Color(0xFF2E2A4E)),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 20),
+
+              // Remote Switch
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Remote Collaboration',
+                        style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Are you available for remote work?',
+                        style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
+                      ),
+                    ],
+                  ),
+                  Switch(
+                    value: _collabRemote,
+                    onChanged: (val) {
+                      setState(() {
+                        _collabRemote = val;
+                      });
+                    },
+                    activeColor: AppTheme.primaryAccent,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+
+              // Collab Bio Description
+              Text(
+                'Collaboration Bio / Details',
+                style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+              ),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: _collabBioController,
+                maxLines: 3,
+                style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
+                decoration: const InputDecoration(
+                  hintText: 'Share what gear you use, your songwriting process, or what you are looking for in collabs...',
+                ),
               ),
               const SizedBox(height: 40),
 

@@ -582,4 +582,97 @@ exports.checkEventReminders = functions.pubsub
     }
   });
 
+exports.onCollabSessionApplicationChanged = onValueWritten({
+  ref: '/Collabs/Applications/{sessionId}/{applicantId}'
+}, async (event) => {
+  try {
+    const beforeData = event.data.before.val();
+    const afterData = event.data.after.val();
+
+    if (!afterData) {
+      console.log('Application was deleted, no notification sent.');
+      return null;
+    }
+
+    const sessionId = event.params.sessionId;
+    const applicantId = event.params.applicantId;
+
+    if (!beforeData) {
+      const creatorId = afterData.CreatorId || afterData.creatorId;
+      if (!creatorId) {
+        console.log('No CreatorId specified for the session application.');
+        return null;
+      }
+
+      const sessionSnapshot = await admin.database().ref(`/Collabs/Sessions/${sessionId}/Title`).once('value');
+      const sessionTitle = sessionSnapshot.val() || 'Collab Session';
+
+      const tokenSnapshot = await admin.database().ref(`/users/${creatorId}/info/PushToken`).once('value');
+      const token = tokenSnapshot.val();
+
+      if (!token) {
+        console.log(`No registered push token found for session creator ${creatorId}`);
+        return null;
+      }
+
+      const message = {
+        token: token,
+        notification: {
+          title: 'New Session Application',
+          body: `A user has requested to join your session: "${sessionTitle}"`,
+        },
+        data: {
+          type: 'session_application',
+          sessionId: sessionId,
+          applicantId: applicantId,
+        }
+      };
+
+      await admin.messaging().send(message);
+      console.log(`Sent new application notification to session creator ${creatorId}`);
+      return null;
+    }
+
+    const beforeStatus = beforeData.Status || beforeData.status;
+    const afterStatus = afterData.Status || afterData.status;
+
+    if (beforeStatus !== afterStatus) {
+      if (afterStatus === 'accepted' || afterStatus === 'declined') {
+        const sessionSnapshot = await admin.database().ref(`/Collabs/Sessions/${sessionId}/Title`).once('value');
+        const sessionTitle = sessionSnapshot.val() || 'Collab Session';
+
+        const tokenSnapshot = await admin.database().ref(`/users/${applicantId}/info/PushToken`).once('value');
+        const token = tokenSnapshot.val();
+
+        if (!token) {
+          console.log(`No registered push token found for applicant ${applicantId}`);
+          return null;
+        }
+
+        const message = {
+          token: token,
+          notification: {
+            title: `Session Request ${afterStatus.toUpperCase()}`,
+            body: `Your request to join "${sessionTitle}" has been ${afterStatus}.`,
+          },
+          data: {
+            type: 'session_application_status',
+            sessionId: sessionId,
+            status: afterStatus,
+          }
+        };
+
+        await admin.messaging().send(message);
+        console.log(`Sent application status ${afterStatus} notification to applicant ${applicantId}`);
+      }
+      return null;
+    }
+
+    return null;
+  } catch (err) {
+    console.error('Error in onCollabSessionApplicationChanged trigger:', err);
+    return null;
+  }
+});
+
 

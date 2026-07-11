@@ -34,6 +34,14 @@ import 'views/create_listing_page.dart';
 import 'views/listing_details_page.dart';
 import 'views/my_listings_page.dart';
 import 'models/listing.dart';
+import 'views/collabs_landing_screen.dart';
+import 'views/find_collabs_screen.dart';
+import 'views/find_studios_screen.dart';
+import 'views/studio_details_screen.dart';
+import 'views/edit_studio_screen.dart';
+import 'views/find_sessions_screen.dart';
+import 'views/create_session_screen.dart';
+import 'views/session_details_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -107,6 +115,11 @@ class MyApp extends StatelessWidget {
           '/marketplace': (context) => const MarketplacePage(),
           '/create-listing': (context) => const CreateListingPage(),
           '/my-listings': (context) => const MyListingsPage(),
+          '/collabs': (context) => const CollabsLandingScreen(),
+          '/find-studios': (context) => const FindStudiosScreen(),
+          '/edit-studio': (context) => const EditStudioScreen(),
+          '/find-sessions': (context) => const FindSessionsScreen(),
+          '/create-session': (context) => const CreateSessionScreen(),
         },
         onGenerateRoute: (settings) {
           if (settings.name == '/listing-details') {
@@ -114,6 +127,36 @@ class MyApp extends StatelessWidget {
             return MaterialPageRoute(
               builder: (context) => ListingDetailsPage(
                 listing: listing,
+              ),
+              settings: settings,
+            );
+          }
+
+          if (settings.name == '/find-collabs') {
+            final role = settings.arguments as String? ?? 'songwriter';
+            return MaterialPageRoute(
+              builder: (context) => FindCollabsScreen(
+                role: role,
+              ),
+              settings: settings,
+            );
+          }
+
+          if (settings.name == '/studio-details') {
+            final studio = settings.arguments as CollabStudio;
+            return MaterialPageRoute(
+              builder: (context) => StudioDetailsScreen(
+                studio: studio,
+              ),
+              settings: settings,
+            );
+          }
+
+          if (settings.name == '/session-details') {
+            final session = settings.arguments as CollabSession;
+            return MaterialPageRoute(
+              builder: (context) => SessionDetailsScreen(
+                session: session,
               ),
               settings: settings,
             );

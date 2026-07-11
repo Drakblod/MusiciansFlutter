@@ -16,6 +16,9 @@ class UserProfile {
   final String? spotifyUrl;
   final String? youtubeUrl;
   final String? audioSnippetUrl;
+  final List<String> collabRoles;
+  final bool collabRemote;
+  final String? collabBio;
 
   UserProfile({
     this.userType,
@@ -35,6 +38,9 @@ class UserProfile {
     this.spotifyUrl,
     this.youtubeUrl,
     this.audioSnippetUrl,
+    this.collabRoles = const [],
+    this.collabRemote = false,
+    this.collabBio,
   });
 
   factory UserProfile.fromJson(Map<dynamic, dynamic> json) {
@@ -56,6 +62,9 @@ class UserProfile {
       spotifyUrl: json['SpotifyUrl']?.toString(),
       youtubeUrl: json['YoutubeUrl']?.toString(),
       audioSnippetUrl: json['AudioSnippetUrl']?.toString(),
+      collabRoles: _toList(json['CollabRoles']),
+      collabRemote: json['CollabRemote'] == true,
+      collabBio: json['CollabBio']?.toString(),
     );
   }
 
@@ -78,6 +87,9 @@ class UserProfile {
       'SpotifyUrl': spotifyUrl,
       'YoutubeUrl': youtubeUrl,
       'AudioSnippetUrl': audioSnippetUrl,
+      'CollabRoles': collabRoles,
+      'CollabRemote': collabRemote,
+      'CollabBio': collabBio,
     };
   }
 
