@@ -308,38 +308,7 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
       }
     }
 
-    // Musician-specific instrument/voice part calculations
-    final Map<String, int> instrumentAttending = {};
-    final Map<String, int> instrumentTotal = {};
 
-    for (var member in _members) {
-      final userId = member.userId;
-      if (userId == null) continue;
-      final profile = _cachedProfiles[userId];
-      if (profile == null) continue;
-
-      List<String> insts = [];
-      if (profile.instruments.isNotEmpty) {
-        insts = profile.instruments;
-      } else if (profile.userType != null && profile.userType!.isNotEmpty) {
-        insts = [profile.userType!];
-      } else {
-        insts = ['Other'];
-      }
-
-      final responseStatus = event.responses[userId]?.status;
-      final isAttending = responseStatus == 'attending';
-
-      for (var inst in insts) {
-        final normalized = inst.trim();
-        if (normalized.isEmpty) continue;
-
-        instrumentTotal[normalized] = (instrumentTotal[normalized] ?? 0) + 1;
-        if (isAttending) {
-          instrumentAttending[normalized] = (instrumentAttending[normalized] ?? 0) + 1;
-        }
-      }
-    }
 
     final extAttendingList = <String>[];
     final extMaybeList = <String>[];
@@ -360,27 +329,7 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
         extPendingList.add(name);
       }
 
-      if (invitee.status == 'attending') {
-        final profile = _cachedProfiles[userId];
-        List<String> insts = [];
-        if (invitee.instrument != null && invitee.instrument!.isNotEmpty) {
-          insts = [invitee.instrument!];
-        } else if (profile != null && profile.instruments.isNotEmpty) {
-          insts = profile.instruments;
-        } else if (profile != null && profile.userType != null && profile.userType!.isNotEmpty) {
-          insts = [profile.userType!];
-        } else {
-          insts = ['Other'];
-        }
 
-        for (var inst in insts) {
-          final normalized = inst.trim();
-          if (normalized.isEmpty) continue;
-
-          instrumentTotal[normalized] = (instrumentTotal[normalized] ?? 0) + 1;
-          instrumentAttending[normalized] = (instrumentAttending[normalized] ?? 0) + 1;
-        }
-      }
     });
 
     final userResponse = currentUserId != null
@@ -702,101 +651,7 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
               const SizedBox(height: 20),
             ],
 
-            // 4. Instrument/Voice Part Attendance Overview (Musician Specific)
-            if (event.requireResponse) ...[
-              Text(
-                'INSTRUMENT / VOICE PART SUMMARY',
-                style: GoogleFonts.outfit(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: AppTheme.primaryAccent,
-                  letterSpacing: 1.5,
-                ),
-              ),
-              const SizedBox(height: 10),
-              _isLoadingMembers
-                  ? const Center(
-                      child: Padding(
-                        padding: EdgeInsets.all(16.0),
-                        child: CircularProgressIndicator(color: AppTheme.primaryAccent),
-                      ),
-                    )
-                  : instrumentTotal.isEmpty
-                      ? Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: AppTheme.cardBackground,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
-                          ),
-                          child: Center(
-                            child: Text(
-                              "No instruments registered in member profiles.",
-                              style: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 13),
-                            ),
-                          ),
-                        )
-                      : Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: AppTheme.cardBackground,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
-                          ),
-                          child: Column(
-                            children: instrumentTotal.keys.map((inst) {
-                              final total = instrumentTotal[inst] ?? 0;
-                              final attending = instrumentAttending[inst] ?? 0;
-                              final ratio = total > 0 ? (attending / total) : 0.0;
 
-                              return Padding(
-                                padding: const EdgeInsets.only(bottom: 12),
-                                child: Column(
-                                  children: [
-                                    Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Text(
-                                          inst,
-                                          style: GoogleFonts.inter(
-                                            fontSize: 14,
-                                            color: Colors.white,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                        Text(
-                                          '$attending/$total responded',
-                                          style: GoogleFonts.inter(
-                                            fontSize: 13,
-                                            color: attending == total
-                                                ? AppTheme.success
-                                                : AppTheme.textSecondary,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 6),
-                                    ClipRRect(
-                                      borderRadius: BorderRadius.circular(4),
-                                      child: LinearProgressIndicator(
-                                        value: ratio,
-                                        minHeight: 6,
-                                        backgroundColor: const Color(0xFF1E1A3A),
-                                        valueColor: AlwaysStoppedAnimation<Color>(
-                                          attending == total
-                                              ? AppTheme.success
-                                              : AppTheme.primaryAccent,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            }).toList(),
-                          ),
-                        ),
-              const SizedBox(height: 20),
 
               // 5. Attendance Detail Lists
               Text(
