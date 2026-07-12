@@ -37,6 +37,11 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
   bool _isLoadingMembers = true;
   String? _currentUserRole;
 
+  String? _localSelectedResponse;
+  final _commentController = TextEditingController();
+  bool _hasInitializedLocalResponse = false;
+  bool _isSavingResponse = false;
+
   @override
   void initState() {
     super.initState();
@@ -48,6 +53,7 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
   @override
   void dispose() {
     _eventSubscription?.cancel();
+    _commentController.dispose();
     super.dispose();
   }
 
@@ -164,7 +170,7 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
     );
   }
 
-  void _respond(String status) async {
+  void _respond(String status, String comment) async {
     final appState = Provider.of<AppState>(context, listen: false);
     final userId = appState.currentUserId;
     if (userId == null || _event == null) return;
@@ -179,14 +185,19 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
       return;
     }
 
+    setState(() => _isSavingResponse = true);
+
     try {
       final isExternal = _event!.externalInvitees.containsKey(userId);
+      final cleanComment = comment.trim().isEmpty ? null : comment.trim();
+
       if (isExternal) {
         await appState.firebaseService.updateExternalInviteeResponseAsync(
           widget.bandId,
           widget.eventId,
           userId,
           status,
+          comment: cleanComment,
         );
       } else {
         await appState.firebaseService.updateEventResponseAsync(
@@ -194,12 +205,13 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
           widget.eventId,
           userId,
           status,
+          comment: cleanComment,
         );
       }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text("RSVP updated to: ${status.toUpperCase()}"),
+          content: Text("RSVP saved: ${status.toUpperCase()}"),
           backgroundColor: AppTheme.success,
           duration: const Duration(seconds: 1),
         ),
@@ -213,6 +225,10 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
           backgroundColor: AppTheme.danger,
         ),
       );
+    } finally {
+      if (mounted) {
+        setState(() => _isSavingResponse = false);
+      }
     }
   }
 
@@ -296,19 +312,19 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
 
       final name = _cachedProfiles[userId]?.displayName ?? _cachedProfiles[userId]?.nickname ?? member.nickname ?? 'Unknown Member';
       final response = event.responses[userId]?.status;
+      final comment = event.responses[userId]?.comment;
+      final displayName = comment != null && comment.isNotEmpty ? '$name\n"$comment"' : name;
 
       if (response == 'attending') {
-        attendingList.add(name);
+        attendingList.add(displayName);
       } else if (response == 'maybe') {
-        maybeList.add(name);
+        maybeList.add(displayName);
       } else if (response == 'declined') {
-        declinedList.add(name);
+        declinedList.add(displayName);
       } else {
         noResponseList.add(name);
       }
     }
-
-
 
     final extAttendingList = <String>[];
     final extMaybeList = <String>[];
@@ -319,17 +335,18 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
     event.externalInvitees.forEach((userId, invitee) {
       final name = invitee.displayName ?? _cachedProfiles[userId]?.displayName ?? _cachedProfiles[userId]?.nickname ?? 'Unknown Guest';
       final status = invitee.status;
+      final comment = invitee.comment;
+      final displayName = comment != null && comment.isNotEmpty ? '$name\n"$comment"' : name;
+
       if (status == 'attending') {
-        extAttendingList.add(name);
+        extAttendingList.add(displayName);
       } else if (status == 'maybe') {
-        extMaybeList.add(name);
+        extMaybeList.add(displayName);
       } else if (status == 'declined') {
-        extDeclinedList.add(name);
+        extDeclinedList.add(displayName);
       } else {
         extPendingList.add(name);
       }
-
-
     });
 
     final userResponse = currentUserId != null
@@ -470,132 +487,213 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
 
             // 2. RSVP Buttons (Only if requireResponse is true)
             if (event.requireResponse) ...[
-              Text(
-                'YOUR RESPONSE',
-                style: GoogleFonts.outfit(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: AppTheme.primaryAccent,
-                  letterSpacing: 1.5,
-                ),
-              ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  // Attending
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () => _respond('attending'),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        decoration: BoxDecoration(
-                          color: userResponse == 'attending'
-                              ? AppTheme.success.withOpacity(0.2)
-                              : AppTheme.cardBackground,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: userResponse == 'attending' ? AppTheme.success : const Color(0xFF2E2A4E),
-                            width: 1.5,
-                          ),
-                        ),
-                        child: Column(
-                          children: [
-                            Icon(
-                              Icons.check_circle_outline_rounded,
-                              color: userResponse == 'attending' ? AppTheme.success : AppTheme.textSecondary,
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Attending',
-                              style: GoogleFonts.inter(
-                                fontSize: 13,
-                                color: userResponse == 'attending' ? Colors.white : AppTheme.textSecondary,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
+              Builder(builder: (context) {
+                final dbResponse = currentUserId != null
+                    ? (event.responses.containsKey(currentUserId)
+                        ? event.responses[currentUserId]?.status
+                        : event.externalInvitees[currentUserId]?.status)
+                    : null;
 
-                  // Declined
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () => _respond('declined'),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        decoration: BoxDecoration(
-                          color: userResponse == 'declined'
-                              ? AppTheme.danger.withOpacity(0.2)
-                              : AppTheme.cardBackground,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: userResponse == 'declined' ? AppTheme.danger : const Color(0xFF2E2A4E),
-                            width: 1.5,
-                          ),
-                        ),
-                        child: Column(
-                          children: [
-                            Icon(
-                              Icons.cancel_outlined,
-                              color: userResponse == 'declined' ? AppTheme.danger : AppTheme.textSecondary,
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Declined',
-                              style: GoogleFonts.inter(
-                                fontSize: 13,
-                                color: userResponse == 'declined' ? Colors.white : AppTheme.textSecondary,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
+                final dbComment = currentUserId != null
+                    ? (event.responses.containsKey(currentUserId)
+                        ? event.responses[currentUserId]?.comment
+                        : event.externalInvitees[currentUserId]?.comment)
+                    : null;
 
-                  // Maybe
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () => _respond('maybe'),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        decoration: BoxDecoration(
-                          color: userResponse == 'maybe'
-                              ? AppTheme.textSecondary.withOpacity(0.2)
-                              : AppTheme.cardBackground,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: userResponse == 'maybe' ? AppTheme.textSecondary : const Color(0xFF2E2A4E),
-                            width: 1.5,
-                          ),
-                        ),
-                        child: Column(
-                          children: [
-                            Icon(
-                              Icons.help_outline_rounded,
-                              color: userResponse == 'maybe' ? AppTheme.textSecondary : AppTheme.textSecondary,
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Maybe',
-                              style: GoogleFonts.inter(
-                                fontSize: 13,
-                                color: userResponse == 'maybe' ? Colors.white : AppTheme.textSecondary,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ),
+                if (!_hasInitializedLocalResponse && currentUserId != null) {
+                  _localSelectedResponse = dbResponse;
+                  _commentController.text = dbComment ?? '';
+                  _hasInitializedLocalResponse = true;
+                }
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'YOUR RESPONSE',
+                      style: GoogleFonts.outfit(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.primaryAccent,
+                        letterSpacing: 1.5,
                       ),
                     ),
-                  ),
-                ],
-              ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        // Attending
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () {
+                              setState(() {
+                                _localSelectedResponse = 'attending';
+                              });
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              decoration: BoxDecoration(
+                                color: _localSelectedResponse == 'attending'
+                                    ? AppTheme.success.withOpacity(0.2)
+                                    : AppTheme.cardBackground,
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                  color: _localSelectedResponse == 'attending' ? AppTheme.success : const Color(0xFF2E2A4E),
+                                  width: 1.5,
+                                ),
+                              ),
+                              child: Column(
+                                children: [
+                                  Icon(
+                                    Icons.check_circle_outline_rounded,
+                                    color: _localSelectedResponse == 'attending' ? AppTheme.success : AppTheme.textSecondary,
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'Attending',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 13,
+                                      color: _localSelectedResponse == 'attending' ? Colors.white : AppTheme.textSecondary,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+
+                        // Declined
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () {
+                              setState(() {
+                                _localSelectedResponse = 'declined';
+                              });
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              decoration: BoxDecoration(
+                                color: _localSelectedResponse == 'declined'
+                                    ? AppTheme.danger.withOpacity(0.2)
+                                    : AppTheme.cardBackground,
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                  color: _localSelectedResponse == 'declined' ? AppTheme.danger : const Color(0xFF2E2A4E),
+                                  width: 1.5,
+                                ),
+                              ),
+                              child: Column(
+                                children: [
+                                  Icon(
+                                    Icons.cancel_outlined,
+                                    color: _localSelectedResponse == 'declined' ? AppTheme.danger : AppTheme.textSecondary,
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'Declined',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 13,
+                                      color: _localSelectedResponse == 'declined' ? Colors.white : AppTheme.textSecondary,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+
+                        // Maybe
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () {
+                              setState(() {
+                                _localSelectedResponse = 'maybe';
+                              });
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              decoration: BoxDecoration(
+                                color: _localSelectedResponse == 'maybe'
+                                    ? AppTheme.textSecondary.withOpacity(0.2)
+                                    : AppTheme.cardBackground,
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                  color: _localSelectedResponse == 'maybe' ? AppTheme.textSecondary : const Color(0xFF2E2A4E),
+                                  width: 1.5,
+                                ),
+                              ),
+                              child: Column(
+                                children: [
+                                  Icon(
+                                    Icons.help_outline_rounded,
+                                    color: _localSelectedResponse == 'maybe' ? AppTheme.textSecondary : AppTheme.textSecondary,
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'Maybe',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 13,
+                                      color: _localSelectedResponse == 'maybe' ? Colors.white : AppTheme.textSecondary,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (_localSelectedResponse == 'maybe') ...[
+                      const SizedBox(height: 16),
+                      Text(
+                        'WHY ARE YOU UNCERTAIN? (OPTIONAL)',
+                        style: GoogleFonts.outfit(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.textSecondary,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: _commentController,
+                        maxLines: 2,
+                        style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
+                        decoration: const InputDecoration(
+                          hintText: 'e.g. Depends on work travel schedules...',
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 20),
+                    _isSavingResponse
+                        ? const Center(
+                            child: CircularProgressIndicator(color: AppTheme.primaryAccent),
+                          )
+                        : SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton(
+                              onPressed: _localSelectedResponse == null
+                                  ? null
+                                  : () => _respond(_localSelectedResponse!, _commentController.text),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppTheme.primaryAccent,
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                padding: const EdgeInsets.symmetric(vertical: 14),
+                              ),
+                              child: Text(
+                                'Save RSVP',
+                                style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 14),
+                              ),
+                            ),
+                          ),
+                  ],
+                );
+              }),
               const SizedBox(height: 20),
             ],
 
@@ -653,6 +751,7 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
 
 
 
+            if (event.requireResponse) ...[
               // 5. Attendance Detail Lists
               Text(
                 'ATTENDANCE RESPONSES',
@@ -873,23 +972,40 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
         iconColor: color,
         collapsedIconColor: color.withOpacity(0.7),
         children: names.map((name) {
+          final parts = name.split('\n');
+          final displayName = parts[0];
+          final comment = parts.length > 1 ? parts[1] : null;
+
           return Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 CircleAvatar(
                   radius: 12,
                   backgroundColor: color.withOpacity(0.2),
                   child: Text(
-                    name.isNotEmpty ? name.substring(0, 1).toUpperCase() : 'M',
+                    displayName.isNotEmpty ? displayName.substring(0, 1).toUpperCase() : 'M',
                     style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold),
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: Text(
-                    name,
-                    style: GoogleFonts.inter(fontSize: 14, color: Colors.white),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        displayName,
+                        style: GoogleFonts.inter(fontSize: 14, color: Colors.white, fontWeight: FontWeight.w600),
+                      ),
+                      if (comment != null) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          comment,
+                          style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary, fontStyle: FontStyle.italic),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
               ],

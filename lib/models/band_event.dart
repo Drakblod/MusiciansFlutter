@@ -1,10 +1,12 @@
 class EventResponse {
   final String status; // 'attending', 'maybe', 'declined'
   final DateTime timestamp;
+  final String? comment;
 
   EventResponse({
     required this.status,
     required this.timestamp,
+    this.comment,
   });
 
   factory EventResponse.fromJson(Map<dynamic, dynamic> json) {
@@ -13,6 +15,7 @@ class EventResponse {
       timestamp: json['timestamp'] != null
           ? DateTime.tryParse(json['timestamp'].toString()) ?? DateTime.now()
           : DateTime.now(),
+      comment: json['comment']?.toString(),
     );
   }
 
@@ -20,6 +23,7 @@ class EventResponse {
     return {
       'status': status,
       'timestamp': timestamp.toUtc().toIso8601String(),
+      if (comment != null) 'comment': comment,
     };
   }
 }
@@ -32,6 +36,7 @@ class ExternalInvitee {
   final String? source; // e.g. 'subRequest'
   final String? subRequestId;
   final String? displayName;
+  final String? comment;
 
   ExternalInvitee({
     required this.userId,
@@ -41,6 +46,7 @@ class ExternalInvitee {
     this.source,
     this.subRequestId,
     this.displayName,
+    this.comment,
   });
 
   factory ExternalInvitee.fromJson(Map<dynamic, dynamic> json, String userId) {
@@ -54,6 +60,7 @@ class ExternalInvitee {
       source: json['source']?.toString(),
       subRequestId: json['subRequestId']?.toString(),
       displayName: json['displayName']?.toString(),
+      comment: json['comment']?.toString(),
     );
   }
 
@@ -65,6 +72,7 @@ class ExternalInvitee {
       'source': source,
       'subRequestId': subRequestId,
       'displayName': displayName,
+      if (comment != null) 'comment': comment,
     };
   }
 }

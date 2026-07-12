@@ -1201,12 +1201,14 @@ class FirebaseService {
     String bandId,
     String eventId,
     String userId,
-    String status,
-  ) async {
+    String status, {
+    String? comment,
+  }) async {
     final timestamp = DateTime.now().toUtc().toIso8601String();
     await _dbRef('Bands/$bandId/Events/$eventId/Responses/$userId').set({
       'status': status,
       'timestamp': timestamp,
+      if (comment != null) 'comment': comment,
     });
     await _dbRef('Bands/$bandId/Events/$eventId/updatedAt').set(DateTime.now().millisecondsSinceEpoch);
   }
@@ -1328,10 +1330,15 @@ class FirebaseService {
     String bandId,
     String eventId,
     String userId,
-    String status,
-  ) async {
+    String status, {
+    String? comment,
+  }) async {
     final timestamp = DateTime.now().millisecondsSinceEpoch;
-    await _dbRef('Bands/$bandId/Events/$eventId/externalInvitees/$userId/status').set(status);
+    final updates = {
+      'status': status,
+      if (comment != null) 'comment': comment,
+    };
+    await _dbRef('Bands/$bandId/Events/$eventId/externalInvitees/$userId').update(updates);
     await _dbRef('Bands/$bandId/Events/$eventId/updatedAt').set(timestamp);
   }
 
