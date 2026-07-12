@@ -74,7 +74,7 @@ class _InboxScreenState extends State<InboxScreen> {
           Padding(
             padding: const EdgeInsets.only(left: 20.0, top: 20.0, bottom: 8.0),
             child: Text(
-              'MESSAGES',
+              'MESSAGES / AGREEMENTS',
               style: GoogleFonts.outfit(
                 fontSize: 26,
                 fontWeight: FontWeight.bold,
@@ -106,7 +106,7 @@ class _InboxScreenState extends State<InboxScreen> {
                       ),
                       child: Center(
                         child: Text(
-                          'Direct Chats',
+                          'Messages',
                           style: GoogleFonts.outfit(
                             fontSize: 14,
                             fontWeight: FontWeight.bold,
@@ -128,7 +128,7 @@ class _InboxScreenState extends State<InboxScreen> {
                       ),
                       child: Center(
                         child: Text(
-                          'Gigs & Agreements',
+                          'Agreements',
                           style: GoogleFonts.outfit(
                             fontSize: 14,
                             fontWeight: FontWeight.bold,
