@@ -308,10 +308,15 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
     try {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.any,
+        withData: true,
       );
 
       if (result != null) {
         final file = result.files.single;
+        Uint8List? bytes = file.bytes;
+        if (bytes == null && file.path != null) {
+          bytes = await File(file.path!).readAsBytes();
+        }
         
         // Show loader dialog
         if (!mounted) return;
@@ -346,7 +351,7 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
         // Upload to storage
         final url = await appState.firebaseService.uploadBandFileAsync(
           bandId,
-          file.bytes,
+          bytes,
           file.path,
           file.name,
         );

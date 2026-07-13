@@ -1,3 +1,5 @@
+import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -201,10 +203,16 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['mp3'],
+        withData: true,
       );
 
       if (result != null) {
         final file = result.files.single;
+        Uint8List? bytes = file.bytes;
+        if (bytes == null && file.path != null) {
+          bytes = await File(file.path!).readAsBytes();
+        }
+
         setState(() {
           _isUploadingAudio = true;
           _pickedAudioFileName = file.name;
@@ -219,7 +227,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         // Upload to storage
         final url = await appState.firebaseService.uploadAudioSnippetAsync(
           userId,
-          file.bytes,
+          bytes,
           file.path,
         );
 

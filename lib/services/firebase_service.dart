@@ -193,12 +193,12 @@ class FirebaseService {
           .child('snippet_${DateTime.now().millisecondsSinceEpoch}.mp3');
 
       UploadTask uploadTask;
-      if (kIsWeb) {
-        if (bytes == null) throw Exception("Audio bytes are null for Web upload");
+      if (bytes != null) {
         uploadTask = ref.putData(bytes, SettableMetadata(contentType: 'audio/mpeg'));
-      } else {
-        if (path == null) throw Exception("Audio file path is null for Mobile upload");
+      } else if (path != null) {
         uploadTask = ref.putFile(File(path));
+      } else {
+        throw Exception("Both audio bytes and path are null for upload");
       }
       final snapshot = await uploadTask;
       final url = await snapshot.ref.getDownloadURL();
@@ -931,12 +931,12 @@ class FirebaseService {
           .child('${DateTime.now().millisecondsSinceEpoch}_$fileName');
 
       UploadTask uploadTask;
-      if (kIsWeb) {
-        if (bytes == null) throw Exception("File bytes are null for Web upload");
+      if (bytes != null) {
         uploadTask = ref.putData(bytes);
-      } else {
-        if (path == null) throw Exception("File path is null for Mobile upload");
+      } else if (path != null) {
         uploadTask = ref.putFile(File(path));
+      } else {
+        throw Exception("Both file bytes and path are null for upload");
       }
       final snapshot = await uploadTask;
       final url = await snapshot.ref.getDownloadURL();
