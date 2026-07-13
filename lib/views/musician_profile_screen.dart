@@ -388,7 +388,7 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
                   if (widget.musician.audioSnippetUrl != null && widget.musician.audioSnippetUrl!.isNotEmpty) ...[
                     const SizedBox(height: 24),
                     Text(
-                      'Audio Snippet',
+                      'Tracks',
                       style: GoogleFonts.outfit(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -431,49 +431,6 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
                               ),
                             ))
                         .toList(),
-                  ),
-                  const SizedBox(height: 24),
-
-                  // Availability Section
-                  Text(
-                    'Availability',
-                    style: GoogleFonts.outfit(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: AppTheme.cardBackground,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: const Color(0xFF231F45), width: 1),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Weekdays after 18:00',
-                          style: GoogleFonts.inter(
-                            fontSize: 14,
-                            color: Colors.white,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          'Weekends: Anytime',
-                          style: GoogleFonts.inter(
-                            fontSize: 14,
-                            color: Colors.white,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
-                    ),
                   ),
                   const SizedBox(height: 40),
 

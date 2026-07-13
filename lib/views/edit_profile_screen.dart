@@ -238,7 +238,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Audio snippet uploaded successfully!'),
+              content: Text('Track uploaded successfully!'),
               backgroundColor: AppTheme.success,
             ),
           );
@@ -248,7 +248,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to upload audio: $e'),
+            content: Text('Failed to upload track: $e'),
             backgroundColor: AppTheme.danger,
           ),
         );
@@ -591,9 +591,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               ),
               const SizedBox(height: 32),
 
-              // Audio Snippet Section
+              // Tracks Section
               Text(
-                'AUDIO SNIPPET',
+                'TRACKS',
                 style: GoogleFonts.outfit(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -603,7 +603,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               ),
               const SizedBox(height: 4),
               Text(
-                'Upload a short MP3 snippet of your own music to play on your profile.',
+                'Upload an MP3 track of your own music to play on your profile.',
                 style: GoogleFonts.inter(
                   fontSize: 13,
                   color: AppTheme.textSecondary,
@@ -626,7 +626,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                           const CircularProgressIndicator(color: AppTheme.primaryAccent),
                           const SizedBox(height: 12),
                           Text(
-                            'Uploading ${_pickedAudioFileName ?? "audio snippet"}...',
+                            'Uploading ${_pickedAudioFileName ?? "track"}...',
                             style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
                           ),
                         ],
@@ -641,7 +641,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      _pickedAudioFileName ?? 'audio_snippet.mp3',
+                                      _pickedAudioFileName ?? 'track.mp3',
                                       style: GoogleFonts.inter(
                                         color: Colors.white,
                                         fontWeight: FontWeight.bold,
@@ -652,7 +652,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                     ),
                                     const SizedBox(height: 4),
                                     Text(
-                                      'Audio snippet loaded',
+                                      'Track loaded',
                                       style: GoogleFonts.inter(
                                         color: AppTheme.success,
                                         fontSize: 12,
@@ -664,7 +664,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                               IconButton(
                                 icon: const Icon(Icons.edit_rounded, color: AppTheme.primaryAccent),
                                 onPressed: _pickAndUploadAudio,
-                                tooltip: 'Change snippet',
+                                tooltip: 'Change track',
                               ),
                               IconButton(
                                 icon: const Icon(Icons.delete_forever_rounded, color: AppTheme.danger),
@@ -675,12 +675,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                   });
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     const SnackBar(
-                                      content: Text('Audio snippet removed from profile (save to apply changes)'),
+                                      content: Text('Track removed from profile (save to apply changes)'),
                                       backgroundColor: AppTheme.warning,
                                     ),
                                   );
                                 },
-                                tooltip: 'Remove snippet',
+                                tooltip: 'Remove track',
                               ),
                             ],
                           )
@@ -699,7 +699,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                   ),
                                   const SizedBox(height: 12),
                                   Text(
-                                    'Upload MP3 Snippet',
+                                    'Upload MP3 Track',
                                     style: GoogleFonts.inter(
                                       color: Colors.white,
                                       fontWeight: FontWeight.bold,

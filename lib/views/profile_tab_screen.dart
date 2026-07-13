@@ -269,7 +269,7 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
           if (user.audioSnippetUrl != null && user.audioSnippetUrl!.isNotEmpty) ...[
             const SizedBox(height: 24),
             Text(
-              'Audio Snippet',
+              'Tracks',
               style: GoogleFonts.outfit(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
