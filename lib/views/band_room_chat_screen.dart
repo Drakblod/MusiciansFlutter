@@ -1144,6 +1144,34 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
     final bandId = appState.activeBandId;
     if (bandId == null) return const Center(child: Text("No band selected"));
 
+    // Categorize files
+    final pdfs = <String, Map<String, String>>{};
+    final audio = <String, Map<String, String>>{};
+    final images = <String, Map<String, String>>{};
+    final other = <String, Map<String, String>>{};
+
+    _files.forEach((fileId, fileData) {
+      final fileName = (fileData['FileName'] ?? '').toLowerCase();
+      if (fileName.endsWith('.pdf')) {
+        pdfs[fileId] = fileData;
+      } else if (fileName.endsWith('.mp3') ||
+          fileName.endsWith('.wav') ||
+          fileName.endsWith('.m4a') ||
+          fileName.endsWith('.aac') ||
+          fileName.endsWith('.ogg')) {
+        audio[fileId] = fileData;
+      } else if (fileName.endsWith('.png') ||
+          fileName.endsWith('.jpg') ||
+          fileName.endsWith('.jpeg') ||
+          fileName.endsWith('.gif') ||
+          fileName.endsWith('.webp') ||
+          fileName.endsWith('.heic')) {
+        images[fileId] = fileData;
+      } else {
+        other[fileId] = fileData;
+      }
+    });
+
     return Column(
       children: [
         Expanded(
@@ -1154,61 +1182,14 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                     style: TextStyle(color: AppTheme.textSecondary),
                   ),
                 )
-              : ListView.builder(
+              : ListView(
                   padding: const EdgeInsets.all(16),
-                  itemCount: _files.length,
-                  itemBuilder: (context, index) {
-                    final fileId = _files.keys.elementAt(index);
-                    final fileData = _files[fileId] ?? {};
-                    final fileName = fileData['FileName'] ?? 'Uploaded File';
-                    final fileUrl = fileData['FileUrl'] ?? '';
-
-                    return AnimatedTapDetector(
-                      onTap: () {
-                        if (fileUrl.isNotEmpty) {
-                          _launchUrl(fileUrl);
-                        } else {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('This file has no download URL.'),
-                              backgroundColor: AppTheme.warning,
-                            ),
-                          );
-                        }
-                      },
-                      child: Container(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: AppTheme.cardBackground,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: const Color(0xFF231F45), width: 1),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.insert_drive_file_outlined, color: AppTheme.primaryAccent, size: 28),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: Text(
-                                fileName,
-                                style: GoogleFonts.inter(fontSize: 14, color: Colors.white, fontWeight: FontWeight.w500),
-                              ),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 20),
-                              onPressed: () async {
-                                await appState.firebaseService.removeBandFileAsync(bandId, fileId);
-                                final files = await appState.firebaseService.getBandFilesAsync(bandId);
-                                setState(() {
-                                  _files = files;
-                                });
-                              },
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
+                  children: [
+                    _buildFileCategorySection('PDF Documents', Icons.picture_as_pdf_outlined, Colors.redAccent, pdfs, bandId, appState),
+                    _buildFileCategorySection('Audio Files', Icons.audiotrack_outlined, Colors.orangeAccent, audio, bandId, appState),
+                    _buildFileCategorySection('Images', Icons.image_outlined, Colors.greenAccent, images, bandId, appState),
+                    _buildFileCategorySection('Other Files', Icons.insert_drive_file_outlined, Colors.blueAccent, other, bandId, appState),
+                  ],
                 ),
         ),
         Padding(
@@ -1238,6 +1219,119 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildFileCategorySection(
+    String title,
+    IconData icon,
+    Color color,
+    Map<String, Map<String, String>> categoryFiles,
+    String bandId,
+    AppState appState,
+  ) {
+    if (categoryFiles.isEmpty) return const SizedBox.shrink();
+
+    return Theme(
+      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 16),
+        decoration: BoxDecoration(
+          color: AppTheme.cardBackground,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFF2E2A4E), width: 1.2),
+        ),
+        child: ExpansionTile(
+          initiallyExpanded: true,
+          leading: Icon(icon, color: color, size: 24),
+          title: Text(
+            '$title (${categoryFiles.length})',
+            style: GoogleFonts.outfit(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+          iconColor: Colors.white,
+          collapsedIconColor: AppTheme.textSecondary,
+          children: categoryFiles.entries.map((entry) {
+            final fileId = entry.key;
+            final fileData = entry.value;
+            final fileName = fileData['FileName'] ?? 'Uploaded File';
+            final fileUrl = fileData['FileUrl'] ?? '';
+
+            return AnimatedTapDetector(
+              onTap: () {
+                if (fileUrl.isNotEmpty) {
+                  _launchUrl(fileUrl);
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('This file has no download URL.'),
+                      backgroundColor: AppTheme.warning,
+                    ),
+                  );
+                }
+              },
+              child: Container(
+                margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF130E26).withOpacity(0.4),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFF2E2A4E).withOpacity(0.5), width: 1),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        fileName,
+                        style: GoogleFonts.inter(fontSize: 13, color: Colors.white70),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 18),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      onPressed: () async {
+                        final confirm = await showDialog<bool>(
+                          context: context,
+                          builder: (context) => AlertDialog(
+                            backgroundColor: AppTheme.cardBackground,
+                            title: const Text('Delete File', style: TextStyle(color: Colors.white)),
+                            content: Text('Are you sure you want to delete "$fileName"?', style: const TextStyle(color: Colors.white70)),
+                            actions: [
+                              TextButton(
+                                child: const Text('Cancel', style: TextStyle(color: AppTheme.textSecondary)),
+                                onPressed: () => Navigator.pop(context, false),
+                              ),
+                              TextButton(
+                                child: const Text('Delete', style: TextStyle(color: Colors.redAccent)),
+                                onPressed: () => Navigator.pop(context, true),
+                              ),
+                            ],
+                          ),
+                        );
+                        if (confirm == true) {
+                          await appState.firebaseService.removeBandFileAsync(bandId, fileId);
+                          final files = await appState.firebaseService.getBandFilesAsync(bandId);
+                          if (mounted) {
+                            setState(() {
+                              _files = files;
+                            });
+                          }
+                        }
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ),
     );
   }
 
