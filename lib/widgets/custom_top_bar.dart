@@ -273,6 +273,17 @@ class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
                 const SizedBox(height: 12),
                 _buildMenuItem(
                   context,
+                  icon: Icons.grid_view_rounded,
+                  title: 'Choose Bubbles',
+                  color: Colors.purpleAccent,
+                  onTap: () {
+                    Navigator.pop(context); // Close settings menu
+                    _showChooseBubblesDialog(context, appState);
+                  },
+                ),
+                const SizedBox(height: 12),
+                _buildMenuItem(
+                  context,
                   icon: Icons.logout_rounded,
                   title: 'Logout',
                   color: Colors.redAccent,
@@ -284,6 +295,174 @@ class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
               ],
             ),
           ),
+        );
+      },
+    );
+  }
+
+  void _showChooseBubblesDialog(BuildContext context, AppState appState) {
+    List<String> tempSelected = List.from(appState.selectedBubbles);
+
+    final List<Map<String, String>> options = [
+      {'id': 'find_musicians', 'name': 'Find Musicians'},
+      {'id': 'browse_musicians', 'name': 'Browse Profiles'},
+      {'id': 'find_gigs', 'name': 'Gigs list'},
+      {'id': 'collabs', 'name': 'Collabs'},
+      {'id': 'event_calendar', 'name': 'Event Calendar'},
+      {'id': 'band_room', 'name': 'Band Room'},
+      {'id': 'marketplace', 'name': 'Marketplace'},
+    ];
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return Dialog(
+              backgroundColor: Colors.transparent,
+              insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0F0C20).withOpacity(0.98),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: const Color(0xFF2E2A4E), width: 1.5),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.6),
+                      blurRadius: 24,
+                      offset: const Offset(0, 12),
+                    ),
+                  ],
+                ),
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      'HOME BUBBLES',
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.outfit(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        letterSpacing: 2,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Choose exactly 3 shortcuts to show as bubbles at the top of your Home screen.',
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        color: AppTheme.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    Flexible(
+                      child: SingleChildScrollView(
+                        child: Column(
+                          children: options.map((opt) {
+                            final id = opt['id']!;
+                            final name = opt['name']!;
+                            final isChecked = tempSelected.contains(id);
+
+                            return Theme(
+                              data: ThemeData.dark().copyWith(
+                                unselectedWidgetColor: Colors.white30,
+                              ),
+                              child: CheckboxListTile(
+                                activeColor: AppTheme.primaryAccent,
+                                checkboxShape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                title: Text(
+                                  name,
+                                  style: GoogleFonts.inter(
+                                    fontSize: 14,
+                                    fontWeight: isChecked ? FontWeight.bold : FontWeight.normal,
+                                    color: isChecked ? Colors.white : Colors.white70,
+                                  ),
+                                ),
+                                value: isChecked,
+                                onChanged: (val) {
+                                  setState(() {
+                                    if (val == true) {
+                                      if (tempSelected.length < 3) {
+                                        tempSelected.add(id);
+                                      } else {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(
+                                            content: Text('You can select exactly 3 bubbles.'),
+                                            duration: Duration(seconds: 1),
+                                            backgroundColor: AppTheme.warning,
+                                          ),
+                                        );
+                                      }
+                                    } else {
+                                      tempSelected.remove(id);
+                                    }
+                                  });
+                                },
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextButton(
+                            child: Text(
+                              'Cancel',
+                              style: GoogleFonts.inter(color: AppTheme.textSecondary, fontWeight: FontWeight.w600),
+                            ),
+                            onPressed: () => Navigator.pop(context),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppTheme.primaryAccent,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              disabledBackgroundColor: AppTheme.primaryAccent.withOpacity(0.3),
+                            ),
+                            onPressed: tempSelected.length == 3
+                                ? () async {
+                                    await appState.updateSelectedBubbles(tempSelected);
+                                    if (context.mounted) {
+                                      Navigator.pop(context);
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(
+                                          content: Text('Home bubbles updated successfully!'),
+                                          backgroundColor: AppTheme.success,
+                                        ),
+                                      );
+                                    }
+                                  }
+                                : null,
+                            child: Text(
+                              'Save (${tempSelected.length}/3)',
+                              style: GoogleFonts.inter(
+                                color: tempSelected.length == 3 ? Colors.white : Colors.white54,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
         );
       },
     );

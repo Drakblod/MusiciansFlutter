@@ -365,7 +365,7 @@ class HomeScreen extends StatelessWidget {
               child: Padding(
                 padding: const EdgeInsets.only(bottom: 10, right: 10),
                 child: Text(
-                  '1.70',
+                  '1.71',
                   style: GoogleFonts.inter(
                     color: AppTheme.textSecondary.withOpacity(0.5),
                     fontSize: 12,
@@ -954,11 +954,14 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
       return (defaultOrder[a.id] ?? 0).compareTo(defaultOrder[b.id] ?? 0);
     });
 
-    final browseMusicians = allActions.firstWhere((item) => item.id == 'browse_musicians');
-    final findGigs = allActions.firstWhere((item) => item.id == 'find_gigs');
-    final findMusician = allActions.firstWhere((item) => item.id == 'find_musicians');
+    final selectedIds = appState.selectedBubbles;
+    final List<String> bubbleIds = selectedIds.length == 3 ? selectedIds : [
+      'browse_musicians',
+      'find_gigs',
+      'find_musicians',
+    ];
 
-    final topBubbleActions = [browseMusicians, findGigs, findMusician];
+    final topBubbleActions = bubbleIds.map((id) => allActions.firstWhere((item) => item.id == id)).toList();
     final remainingCardActions = allActions.where((item) => !topBubbleActions.contains(item)).toList();
 
     return Stack(
@@ -1037,11 +1040,11 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  _buildCustomBubble(context, browseMusicians, isCenter: false),
+                                  _buildCustomBubble(context, topBubbleActions[0], isCenter: false),
                                   const SizedBox(width: 18),
-                                  _buildCustomBubble(context, findGigs, isCenter: true),
+                                  _buildCustomBubble(context, topBubbleActions[1], isCenter: true),
                                   const SizedBox(width: 18),
-                                  _buildCustomBubble(context, findMusician, isCenter: false),
+                                  _buildCustomBubble(context, topBubbleActions[2], isCenter: false),
                                 ],
                               ),
                             ),
@@ -1104,7 +1107,7 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
                               }
                             },
                             child: Text(
-                              '1.70',
+                              '1.71',
                               style: GoogleFonts.inter(
                                 color: AppTheme.textSecondary.withOpacity(0.5),
                                 fontSize: 12,

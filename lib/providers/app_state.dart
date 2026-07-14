@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:shared_preferences/shared_preferences.dart';
 import '../services/firebase_service.dart';
 import '../models/user_profile.dart';
 import '../main.dart';
@@ -21,13 +22,34 @@ class AppState extends ChangeNotifier {
   Map<String, int> _buttonClicks = {};
   Map<String, dynamic>? _pendingNotificationPayload;
 
+  List<String> _selectedBubbles = ['browse_musicians', 'find_gigs', 'find_musicians'];
+  List<String> get selectedBubbles => _selectedBubbles;
+
   StreamSubscription<bool>? _unreadSubscription;
 
   AppState() {
     _listenToNotifications();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initializeAuthListener();
+      loadSelectedBubbles();
     });
+  }
+
+  Future<void> loadSelectedBubbles() async {
+    final prefs = await SharedPreferences.getInstance();
+    _selectedBubbles = prefs.getStringList('home_selected_bubbles') ?? [
+      'browse_musicians',
+      'find_gigs',
+      'find_musicians',
+    ];
+    notifyListeners();
+  }
+
+  Future<void> updateSelectedBubbles(List<String> bubbleIds) async {
+    _selectedBubbles = List.from(bubbleIds);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList('home_selected_bubbles', bubbleIds);
+    notifyListeners();
   }
 
   void _listenToNotifications() {
