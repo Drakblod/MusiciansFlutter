@@ -27,6 +27,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   final _youtubeController = TextEditingController();
   
   List<String> _selectedInstruments = [];
+  String? _mainInstrument;
   List<String> _selectedGenres = [];
   bool _isSaving = false;
   bool _showAllInstruments = false;
@@ -168,6 +169,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       _selectedCollabRoles = List<String>.from(user.collabRoles);
       _collabRemote = user.collabRemote;
       _collabBioController.text = user.collabBio ?? '';
+      _mainInstrument = user.mainInstrument;
     }
   }
 
@@ -276,8 +278,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     setState(() {
       if (_selectedInstruments.contains(instrument)) {
         _selectedInstruments.remove(instrument);
+        if (_mainInstrument == instrument) {
+          _mainInstrument = null;
+        }
       } else {
         _selectedInstruments.add(instrument);
+        if (_mainInstrument == null) {
+          _mainInstrument = instrument;
+        }
       }
     });
   }
@@ -316,6 +324,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           collabRoles: _selectedCollabRoles,
           collabRemote: _collabRemote,
           collabBio: _collabBioController.text.trim().isEmpty ? null : _collabBioController.text.trim(),
+          mainInstrument: _selectedInstruments.contains(_mainInstrument) ? _mainInstrument : (_selectedInstruments.isNotEmpty ? _selectedInstruments.first : null),
         );
 
         await appState.firebaseService.saveUserProfileAsync(user.userId ?? '', updatedProfile);
@@ -449,6 +458,53 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 ),
               ),
               const SizedBox(height: 20),
+
+              // Main Instrument Selector
+              if (_selectedInstruments.isNotEmpty) ...[
+                Text(
+                  'Main Instrument / Role',
+                  style: GoogleFonts.outfit(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  decoration: BoxDecoration(
+                    color: AppTheme.cardBackground,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
+                  ),
+                  child: Theme(
+                    data: Theme.of(context).copyWith(
+                      canvasColor: const Color(0xFF1E1A3A),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: _selectedInstruments.contains(_mainInstrument) ? _mainInstrument : _selectedInstruments.first,
+                        isExpanded: true,
+                        icon: const Icon(Icons.arrow_drop_down_rounded, color: AppTheme.primaryAccent, size: 30),
+                        dropdownColor: const Color(0xFF0F0C20),
+                        style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
+                        onChanged: (String? newValue) {
+                          setState(() {
+                            _mainInstrument = newValue;
+                          });
+                        },
+                        items: _selectedInstruments.map<DropdownMenuItem<String>>((String value) {
+                          return DropdownMenuItem<String>(
+                            value: value,
+                            child: Text(value),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+              ],
 
               // Location
               Text(

@@ -107,6 +107,7 @@ class FirebaseService {
       'CollabRoles': profile.collabRoles,
       'CollabRemote': profile.collabRemote,
       'CollabBio': profile.collabBio,
+      'MainInstrument': profile.mainInstrument,
     };
     await _dbRef('users/$userId/info').set(infoMap);
     await _dbRef('users/$userId/DisplayName').set(profile.displayName);
@@ -141,6 +142,7 @@ class FirebaseService {
         collabRoles: _parseList(infoMap['CollabRoles']),
         collabRemote: infoMap['CollabRemote'] == true,
         collabBio: infoMap['CollabBio']?.toString(),
+        mainInstrument: infoMap['MainInstrument']?.toString(),
       );
     }
     return null;
@@ -177,6 +179,7 @@ class FirebaseService {
             collabRoles: _parseList(infoMap['CollabRoles']),
             collabRemote: infoMap['CollabRemote'] == true,
             collabBio: infoMap['CollabBio']?.toString(),
+            mainInstrument: infoMap['MainInstrument']?.toString(),
           ));
         }
       });
