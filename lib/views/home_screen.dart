@@ -365,7 +365,7 @@ class HomeScreen extends StatelessWidget {
               child: Padding(
                 padding: const EdgeInsets.only(bottom: 10, right: 10),
                 child: Text(
-                  '1.71',
+                  '1.72',
                   style: GoogleFonts.inter(
                     color: AppTheme.textSecondary.withOpacity(0.5),
                     fontSize: 12,
@@ -707,17 +707,18 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
   }
 
   Widget _buildCustomBubble(BuildContext context, HomeActionItem item, {required bool isCenter}) {
-    final double size = isCenter ? 124 : 102;
-    final double iconSize = isCenter ? 36 : 28;
-    final double fontSize = isCenter ? 10.5 : 9.5;
+    final double size = isCenter ? 112 : 92;
+    final double iconSize = isCenter ? 32 : 24;
+    final double fontSize = isCenter ? 10.0 : 9.0;
 
     return AnimatedTapDetector(
       onTap: item.onTap,
       child: Container(
         width: size,
         height: size,
+        clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
-          shape: BoxShape.circle,
+          borderRadius: BorderRadius.circular(size / 2),
           gradient: const RadialGradient(
             colors: [
               Color(0xFF2E1756), // Dark purple center
@@ -740,8 +741,9 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
         ),
         child: Container(
           margin: const EdgeInsets.all(4), // Space between outer and inner ring
+          clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
-            shape: BoxShape.circle,
+            borderRadius: BorderRadius.circular((size - 8) / 2),
             border: Border.all(
               color: const Color(0xFFC066F6).withOpacity(0.25), // Subtle inner ring
               width: 1,
@@ -1041,9 +1043,9 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   _buildCustomBubble(context, topBubbleActions[0], isCenter: false),
-                                  const SizedBox(width: 18),
+                                  const SizedBox(width: 14),
                                   _buildCustomBubble(context, topBubbleActions[1], isCenter: true),
-                                  const SizedBox(width: 18),
+                                  const SizedBox(width: 14),
                                   _buildCustomBubble(context, topBubbleActions[2], isCenter: false),
                                 ],
                               ),
@@ -1107,7 +1109,7 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
                               }
                             },
                             child: Text(
-                              '1.71',
+                              '1.72',
                               style: GoogleFonts.inter(
                                 color: AppTheme.textSecondary.withOpacity(0.5),
                                 fontSize: 12,
