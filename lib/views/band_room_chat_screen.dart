@@ -35,6 +35,7 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
 
   Band? _activeBand;
   List<BandMember> _members = [];
+  Map<String, UserProfile> _memberProfiles = {};
   Map<String, Map<String, String>> _files = {};
   List<Message> _chatMessages = [];
   List<BandEvent> _bandEvents = [];
@@ -121,6 +122,8 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
           _files = files;
         });
 
+        _loadMemberProfiles(appState, members);
+
         _chatSubscription = appState.firebaseService
             .subscribeToBandMessages(bandId)
             .listen((messages) {
@@ -159,6 +162,40 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
         setState(() => _isLoading = false);
       }
     }
+  }
+
+  Future<void> _loadMemberProfiles(AppState appState, List<BandMember> members) async {
+    final Map<String, UserProfile> profilesMap = {};
+    for (final m in members) {
+      if (m.userId != null) {
+        try {
+          final profile = await appState.firebaseService.getUserProfileAsync(m.userId!);
+          if (profile != null) {
+            profilesMap[m.userId!] = profile;
+          }
+        } catch (e) {
+          debugPrint("Error loading profile for ${m.userId}: $e");
+        }
+      }
+    }
+    if (mounted) {
+      setState(() {
+        _memberProfiles = profilesMap;
+      });
+    }
+  }
+
+  String _getMemberInstrument(String? userId) {
+    if (userId == null) return '';
+    final profile = _memberProfiles[userId];
+    if (profile == null) return '';
+    if (profile.mainInstrument != null && profile.mainInstrument!.isNotEmpty) {
+      return profile.mainInstrument!;
+    }
+    if (profile.instruments.isNotEmpty) {
+      return profile.instruments.first;
+    }
+    return '';
   }
 
   void _scrollToBottom() {
@@ -1001,13 +1038,29 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                     },
                     child: Padding(
                       padding: const EdgeInsets.only(left: 4, bottom: 4),
-                      child: Text(
-                        senderName,
-                        style: GoogleFonts.inter(
-                          fontSize: 12,
-                          color: AppTheme.primaryAccent,
-                          fontWeight: FontWeight.bold,
-                        ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            senderName,
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              color: AppTheme.primaryAccent,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          if (_getMemberInstrument(msg.senderId).isNotEmpty) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              _getMemberInstrument(msg.senderId),
+                              style: GoogleFonts.inter(
+                                fontSize: 10,
+                                color: AppTheme.textSecondary.withOpacity(0.8),
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                     ),
                   ),
@@ -1495,6 +1548,13 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                               member.role ?? 'Member',
                               style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
                             ),
+                            if (_getMemberInstrument(member.userId).isNotEmpty) ...[
+                              const SizedBox(height: 2),
+                              Text(
+                                _getMemberInstrument(member.userId),
+                                style: GoogleFonts.inter(fontSize: 11, color: AppTheme.primaryAccent, fontWeight: FontWeight.w500),
+                              ),
+                            ],
                           ],
                         ),
                       ),

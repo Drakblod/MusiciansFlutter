@@ -19,6 +19,7 @@ class UserProfile {
   final List<String> collabRoles;
   final bool collabRemote;
   final String? collabBio;
+  final String? mainInstrument;
 
   UserProfile({
     this.userType,
@@ -41,6 +42,7 @@ class UserProfile {
     this.collabRoles = const [],
     this.collabRemote = false,
     this.collabBio,
+    this.mainInstrument,
   });
 
   factory UserProfile.fromJson(Map<dynamic, dynamic> json) {
@@ -65,6 +67,7 @@ class UserProfile {
       collabRoles: _toList(json['CollabRoles']),
       collabRemote: json['CollabRemote'] == true,
       collabBio: json['CollabBio']?.toString(),
+      mainInstrument: json['MainInstrument']?.toString(),
     );
   }
 
@@ -90,6 +93,7 @@ class UserProfile {
       'CollabRoles': collabRoles,
       'CollabRemote': collabRemote,
       'CollabBio': collabBio,
+      'MainInstrument': mainInstrument,
     };
   }
 
