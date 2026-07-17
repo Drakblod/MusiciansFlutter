@@ -1514,7 +1514,7 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
               return AnimatedTapDetector(
                 onTap: () {
                   if (member.userId != null) {
-                    _navigateTo1on1Chat(member.userId!, member.nickname ?? 'Member');
+                    _viewMemberProfile(member.userId!);
                   }
                 },
                 child: Container(
@@ -1571,6 +1571,26 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                             style: GoogleFonts.inter(fontSize: 10, color: AppTheme.primaryAccent, fontWeight: FontWeight.bold),
                           ),
                         ),
+                      if (member.userId != null && member.userId != selfId) ...[
+                        const SizedBox(width: 12),
+                        GestureDetector(
+                          onTap: () {
+                            _navigateTo1on1Chat(member.userId!, member.nickname ?? 'Member');
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: AppTheme.primaryAccent.withOpacity(0.12),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.chat_bubble_outline_rounded,
+                              color: AppTheme.primaryAccent,
+                              size: 18,
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),

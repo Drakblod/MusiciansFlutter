@@ -29,24 +29,7 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
     });
   }
 
-  Future<void> _launchUrl(String urlString) async {
-    try {
-      final uri = Uri.parse(urlString.trim());
-      final success = await launchUrl(uri, mode: LaunchMode.externalApplication);
-      if (!success) {
-        await launchUrl(uri);
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Could not launch link: $urlString'),
-            backgroundColor: AppTheme.danger,
-          ),
-        );
-      }
-    }
-  }
+
 
   Future<void> _loadFavorites() async {
     setState(() => _isLoadingFavorites = true);
@@ -95,149 +78,189 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: AppTheme.cardBackground,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFF231F45), width: 1),
-            ),
-            child: Row(
-              children: [
-                CircleAvatar(
-                  radius: 35,
-                  backgroundColor: AppTheme.primaryAccent.withOpacity(0.2),
-                  backgroundImage: user.profilePictureUrl != null && user.profilePictureUrl!.isNotEmpty
-                      ? NetworkImage(user.profilePictureUrl!)
-                      : null,
-                  child: user.profilePictureUrl == null || user.profilePictureUrl!.isEmpty
-                      ? Text(
-                          (user.displayName != null && user.displayName!.isNotEmpty)
-                              ? user.displayName!.substring(0, 1).toUpperCase()
-                              : 'U',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 28,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        )
-                      : null,
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        user.displayName ?? 'Alex Hill',
-                        style: GoogleFonts.outfit(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        user.userType ?? 'Musician',
-                        style: GoogleFonts.inter(
-                          fontSize: 14,
-                          color: AppTheme.primaryAccent,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Row(
+                    // Standardized Centered Profile Header
+                    Center(
+                      child: Column(
                         children: [
-                          const Icon(Icons.location_on_outlined, color: AppTheme.textSecondary, size: 14),
-                          const SizedBox(width: 4),
-                          Text(
-                            user.location ?? 'Stockholm, Sweden',
-                            style: GoogleFonts.inter(
-                              fontSize: 12,
-                              color: AppTheme.textSecondary,
+                          const SizedBox(height: 10),
+                          // Profile Photo
+                          Container(
+                            width: 110,
+                            height: 110,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(color: AppTheme.primaryAccent, width: 2),
+                              color: AppTheme.inputBackground,
                             ),
+                            child: Center(
+                              child: user.profilePictureUrl != null && user.profilePictureUrl!.isNotEmpty
+                                  ? ClipOval(
+                                      child: Image.network(
+                                        user.profilePictureUrl!,
+                                        width: 106,
+                                        height: 106,
+                                        fit: BoxFit.cover,
+                                      ),
+                                    )
+                                  : Text(
+                                      (user.displayName != null && user.displayName!.isNotEmpty)
+                                          ? user.displayName!.substring(0, 1).toUpperCase()
+                                          : 'U',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 44,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+
+                          // Name & Verified badge
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                user.displayName ?? 'Alex Hill',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              const Icon(
+                                Icons.verified_rounded,
+                                color: Colors.blue,
+                                size: 20,
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+
+                          // Role / Instrument
+                          Text(
+                            user.userType ?? 'Musician',
+                            style: GoogleFonts.inter(
+                              fontSize: 14,
+                              color: AppTheme.primaryAccent,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+
+                          // Location
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(
+                                Icons.location_on_outlined,
+                                color: AppTheme.textSecondary,
+                                size: 14,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                user.location ?? 'Stockholm, Sweden',
+                                style: GoogleFonts.inter(
+                                  fontSize: 12,
+                                  color: AppTheme.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+
+                          // Edit Profile & Logout Row
+                          Row(
+                            children: [
+                              Expanded(
+                                child: AnimatedTapDetector(
+                                  onTap: () async {
+                                    await Navigator.pushNamed(context, '/edit-profile');
+                                    appState.refreshProfile();
+                                  },
+                                  child: Container(
+                                    height: 48,
+                                    decoration: BoxDecoration(
+                                      gradient: AppTheme.primaryGradient,
+                                      borderRadius: BorderRadius.circular(12),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: AppTheme.primaryAccent.withOpacity(0.35),
+                                          blurRadius: 8,
+                                          offset: const Offset(0, 3),
+                                        )
+                                      ],
+                                    ),
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        const Icon(Icons.edit_rounded, color: Colors.white, size: 18),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          'Edit Profile',
+                                          style: GoogleFonts.inter(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              AnimatedTapDetector(
+                                onTap: () async {
+                                  final confirmed = await showDialog<bool>(
+                                    context: context,
+                                    builder: (context) => AlertDialog(
+                                      backgroundColor: AppTheme.cardBackground,
+                                      title: const Text('Logout?'),
+                                      content: const Text('Are you sure you want to logout?'),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () => Navigator.pop(context, false),
+                                          child: const Text('Cancel', style: TextStyle(color: Colors.white)),
+                                        ),
+                                        TextButton(
+                                          onPressed: () => Navigator.pop(context, true),
+                                          child: const Text('Logout', style: TextStyle(color: Colors.redAccent)),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                  if (confirmed == true) {
+                                    await appState.logout();
+                                    if (context.mounted) {
+                                      Navigator.pushReplacementNamed(context, '/login');
+                                    }
+                                  }
+                                },
+                                child: Container(
+                                  width: 48,
+                                  height: 48,
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.cardBackground,
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(color: const Color(0xFF231F45), width: 1),
+                                  ),
+                                  child: const Center(
+                                    child: Icon(
+                                      Icons.logout_rounded,
+                                      color: Colors.redAccent,
+                                      size: 20,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
-                      if (user.spotifyUrl != null || user.youtubeUrl != null) ...[
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            if (user.spotifyUrl != null && user.spotifyUrl!.isNotEmpty)
-                              GestureDetector(
-                                onTap: () => _launchUrl(user.spotifyUrl!),
-                                child: Container(
-                                  margin: const EdgeInsets.only(right: 8),
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: Colors.green.withOpacity(0.1),
-                                    borderRadius: BorderRadius.circular(4),
-                                    border: Border.all(color: Colors.green.withOpacity(0.3)),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      const Icon(Icons.music_note, color: Colors.green, size: 12),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        'Spotify',
-                                        style: GoogleFonts.inter(fontSize: 10, color: Colors.green, fontWeight: FontWeight.bold),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            if (user.youtubeUrl != null && user.youtubeUrl!.isNotEmpty)
-                              GestureDetector(
-                                onTap: () => _launchUrl(user.youtubeUrl!),
-                                child: Container(
-                                  margin: const EdgeInsets.only(right: 8),
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: Colors.red.withOpacity(0.1),
-                                    borderRadius: BorderRadius.circular(4),
-                                    border: Border.all(color: Colors.red.withOpacity(0.3)),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      const Icon(Icons.play_circle_fill, color: Colors.red, size: 12),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        'YouTube',
-                                        style: GoogleFonts.inter(fontSize: 10, color: Colors.red, fontWeight: FontWeight.bold),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                // Edit Profile Icon Button
-                AnimatedTapDetector(
-                  onTap: () async {
-                    await Navigator.pushNamed(context, '/edit-profile');
-                    // Reload profile details upon returning
-                    appState.refreshProfile();
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: AppTheme.inputBackground,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
                     ),
-                    child: const Icon(Icons.edit_outlined, color: Colors.white, size: 20),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 24),
+                    const SizedBox(height: 24),
 
           // 2. About Info section
           Text(
@@ -432,41 +455,7 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                         );
                       },
                     ),
-          const SizedBox(height: 30),
-
-          // 5. Logout Button
-          AnimatedTapDetector(
-            onTap: () async {
-              await appState.logout();
-              if (mounted) {
-                Navigator.pushReplacementNamed(context, '/login');
-              }
-            },
-            child: Container(
-              height: 55,
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: const Color(0xFF2C101B),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0xFF5D1226), width: 1.5),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.logout_rounded, color: Colors.redAccent, size: 20),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Logout',
-                    style: GoogleFonts.inter(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.redAccent,
-                    ),
-                  ),
-                  ],
-                ),
-              ),
-            ),
+          const SizedBox(height: 40),
           ],
         ),
       ),
