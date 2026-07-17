@@ -12,10 +12,12 @@ import '../widgets/audio_snippet_player.dart';
 
 class MusicianProfileScreen extends StatefulWidget {
   final UserProfile musician;
+  final bool isTab;
 
   const MusicianProfileScreen({
     super.key,
     required this.musician,
+    this.isTab = false,
   });
 
   @override
@@ -101,9 +103,13 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
         ? ['Studio Recording', 'Live Performance', 'Songwriting']
         : [...widget.musician.instruments, 'Live Performance', 'Songwriting'];
 
+    final appState = Provider.of<AppState>(context);
+    final isMe = widget.musician.userId == appState.currentUserId;
+
     return GradientScaffold(
-      appBar: const CustomTopBar(
-        showBack: true,
+      appBar: CustomTopBar(
+        showBack: !widget.isTab,
+        title: widget.isTab ? 'My Profile' : '',
       ),
       body: SingleChildScrollView(
         child: Column(
@@ -434,13 +440,15 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
                   ),
                   const SizedBox(height: 40),
 
-                  // Bottom Action Buttons (Message & Add)
+                  // Bottom Action Buttons (Message & Add, or Edit & Logout if isMe)
                   Row(
                     children: [
-                      // Message Button
+                      // Primary Button (Message or Edit Profile)
                       Expanded(
                         child: AnimatedTapDetector(
-                          onTap: _openChat,
+                          onTap: isMe
+                              ? () => Navigator.pushNamed(context, '/edit-profile')
+                              : _openChat,
                           child: Container(
                             height: 55,
                             decoration: BoxDecoration(
@@ -457,10 +465,14 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                const Icon(Icons.chat_bubble_outline_rounded, color: Colors.white, size: 20),
+                                Icon(
+                                  isMe ? Icons.edit_rounded : Icons.chat_bubble_outline_rounded,
+                                  color: Colors.white,
+                                  size: 20,
+                                ),
                                 const SizedBox(width: 8),
                                 Text(
-                                  'Message',
+                                  isMe ? 'Edit Profile' : 'Message',
                                   style: GoogleFonts.inter(
                                     fontSize: 16,
                                     fontWeight: FontWeight.bold,
@@ -474,9 +486,11 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
                       ),
                       const SizedBox(width: 16),
 
-                      // Follow/Favorite Button
+                      // Secondary Button (Favorite, or Logout if isMe)
                       AnimatedTapDetector(
-                        onTap: _toggleFavorite,
+                        onTap: isMe
+                            ? () => _showLogoutConfirmation(context, appState)
+                            : _toggleFavorite,
                         child: Container(
                           width: 55,
                           height: 55,
@@ -486,20 +500,26 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
                             border: Border.all(color: const Color(0xFF231F45), width: 1),
                           ),
                           child: Center(
-                            child: _isCheckingFav
-                                ? const SizedBox(
-                                    width: 20,
-                                    height: 20,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: AppTheme.primaryAccent,
-                                    ),
+                            child: isMe
+                                ? const Icon(
+                                    Icons.logout_rounded,
+                                    color: Colors.redAccent,
+                                    size: 24,
                                   )
-                                : Icon(
-                                    _isFavorite ? Icons.star_rounded : Icons.star_border_rounded,
-                                    color: _isFavorite ? AppTheme.primaryAccent : Colors.white,
-                                    size: 26,
-                                  ),
+                                : (_isCheckingFav
+                                    ? const SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: AppTheme.primaryAccent,
+                                        ),
+                                      )
+                                    : Icon(
+                                        _isFavorite ? Icons.star_rounded : Icons.star_border_rounded,
+                                        color: _isFavorite ? AppTheme.primaryAccent : Colors.white,
+                                        size: 26,
+                                      )),
                           ),
                         ),
                       ),
@@ -512,6 +532,92 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  void _showLogoutConfirmation(BuildContext context, AppState appState) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          child: Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: const Color(0xFF0F0C20),
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: const Color(0xFF2E2A4E), width: 1.5),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.logout_rounded, color: Colors.redAccent, size: 48),
+                const SizedBox(height: 16),
+                Text(
+                  'Logout',
+                  style: GoogleFonts.outfit(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Are you sure you want to logout?',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    color: AppTheme.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: Text(
+                          'Cancel',
+                          style: GoogleFonts.inter(
+                            color: AppTheme.textSecondary,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.redAccent,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                        onPressed: () async {
+                          Navigator.pop(context); // Close dialog
+                          await appState.logout();
+                          if (context.mounted) {
+                            Navigator.of(context).pushReplacementNamed('/login');
+                          }
+                        },
+                        child: Text(
+                          'Logout',
+                          style: GoogleFonts.inter(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }
