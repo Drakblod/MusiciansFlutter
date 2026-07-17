@@ -46,6 +46,7 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
   StreamSubscription<List<BandEvent>>? _bandEventsSubscription;
   StreamSubscription? _gigsNewsSubscription;
   List<Map<String, dynamic>> _gigsNews = [];
+  String _gigsTabFilter = 'All';
   String? _loadedBandId;
 
   @override
@@ -1592,140 +1593,689 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
     );
     final isLeaderOrAdmin = currentMember.role == 'Leader' || currentMember.role == 'Admin';
 
+    // 1. Prepare feed items
+    final feedItems = <Map<String, dynamic>>[];
+    final now = DateTime.now();
+
+    // Add News/Gigs
+    if (_gigsTabFilter == 'All' || _gigsTabFilter == 'News') {
+      for (var post in _gigsNews) {
+        feedItems.add({
+          'id': post['id'] ?? '',
+          'feedType': post['type'] ?? 'News', // 'Gig' or 'News'
+          'title': post['title'] ?? 'Untitled',
+          'content': post['content'] ?? '',
+          'authorName': post['authorName'] ?? 'Leader',
+          'timestamp': post['timestamp'] as int? ?? 0,
+          'location': post['location'] ?? '',
+          'originalData': post,
+        });
+      }
+    }
+
+    // Add Events
+    if (_gigsTabFilter == 'All' || _gigsTabFilter == 'Events') {
+      for (var event in _bandEvents) {
+        final endLocal = DateTime.tryParse(event.endDateTime)?.toLocal() ?? now;
+        final isUpcoming = endLocal.isAfter(now);
+        final timestamp = event.createdAt > 0
+            ? event.createdAt
+            : (DateTime.tryParse(event.startDateTime)?.millisecondsSinceEpoch ?? 0);
+
+        feedItems.add({
+          'id': event.id ?? '',
+          'feedType': isUpcoming ? 'UpcomingEvent' : 'PastEvent',
+          'title': event.title,
+          'content': event.description,
+          'authorName': event.createdBy,
+          'timestamp': timestamp,
+          'location': event.location,
+          'originalData': event,
+        });
+      }
+    }
+
+    // Sort by timestamp descending
+    feedItems.sort((a, b) => (b['timestamp'] as int).compareTo(a['timestamp'] as int));
+
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (isLeaderOrAdmin && bandId != null)
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: AnimatedTapDetector(
-              onTap: () => _showPostGigsNewsDialog(bandId),
-              child: Container(
-                height: 50,
-                decoration: BoxDecoration(
-                  gradient: AppTheme.primaryGradient,
-                  borderRadius: BorderRadius.circular(12),
+        // Filter Chips Bar
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _buildFilterChip('All', Icons.feed_rounded),
+                const SizedBox(width: 8),
+                _buildFilterChip('News', Icons.campaign_rounded),
+                const SizedBox(width: 8),
+                _buildFilterChip('Events', Icons.event_rounded),
+                const SizedBox(width: 8),
+                _buildFilterChip('Roster', Icons.groups_rounded),
+              ],
+            ),
+          ),
+        ),
+
+        Expanded(
+          child: ListView(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            physics: const BouncingScrollPhysics(),
+            children: [
+              // Welcome Roster Board (rendered at the top of 'All' or 'Roster')
+              if ((_gigsTabFilter == 'All' || _gigsTabFilter == 'Roster') && _members.isNotEmpty) ...[
+                _buildWelcomeRosterSection(),
+                const SizedBox(height: 20),
+              ],
+
+              // Post Button for Leaders/Admins (under News filter, or top of feed when appropriate)
+              if (isLeaderOrAdmin && bandId != null && (_gigsTabFilter == 'All' || _gigsTabFilter == 'News')) ...[
+                AnimatedTapDetector(
+                  onTap: () => _showPostGigsNewsDialog(bandId),
+                  child: Container(
+                    height: 48,
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      gradient: AppTheme.primaryGradient,
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppTheme.primaryAccent.withOpacity(0.3),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Center(
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.add_circle_outline_rounded, color: Colors.white, size: 20),
+                          const SizedBox(width: 8),
+                          Text(
+                            "Create Gig or News Update",
+                            style: GoogleFonts.outfit(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
-                child: const Center(
-                  child: Row(
+              ],
+
+              // Feed list content
+              if (_gigsTabFilter == 'Roster') ...[
+                _buildDetailedRosterList(),
+              ] else if (feedItems.isEmpty) ...[
+                SizedBox(
+                  height: 200,
+                  child: Center(
+                    child: Text(
+                      "No posts or events found.",
+                      style: GoogleFonts.inter(color: AppTheme.textSecondary),
+                    ),
+                  ),
+                ),
+              ] else ...[
+                ...feedItems.map((item) {
+                  final feedType = item['feedType'] as String;
+                  if (feedType == 'Gig' || feedType == 'News') {
+                    return _buildNewsFeedCard(item, isLeaderOrAdmin, bandId);
+                  } else {
+                    return _buildEventFeedCard(item, bandId);
+                  }
+                }),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFilterChip(String filterVal, IconData icon) {
+    final isSelected = _gigsTabFilter == filterVal;
+    return AnimatedTapDetector(
+      onTap: () {
+        setState(() {
+          _gigsTabFilter = filterVal;
+        });
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? AppTheme.primaryAccent : AppTheme.cardBackground,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected ? AppTheme.primaryAccent : const Color(0xFF2E2A4E),
+            width: 1,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 16,
+              color: isSelected ? Colors.white : AppTheme.textSecondary,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              filterVal == 'News' ? 'Gigs & News' : filterVal,
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                color: isSelected ? Colors.white : AppTheme.textSecondary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildWelcomeRosterSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'BAND ROSTER',
+              style: GoogleFonts.outfit(
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+                letterSpacing: 1.5,
+              ),
+            ),
+            Text(
+              '${_members.length} members',
+              style: GoogleFonts.inter(
+                fontSize: 11,
+                color: AppTheme.textSecondary,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        SizedBox(
+          height: 100,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            itemCount: _members.length,
+            itemBuilder: (context, index) {
+              final member = _members[index];
+              final instrument = _getMemberInstrument(member.userId);
+              return GestureDetector(
+                onTap: () {
+                  if (member.userId != null) {
+                    _viewMemberProfile(member.userId!);
+                  }
+                },
+                child: Container(
+                  width: 85,
+                  margin: const EdgeInsets.only(right: 12),
+                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                  decoration: BoxDecoration(
+                    color: AppTheme.cardBackground,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
+                  ),
+                  child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.add_comment_outlined, color: Colors.white),
-                      SizedBox(width: 8),
+                      CircleAvatar(
+                        radius: 18,
+                        backgroundColor: AppTheme.primaryAccent.withOpacity(0.2),
+                        child: Text(
+                          (member.nickname ?? 'M').substring(0, 1).toUpperCase(),
+                          style: GoogleFonts.outfit(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
                       Text(
-                        "Post Gig or News",
-                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                        member.nickname ?? 'Member',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.inter(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                      if (instrument.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          instrument,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.inter(
+                            fontSize: 9,
+                            color: AppTheme.primaryAccent,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDetailedRosterList() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'BAND MEMBERS',
+          style: GoogleFonts.outfit(
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+            letterSpacing: 1.5,
+          ),
+        ),
+        const SizedBox(height: 12),
+        ListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: _members.length,
+          itemBuilder: (context, index) {
+            final member = _members[index];
+            final instrument = _getMemberInstrument(member.userId);
+            return Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppTheme.cardBackground,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
+              ),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 22,
+                    backgroundColor: AppTheme.primaryAccent.withOpacity(0.2),
+                    child: Text(
+                      (member.nickname ?? 'M').substring(0, 1).toUpperCase(),
+                      style: GoogleFonts.outfit(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          member.nickname ?? 'Member',
+                          style: GoogleFonts.outfit(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          member.role ?? 'Member',
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            color: AppTheme.textSecondary,
+                          ),
+                        ),
+                        if (instrument.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            instrument,
+                            style: GoogleFonts.inter(
+                              fontSize: 11,
+                              color: AppTheme.primaryAccent,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.arrow_forward_ios_rounded, color: AppTheme.textSecondary, size: 16),
+                    onPressed: () {
+                      if (member.userId != null) {
+                        _viewMemberProfile(member.userId!);
+                      }
+                    },
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildNewsFeedCard(Map<String, dynamic> item, bool isLeaderOrAdmin, String? bandId) {
+    final isGig = item['feedType'] == 'Gig';
+    final dateStr = item['timestamp'] > 0
+        ? DateTime.fromMillisecondsSinceEpoch(item['timestamp'] as int).toLocal().toString().substring(0, 16)
+        : '';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppTheme.cardBackground,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isGig ? AppTheme.warning.withOpacity(0.3) : const Color(0xFF2E2A4E),
+          width: 1.0,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: (isGig ? AppTheme.warning : AppTheme.primaryAccent).withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  isGig ? 'GIG' : 'NEWS',
+                  style: GoogleFonts.inter(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: isGig ? AppTheme.warning : AppTheme.secondaryAccent,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  item['title'] ?? 'Untitled',
+                  style: GoogleFonts.outfit(
+                    fontSize: 17,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+              if (isLeaderOrAdmin && bandId != null && item['id'].toString().isNotEmpty)
+                IconButton(
+                  icon: const Icon(Icons.delete_outline_rounded, color: AppTheme.danger, size: 20),
+                  onPressed: () => _deleteGigsNewsPost(bandId, item['id']!),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            item['content'] ?? '',
+            style: GoogleFonts.inter(
+              fontSize: 13.5,
+              color: AppTheme.textSecondary,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'By: ${item['authorName'] ?? 'Leader'}',
+                style: GoogleFonts.inter(
+                  fontSize: 11,
+                  color: AppTheme.textMuted,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              Text(
+                dateStr,
+                style: GoogleFonts.inter(
+                  fontSize: 11,
+                  color: AppTheme.textMuted,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEventFeedCard(Map<String, dynamic> item, String? bandId) {
+    final event = item['originalData'] as BandEvent;
+    final isUpcoming = item['feedType'] == 'UpcomingEvent';
+    final startLocal = DateTime.tryParse(event.startDateTime)?.toLocal() ?? DateTime.now();
+    final formattedTime = DateFormat('EEEE, MMM d - HH:mm').format(startLocal);
+
+    final totalResponses = event.responses.length;
+    final yesResponses = event.responses.values.where((r) => r.status == 'Yes').length;
+
+    IconData eventIcon;
+    switch (event.eventType.toLowerCase()) {
+      case 'rehearsal':
+        eventIcon = Icons.music_note_rounded;
+        break;
+      case 'concert':
+      case 'gig':
+        eventIcon = Icons.campaign_rounded;
+        break;
+      case 'recording session':
+        eventIcon = Icons.mic_rounded;
+        break;
+      case 'meeting':
+        eventIcon = Icons.forum_rounded;
+        break;
+      default:
+        eventIcon = Icons.event_available_rounded;
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppTheme.cardBackground,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isUpcoming ? AppTheme.success.withOpacity(0.3) : const Color(0xFF2E2A4E),
+          width: 1.0,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: (isUpcoming ? AppTheme.success : AppTheme.textSecondary).withOpacity(0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  eventIcon,
+                  color: isUpcoming ? AppTheme.success : AppTheme.textSecondary,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: (isUpcoming ? AppTheme.success : AppTheme.textSecondary).withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            isUpcoming ? 'UPCOMING EVENT' : 'PAST EVENT',
+                            style: GoogleFonts.inter(
+                              fontSize: 9,
+                              fontWeight: FontWeight.bold,
+                              color: isUpcoming ? AppTheme.success : AppTheme.textSecondary,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      event.title,
+                      style: GoogleFonts.outfit(
+                        fontSize: 17,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (event.description.isNotEmpty) ...[
+            Text(
+              event.description,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                color: AppTheme.textSecondary,
+                height: 1.35,
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.access_time_rounded, color: AppTheme.textSecondary, size: 14),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        formattedTime,
+                        style: GoogleFonts.inter(fontSize: 12.5, color: Colors.white70),
+                      ),
+                    ),
+                  ],
+                ),
+                if (event.location.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      const Icon(Icons.location_on_outlined, color: AppTheme.textSecondary, size: 14),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          event.location,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.inter(fontSize: 12.5, color: Colors.white70),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                '$yesResponses Attending ($totalResponses responses)',
+                style: GoogleFonts.inter(
+                  fontSize: 11,
+                  color: AppTheme.textMuted,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              GestureDetector(
+                onTap: () {
+                  if (bandId != null && event.id != null) {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => EventDetailsPage(
+                          bandId: bandId,
+                          eventId: event.id!,
+                          initialEvent: event,
+                        ),
+                      ),
+                    );
+                  }
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: isUpcoming ? AppTheme.primaryAccent.withOpacity(0.15) : const Color(0xFF2E2A4E),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: isUpcoming ? AppTheme.primaryAccent : const Color(0xFF2E2A4E),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Text(
+                        isUpcoming ? 'RSVP / Details' : 'View Details',
+                        style: GoogleFonts.inter(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.bold,
+                          color: isUpcoming ? AppTheme.primaryAccent : Colors.white70,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Icon(
+                        Icons.chevron_right_rounded,
+                        color: isUpcoming ? AppTheme.primaryAccent : Colors.white70,
+                        size: 14,
                       ),
                     ],
                   ),
                 ),
               ),
-            ),
+            ],
           ),
-        Expanded(
-          child: _gigsNews.isEmpty
-              ? const Center(
-                  child: Text(
-                    "No news or gigs posted yet.",
-                    style: TextStyle(color: AppTheme.textSecondary),
-                  ),
-                )
-              : ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  itemCount: _gigsNews.length,
-                  physics: const BouncingScrollPhysics(),
-                  itemBuilder: (context, index) {
-                    final post = _gigsNews[index];
-                    final isGig = post['type'] == 'Gig';
-                    final dateStr = post['timestamp'] != null
-                        ? DateTime.fromMillisecondsSinceEpoch(post['timestamp'] as int).toLocal().toString().substring(0, 16)
-                        : '';
-
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 16),
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: AppTheme.cardBackground,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: isGig ? AppTheme.warning.withOpacity(0.3) : const Color(0xFF231F45),
-                          width: 1,
-                        ),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: (isGig ? AppTheme.warning : AppTheme.primaryAccent).withOpacity(0.15),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Text(
-                                  isGig ? 'GIG' : 'NEWS',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
-                                    color: isGig ? AppTheme.warning : AppTheme.secondaryAccent,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  post['title'] ?? 'Untitled',
-                                  style: GoogleFonts.outfit(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                              ),
-                              if (isLeaderOrAdmin && bandId != null && post['id'] != null)
-                                IconButton(
-                                  icon: const Icon(Icons.delete_outline_rounded, color: AppTheme.danger, size: 20),
-                                  onPressed: () => _deleteGigsNewsPost(bandId, post['id']!),
-                                ),
-                            ],
-                          ),
-                          const SizedBox(height: 10),
-                          Text(
-                            post['content'] ?? '',
-                            style: GoogleFonts.inter(
-                              fontSize: 14,
-                              color: AppTheme.textSecondary,
-                              height: 1.4,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                'By: ${post['authorName'] ?? 'Leader'}',
-                                style: GoogleFonts.inter(
-                                  fontSize: 11,
-                                  color: AppTheme.textMuted,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              Text(
-                                dateStr,
-                                style: GoogleFonts.inter(
-                                  fontSize: 11,
-                                  color: AppTheme.textMuted,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
