@@ -837,7 +837,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
                       const Icon(Icons.chat_bubble_outline_rounded, color: AppTheme.primaryAccent, size: 18),
                       const SizedBox(width: 8),
                       Text(
-                        'Message',
+                        'More details..',
                         style: GoogleFonts.outfit(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
@@ -861,7 +861,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
                     maxLength: 200,
                     style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
                     decoration: const InputDecoration(
-                      hintText: 'Write a message to tell more about your rehearsal...',
+                      hintText: 'More details..',
                       counterStyle: TextStyle(color: AppTheme.textSecondary),
                       contentPadding: EdgeInsets.all(12),
                     ),
