@@ -672,7 +672,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
                     if (newValue != null) {
                       setState(() {
                         _selectedInstrument = newValue;
-                        if (_sendToFavoritesOnly) {
+                        if (_showFavoritesList) {
                           _updateFilteredFavorites();
                         }
                       });
@@ -900,9 +900,6 @@ class _FindSubScreenState extends State<FindSubScreen> {
             const SizedBox(height: 16),
             const Divider(color: Color(0xFF2E2A4E), height: 32),
 
-            // Send request to Favorites only switch
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
             // Side-by-side Action Buttons: FAVORITES LIST & SEND TO ALL
             Row(
               children: [
@@ -1159,3 +1156,4 @@ class _FindSubScreenState extends State<FindSubScreen> {
     );
   }
 }
+
