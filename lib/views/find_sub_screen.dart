@@ -34,6 +34,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
   bool _isSubmitting = false;
 
   bool _sendToFavoritesOnly = false;
+  bool _showFavoritesList = false;
   List<UserProfile> _favorites = [];
   List<UserProfile> _filteredFavorites = [];
   Map<String, bool> _selectedFavorites = {};
@@ -305,17 +306,19 @@ class _FindSubScreenState extends State<FindSubScreen> {
     }
   }
 
-  Future<void> _submitRequest() async {
+  Future<void> _submitRequest({required bool sendToAll}) async {
     setState(() => _isSubmitting = true);
     try {
       final appState = Provider.of<AppState>(context, listen: false);
       final profile = appState.currentUserProfile;
 
-      if (_sendToFavoritesOnly) {
+      List<String>? targetUserIds;
+
+      if (!sendToAll) {
         if (_favorites.isEmpty) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('You have no favorited musicians. Go to the Browse tab to add favorites or turn off the Favorites switch.'),
+              content: Text('You have no favorited musicians. Go to the Browse tab to add favorites.'),
               backgroundColor: AppTheme.danger,
             ),
           );
@@ -325,7 +328,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
         if (_filteredFavorites.isEmpty) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('None of your favorites play $_selectedInstrument. Add matching favorites or turn off the Favorites switch.'),
+              content: Text('None of your favorites play $_selectedInstrument. Add matching favorites or use Send to All.'),
               backgroundColor: AppTheme.danger,
             ),
           );
@@ -346,6 +349,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
           setState(() => _isSubmitting = false);
           return;
         }
+        targetUserIds = checkedUserIds;
       }
 
       final resolvedLoc = _locationController.text.trim().isNotEmpty
@@ -368,12 +372,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
         rehearsalDayOfWeek: DateFormat('EEEE').format(_selectedDate),
         latitude: coords?['latitude'],
         longitude: coords?['longitude'],
-        targetUserIds: _sendToFavoritesOnly
-            ? _selectedFavorites.entries
-                .where((e) => e.value)
-                .map((e) => e.key)
-                .toList()
-            : null,
+        targetUserIds: targetUserIds,
         eventId: widget.eventId,
         bandId: widget.bandId,
       );
@@ -621,158 +620,32 @@ class _FindSubScreenState extends State<FindSubScreen> {
                 }
               },
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 decoration: BoxDecoration(
                   color: AppTheme.primaryAccent.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.3)),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.groups_rounded, color: AppTheme.primaryAccent, size: 16),
-                    const SizedBox(width: 8),
+                    const Icon(Icons.groups_rounded, color: AppTheme.primaryAccent, size: 20),
+                    const SizedBox(width: 10),
                     Text(
-                      'Posting for: ${appState.activeBandName ?? "Freelance Gig"}',
-                      style: GoogleFonts.inter(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
+                      appState.activeBandName ?? "Freelance Gig",
+                      style: GoogleFonts.outfit(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
                         color: Colors.white,
                       ),
                     ),
-                    const SizedBox(width: 6),
-                    const Icon(Icons.edit_rounded, color: AppTheme.primaryAccent, size: 12),
+                    const SizedBox(width: 8),
+                    const Icon(Icons.edit_rounded, color: AppTheme.primaryAccent, size: 14),
                   ],
                 ),
               ),
             ),
             const SizedBox(height: 24),
-            // Role Selector
-            Text(
-              'WHAT TYPE OF POSITION?',
-              style: GoogleFonts.outfit(
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-                color: AppTheme.textSecondary,
-                letterSpacing: 1.5,
-              ),
-            ),
-            const SizedBox(height: 10),            Row(
-              children: [
-                Expanded(
-                  child: GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        _selectedRole = 'Substitute';
-                      });
-                    },
-                    child: Container(
-                      height: 48,
-                      decoration: BoxDecoration(
-                        color: _selectedRole == 'Substitute'
-                            ? AppTheme.primaryAccent.withOpacity(0.12)
-                            : AppTheme.cardBackground,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                          color: _selectedRole == 'Substitute'
-                              ? AppTheme.primaryAccent
-                              : const Color(0xFF2E2A4E),
-                          width: 1.5,
-                        ),
-                      ),
-                      child: Center(
-                        child: Text(
-                          'Substitute',
-                          style: GoogleFonts.inter(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: _selectedRole == 'Substitute'
-                                ? Colors.white
-                                : AppTheme.textSecondary,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        _selectedRole = 'New member';
-                      });
-                    },
-                    child: Container(
-                      height: 48,
-                      decoration: BoxDecoration(
-                        color: _selectedRole == 'New member'
-                            ? AppTheme.primaryAccent.withOpacity(0.12)
-                            : AppTheme.cardBackground,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                          color: _selectedRole == 'New member'
-                              ? AppTheme.primaryAccent
-                              : const Color(0xFF2E2A4E),
-                          width: 1.5,
-                        ),
-                      ),
-                      child: Center(
-                        child: Text(
-                          'New member',
-                          style: GoogleFonts.inter(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: _selectedRole == 'New member'
-                                ? Colors.white
-                                : AppTheme.textSecondary,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        _selectedRole = 'Session Musician';
-                      });
-                    },
-                    child: Container(
-                      height: 48,
-                      decoration: BoxDecoration(
-                        color: _selectedRole == 'Session Musician'
-                            ? AppTheme.primaryAccent.withOpacity(0.12)
-                            : AppTheme.cardBackground,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                          color: _selectedRole == 'Session Musician'
-                              ? AppTheme.primaryAccent
-                              : const Color(0xFF2E2A4E),
-                          width: 1.5,
-                        ),
-                      ),
-                      child: Center(
-                        child: Text(
-                          'Session Musician',
-                          textAlign: TextAlign.center,
-                          style: GoogleFonts.inter(
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                            color: _selectedRole == 'Session Musician'
-                                ? Colors.white
-                                : AppTheme.textSecondary,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
 
             // Instrument Picker Dropdown
             Container(
@@ -1030,50 +903,85 @@ class _FindSubScreenState extends State<FindSubScreen> {
             // Send request to Favorites only switch
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            // Side-by-side Action Buttons: FAVORITES LIST & SEND TO ALL
+            Row(
               children: [
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Send request to Favorites only',
-                        style: GoogleFonts.inter(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w500,
-                          color: Colors.white,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Only selected favorites will see this request',
-                        style: GoogleFonts.inter(
-                          fontSize: 12,
-                          color: AppTheme.textSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Switch(
-                  value: _sendToFavoritesOnly,
-                  onChanged: (val) {
-                    setState(() {
-                      _sendToFavoritesOnly = val;
-                      if (_sendToFavoritesOnly) {
+                  child: AnimatedTapDetector(
+                    onTap: () {
+                      setState(() {
+                        _showFavoritesList = !_showFavoritesList;
+                      });
+                      if (_showFavoritesList && _favorites.isEmpty) {
                         _loadFavorites();
                       }
-                    });
-                  },
-                  activeColor: AppTheme.primaryAccent,
-                  activeTrackColor: AppTheme.primaryAccent.withOpacity(0.3),
-                  inactiveThumbColor: AppTheme.textSecondary,
-                  inactiveTrackColor: Colors.grey.withOpacity(0.2),
+                    },
+                    child: Container(
+                      height: 52,
+                      decoration: BoxDecoration(
+                        color: _showFavoritesList
+                            ? AppTheme.primaryAccent.withOpacity(0.15)
+                            : AppTheme.cardBackground,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: _showFavoritesList
+                              ? AppTheme.primaryAccent
+                              : const Color(0xFF2E2A4E),
+                          width: 1.5,
+                        ),
+                      ),
+                      child: Center(
+                        child: Text(
+                          'FAVORITES LIST',
+                          style: GoogleFonts.inter(
+                            color: _showFavoritesList ? Colors.white : AppTheme.textSecondary,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: _isSubmitting
+                      ? const Center(child: CircularProgressIndicator(color: AppTheme.primaryAccent))
+                      : AnimatedTapDetector(
+                          onTap: () => _submitRequest(sendToAll: true),
+                          child: Container(
+                            height: 52,
+                            decoration: BoxDecoration(
+                              gradient: AppTheme.primaryGradient,
+                              borderRadius: BorderRadius.circular(12),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: AppTheme.primaryAccent.withOpacity(0.3),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 3),
+                                )
+                              ],
+                            ),
+                            child: Center(
+                              child: Text(
+                                'SEND TO ALL',
+                                style: GoogleFonts.inter(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
                 ),
               ],
             ),
 
-            if (_sendToFavoritesOnly) ...[
-              const SizedBox(height: 16),
+            if (_showFavoritesList) ...[
+              const SizedBox(height: 24),
               if (_isLoadingFavorites)
                 const Center(
                   child: Padding(
@@ -1095,7 +1003,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
-                          'You have no favorited musicians. Go to the Browse tab to add favorites, or turn off this switch.',
+                          'You have no favorited musicians. Go to the Browse tab to add favorites.',
                           style: GoogleFonts.inter(color: Colors.white, fontSize: 13),
                         ),
                       ),
@@ -1116,7 +1024,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
-                          'None of your favorites play $_selectedInstrument. Add matching favorites or turn off this switch.',
+                          'None of your favorites play $_selectedInstrument. Add matching favorites or use Send to All.',
                           style: GoogleFonts.inter(color: Colors.white, fontSize: 13),
                         ),
                       ),
@@ -1156,6 +1064,17 @@ class _FindSubScreenState extends State<FindSubScreen> {
                       ),
                       child: Row(
                         children: [
+                          Checkbox(
+                            value: isChecked,
+                            onChanged: (val) {
+                              setState(() {
+                                _selectedFavorites[userId] = val ?? false;
+                              });
+                            },
+                            activeColor: AppTheme.primaryAccent,
+                            checkColor: Colors.white,
+                          ),
+                          const SizedBox(width: 4),
                           CircleAvatar(
                             radius: 20,
                             backgroundColor: AppTheme.primaryAccent.withOpacity(0.2),
@@ -1195,55 +1114,44 @@ class _FindSubScreenState extends State<FindSubScreen> {
                               ],
                             ),
                           ),
-                          Checkbox(
-                            value: isChecked,
-                            onChanged: (val) {
-                              setState(() {
-                                _selectedFavorites[userId] = val ?? false;
-                              });
-                            },
-                            activeColor: AppTheme.primaryAccent,
-                            checkColor: Colors.white,
-                          ),
                         ],
                       ),
                     );
                   },
                 ),
-              ],
-            ],
-            const SizedBox(height: 30),
-
-            // Submit Button
-            _isSubmitting
-                ? const Center(child: CircularProgressIndicator(color: AppTheme.primaryAccent))
-                : AnimatedTapDetector(
-                    onTap: _submitRequest,
-                    child: Container(
-                      height: 55,
-                      decoration: BoxDecoration(
-                        gradient: AppTheme.primaryGradient,
-                        borderRadius: BorderRadius.circular(14),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppTheme.primaryAccent.withOpacity(0.3),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
-                          )
-                        ],
-                      ),
-                      child: Center(
-                        child: Text(
-                          'Send Request',
-                          style: GoogleFonts.inter(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
+                const SizedBox(height: 20),
+                _isSubmitting
+                    ? const Center(child: CircularProgressIndicator(color: AppTheme.primaryAccent))
+                    : AnimatedTapDetector(
+                        onTap: () => _submitRequest(sendToAll: false),
+                        child: Container(
+                          height: 52,
+                          width: double.infinity,
+                          decoration: BoxDecoration(
+                            gradient: AppTheme.primaryGradient,
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppTheme.primaryAccent.withOpacity(0.3),
+                                blurRadius: 8,
+                                offset: const Offset(0, 3),
+                              )
+                            ],
+                          ),
+                          child: Center(
+                            child: Text(
+                              'Send to Favorites Only',
+                              style: GoogleFonts.inter(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 15,
+                              ),
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  ),
+              ],
+            ],
             const SizedBox(height: 40),
           ],
         ),
