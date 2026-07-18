@@ -88,6 +88,29 @@ class _FindGigsScreenState extends State<FindGigsScreen>
         return targets != null && currentUserId != null && targets.contains(currentUserId);
       }).toList();
 
+      // Sort chronologically (earliest gig date first)
+      filteredUpcoming.sort((a, b) {
+        final aDate = DateTime.tryParse(a.date ?? '') ?? DateTime(3000);
+        final bDate = DateTime.tryParse(b.date ?? '') ?? DateTime(3000);
+        if (aDate.isAtSameMomentAs(bDate)) {
+          final aTime = a.startTime ?? '';
+          final bTime = b.startTime ?? '';
+          return aTime.compareTo(bTime);
+        }
+        return aDate.compareTo(bDate);
+      });
+
+      filteredInvites.sort((a, b) {
+        final aDate = DateTime.tryParse(a.date ?? '') ?? DateTime(3000);
+        final bDate = DateTime.tryParse(b.date ?? '') ?? DateTime(3000);
+        if (aDate.isAtSameMomentAs(bDate)) {
+          final aTime = a.startTime ?? '';
+          final bTime = b.startTime ?? '';
+          return aTime.compareTo(bTime);
+        }
+        return aDate.compareTo(bDate);
+      });
+
       setState(() {
         _liveGigs = filteredUpcoming;
         _inviteGigs = filteredInvites;
