@@ -1364,6 +1364,20 @@ class FirebaseService {
     return null;
   }
 
+  Future<List<Band>> getAllBandsAsync() async {
+    final snapshot = await _dbRef('Bands').get();
+    final List<Band> list = [];
+    if (snapshot.exists && snapshot.value is Map) {
+      final map = snapshot.value as Map;
+      map.forEach((k, v) {
+        if (v is Map) {
+          list.add(Band.fromJson(v, k.toString()));
+        }
+      });
+    }
+    return list;
+  }
+
   // ==========================================
   // 10. Collabs MVP Methods
   // ==========================================
