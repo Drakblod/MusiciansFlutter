@@ -365,7 +365,7 @@ class HomeScreen extends StatelessWidget {
               child: Padding(
                 padding: const EdgeInsets.only(bottom: 10, right: 10),
                 child: Text(
-                  '1.77',
+                  '1.78',
                   style: GoogleFonts.inter(
                     color: AppTheme.textSecondary.withOpacity(0.5),
                     fontSize: 12,
@@ -707,9 +707,9 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
   }
 
   Widget _buildCustomBubble(BuildContext context, HomeActionItem item, {required bool isCenter}) {
-    final double size = isCenter ? 112 : 92;
-    final double iconSize = isCenter ? 32 : 24;
-    final double fontSize = isCenter ? 10.0 : 9.0;
+    final double size = 114;
+    final double iconSize = 32;
+    final double fontSize = 10;
 
     return AnimatedTapDetector(
       onTap: item.onTap,
@@ -718,6 +718,7 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
         height: size,
         clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
+          shape: BoxShape.circle,
           borderRadius: BorderRadius.circular(size / 2),
           gradient: const RadialGradient(
             colors: [
@@ -734,7 +735,7 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
           boxShadow: [
             BoxShadow(
               color: const Color(0xFFC066F6).withOpacity(0.55),
-              blurRadius: isCenter ? 26 : 20,
+              blurRadius: 24,
               spreadRadius: 1,
             ),
           ],
@@ -992,7 +993,7 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
                 // Top margin to offset content below the transparent CustomTopBar (app bar is 60px height)
                 const SizedBox(height: 60),
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                  padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -1020,41 +1021,51 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
                           color: AppTheme.textSecondary,
                         ),
                       ),
-                      const SizedBox(height: 24),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
 
-
-
-                      // Curved/glow background behind the bubble row
-                      Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          Positioned.fill(
-                            child: CustomPaint(
-                              painter: NeonArcPainter(),
-                            ),
-                          ),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 24),
-                            child: SingleChildScrollView(
-                              scrollDirection: Axis.horizontal,
-                              physics: const BouncingScrollPhysics(),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  _buildCustomBubble(context, topBubbleActions[0], isCenter: false),
-                                  const SizedBox(width: 14),
-                                  _buildCustomBubble(context, topBubbleActions[1], isCenter: true),
-                                  const SizedBox(width: 14),
-                                  _buildCustomBubble(context, topBubbleActions[2], isCenter: false),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
+                // Curved/glow background behind the bubble row (FULL WIDTH BLEED)
+                Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Positioned.fill(
+                      child: CustomPaint(
+                        painter: NeonArcPainter(),
                       ),
-                      const SizedBox(height: 32),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 24),
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        clipBehavior: Clip.none, // Prevent clipping of neon glow/shadows
+                        physics: const BouncingScrollPhysics(),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 20), // Align content edges with page borders
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              _buildCustomBubble(context, topBubbleActions[0], isCenter: false),
+                              const SizedBox(width: 18),
+                              _buildCustomBubble(context, topBubbleActions[1], isCenter: true),
+                              const SizedBox(width: 18),
+                              _buildCustomBubble(context, topBubbleActions[2], isCenter: false),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 32),
 
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                       // Remaining Cards List
                       ...remainingCardActions.expand((item) => [
                         _buildActionCard(
@@ -1109,7 +1120,7 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
                               }
                             },
                             child: Text(
-                              '1.77',
+                              '1.78',
                               style: GoogleFonts.inter(
                                 color: AppTheme.textSecondary.withOpacity(0.5),
                                 fontSize: 12,
