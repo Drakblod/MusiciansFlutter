@@ -802,7 +802,7 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
           tabs: const [
             Tab(text: 'Chat'),
             Tab(text: 'Files'),
-            Tab(text: 'Calendar'),
+            Tab(text: 'Events'),
             Tab(text: 'Gigs/Info'),
             Tab(text: 'Members'),
           ],
