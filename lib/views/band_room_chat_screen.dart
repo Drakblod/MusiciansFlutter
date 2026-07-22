@@ -350,11 +350,18 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
         withData: true,
       );
 
-      if (result != null) {
+      if (result != null && result.files.isNotEmpty) {
         final file = result.files.single;
         Uint8List? bytes = file.bytes;
-        if (bytes == null && file.path != null) {
-          bytes = await File(file.path!).readAsBytes();
+        if (bytes == null && file.path != null && file.path!.isNotEmpty) {
+          try {
+            final f = File(file.path!);
+            if (await f.exists()) {
+              bytes = await f.readAsBytes();
+            }
+          } catch (e) {
+            debugPrint("Could not read file bytes directly from path: $e");
+          }
         }
         
         // Show loader dialog
@@ -1673,8 +1680,6 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                 _buildFilterChip('News', Icons.campaign_rounded),
                 const SizedBox(width: 8),
                 _buildFilterChip('Events', Icons.event_rounded),
-                const SizedBox(width: 8),
-                _buildFilterChip('Roster', Icons.groups_rounded),
               ],
             ),
           ),
@@ -1685,12 +1690,6 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             physics: const BouncingScrollPhysics(),
             children: [
-              // Welcome Roster Board (rendered at the top of 'All' or 'Roster')
-              if ((_gigsTabFilter == 'All' || _gigsTabFilter == 'Roster') && _members.isNotEmpty) ...[
-                _buildWelcomeRosterSection(),
-                const SizedBox(height: 20),
-              ],
-
               // Post Button for Leaders/Admins (under News filter, or top of feed when appropriate)
               if (isLeaderOrAdmin && bandId != null && (_gigsTabFilter == 'All' || _gigsTabFilter == 'News')) ...[
                 AnimatedTapDetector(
@@ -1731,9 +1730,7 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
               ],
 
               // Feed list content
-              if (_gigsTabFilter == 'Roster') ...[
-                _buildDetailedRosterList(),
-              ] else if (feedItems.isEmpty) ...[
+              if (feedItems.isEmpty) ...[
                 SizedBox(
                   height: 200,
                   child: Center(

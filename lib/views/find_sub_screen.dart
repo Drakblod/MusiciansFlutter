@@ -562,7 +562,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
 
     return GradientScaffold(
       appBar: const CustomTopBar(
-        title: 'Find a Musician',
+        title: 'Find Musician',
         showBack: true,
       ),
       body: SingleChildScrollView(
@@ -571,7 +571,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'FIND A MUSICIAN/VOCALIST',
+              'FIND MUSICIAN/VOCALIST',
               style: GoogleFonts.outfit(
                 fontSize: 26,
                 fontWeight: FontWeight.bold,
@@ -646,6 +646,124 @@ class _FindSubScreenState extends State<FindSubScreen> {
               ),
             ),
             const SizedBox(height: 24),
+
+            // Position Type Selector
+            Row(
+              children: [
+                Expanded(
+                  child: AnimatedTapDetector(
+                    onTap: () {
+                      setState(() {
+                        _selectedRole = 'Substitute';
+                      });
+                    },
+                    child: Container(
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: _selectedRole == 'Substitute'
+                            ? AppTheme.primaryAccent.withOpacity(0.12)
+                            : AppTheme.cardBackground,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: _selectedRole == 'Substitute'
+                              ? AppTheme.primaryAccent
+                              : const Color(0xFF2E2A4E),
+                          width: 1.5,
+                        ),
+                      ),
+                      child: Center(
+                        child: Text(
+                          'Substitute',
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: _selectedRole == 'Substitute'
+                                ? Colors.white
+                                : AppTheme.textSecondary,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: AnimatedTapDetector(
+                    onTap: () {
+                      setState(() {
+                        _selectedRole = 'New Member';
+                      });
+                    },
+                    child: Container(
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: (_selectedRole == 'New Member' || _selectedRole == 'New member')
+                            ? AppTheme.primaryAccent.withOpacity(0.12)
+                            : AppTheme.cardBackground,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: (_selectedRole == 'New Member' || _selectedRole == 'New member')
+                              ? AppTheme.primaryAccent
+                              : const Color(0xFF2E2A4E),
+                          width: 1.5,
+                        ),
+                      ),
+                      child: Center(
+                        child: Text(
+                          'New Member',
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: (_selectedRole == 'New Member' || _selectedRole == 'New member')
+                                ? Colors.white
+                                : AppTheme.textSecondary,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: AnimatedTapDetector(
+                    onTap: () {
+                      setState(() {
+                        _selectedRole = 'Session Musician';
+                      });
+                    },
+                    child: Container(
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: _selectedRole == 'Session Musician'
+                            ? AppTheme.primaryAccent.withOpacity(0.12)
+                            : AppTheme.cardBackground,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: _selectedRole == 'Session Musician'
+                              ? AppTheme.primaryAccent
+                              : const Color(0xFF2E2A4E),
+                          width: 1.5,
+                        ),
+                      ),
+                      child: Center(
+                        child: Text(
+                          'Session Musician',
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.inter(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: _selectedRole == 'Session Musician'
+                                ? Colors.white
+                                : AppTheme.textSecondary,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
 
             // Instrument Picker Dropdown
             Container(
