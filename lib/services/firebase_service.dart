@@ -925,6 +925,43 @@ class FirebaseService {
     await _dbRef('files/$bandId/$fileId').remove();
   }
 
+  String _getMimeType(String fileName) {
+    final ext = fileName.split('.').last.toLowerCase().trim();
+    switch (ext) {
+      case 'pdf':
+        return 'application/pdf';
+      case 'mp3':
+        return 'audio/mpeg';
+      case 'wav':
+        return 'audio/wav';
+      case 'm4a':
+        return 'audio/mp4';
+      case 'aac':
+        return 'audio/aac';
+      case 'ogg':
+        return 'audio/ogg';
+      case 'png':
+        return 'image/png';
+      case 'jpg':
+      case 'jpeg':
+        return 'image/jpeg';
+      case 'gif':
+        return 'image/gif';
+      case 'webp':
+        return 'image/webp';
+      case 'heic':
+        return 'image/heic';
+      case 'doc':
+        return 'application/msword';
+      case 'docx':
+        return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+      case 'txt':
+        return 'text/plain';
+      default:
+        return 'application/octet-stream';
+    }
+  }
+
   Future<String> uploadBandFileAsync(String bandId, Uint8List? bytes, String? path, String fileName) async {
     try {
       final ref = FirebaseStorage.instance
@@ -933,11 +970,14 @@ class FirebaseService {
           .child(bandId)
           .child('${DateTime.now().millisecondsSinceEpoch}_$fileName');
 
+      final mimeType = _getMimeType(fileName);
+      final metadata = SettableMetadata(contentType: mimeType);
+
       UploadTask uploadTask;
-      if (bytes != null) {
-        uploadTask = ref.putData(bytes);
-      } else if (path != null) {
-        uploadTask = ref.putFile(File(path));
+      if (bytes != null && bytes.isNotEmpty) {
+        uploadTask = ref.putData(bytes, metadata);
+      } else if (path != null && path.isNotEmpty) {
+        uploadTask = ref.putFile(File(path), metadata);
       } else {
         throw Exception("Both file bytes and path are null for upload");
       }

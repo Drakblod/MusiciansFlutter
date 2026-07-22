@@ -531,7 +531,7 @@ class _CollabsLandingScreenState extends State<CollabsLandingScreen> {
 
             // Collab Main Category selector
             Text(
-              'WHAT COLLAB TYPE?',
+              'COLLABORATION AREA',
               style: GoogleFonts.outfit(
                 fontSize: 12,
                 fontWeight: FontWeight.bold,
@@ -618,7 +618,7 @@ class _CollabsLandingScreenState extends State<CollabsLandingScreen> {
 
             // Collab Role / Subcategory selector
             Text(
-              'SELECT ROLE',
+              'SKILLS/TALENTS',
               style: GoogleFonts.outfit(
                 fontSize: 12,
                 fontWeight: FontWeight.bold,
@@ -662,145 +662,7 @@ class _CollabsLandingScreenState extends State<CollabsLandingScreen> {
             ),
             const SizedBox(height: 24),
 
-            // Gig/Collab Details Card
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: AppTheme.cardBackground,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFF231F45), width: 1),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      const Icon(Icons.calendar_today_rounded, color: AppTheme.primaryAccent, size: 18),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Collaboration Details',
-                        style: GoogleFonts.outfit(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Location / Address',
-                    style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
-                  ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: _locationController,
-                    decoration: const InputDecoration(
-                      hintText: 'Location (e.g. Stockholm, Gothenburg, Malmö)',
-                      prefixIcon: Icon(Icons.location_on_rounded, color: AppTheme.textSecondary),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Date',
-                    style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
-                  ),
-                  const SizedBox(height: 8),
-
-                  // Date Picker Button
-                  AnimatedTapDetector(
-                    onTap: _pickDate,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                      decoration: BoxDecoration(
-                        color: AppTheme.inputBackground,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            DateFormat('dd MMMM yyyy').format(_selectedDate),
-                            style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
-                          ),
-                          const Icon(Icons.keyboard_arrow_down_rounded, color: AppTheme.textSecondary),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Time fields row
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Start Time',
-                              style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
-                            ),
-                            const SizedBox(height: 8),
-                            AnimatedTapDetector(
-                              onTap: () => _pickTime(true),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(vertical: 14),
-                                decoration: BoxDecoration(
-                                  color: AppTheme.inputBackground,
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
-                                ),
-                                child: Center(
-                                  child: Text(
-                                    formatTime(_startTime),
-                                    style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'End Time',
-                              style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
-                            ),
-                            const SizedBox(height: 8),
-                            AnimatedTapDetector(
-                              onTap: () => _pickTime(false),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(vertical: 14),
-                                decoration: BoxDecoration(
-                                  color: AppTheme.inputBackground,
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
-                                ),
-                                child: Center(
-                                  child: Text(
-                                    formatTime(_endTime),
-                                    style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            // More Details Card
+            // Collaboration Details Card (Free Text Only)
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
@@ -816,19 +678,11 @@ class _CollabsLandingScreenState extends State<CollabsLandingScreen> {
                       const Icon(Icons.chat_bubble_outline_rounded, color: AppTheme.primaryAccent, size: 18),
                       const SizedBox(width: 8),
                       Text(
-                        'More details..',
+                        'Collaboration Details',
                         style: GoogleFonts.outfit(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
                           color: Colors.white,
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        '(optional)',
-                        style: GoogleFonts.inter(
-                          fontSize: 12,
-                          color: AppTheme.textSecondary,
                         ),
                       ),
                     ],
@@ -840,41 +694,13 @@ class _CollabsLandingScreenState extends State<CollabsLandingScreen> {
                     maxLength: 200,
                     style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
                     decoration: const InputDecoration(
-                      hintText: 'More details..',
+                      hintText: "I'm looking for a co-writer to compose on the weekends...",
                       counterStyle: TextStyle(color: AppTheme.textSecondary),
                       contentPadding: EdgeInsets.all(12),
                     ),
                   ),
                 ],
               ),
-            ),
-            const SizedBox(height: 24),
-
-            // Paid switch row
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Is this a paid collab?',
-                  style: GoogleFonts.inter(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                    color: Colors.white,
-                  ),
-                ),
-                Switch(
-                  value: _isPaid,
-                  onChanged: (val) {
-                    setState(() {
-                      _isPaid = val;
-                    });
-                  },
-                  activeColor: AppTheme.primaryAccent,
-                  activeTrackColor: AppTheme.primaryAccent.withOpacity(0.3),
-                  inactiveThumbColor: AppTheme.textSecondary,
-                  inactiveTrackColor: Colors.grey.withOpacity(0.2),
-                ),
-              ],
             ),
             const SizedBox(height: 16),
             const Divider(color: Color(0xFF2E2A4E), height: 32),
