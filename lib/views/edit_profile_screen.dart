@@ -10,6 +10,7 @@ import '../models/user_profile.dart';
 import '../widgets/gradient_scaffold.dart';
 import '../widgets/custom_top_bar.dart';
 import '../widgets/animated_tap_detector.dart';
+import '../widgets/searchable_category_multi_select_sheet.dart';
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
@@ -30,8 +31,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   String? _mainInstrument;
   List<String> _selectedGenres = [];
   bool _isSaving = false;
-  bool _showAllInstruments = false;
-  bool _showAllGenres = false;
 
   String? _audioSnippetUrl;
   String? _pickedAudioFileName;
@@ -43,8 +42,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   final List<String> _roles = [
     "BANDLEADER",
+    "SONGWRITER",
     "PRODUCER",
-    "Vocalist",
+    "COMPOSER",
+    "LYRICIST",
+    "BEATMAKER",
+    "STUDIO/ENGINEER, etc",
+    "INSTRUMENTS/VOICES",
     "Recorder",
     "Flute",
     "Oboe",
@@ -73,8 +77,20 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     "Harpsichord",
     "Organ (Hammond)",
     "Drums",
-    "Latin Percussion",
-    "Classical Percussion",
+    "Latin Percussion (congas, timbales, etc)",
+    "Classical Percussion (timpani, cymbals, etc)",
+    "Soprano",
+    "Alto",
+    "Tenor",
+    "Baritone",
+    "Bass",
+    "Mezzo Soprano",
+    "Contralto",
+    "Counter Tenor",
+    "Male Lead Vocals",
+    "Female Lead vocals",
+    "Male Backing vocals",
+    "Female Backing vocals",
     "Soprano Recorder",
     "Alto Recorder",
     "Tenor Recorder",
@@ -94,44 +110,154 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     "Steel Pan"
   ];
 
-  final List<String> _genresList = [
-    "All styles",
-    "Salsa",
-    "Fusion",
-    "20's-40's",
-    "Classical",
-    "Pop",
-    "K-pop",
-    "Mainstream Rock",
-    "Hard Rock",
-    "Metal",
-    "Death Metal",
-    "Psychedelic",
-    "Rock and Roll",
-    "Rockabilly",
-    "Punk",
-    "Grunge",
-    "Soul",
-    "Reggae",
-    "Glam Rock",
-    "Blues-Rock",
-    "Country",
-    "Hip-Hop",
-    "Trip-hop",
-    "Balkan",
-    "Klezmer",
-    "A Capella",
-    "Chamber",
-    "Men's choir",
-    "Women's choir",
-    "Children's choir",
-    "Gospel",
-    "Barbershop",
-    "Madrigals",
-    "Gregorian",
-    "Mixing",
-    "Mastering"
-  ];
+  static final Map<String, List<String>> _instrumentCategoryMap = {
+    '✨ Skills & Production': [
+      'BANDLEADER',
+      'SONGWRITER',
+      'PRODUCER',
+      'COMPOSER',
+      'LYRICIST',
+      'BEATMAKER',
+      'STUDIO/ENGINEER, etc',
+      'INSTRUMENTS/VOICES',
+    ],
+    '🎷 Woodwinds': [
+      'Recorder',
+      'Flute',
+      'Oboe',
+      'Clarinet',
+      'Bassoon',
+      'Soprano Sax',
+      'Alto Sax',
+      'Tenor Sax',
+      'Bari Sax',
+    ],
+    '🎺 Brass': [
+      'Trumpet',
+      'Cornet',
+      'Trombone',
+      'French Horn',
+      'Euphonium',
+      'Tuba',
+    ],
+    '🎻 Strings': [
+      'Violin',
+      'Viola',
+      'Cello',
+      'Contrabass',
+      'Acoustic Guitar',
+      'Electric Guitar',
+      'Electric Bass',
+      'Harp',
+    ],
+    '🎹 Keyboards': [
+      'Piano',
+      'Keyboard/Synth',
+      'Harpsichord',
+      'Organ (Hammond)',
+    ],
+    '🥁 Percussion': [
+      'Drums',
+      'Latin Percussion (congas, timbales, etc)',
+      'Classical Percussion (timpani, cymbals, etc)',
+    ],
+    '🗣️ Voices (Choir)': [
+      'Soprano',
+      'Alto',
+      'Tenor',
+      'Baritone',
+      'Bass',
+    ],
+    '🎼 Misc Voices (Classical & Choir)': [
+      'Mezzo Soprano',
+      'Contralto',
+      'Counter Tenor',
+    ],
+    '🎙️ Voices (Popular Music)': [
+      'Male Lead Vocals',
+      'Female Lead vocals',
+      'Male Backing vocals',
+      'Female Backing vocals',
+    ],
+    '🪕 Miscellaneous Instruments': [
+      'Soprano Recorder',
+      'Alto Recorder',
+      'Tenor Recorder',
+      'Bass Recorder',
+      'Piccolo Flute',
+      'Alto Flute',
+      'Bass Flute',
+      'English Horn',
+      'Eb Clarinet',
+      'Alto Clarinet',
+      'Bass Clarinet',
+      'Contra Bassoon',
+      'Piccolo Trumpet',
+      'Alto Trombone',
+      'Viola da Gamba',
+      'Steel Guitar',
+      'Steel Pan',
+    ],
+  };
+
+  static final Map<String, List<String>> _genreCategoryMap = {
+    '🎸 Rock & Metal': [
+      'Mainstream Rock', 'Hard Rock', 'Metal', 'Death Metal', 'Psychedelic',
+      'Rock and Roll', 'Rockabilly', 'Punk', 'Grunge', 'Glam Rock', 'Blues-Rock'
+    ],
+    '🎶 Pop, Country & Latin': [
+      'Pop', 'K-pop', 'Country', 'Salsa', 'Fusion', "20's-40's"
+    ],
+    '🎤 Soul, Gospel & Reggae': [
+      'Soul', 'Reggae', 'Gospel'
+    ],
+    '🎼 Classical & Choral': [
+      'Classical', 'A Capella', 'Chamber', "Men's choir", "Women's choir",
+      "Children's choir", 'Barbershop', 'Madrigals', 'Gregorian'
+    ],
+    '🎧 Urban & World': [
+      'Hip-Hop', 'Trip-hop', 'Balkan', 'Klezmer'
+    ],
+    '🎚️ Audio & Studio': [
+      'Mixing', 'Mastering'
+    ],
+    '⭐ All Styles': [
+      'All styles'
+    ],
+  };
+
+  Future<void> _openInstrumentPicker() async {
+    final result = await SearchableCategoryMultiSelectSheet.show(
+      context: context,
+      title: 'Select Instruments',
+      categoryMap: _instrumentCategoryMap,
+      initialSelected: _selectedInstruments,
+    );
+    if (result != null) {
+      setState(() {
+        _selectedInstruments = result;
+        if (_mainInstrument != null && !_selectedInstruments.contains(_mainInstrument)) {
+          _mainInstrument = _selectedInstruments.isNotEmpty ? _selectedInstruments.first : null;
+        } else if (_mainInstrument == null && _selectedInstruments.isNotEmpty) {
+          _mainInstrument = _selectedInstruments.first;
+        }
+      });
+    }
+  }
+
+  Future<void> _openGenrePicker() async {
+    final result = await SearchableCategoryMultiSelectSheet.show(
+      context: context,
+      title: 'Select Genres',
+      categoryMap: _genreCategoryMap,
+      initialSelected: _selectedGenres,
+    );
+    if (result != null) {
+      setState(() {
+        _selectedGenres = result;
+      });
+    }
+  }
 
   @override
   void initState() {
@@ -402,61 +528,80 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               const SizedBox(height: 20),
 
               // Instruments Selection
-              Text(
-                'Instruments/Roles',
-                style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Instruments/Roles',
+                    style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                  ),
+                  AnimatedTapDetector(
+                    onTap: _openInstrumentPicker,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryAccent.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.4)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.tune_rounded, color: AppTheme.primaryAccent, size: 16),
+                          const SizedBox(width: 6),
+                          Text(
+                            _selectedInstruments.isEmpty ? 'Select Instruments' : 'Edit (${_selectedInstruments.length})',
+                            style: GoogleFonts.inter(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 10),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: (_showAllInstruments
-                        ? _roles
-                        : _roles.where((i) => _selectedInstruments.contains(i) || _roles.indexOf(i) < 8).toList())
-                    .map((instrument) {
-                  final isSelected = _selectedInstruments.contains(instrument);
-                  return ChoiceChip(
-                    label: Text(instrument),
-                    selected: isSelected,
-                    onSelected: (_) => _toggleInstrument(instrument),
-                    selectedColor: AppTheme.primaryAccent,
-                    backgroundColor: AppTheme.cardBackground,
-                    labelStyle: GoogleFonts.inter(
-                      fontSize: 12,
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                      color: Colors.white,
+              if (_selectedInstruments.isEmpty)
+                AnimatedTapDetector(
+                  onTap: _openInstrumentPicker,
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: AppTheme.cardBackground,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFF231F45)),
                     ),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    side: BorderSide(color: isSelected ? AppTheme.primaryAccent : const Color(0xFF2E2A4E)),
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 6),
-              TextButton.icon(
-                onPressed: () {
-                  setState(() {
-                    _showAllInstruments = !_showAllInstruments;
-                  });
-                },
-                icon: Icon(
-                  _showAllInstruments ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
-                  color: AppTheme.primaryAccent,
-                  size: 20,
-                ),
-                label: Text(
-                  _showAllInstruments ? 'Show Less' : 'Show More',
-                  style: GoogleFonts.inter(
-                    color: AppTheme.primaryAccent,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
+                    child: Text(
+                      'No instruments selected yet. Tap to add your instruments...',
+                      style: GoogleFonts.inter(fontSize: 13, color: AppTheme.textSecondary),
+                    ),
                   ),
+                )
+              else
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: _selectedInstruments.map((instrument) {
+                    return InputChip(
+                      label: Text(instrument),
+                      selected: false,
+                      onDeleted: () => _toggleInstrument(instrument),
+                      deleteIcon: const Icon(Icons.close_rounded, size: 16, color: Colors.white70),
+                      backgroundColor: AppTheme.cardBackground,
+                      labelStyle: GoogleFonts.inter(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      side: const BorderSide(color: AppTheme.primaryAccent),
+                    );
+                  }).toList(),
                 ),
-                style: TextButton.styleFrom(
-                  padding: EdgeInsets.zero,
-                  minimumSize: const Size(0, 0),
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
-              ),
               const SizedBox(height: 20),
 
               // Main Instrument Selector
@@ -544,61 +689,80 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               const SizedBox(height: 24),
 
               // Genres selection list
-              Text(
-                'Genres',
-                style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Genres',
+                    style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                  ),
+                  AnimatedTapDetector(
+                    onTap: _openGenrePicker,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryAccent.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.4)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.tune_rounded, color: AppTheme.primaryAccent, size: 16),
+                          const SizedBox(width: 6),
+                          Text(
+                            _selectedGenres.isEmpty ? 'Select Genres' : 'Edit (${_selectedGenres.length})',
+                            style: GoogleFonts.inter(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 10),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: (_showAllGenres
-                        ? _genresList
-                        : _genresList.where((g) => _selectedGenres.contains(g) || _genresList.indexOf(g) < 8).toList())
-                    .map((genre) {
-                  final isSelected = _selectedGenres.contains(genre);
-                  return ChoiceChip(
-                    label: Text(genre),
-                    selected: isSelected,
-                    onSelected: (_) => _toggleGenre(genre),
-                    selectedColor: AppTheme.primaryAccent,
-                    backgroundColor: AppTheme.cardBackground,
-                    labelStyle: GoogleFonts.inter(
-                      fontSize: 12,
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                      color: Colors.white,
+              if (_selectedGenres.isEmpty)
+                AnimatedTapDetector(
+                  onTap: _openGenrePicker,
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: AppTheme.cardBackground,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFF231F45)),
                     ),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    side: BorderSide(color: isSelected ? AppTheme.primaryAccent : const Color(0xFF2E2A4E)),
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 6),
-              TextButton.icon(
-                onPressed: () {
-                  setState(() {
-                    _showAllGenres = !_showAllGenres;
-                  });
-                },
-                icon: Icon(
-                  _showAllGenres ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
-                  color: AppTheme.primaryAccent,
-                  size: 20,
-                ),
-                label: Text(
-                  _showAllGenres ? 'Show Less' : 'Show More',
-                  style: GoogleFonts.inter(
-                    color: AppTheme.primaryAccent,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
+                    child: Text(
+                      'No genres selected yet. Tap to add your musical styles...',
+                      style: GoogleFonts.inter(fontSize: 13, color: AppTheme.textSecondary),
+                    ),
                   ),
+                )
+              else
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: _selectedGenres.map((genre) {
+                    return InputChip(
+                      label: Text(genre),
+                      selected: false,
+                      onDeleted: () => _toggleGenre(genre),
+                      deleteIcon: const Icon(Icons.close_rounded, size: 16, color: Colors.white70),
+                      backgroundColor: AppTheme.cardBackground,
+                      labelStyle: GoogleFonts.inter(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      side: const BorderSide(color: AppTheme.primaryAccent),
+                    );
+                  }).toList(),
                 ),
-                style: TextButton.styleFrom(
-                  padding: EdgeInsets.zero,
-                  minimumSize: const Size(0, 0),
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
-              ),
               const SizedBox(height: 40),
 
               // Social Links Section
