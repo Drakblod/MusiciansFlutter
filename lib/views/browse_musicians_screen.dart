@@ -905,12 +905,14 @@ class _BrowseMusiciansScreenState extends State<BrowseMusiciansScreen> {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        user.userType ?? 'Musician',
+                        user.mainSkillsSubtitle,
                         style: GoogleFonts.inter(
                           fontSize: 13,
                           color: AppTheme.primaryAccent,
                           fontWeight: FontWeight.w500,
                         ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 6),
                       Row(

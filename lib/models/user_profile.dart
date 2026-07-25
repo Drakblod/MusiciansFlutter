@@ -101,6 +101,37 @@ class UserProfile {
   String get stylesStr => styles.join(', ');
   bool get canMixMaster => styles.contains('Mixing') || styles.contains('Mastering');
 
+  /// Returns top 3 main skills parsed from mainInstrument or fallback to first instrument
+  List<String> get mainSkills {
+    if (mainInstrument != null && mainInstrument!.isNotEmpty) {
+      final parsed = mainInstrument!.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+      final valid = parsed.where((item) => instruments.contains(item)).take(3).toList();
+      if (valid.isNotEmpty) return valid;
+    }
+    if (instruments.isNotEmpty) {
+      return [instruments.first];
+    }
+    if (userType != null && userType!.isNotEmpty) {
+      return [userType!];
+    }
+    return [];
+  }
+
+  /// Returns remaining selected instruments/skills excluding mainSkills
+  List<String> get secondarySkills {
+    final mains = mainSkills.toSet();
+    return instruments.where((item) => !mains.contains(item)).toList();
+  }
+
+  /// Single formatted string of main skills for headers and subtitles
+  String get mainSkillsSubtitle {
+    final skills = mainSkills;
+    if (skills.isNotEmpty) {
+      return skills.join(' • ');
+    }
+    return userType ?? 'Musician';
+  }
+
   static List<String> _toList(dynamic val) {
     if (val == null) return [];
     if (val is List) return val.map((e) => e.toString()).toList();
