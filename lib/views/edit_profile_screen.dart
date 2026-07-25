@@ -28,9 +28,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   final _youtubeController = TextEditingController();
   
   List<String> _selectedInstruments = [];
-  String? _mainInstrument;
+  List<String> _mainSkills = [];
   List<String> _selectedGenres = [];
   bool _isSaving = false;
+
+  String? _profilePictureUrl;
+  bool _isUploadingProfilePic = false;
 
   String? _audioSnippetUrl;
   String? _pickedAudioFileName;
@@ -229,17 +232,16 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   Future<void> _openInstrumentPicker() async {
     final result = await SearchableCategoryMultiSelectSheet.show(
       context: context,
-      title: 'Select Instruments',
+      title: 'Select Skills & Talents',
       categoryMap: _instrumentCategoryMap,
       initialSelected: _selectedInstruments,
     );
     if (result != null) {
       setState(() {
         _selectedInstruments = result;
-        if (_mainInstrument != null && !_selectedInstruments.contains(_mainInstrument)) {
-          _mainInstrument = _selectedInstruments.isNotEmpty ? _selectedInstruments.first : null;
-        } else if (_mainInstrument == null && _selectedInstruments.isNotEmpty) {
-          _mainInstrument = _selectedInstruments.first;
+        _mainSkills.removeWhere((skill) => !_selectedInstruments.contains(skill));
+        if (_mainSkills.isEmpty && _selectedInstruments.isNotEmpty) {
+          _mainSkills = [_selectedInstruments.first];
         }
       });
     }
@@ -274,6 +276,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       _aboutController.text = user.about ?? '';
       _spotifyController.text = user.spotifyUrl ?? '';
       _youtubeController.text = user.youtubeUrl ?? '';
+      _profilePictureUrl = user.profilePictureUrl;
       _audioSnippetUrl = user.audioSnippetUrl;
       if (user.audioSnippetUrl != null) {
         // extract file name or use a default label
@@ -291,11 +294,20 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       if (role.isNotEmpty && !_selectedInstruments.contains(role)) {
         _selectedInstruments.add(role);
       }
+
+      // Parse Main Skills from user.mainInstrument
+      if (user.mainInstrument != null && user.mainInstrument!.isNotEmpty) {
+        final parsed = user.mainInstrument!.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+        _mainSkills = parsed.where((item) => _selectedInstruments.contains(item)).take(3).toList();
+      }
+      if (_mainSkills.isEmpty && _selectedInstruments.isNotEmpty) {
+        _mainSkills = [_selectedInstruments.first];
+      }
+
       _selectedGenres = List<String>.from(user.genres);
       _selectedCollabRoles = List<String>.from(user.collabRoles);
       _collabRemote = user.collabRemote;
       _collabBioController.text = user.collabBio ?? '';
-      _mainInstrument = user.mainInstrument;
     }
   }
 
@@ -390,6 +402,94 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     }
   }
 
+  Future<void> _pickAndUploadProfilePicture() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.image,
+        withData: true,
+      );
+
+      if (result != null && result.files.isNotEmpty) {
+        final file = result.files.single;
+        Uint8List? bytes = file.bytes;
+        if (bytes == null && file.path != null && file.path!.isNotEmpty) {
+          try {
+            final f = File(file.path!);
+            if (await f.exists()) {
+              bytes = await f.readAsBytes();
+            }
+          } catch (e) {
+            debugPrint("Could not read image bytes from path: $e");
+          }
+        }
+
+        setState(() {
+          _isUploadingProfilePic = true;
+        });
+
+        final appState = Provider.of<AppState>(context, listen: false);
+        final userId = appState.currentUserProfile?.userId;
+        if (userId == null) {
+          throw Exception("User is not logged in");
+        }
+
+        final url = await appState.firebaseService.uploadProfilePictureAsync(
+          userId,
+          bytes,
+          file.path,
+        );
+
+        setState(() {
+          _profilePictureUrl = url;
+        });
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Profile picture updated!'),
+              backgroundColor: AppTheme.success,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to upload profile picture: $e'),
+            backgroundColor: AppTheme.danger,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isUploadingProfilePic = false;
+        });
+      }
+    }
+  }
+
+  void _toggleMainSkill(String skill) {
+    setState(() {
+      if (_mainSkills.contains(skill)) {
+        _mainSkills.remove(skill);
+      } else {
+        if (_mainSkills.length >= 3) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('You can select a maximum of 3 Main Skills'),
+              backgroundColor: AppTheme.warning,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        } else {
+          _mainSkills.add(skill);
+        }
+      }
+    });
+  }
+
   void _toggleGenre(String genre) {
     setState(() {
       if (_selectedGenres.contains(genre)) {
@@ -404,13 +504,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     setState(() {
       if (_selectedInstruments.contains(instrument)) {
         _selectedInstruments.remove(instrument);
-        if (_mainInstrument == instrument) {
-          _mainInstrument = null;
+        _mainSkills.remove(instrument);
+        if (_mainSkills.isEmpty && _selectedInstruments.isNotEmpty) {
+          _mainSkills = [_selectedInstruments.first];
         }
       } else {
         _selectedInstruments.add(instrument);
-        if (_mainInstrument == null) {
-          _mainInstrument = instrument;
+        if (_mainSkills.length < 3) {
+          _mainSkills.add(instrument);
         }
       }
     });
@@ -438,10 +539,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           userId: user.userId,
           nickname: user.nickname,
           displayName: _nameController.text.trim(),
-          userType: _selectedInstruments.isNotEmpty ? _selectedInstruments.first : 'Electric Guitar',
+          userType: _mainSkills.isNotEmpty ? _mainSkills.first : (_selectedInstruments.isNotEmpty ? _selectedInstruments.first : 'Electric Guitar'),
           location: _locationController.text.trim(),
           about: _aboutController.text.trim(),
-          profilePictureUrl: user.profilePictureUrl,
+          profilePictureUrl: _profilePictureUrl,
           genres: _selectedGenres,
           instruments: _selectedInstruments,
           spotifyUrl: _spotifyController.text.trim().isEmpty ? null : _spotifyController.text.trim(),
@@ -450,7 +551,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           collabRoles: _selectedCollabRoles,
           collabRemote: _collabRemote,
           collabBio: _collabBioController.text.trim().isEmpty ? null : _collabBioController.text.trim(),
-          mainInstrument: _selectedInstruments.contains(_mainInstrument) ? _mainInstrument : (_selectedInstruments.isNotEmpty ? _selectedInstruments.first : null),
+          mainInstrument: _mainSkills.isNotEmpty ? _mainSkills.join(', ') : (_selectedInstruments.isNotEmpty ? _selectedInstruments.first : null),
         );
 
         await appState.firebaseService.saveUserProfileAsync(user.userId ?? '', updatedProfile);
@@ -505,6 +606,95 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   letterSpacing: 1.5,
                 ),
               ),
+              const SizedBox(height: 20),
+
+              // Profile Picture Avatar Header
+              Center(
+                child: Column(
+                  children: [
+                    Stack(
+                      children: [
+                        GestureDetector(
+                          onTap: _pickAndUploadProfilePicture,
+                          child: Container(
+                            width: 105,
+                            height: 105,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(color: AppTheme.primaryAccent, width: 2.5),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: AppTheme.primaryAccent.withOpacity(0.3),
+                                  blurRadius: 12,
+                                  spreadRadius: 2,
+                                ),
+                              ],
+                            ),
+                            child: ClipOval(
+                              child: _isUploadingProfilePic
+                                  ? const Center(child: CircularProgressIndicator(color: AppTheme.primaryAccent))
+                                  : _profilePictureUrl != null && _profilePictureUrl!.isNotEmpty
+                                      ? Image.network(
+                                          _profilePictureUrl!,
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (ctx, err, stack) => const Icon(
+                                            Icons.person_rounded,
+                                            size: 60,
+                                            color: Colors.white70,
+                                          ),
+                                        )
+                                      : Container(
+                                          color: AppTheme.cardBackground,
+                                          child: const Icon(
+                                            Icons.person_rounded,
+                                            size: 60,
+                                            color: Colors.white70,
+                                          ),
+                                        ),
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          bottom: 0,
+                          right: 0,
+                          child: GestureDetector(
+                            onTap: _pickAndUploadProfilePicture,
+                            child: Container(
+                              padding: const EdgeInsets.all(7),
+                              decoration: const BoxDecoration(
+                                color: AppTheme.primaryAccent,
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.camera_alt_rounded,
+                                color: Colors.white,
+                                size: 16,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    TextButton(
+                      onPressed: _pickAndUploadProfilePicture,
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      child: Text(
+                        _profilePictureUrl != null ? 'Change Profile Picture' : 'Upload Profile Picture',
+                        style: GoogleFonts.inter(
+                          color: AppTheme.primaryAccent,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
               const SizedBox(height: 24),
               // Profile Name
               Text(
@@ -527,12 +717,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               ),
               const SizedBox(height: 20),
 
-              // Instruments Selection
+              // Skills & Talents Selection
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    'Instruments/Roles',
+                    'Skills & Talents',
                     style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
                   ),
                   AnimatedTapDetector(
@@ -550,7 +740,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                           const Icon(Icons.tune_rounded, color: AppTheme.primaryAccent, size: 16),
                           const SizedBox(width: 6),
                           Text(
-                            _selectedInstruments.isEmpty ? 'Select Instruments' : 'Edit (${_selectedInstruments.length})',
+                            _selectedInstruments.isEmpty ? 'Select Skills & Talents' : 'Edit (${_selectedInstruments.length})',
                             style: GoogleFonts.inter(
                               color: Colors.white,
                               fontSize: 12,
@@ -576,7 +766,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       border: Border.all(color: const Color(0xFF231F45)),
                     ),
                     child: Text(
-                      'No instruments selected yet. Tap to add your instruments...',
+                      'No skills or talents selected yet. Tap to add yours...',
                       style: GoogleFonts.inter(fontSize: 13, color: AppTheme.textSecondary),
                     ),
                   ),
@@ -604,49 +794,100 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 ),
               const SizedBox(height: 20),
 
-              // Main Instrument Selector
+              // Main Skills (Max 3) & Secondary Skills Selection
               if (_selectedInstruments.isNotEmpty) ...[
                 Text(
-                  'Main Instrument / Role',
+                  'Main Skills (Select up to 3)',
                   style: GoogleFonts.outfit(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
                     color: Colors.white,
                   ),
                 ),
-                const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  decoration: BoxDecoration(
-                    color: AppTheme.cardBackground,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
-                  ),
-                  child: Theme(
-                    data: Theme.of(context).copyWith(
-                      canvasColor: const Color(0xFF1E1A3A),
-                    ),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<String>(
-                        value: _selectedInstruments.contains(_mainInstrument) ? _mainInstrument : _selectedInstruments.first,
-                        isExpanded: true,
-                        icon: const Icon(Icons.arrow_drop_down_rounded, color: AppTheme.primaryAccent, size: 30),
-                        dropdownColor: const Color(0xFF0F0C20),
-                        style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
-                        onChanged: (String? newValue) {
-                          setState(() {
-                            _mainInstrument = newValue;
-                          });
-                        },
-                        items: _selectedInstruments.map<DropdownMenuItem<String>>((String value) {
-                          return DropdownMenuItem<String>(
-                            value: value,
-                            child: Text(value),
-                          );
-                        }).toList(),
+                const SizedBox(height: 4),
+                Text(
+                  'Tap to select your top 3 main skills/talents from your list above.',
+                  style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: _selectedInstruments.map((skill) {
+                    final isMain = _mainSkills.contains(skill);
+                    return FilterChip(
+                      label: Text(skill),
+                      selected: isMain,
+                      onSelected: (_) => _toggleMainSkill(skill),
+                      selectedColor: AppTheme.primaryAccent,
+                      backgroundColor: AppTheme.cardBackground,
+                      checkmarkColor: Colors.white,
+                      labelStyle: GoogleFonts.inter(
+                        fontSize: 12,
+                        fontWeight: isMain ? FontWeight.bold : FontWeight.normal,
+                        color: Colors.white,
                       ),
-                    ),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      side: BorderSide(
+                        color: isMain ? AppTheme.primaryAccent : const Color(0xFF2E2A4E),
+                      ),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 20),
+
+                // Secondary Skills
+                Text(
+                  'Secondary Skills',
+                  style: GoogleFonts.outfit(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
                   ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Remaining skills automatically listed as secondary skills.',
+                  style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
+                ),
+                const SizedBox(height: 10),
+                Builder(
+                  builder: (context) {
+                    final secondarySkills = _selectedInstruments
+                        .where((skill) => !_mainSkills.contains(skill))
+                        .toList();
+                    if (secondarySkills.isEmpty) {
+                      return Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppTheme.cardBackground,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: const Color(0xFF231F45)),
+                        ),
+                        child: Text(
+                          'All selected skills are assigned as Main Skills.',
+                          style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textMuted),
+                        ),
+                      );
+                    }
+                    return Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: secondarySkills.map((skill) {
+                        return Chip(
+                          label: Text(skill),
+                          backgroundColor: const Color(0xFF1E1A3A),
+                          labelStyle: GoogleFonts.inter(
+                            fontSize: 12,
+                            color: Colors.white70,
+                          ),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          side: const BorderSide(color: Color(0xFF2E2A4E)),
+                        );
+                      }).toList(),
+                    );
+                  },
                 ),
                 const SizedBox(height: 20),
               ],
@@ -939,103 +1180,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                             ),
                           ),
               ),
-              // Collabs Section
               const SizedBox(height: 30),
-              Text(
-                'COLLABORATION SETTINGS',
-                style: GoogleFonts.outfit(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: AppTheme.primaryAccent,
-                  letterSpacing: 1.2,
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              // Collab Roles Checkboxes
-              Text(
-                'Collaboration Roles',
-                style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
-              ),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: ['Songwriter', 'Producer', 'Engineer'].map((role) {
-                  final key = role.toLowerCase();
-                  final isSelected = _selectedCollabRoles.contains(key);
-                  return ChoiceChip(
-                    label: Text(role),
-                    selected: isSelected,
-                    onSelected: (val) {
-                      setState(() {
-                        if (val) {
-                          _selectedCollabRoles.add(key);
-                        } else {
-                          _selectedCollabRoles.remove(key);
-                        }
-                      });
-                    },
-                    selectedColor: AppTheme.primaryAccent,
-                    backgroundColor: AppTheme.cardBackground,
-                    labelStyle: GoogleFonts.inter(
-                      fontSize: 12,
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                      color: Colors.white,
-                    ),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    side: BorderSide(color: isSelected ? AppTheme.primaryAccent : const Color(0xFF2E2A4E)),
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 20),
-
-              // Remote Switch
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Remote Collaboration',
-                        style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Are you available for remote work?',
-                        style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
-                      ),
-                    ],
-                  ),
-                  Switch(
-                    value: _collabRemote,
-                    onChanged: (val) {
-                      setState(() {
-                        _collabRemote = val;
-                      });
-                    },
-                    activeColor: AppTheme.primaryAccent,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-
-              // Collab Bio Description
-              Text(
-                'Collaboration Bio / Details',
-                style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
-              ),
-              const SizedBox(height: 8),
-              TextFormField(
-                controller: _collabBioController,
-                maxLines: 3,
-                style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
-                decoration: const InputDecoration(
-                  hintText: 'Share what gear you use, your songwriting process, or what you are looking for in collabs...',
-                ),
-              ),
-              const SizedBox(height: 40),
 
               // Save Button
               _isSaving

@@ -212,6 +212,31 @@ class FirebaseService {
     }
   }
 
+  Future<String> uploadProfilePictureAsync(String userId, Uint8List? bytes, String? path) async {
+    try {
+      final ref = FirebaseStorage.instance
+          .ref()
+          .child('profilePictures')
+          .child('profile_${userId}_${DateTime.now().millisecondsSinceEpoch}.jpg');
+
+      UploadTask uploadTask;
+      final metadata = SettableMetadata(contentType: 'image/jpeg');
+      if (bytes != null) {
+        uploadTask = ref.putData(bytes, metadata);
+      } else if (path != null) {
+        uploadTask = ref.putFile(File(path), metadata);
+      } else {
+        throw Exception("Both picture bytes and path are null for upload");
+      }
+      final snapshot = await uploadTask;
+      final url = await snapshot.ref.getDownloadURL();
+      return url;
+    } catch (e) {
+      print("[FirebaseService] Error uploading profile picture: $e");
+      rethrow;
+    }
+  }
+
   List<String> _parseList(dynamic val) {
     if (val == null) return [];
     if (val is List) return val.map((e) => e.toString()).toList();
