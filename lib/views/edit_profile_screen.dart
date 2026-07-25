@@ -1,9 +1,11 @@
 import 'dart:io';
 import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:image_picker/image_picker.dart';
 import '../providers/app_state.dart';
 import '../theme/app_theme.dart';
 import '../models/user_profile.dart';
@@ -402,31 +404,92 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     }
   }
 
-  Future<void> _pickAndUploadProfilePicture() async {
+  Future<void> _showImagePickerOptions() async {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFF0F0C22).withOpacity(0.95),
+            borderRadius: const BorderRadius.only(
+              topLeft: Radius.circular(20),
+              topRight: Radius.circular(20),
+            ),
+            border: Border.all(color: const Color(0xFF2E2A4E), width: 1.5),
+          ),
+          child: SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(height: 16),
+                Text(
+                  'PROFILE PICTURE',
+                  style: GoogleFonts.outfit(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    letterSpacing: 2,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                ListTile(
+                  leading: const Icon(Icons.camera_alt_outlined, color: AppTheme.primaryAccent),
+                  title: Text('Take Photo', style: GoogleFonts.inter(color: Colors.white)),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _pickAndUploadProfilePicture(ImageSource.camera);
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.photo_library_outlined, color: AppTheme.primaryAccent),
+                  title: Text('Choose from Gallery', style: GoogleFonts.inter(color: Colors.white)),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _pickAndUploadProfilePicture(ImageSource.gallery);
+                  },
+                ),
+                if (_profilePictureUrl != null && _profilePictureUrl!.isNotEmpty)
+                  ListTile(
+                    leading: const Icon(Icons.delete_outline_rounded, color: AppTheme.danger),
+                    title: Text('Remove Photo', style: GoogleFonts.inter(color: AppTheme.danger)),
+                    onTap: () {
+                      Navigator.pop(context);
+                      setState(() {
+                        _profilePictureUrl = null;
+                      });
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Profile picture removed (save to apply changes)'),
+                          backgroundColor: AppTheme.warning,
+                        ),
+                      );
+                    },
+                  ),
+                const SizedBox(height: 8),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _pickAndUploadProfilePicture([ImageSource source = ImageSource.gallery]) async {
     try {
-      final result = await FilePicker.platform.pickFiles(
-        type: FileType.image,
-        withData: true,
+      final ImagePicker picker = ImagePicker();
+      final XFile? image = await picker.pickImage(
+        source: source,
+        imageQuality: 85,
+        maxWidth: 1024,
       );
 
-      if (result != null && result.files.isNotEmpty) {
-        final file = result.files.single;
-        Uint8List? bytes = file.bytes;
-        if (bytes == null && file.path != null && file.path!.isNotEmpty) {
-          try {
-            final f = File(file.path!);
-            if (await f.exists()) {
-              bytes = await f.readAsBytes();
-            }
-          } catch (e) {
-            debugPrint("Could not read image bytes from path: $e");
-          }
-        }
-
+      if (image != null) {
         setState(() {
           _isUploadingProfilePic = true;
         });
 
+        final bytes = await image.readAsBytes();
         final appState = Provider.of<AppState>(context, listen: false);
         final userId = appState.currentUserProfile?.userId;
         if (userId == null) {
@@ -436,7 +499,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         final url = await appState.firebaseService.uploadProfilePictureAsync(
           userId,
           bytes,
-          file.path,
+          kIsWeb ? null : image.path,
         );
 
         setState(() {
@@ -615,7 +678,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     Stack(
                       children: [
                         GestureDetector(
-                          onTap: _pickAndUploadProfilePicture,
+                          onTap: _showImagePickerOptions,
                           child: Container(
                             width: 105,
                             height: 105,
@@ -658,7 +721,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                           bottom: 0,
                           right: 0,
                           child: GestureDetector(
-                            onTap: _pickAndUploadProfilePicture,
+                            onTap: _showImagePickerOptions,
                             child: Container(
                               padding: const EdgeInsets.all(7),
                               decoration: const BoxDecoration(
@@ -677,7 +740,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     ),
                     const SizedBox(height: 6),
                     TextButton(
-                      onPressed: _pickAndUploadProfilePicture,
+                      onPressed: _showImagePickerOptions,
                       style: TextButton.styleFrom(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                         minimumSize: Size.zero,

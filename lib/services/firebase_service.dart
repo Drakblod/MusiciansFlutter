@@ -223,7 +223,7 @@ class FirebaseService {
       final metadata = SettableMetadata(contentType: 'image/jpeg');
       if (bytes != null) {
         uploadTask = ref.putData(bytes, metadata);
-      } else if (path != null) {
+      } else if (path != null && !kIsWeb) {
         uploadTask = ref.putFile(File(path), metadata);
       } else {
         throw Exception("Both picture bytes and path are null for upload");
