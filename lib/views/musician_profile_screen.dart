@@ -184,9 +184,10 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
                   ),
                   const SizedBox(height: 4),
 
-                  // Role / Instrument
+                  // Role / Main Skills
                   Text(
-                    widget.musician.userType ?? 'Instrumentalist',
+                    widget.musician.mainSkillsSubtitle,
+                    textAlign: TextAlign.center,
                     style: GoogleFonts.inter(
                       fontSize: 15,
                       color: AppTheme.primaryAccent,
@@ -406,38 +407,82 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
                   ],
                   const SizedBox(height: 24),
 
-                  // Skills Section
-                  Text(
-                    'Skills',
-                    style: GoogleFonts.outfit(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
+                  // Main Skills & Secondary Skills Section
+                  if (widget.musician.mainSkills.isNotEmpty) ...[
+                    Text(
+                      'Main Skills',
+                      style: GoogleFonts.outfit(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: skills
-                        .map((skill) => Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                              decoration: BoxDecoration(
-                                color: AppTheme.cardBackground,
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: const Color(0xFF231F45), width: 1),
-                              ),
-                              child: Text(
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: widget.musician.mainSkills.map((skill) {
+                        return Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: AppTheme.primaryAccent.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.5), width: 1.5),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.star_rounded, color: AppTheme.primaryAccent, size: 16),
+                              const SizedBox(width: 6),
+                              Text(
                                 skill,
                                 style: GoogleFonts.inter(
-                                  fontSize: 12,
+                                  fontSize: 13,
                                   color: Colors.white,
-                                  fontWeight: FontWeight.w500,
+                                  fontWeight: FontWeight.bold,
                                 ),
                               ),
-                            ))
-                        .toList(),
-                  ),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 20),
+                  ],
+
+                  if (widget.musician.secondarySkills.isNotEmpty) ...[
+                    Text(
+                      'Secondary Skills',
+                      style: GoogleFonts.outfit(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: widget.musician.secondarySkills.map((skill) {
+                        return Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF1E1A3A),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
+                          ),
+                          child: Text(
+                            skill,
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              color: Colors.white70,
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 20),
+                  ],
                   const SizedBox(height: 40),
 
                   // Bottom Action Buttons (Message & Add, or Edit & Logout if isMe)
