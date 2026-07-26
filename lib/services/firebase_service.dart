@@ -91,13 +91,14 @@ class FirebaseService {
   Future<void> saveUserProfileAsync(String userId, UserProfile profile) async {
     final infoMap = {
       'DisplayName': profile.displayName,
+      'Email': profile.email,
       'Level': profile.level,
       'Location': profile.location,
       'About': profile.about,
       'Instruments': profile.instruments,
       'Styles': profile.styles,
       'Genres': profile.genres,
-      'Contact': profile.contact,
+      'Contact': profile.contact ?? profile.email,
       'History': profile.history,
       'Projects': profile.projects,
       'ProfilePictureUrl': profile.profilePictureUrl,
@@ -126,6 +127,7 @@ class FirebaseService {
         userType: rootMap['UserType']?.toString() ?? infoMap['UserType']?.toString(),
         nickname: rootMap['Nickname']?.toString() ?? infoMap['Nickname']?.toString(),
         displayName: infoMap['DisplayName']?.toString() ?? rootMap['DisplayName']?.toString(),
+        email: infoMap['Email']?.toString() ?? infoMap['Contact']?.toString(),
         location: infoMap['Location']?.toString(),
         about: infoMap['About']?.toString(),
         level: infoMap['Level']?.toString(),

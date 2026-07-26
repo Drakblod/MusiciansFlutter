@@ -3,6 +3,7 @@ class UserProfile {
   final String? userId;
   final String? displayName;
   final String? nickname;
+  final String? email;
   final List<String> instruments;
   final List<String> styles;
   final List<String> genres;
@@ -26,6 +27,7 @@ class UserProfile {
     this.userId,
     this.displayName,
     this.nickname,
+    this.email,
     this.instruments = const [],
     this.styles = const [],
     this.genres = const [],
@@ -51,6 +53,7 @@ class UserProfile {
       userId: json['UserId']?.toString(),
       displayName: json['DisplayName']?.toString(),
       nickname: json['Nickname']?.toString(),
+      email: json['Email']?.toString() ?? json['contact']?.toString(),
       instruments: _toList(json['Instruments']),
       styles: _toList(json['Styles']),
       genres: _toList(json['Genres']),
@@ -77,6 +80,7 @@ class UserProfile {
       'UserId': userId,
       'DisplayName': displayName,
       'Nickname': nickname,
+      'Email': email,
       'Instruments': instruments,
       'Styles': styles,
       'Genres': genres,
