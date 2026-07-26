@@ -818,7 +818,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
               // 1. Profile Name
               Text(
-                '1. Profile Name',
+                'Profile Name',
                 style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
               ),
               const SizedBox(height: 8),
@@ -839,7 +839,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
               // 2. Email Address
               Text(
-                '2. Email Address',
+                'Email Address',
                 style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
               ),
               const SizedBox(height: 8),
@@ -863,7 +863,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
               // 3. Location (incl. country)
               Text(
-                '3. Location (incl. country)',
+                'Location (incl. country)',
                 style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
               ),
               const SizedBox(height: 8),
@@ -878,7 +878,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
               // 4. Skills/Talents (5 Main Category Cards)
               Text(
-                '4. Skills/Talents',
+                'Skills/Talents',
                 style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
               ),
               const SizedBox(height: 4),
@@ -888,7 +888,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               ),
               const SizedBox(height: 12),
               _buildCategoryCard(
-                title: '1. Instruments',
+                title: 'Instruments',
                 subtitle: 'Woodwinds, Brass, Strings, Keyboards, Percussion',
                 icon: Icons.music_note_rounded,
                 selectedCount: instrumentsCount,
@@ -896,7 +896,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               ),
               const SizedBox(height: 10),
               _buildCategoryCard(
-                title: '2. Voices',
+                title: 'Voices',
                 subtitle: 'Choir, Classical & Popular Music Vocals',
                 icon: Icons.mic_rounded,
                 selectedCount: voicesCount,
@@ -904,7 +904,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               ),
               const SizedBox(height: 10),
               _buildCategoryCard(
-                title: '3. Songwriters/Producers, etc',
+                title: 'Songwriters/Producers, etc',
                 subtitle: 'Songwriter, Producer, Composer, Lyricist, Beatmaker, DJ',
                 icon: Icons.headphones_rounded,
                 selectedCount: songwritersCount,
@@ -912,7 +912,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               ),
               const SizedBox(height: 10),
               _buildCategoryCard(
-                title: '4. Studios/Engineers',
+                title: 'Studios/Engineers',
                 subtitle: 'Studio, Home Studio, Recording, Mix & Live Engineers',
                 icon: Icons.tune_rounded,
                 selectedCount: studiosCount,
@@ -920,7 +920,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               ),
               const SizedBox(height: 10),
               _buildCategoryCard(
-                title: '5. PR & Management',
+                title: 'PR & Management',
                 subtitle: 'Manager, Promotor, Agency',
                 icon: Icons.work_outline_rounded,
                 selectedCount: prCount,
@@ -931,7 +931,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               // 5. Primary Skill/Talents
               if (_selectedInstruments.isNotEmpty) ...[
                 Text(
-                  '5. Primary Skill/Talents',
+                  'Primary Skill/Talents',
                   style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
                 ),
                 const SizedBox(height: 4),
@@ -968,7 +968,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
                 // 6. Secondary Skills/Talents
                 Text(
-                  '6. Secondary Skills/Talents',
+                  'Secondary Skills/Talents',
                   style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
                 ),
                 const SizedBox(height: 4),
@@ -1025,7 +1025,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    '7. Genres/Band Types',
+                    'Genres/Band Types',
                     style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
                   ),
                   AnimatedTapDetector(
@@ -1099,7 +1099,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
               // 8. About
               Text(
-                '8. About',
+                'About',
                 style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
               ),
               const SizedBox(height: 8),
@@ -1115,7 +1115,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
               // 9. Collaborations
               Text(
-                '9. Collaborations',
+                'Collaborations',
                 style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
               ),
               const SizedBox(height: 4),
@@ -1136,7 +1136,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
               // 10. Social Links
               Text(
-                '10. Social Links',
+                'Social Links',
                 style: GoogleFonts.outfit(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -1180,7 +1180,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
               // 11. Track
               Text(
-                '11. Track',
+                'Track',
                 style: GoogleFonts.outfit(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
