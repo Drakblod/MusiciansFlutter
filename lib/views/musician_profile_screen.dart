@@ -184,7 +184,7 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
                   ),
                   const SizedBox(height: 4),
 
-                  // Role / Main Skills
+                  // Role / Primary Skills
                   Text(
                     widget.musician.mainSkillsSubtitle,
                     textAlign: TextAlign.center,
@@ -194,9 +194,9 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 6),
 
-                  // Location
+                  // Location (incl. Country)
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -215,6 +215,33 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
                       ),
                     ],
                   ),
+                  if (widget.musician.genres.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(
+                          Icons.music_note_rounded,
+                          color: AppTheme.primaryAccent,
+                          size: 14,
+                        ),
+                        const SizedBox(width: 4),
+                        Flexible(
+                          child: Text(
+                            widget.musician.genres.join(' • '),
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              color: AppTheme.primaryAccent.withOpacity(0.9),
+                              fontWeight: FontWeight.w500,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                   if (widget.musician.spotifyUrl != null || widget.musician.youtubeUrl != null) ...[
                     const SizedBox(height: 12),
                     Row(
@@ -288,129 +315,10 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // About Section
-                  Text(
-                    'About',
-                    style: GoogleFonts.outfit(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: AppTheme.cardBackground,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: const Color(0xFF231F45), width: 1),
-                    ),
-                    child: Text(
-                      widget.musician.about != null && widget.musician.about!.isNotEmpty
-                          ? widget.musician.about!
-                          : defaultAbout,
-                      style: GoogleFonts.inter(
-                        fontSize: 14,
-                        color: AppTheme.textSecondary,
-                        height: 1.4,
-                      ),
-                    ),
-                  ),
-                  if (widget.musician.collabRoles.isNotEmpty) ...[
-                    const SizedBox(height: 24),
-                    Text(
-                      'Collaboration Info',
-                      style: GoogleFonts.outfit(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: AppTheme.cardBackground,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: const Color(0xFF231F45), width: 1),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              const Icon(Icons.handshake_outlined, color: AppTheme.primaryAccent, size: 18),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  'Roles: ${widget.musician.collabRoles.map((r) => r[0].toUpperCase() + r.substring(1)).join(", ")}',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 10),
-                          Row(
-                            children: [
-                              Icon(
-                                widget.musician.collabRemote ? Icons.check_circle_outline : Icons.cancel_outlined,
-                                color: widget.musician.collabRemote ? AppTheme.success : AppTheme.danger,
-                                size: 18,
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                widget.musician.collabRemote
-                                    ? 'Remote Collaboration Available'
-                                    : 'Remote Collaboration Unavailable',
-                                style: GoogleFonts.inter(
-                                  fontSize: 13,
-                                  color: AppTheme.textSecondary,
-                                ),
-                              ),
-                            ],
-                          ),
-                          if (widget.musician.collabBio != null && widget.musician.collabBio!.isNotEmpty) ...[
-                            const SizedBox(height: 12),
-                            const Divider(color: Color(0xFF231F45)),
-                            const SizedBox(height: 8),
-                            Text(
-                              widget.musician.collabBio!,
-                              style: GoogleFonts.inter(
-                                fontSize: 13,
-                                color: AppTheme.textSecondary,
-                                height: 1.5,
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ],
-                  if (widget.musician.audioSnippetUrl != null && widget.musician.audioSnippetUrl!.isNotEmpty) ...[
-                    const SizedBox(height: 24),
-                    Text(
-                      'Tracks',
-                      style: GoogleFonts.outfit(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    AudioSnippetPlayer(audioUrl: widget.musician.audioSnippetUrl!),
-                  ],
-                  const SizedBox(height: 24),
-
-                  // Main Skills & Secondary Skills Section
+                  // 1. PRIMARY Skills/Talents
                   if (widget.musician.mainSkills.isNotEmpty) ...[
                     Text(
-                      'Main Skills',
+                      'PRIMARY Skills/Talents',
                       style: GoogleFonts.outfit(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -447,12 +355,13 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
                         );
                       }).toList(),
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 24),
                   ],
 
+                  // 2. SECONDARY Skills/Talents
                   if (widget.musician.secondarySkills.isNotEmpty) ...[
                     Text(
-                      'Secondary Skills',
+                      'SECONDARY Skills/Talents',
                       style: GoogleFonts.outfit(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -481,11 +390,171 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
                         );
                       }).toList(),
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 24),
                   ],
-                  const SizedBox(height: 40),
 
-                  // Bottom Action Buttons (Message & Add, or Edit & Logout if isMe)
+                  // 3. Genres/Band Types
+                  if (widget.musician.genres.isNotEmpty) ...[
+                    Text(
+                      'Genres/Band Types',
+                      style: GoogleFonts.outfit(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: widget.musician.genres.map((genre) {
+                        return Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: AppTheme.cardBackground,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.4), width: 1),
+                          ),
+                          child: Text(
+                            genre,
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              color: Colors.white,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 24),
+                  ],
+
+                  // 4. About Section
+                  Text(
+                    'About',
+                    style: GoogleFonts.outfit(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AppTheme.cardBackground,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFF231F45), width: 1),
+                    ),
+                    child: Text(
+                      widget.musician.about != null && widget.musician.about!.isNotEmpty
+                          ? widget.musician.about!
+                          : defaultAbout,
+                      style: GoogleFonts.inter(
+                        fontSize: 14,
+                        color: AppTheme.textSecondary,
+                        height: 1.4,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // 5. Collaborations
+                  Text(
+                    'Collaborations',
+                    style: GoogleFonts.outfit(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AppTheme.cardBackground,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFF231F45), width: 1),
+                    ),
+                    child: Text(
+                      widget.musician.collabBio != null && widget.musician.collabBio!.isNotEmpty
+                          ? widget.musician.collabBio!
+                          : "I'm looking for musical collaborations!",
+                      style: GoogleFonts.inter(
+                        fontSize: 14,
+                        color: AppTheme.textSecondary,
+                        height: 1.4,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // 6. SOCIAL LINKS
+                  if ((widget.musician.spotifyUrl != null && widget.musician.spotifyUrl!.isNotEmpty) ||
+                      (widget.musician.youtubeUrl != null && widget.musician.youtubeUrl!.isNotEmpty)) ...[
+                    Text(
+                      'SOCIAL LINKS',
+                      style: GoogleFonts.outfit(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        if (widget.musician.spotifyUrl != null && widget.musician.spotifyUrl!.isNotEmpty)
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: () => _launchUrl(widget.musician.spotifyUrl!),
+                              icon: const Icon(Icons.music_note, color: Colors.green),
+                              label: const Text('Spotify', style: TextStyle(color: Colors.white)),
+                              style: OutlinedButton.styleFrom(
+                                side: const BorderSide(color: Colors.green),
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              ),
+                            ),
+                          ),
+                        if (widget.musician.spotifyUrl != null && widget.musician.spotifyUrl!.isNotEmpty &&
+                            widget.musician.youtubeUrl != null && widget.musician.youtubeUrl!.isNotEmpty)
+                          const SizedBox(width: 12),
+                        if (widget.musician.youtubeUrl != null && widget.musician.youtubeUrl!.isNotEmpty)
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: () => _launchUrl(widget.musician.youtubeUrl!),
+                              icon: const Icon(Icons.play_circle_fill, color: Colors.red),
+                              label: const Text('YouTube', style: TextStyle(color: Colors.white)),
+                              style: OutlinedButton.styleFrom(
+                                side: const BorderSide(color: Colors.red),
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+                  ],
+
+                  // 7. TRACKS
+                  if (widget.musician.audioSnippetUrl != null && widget.musician.audioSnippetUrl!.isNotEmpty) ...[
+                    Text(
+                      'TRACKS',
+                      style: GoogleFonts.outfit(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    AudioSnippetPlayer(audioUrl: widget.musician.audioSnippetUrl!),
+                    const SizedBox(height: 24),
+                  ],
+                  const SizedBox(height: 20),
+// Bottom Action Buttons (Message & Add, or Edit & Logout if isMe)
                   Row(
                     children: [
                       // Primary Button (Message or Edit Profile)
