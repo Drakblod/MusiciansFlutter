@@ -241,7 +241,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     final user = appState.currentUserProfile;
     if (user != null) {
       _nameController.text = user.displayName ?? '';
-      _emailController.text = user.email ?? appState.currentUser?.email ?? '';
+      _emailController.text = user.email ?? appState.firebaseService.currentUser?.email ?? '';
       _locationController.text = user.location ?? '';
       _aboutController.text = user.about ?? '';
       _collabBioController.text = user.collabBio ?? '';
@@ -275,7 +275,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
       _selectedGenres = List<String>.from(user.genres);
     } else {
-      _emailController.text = appState.currentUser?.email ?? '';
+      _emailController.text = appState.firebaseService.currentUser?.email ?? '';
     }
   }
 

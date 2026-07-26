@@ -149,7 +149,7 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                           ),
                           const SizedBox(height: 8),
 
-                          // Location
+                          // Location (incl. Country)
                           Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
@@ -168,6 +168,33 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                               ),
                             ],
                           ),
+                          if (user.genres.isNotEmpty) ...[
+                            const SizedBox(height: 6),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(
+                                  Icons.music_note_rounded,
+                                  color: AppTheme.primaryAccent,
+                                  size: 14,
+                                ),
+                                const SizedBox(width: 4),
+                                Flexible(
+                                  child: Text(
+                                    user.genres.join(' • '),
+                                    textAlign: TextAlign.center,
+                                    style: GoogleFonts.inter(
+                                      fontSize: 12,
+                                      color: AppTheme.primaryAccent.withOpacity(0.9),
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
                           const SizedBox(height: 16),
 
                           // Edit Profile & Logout Row
@@ -262,10 +289,10 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                     ),
                     const SizedBox(height: 24),
 
-          // Main & Secondary Skills Sections
+          // 1. PRIMARY Skills/Talents
           if (user.mainSkills.isNotEmpty) ...[
             Text(
-              'Main Skills',
+              'PRIMARY Skills/Talents',
               style: GoogleFonts.outfit(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
@@ -302,12 +329,13 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                 );
               }).toList(),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 24),
           ],
 
+          // 2. SECONDARY Skills/Talents
           if (user.secondarySkills.isNotEmpty) ...[
             Text(
-              'Secondary Skills',
+              'SECONDARY Skills/Talents',
               style: GoogleFonts.outfit(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
@@ -336,19 +364,55 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                 );
               }).toList(),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 24),
           ],
 
-          // 2. About Info section
+          // 3. Genres/Band Types
+          if (user.genres.isNotEmpty) ...[
+            Text(
+              'Genres/Band Types',
+              style: GoogleFonts.outfit(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: user.genres.map((genre) {
+                return Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: AppTheme.cardBackground,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.4), width: 1),
+                  ),
+                  child: Text(
+                    genre,
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      color: Colors.white,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 24),
+          ],
+
+          // 4. About Info section
           Text(
-            'About Me',
+            'About',
             style: GoogleFonts.outfit(
               fontSize: 18,
               fontWeight: FontWeight.bold,
               color: Colors.white,
             ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(16),
@@ -366,10 +430,44 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
               ),
             ),
           ),
-          if (user.audioSnippetUrl != null && user.audioSnippetUrl!.isNotEmpty) ...[
-            const SizedBox(height: 24),
+          const SizedBox(height: 24),
+
+          // 5. Collaborations
+          Text(
+            'Collaborations',
+            style: GoogleFonts.outfit(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppTheme.cardBackground,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFF231F45), width: 1),
+            ),
+            child: Text(
+              user.collabBio != null && user.collabBio!.isNotEmpty
+                  ? user.collabBio!
+                  : "I'm looking for musical collaborations!",
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                color: AppTheme.textSecondary,
+                height: 1.4,
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // 6. SOCIAL LINKS
+          if ((user.spotifyUrl != null && user.spotifyUrl!.isNotEmpty) ||
+              (user.youtubeUrl != null && user.youtubeUrl!.isNotEmpty)) ...[
             Text(
-              'Tracks',
+              'SOCIAL LINKS',
               style: GoogleFonts.outfit(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
@@ -377,11 +475,57 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
               ),
             ),
             const SizedBox(height: 10),
-            AudioSnippetPlayer(audioUrl: user.audioSnippetUrl!),
+            Row(
+              children: [
+                if (user.spotifyUrl != null && user.spotifyUrl!.isNotEmpty)
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () {},
+                      icon: const Icon(Icons.music_note, color: Colors.green),
+                      label: const Text('Spotify', style: TextStyle(color: Colors.white)),
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: Colors.green),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                  ),
+                if (user.spotifyUrl != null && user.spotifyUrl!.isNotEmpty &&
+                    user.youtubeUrl != null && user.youtubeUrl!.isNotEmpty)
+                  const SizedBox(width: 12),
+                if (user.youtubeUrl != null && user.youtubeUrl!.isNotEmpty)
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () {},
+                      icon: const Icon(Icons.play_circle_fill, color: Colors.red),
+                      label: const Text('YouTube', style: TextStyle(color: Colors.white)),
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: Colors.red),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 24),
           ],
-          const SizedBox(height: 24),
 
-          // 3. Bands / Rehearsals section
+          // 7. TRACKS
+          if (user.audioSnippetUrl != null && user.audioSnippetUrl!.isNotEmpty) ...[
+            Text(
+              'TRACKS',
+              style: GoogleFonts.outfit(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+            const SizedBox(height: 8),
+            AudioSnippetPlayer(audioUrl: user.audioSnippetUrl!),
+            const SizedBox(height: 24),
+          ],
+// 3. Bands / Rehearsals section
           Text(
             'Active Band',
             style: GoogleFonts.outfit(

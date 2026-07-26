@@ -78,6 +78,8 @@ class FirebaseService {
 
   String? get currentUserId => _auth.currentUser?.uid;
 
+  User? get currentUser => _auth.currentUser;
+
   bool get isLoggedIn => _auth.currentUser != null;
 
   Future<void> logoutAsync() async {
