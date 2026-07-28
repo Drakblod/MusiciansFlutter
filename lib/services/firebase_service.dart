@@ -15,6 +15,7 @@ import '../models/calendar_event.dart';
 import '../models/agreement.dart';
 import '../models/listing.dart';
 import '../models/band_event.dart';
+import '../models/event_room.dart';
 import '../models/collab_session.dart';
 import '../models/collab_studio.dart';
 
@@ -1209,26 +1210,28 @@ class FirebaseService {
   // 10. Band Room Events (Spond-like)
   // ==========================================
 
-  Future<void> saveBandEventAsync(String bandId, BandEvent event) async {
-    final eventId = event.id ?? _dbRef('Bands/$bandId/Events').push().key;
-    if (eventId != null) {
-      final updated = BandEvent(
-        id: eventId,
-        title: event.title,
-        description: event.description,
-        eventType: event.eventType,
-        location: event.location,
-        startDateTime: event.startDateTime,
-        endDateTime: event.endDateTime,
-        additionalNotes: event.additionalNotes,
-        createdBy: event.createdBy.isNotEmpty ? event.createdBy : (currentUserId ?? ''),
-        createdAt: event.createdAt != 0 ? event.createdAt : DateTime.now().millisecondsSinceEpoch,
-        updatedAt: DateTime.now().millisecondsSinceEpoch,
-        requireResponse: event.requireResponse,
-        responses: event.responses,
-      );
-      await _dbRef('Bands/$bandId/Events/$eventId').set(updated.toJson());
-    }
+  Future<String> saveBandEventAsync(String bandId, BandEvent event) async {
+    final eventId = event.id ?? _dbRef('Bands/$bandId/Events').push().key ?? DateTime.now().millisecondsSinceEpoch.toString();
+    final updated = BandEvent(
+      id: eventId,
+      title: event.title,
+      description: event.description,
+      eventType: event.eventType,
+      location: event.location,
+      startDateTime: event.startDateTime,
+      endDateTime: event.endDateTime,
+      additionalNotes: event.additionalNotes,
+      createdBy: event.createdBy.isNotEmpty ? event.createdBy : (currentUserId ?? ''),
+      createdAt: event.createdAt != 0 ? event.createdAt : DateTime.now().millisecondsSinceEpoch,
+      updatedAt: DateTime.now().millisecondsSinceEpoch,
+      requireResponse: event.requireResponse,
+      responses: event.responses,
+      rsvpDeadline: event.rsvpDeadline,
+      reminderIntervalHours: event.reminderIntervalHours,
+      temporaryRoomId: event.temporaryRoomId,
+    );
+    await _dbRef('Bands/$bandId/Events/$eventId').set(updated.toJson());
+    return eventId;
   }
 
   Future<List<BandEvent>> getBandEventsListAsync(String bandId) async {
@@ -1566,6 +1569,84 @@ class FirebaseService {
     final app = await getCollabSessionApplicationAsync(sessionId, applicantId);
     if (app != null && app.status == 'pending') {
       await _dbRef('Collabs/Applications/$sessionId/$applicantId').remove();
+    }
+  }
+
+  // ==========================================
+  // Temporary Event Rooms
+  // ==========================================
+
+  Future<String> createTemporaryEventRoomAsync({
+    required String bandId,
+    required String eventId,
+    required String roomName,
+    required String createdBy,
+    List<String> initialMembers = const [],
+  }) async {
+    final ref = _dbRef('Bands/$bandId/eventRooms').push();
+    final roomId = ref.key!;
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+
+    final Map<String, String> membersMap = {
+      createdBy: 'leader',
+    };
+    for (final memberId in initialMembers) {
+      if (memberId.isNotEmpty) {
+        membersMap[memberId] = 'member';
+      }
+    }
+
+    final eventRoom = EventRoom(
+      roomId: roomId,
+      eventId: eventId,
+      bandId: bandId,
+      name: roomName,
+      createdAt: timestamp,
+      createdBy: createdBy,
+      isTemporary: true,
+      isClosed: false,
+      members: membersMap,
+    );
+
+    await ref.set(eventRoom.toJson());
+    await _dbRef('Bands/$bandId/Events/$eventId/temporaryRoomId').set(roomId);
+    return roomId;
+  }
+
+  Stream<List<EventRoom>> subscribeToBandEventRooms(String bandId) {
+    return _dbRef('Bands/$bandId/eventRooms').onValue.map((event) {
+      final List<EventRoom> rooms = [];
+      final data = event.snapshot.value;
+      if (data is Map) {
+        data.forEach((k, v) {
+          if (v is Map) {
+            rooms.add(EventRoom.fromJson(v, k.toString()));
+          }
+        });
+      }
+      rooms.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return rooms;
+    });
+  }
+
+  Future<void> addMemberToEventRoomAsync(
+    String bandId,
+    String roomId,
+    String userId, [
+    String role = 'member',
+  ]) async {
+    await _dbRef('Bands/$bandId/eventRooms/$roomId/members/$userId').set(role);
+  }
+
+  Future<void> closeOrDeleteEventRoomAsync(
+    String bandId,
+    String roomId,
+    bool deleteRoom,
+  ) async {
+    if (deleteRoom) {
+      await _dbRef('Bands/$bandId/eventRooms/$roomId').remove();
+    } else {
+      await _dbRef('Bands/$bandId/eventRooms/$roomId/isClosed').set(true);
     }
   }
 }

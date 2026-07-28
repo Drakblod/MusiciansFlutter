@@ -99,6 +99,9 @@ class BandEvent {
   final bool sentReminder72h;
   final bool sentReminder84h;
   final Map<String, ExternalInvitee> externalInvitees;
+  final int? rsvpDeadline; // epoch millis
+  final int? reminderIntervalHours; // e.g. 24, 48, 72
+  final String? temporaryRoomId;
 
   BandEvent({
     this.id,
@@ -122,6 +125,9 @@ class BandEvent {
     this.sentReminder72h = false,
     this.sentReminder84h = false,
     this.externalInvitees = const {},
+    this.rsvpDeadline,
+    this.reminderIntervalHours,
+    this.temporaryRoomId,
   });
 
   factory BandEvent.fromJson(Map<dynamic, dynamic> json, String keyId) {
@@ -173,6 +179,13 @@ class BandEvent {
       sentReminder72h: json['sentReminder72h'] == true,
       sentReminder84h: json['sentReminder84h'] == true,
       externalInvitees: parsedExternalInvitees,
+      rsvpDeadline: json['rsvpDeadline'] is int
+          ? json['rsvpDeadline'] as int
+          : int.tryParse(json['rsvpDeadline']?.toString() ?? ''),
+      reminderIntervalHours: json['reminderIntervalHours'] is int
+          ? json['reminderIntervalHours'] as int
+          : int.tryParse(json['reminderIntervalHours']?.toString() ?? ''),
+      temporaryRoomId: json['temporaryRoomId']?.toString(),
     );
   }
 
@@ -208,6 +221,9 @@ class BandEvent {
       'sentReminder72h': sentReminder72h,
       'sentReminder84h': sentReminder84h,
       'externalInvitees': externalInviteesMap,
+      if (rsvpDeadline != null) 'rsvpDeadline': rsvpDeadline,
+      if (reminderIntervalHours != null) 'reminderIntervalHours': reminderIntervalHours,
+      if (temporaryRoomId != null) 'temporaryRoomId': temporaryRoomId,
     };
   }
 }
