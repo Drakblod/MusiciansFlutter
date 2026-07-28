@@ -1649,5 +1649,50 @@ class FirebaseService {
       await _dbRef('Bands/$bandId/eventRooms/$roomId/isClosed').set(true);
     }
   }
+
+  // ==========================================
+  // God Mode / Admin Reminder Triggers
+  // ==========================================
+
+  Future<int> triggerEventReminderAsync(
+    String bandId,
+    String eventId,
+    String reminderType, // '24h', '48h', '72h', 'last'
+  ) async {
+    final event = await getBandEventOnceAsync(bandId, eventId);
+    if (event == null) return 0;
+
+    final members = await getBandMembersAsync(bandId);
+    int notifiedCount = 0;
+
+    for (final m in members) {
+      final uid = m.userId;
+      if (uid == null) continue;
+      final status = event.responses[uid]?.status;
+      if (status == null || status == 'pending') {
+        notifiedCount++;
+      }
+    }
+
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    final Map<String, dynamic> updates = {
+      'updatedAt': timestamp,
+    };
+    if (reminderType == '24h') updates['sentReminder24h'] = true;
+    if (reminderType == '48h') updates['sentReminder48h'] = true;
+    if (reminderType == '72h') updates['sentReminder72h'] = true;
+    if (reminderType == 'last') updates['sentReminder84h'] = true;
+
+    await _dbRef('Bands/$bandId/Events/$eventId').update(updates);
+
+    final titleLabel = reminderType == 'last' ? 'FINAL RSVP REMINDER' : '${reminderType.toUpperCase()} RSVP REMINDER';
+    await sendBandMessageAsync(
+      bandId,
+      '🔔 [$titleLabel] Please confirm your attendance for "${event.title}"!',
+      'System Reminder',
+    );
+
+    return notifiedCount;
+  }
 }
 

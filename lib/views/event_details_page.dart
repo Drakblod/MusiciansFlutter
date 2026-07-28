@@ -139,6 +139,69 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
     return _currentUserRole == 'Leader' || _currentUserRole == 'Admin';
   }
 
+  Future<void> _triggerReminder(String reminderType) async {
+    final appState = Provider.of<AppState>(context, listen: false);
+    try {
+      final count = await appState.firebaseService.triggerEventReminderAsync(
+        widget.bandId,
+        widget.eventId,
+        reminderType,
+      );
+      if (mounted) {
+        final label = reminderType == 'last' ? 'Final' : reminderType.toUpperCase();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("⚡ [GOD MODE] Sent $label RSVP reminder to $count pending members!"),
+            backgroundColor: AppTheme.success,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Failed to trigger reminder: $e"),
+            backgroundColor: AppTheme.danger,
+          ),
+        );
+      }
+    }
+  }
+
+  Widget _buildGodModeButton({
+    required String label,
+    required IconData icon,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return AnimatedTapDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.18),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: color.withOpacity(0.6), width: 1),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: color, size: 16),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _getEventIcon(String type) {
     String emoji = '📅';
     switch (type) {
@@ -882,6 +945,83 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                   ),
                 ),
               ),
+            ],
+
+            // ⚡ GOD MODE / ADMIN CONTROLS
+            if (currentUserId == event.createdBy || _isAdmin) ...[
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1E1535),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.amber.withOpacity(0.6), width: 1.5),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.amber.withOpacity(0.15),
+                      blurRadius: 10,
+                      spreadRadius: 1,
+                    )
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.bolt_rounded, color: Colors.amber, size: 22),
+                        const SizedBox(width: 8),
+                        Text(
+                          'GOD MODE / ADMIN CONTROLS',
+                          style: GoogleFonts.outfit(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.amber,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Manually trigger RSVP reminder notifications on demand.',
+                      style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
+                    ),
+                    const SizedBox(height: 14),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        _buildGodModeButton(
+                          label: 'Trigger 24h Reminder',
+                          icon: Icons.notifications_active_outlined,
+                          color: AppTheme.primaryAccent,
+                          onTap: () => _triggerReminder('24h'),
+                        ),
+                        _buildGodModeButton(
+                          label: 'Trigger 48h Reminder',
+                          icon: Icons.notifications_active_outlined,
+                          color: Colors.deepPurpleAccent,
+                          onTap: () => _triggerReminder('48h'),
+                        ),
+                        _buildGodModeButton(
+                          label: 'Trigger 72h Reminder',
+                          icon: Icons.notifications_active_outlined,
+                          color: Colors.blueAccent,
+                          onTap: () => _triggerReminder('72h'),
+                        ),
+                        _buildGodModeButton(
+                          label: 'Trigger Final Reminder',
+                          icon: Icons.warning_amber_rounded,
+                          color: Colors.orangeAccent,
+                          onTap: () => _triggerReminder('last'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
             ],
 
             // Creator Actions Section
