@@ -13,11 +13,13 @@ import '../models/band.dart';
 import '../models/user_profile.dart';
 import '../models/message.dart';
 import '../models/band_event.dart';
+import '../models/event_room.dart';
 import '../widgets/animated_tap_detector.dart';
 import '../widgets/custom_top_bar.dart';
 import '../widgets/gradient_scaffold.dart';
 import 'create_event_page.dart';
 import 'event_details_page.dart';
+import 'event_room_chat_screen.dart';
 import 'edit_band_info_screen.dart';
 
 class BandRoomChatScreen extends StatefulWidget {
@@ -39,11 +41,13 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
   Map<String, Map<String, String>> _files = {};
   List<Message> _chatMessages = [];
   List<BandEvent> _bandEvents = [];
+  List<EventRoom> _eventRooms = [];
   bool _isLoading = true;
   Message? _replyToMessage;
 
   StreamSubscription<List<Message>>? _chatSubscription;
   StreamSubscription<List<BandEvent>>? _bandEventsSubscription;
+  StreamSubscription<List<EventRoom>>? _eventRoomsSubscription;
   StreamSubscription? _gigsNewsSubscription;
   List<Map<String, dynamic>> _gigsNews = [];
   String _gigsTabFilter = 'All';
@@ -72,6 +76,7 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
     _scrollController.dispose();
     _chatSubscription?.cancel();
     _bandEventsSubscription?.cancel();
+    _eventRoomsSubscription?.cancel();
     _gigsNewsSubscription?.cancel();
     super.dispose();
   }
@@ -82,6 +87,8 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
     _chatSubscription = null;
     _bandEventsSubscription?.cancel();
     _bandEventsSubscription = null;
+    _eventRoomsSubscription?.cancel();
+    _eventRoomsSubscription = null;
     _gigsNewsSubscription?.cancel();
     _gigsNewsSubscription = null;
 
@@ -143,6 +150,16 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
           if (mounted) {
             setState(() {
               _bandEvents = events;
+            });
+          }
+        });
+
+        _eventRoomsSubscription = appState.firebaseService
+            .subscribeToBandEventRooms(bandId)
+            .listen((rooms) {
+          if (mounted) {
+            setState(() {
+              _eventRooms = rooms;
             });
           }
         });
@@ -798,6 +815,76 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
             ],
           ),
         ),
+
+        // Temporary Event Rooms (Tasks 2831 & 2843-2847)
+        if (_eventRooms.where((r) => !r.isClosed).isNotEmpty) ...[
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            child: SizedBox(
+              height: 38,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                itemCount: _eventRooms.where((r) => !r.isClosed).length,
+                itemBuilder: (context, index) {
+                  final room = _eventRooms.where((r) => !r.isClosed).elementAt(index);
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: AnimatedTapDetector(
+                      onTap: () {
+                        if (_loadedBandId != null) {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => EventRoomChatScreen(
+                                bandId: _loadedBandId!,
+                                eventRoom: room,
+                              ),
+                            ),
+                          );
+                        }
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: AppTheme.primaryAccent.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.5), width: 1.2),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.forum_outlined, color: AppTheme.primaryAccent, size: 14),
+                            const SizedBox(width: 6),
+                            Text(
+                              room.name,
+                              style: GoogleFonts.inter(
+                                fontSize: 12,
+                                color: Colors.white,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                              decoration: BoxDecoration(
+                                color: AppTheme.primaryAccent,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(
+                                'ROOM',
+                                style: GoogleFonts.inter(fontSize: 8, color: Colors.white, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+        ],
 
         // 3. Tab Bar
         TabBar(

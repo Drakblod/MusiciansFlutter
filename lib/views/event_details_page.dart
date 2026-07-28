@@ -6,12 +6,14 @@ import 'package:provider/provider.dart';
 import '../providers/app_state.dart';
 import '../theme/app_theme.dart';
 import '../models/band_event.dart';
+import '../models/event_room.dart';
 import '../models/band.dart';
 import '../models/user_profile.dart';
 import '../widgets/gradient_scaffold.dart';
 import '../widgets/custom_top_bar.dart';
 import '../widgets/animated_tap_detector.dart';
 import 'find_sub_screen.dart';
+import 'event_room_chat_screen.dart';
 
 class EventDetailsPage extends StatefulWidget {
   final String bandId;
@@ -206,6 +208,15 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
           userId,
           status,
           comment: cleanComment,
+        );
+      }
+
+      if (status == 'attending' && _event?.temporaryRoomId != null && _event!.temporaryRoomId!.isNotEmpty) {
+        await appState.firebaseService.addMemberToEventRoomAsync(
+          widget.bandId,
+          _event!.temporaryRoomId!,
+          userId,
+          'attending',
         );
       }
       if (!mounted) return;
@@ -812,9 +823,70 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
               const SizedBox(height: 12),
             ],
 
+            // Temporary Event Room Button (Task 2843)
+            if (event.temporaryRoomId != null && event.temporaryRoomId!.isNotEmpty) ...[
+              AnimatedTapDetector(
+                onTap: () {
+                  final eventRoom = EventRoom(
+                    roomId: event.temporaryRoomId!,
+                    eventId: widget.eventId,
+                    bandId: widget.bandId,
+                    name: '${event.title} Room',
+                    createdAt: event.createdAt,
+                    createdBy: event.createdBy,
+                  );
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => EventRoomChatScreen(
+                        bandId: widget.bandId,
+                        eventRoom: eventRoom,
+                      ),
+                    ),
+                  );
+                },
+                child: Container(
+                  height: 52,
+                  margin: const EdgeInsets.only(bottom: 20),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primaryAccent.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: AppTheme.primaryAccent, width: 1.5),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.forum_outlined, color: AppTheme.primaryAccent, size: 20),
+                      const SizedBox(width: 10),
+                      Text(
+                        "Open Event Room",
+                        style: GoogleFonts.inter(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: AppTheme.primaryAccent,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          'CHAT',
+                          style: GoogleFonts.inter(fontSize: 9, color: Colors.white, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+
             // Creator Actions Section
             if (currentUserId == event.createdBy || _isAdmin) ...[
-              const SizedBox(height: 20),
+              const SizedBox(height: 10),
               Text(
                 'CREATOR ACTIONS',
                 style: GoogleFonts.outfit(
@@ -847,13 +919,51 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                     if (confirmed == true && mounted) {
                       try {
                         await appState.firebaseService.lockBandEventAsync(widget.bandId, widget.eventId);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text("Event locked successfully"), backgroundColor: AppTheme.success),
-                        );
+                        
+                        // Tasks 2851-2853: Ask creator if they want to create an event room if none exists yet
+                        if (event.temporaryRoomId == null || event.temporaryRoomId!.isEmpty) {
+                          if (!mounted) return;
+                          final createRoom = await showDialog<bool>(
+                            context: context,
+                            builder: (ctx) => AlertDialog(
+                              backgroundColor: const Color(0xFF0F0C20),
+                              title: Text("Create Event Room?", style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold)),
+                              content: Text(
+                                "The event is locked! Would you like to create a temporary event room for attending members & subs?",
+                                style: GoogleFonts.inter(color: AppTheme.textSecondary),
+                              ),
+                              actions: [
+                                TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("No thanks", style: TextStyle(color: AppTheme.textSecondary))),
+                                ElevatedButton(
+                                  style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryAccent),
+                                  onPressed: () => Navigator.pop(ctx, true),
+                                  child: const Text("Create Room", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                ),
+                              ],
+                            ),
+                          );
+
+                          if (createRoom == true && mounted) {
+                            await appState.firebaseService.createTemporaryEventRoomAsync(
+                              bandId: widget.bandId,
+                              eventId: widget.eventId,
+                              roomName: '${event.title} Room',
+                              createdBy: currentUserId ?? '',
+                            );
+                          }
+                        }
+
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text("Event locked successfully"), backgroundColor: AppTheme.success),
+                          );
+                        }
                       } catch (e) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text("Failed to lock event: $e"), backgroundColor: AppTheme.danger),
-                        );
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text("Failed to lock event: $e"), backgroundColor: AppTheme.danger),
+                          );
+                        }
                       }
                     }
                   },

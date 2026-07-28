@@ -30,6 +30,8 @@ class _CreateEventPageState extends State<CreateEventPage> {
   TimeOfDay _startTime = const TimeOfDay(hour: 19, minute: 0);
   TimeOfDay _endTime = const TimeOfDay(hour: 21, minute: 0);
   bool _requireResponse = true;
+  bool _createEventRoom = true;
+  int _reminderIntervalHours = 48;
   bool _isSaving = false;
   bool _isLoadingRole = true;
 
@@ -199,6 +201,8 @@ class _CreateEventPageState extends State<CreateEventPage> {
         end = end.add(const Duration(days: 1));
       }
 
+      final deadline = start.subtract(Duration(hours: _reminderIntervalHours > 0 ? _reminderIntervalHours : 24));
+
       final newEvent = BandEvent(
         title: _titleController.text.trim(),
         description: _descriptionController.text.trim(),
@@ -211,15 +215,27 @@ class _CreateEventPageState extends State<CreateEventPage> {
         createdAt: DateTime.now().millisecondsSinceEpoch,
         updatedAt: DateTime.now().millisecondsSinceEpoch,
         requireResponse: _requireResponse,
+        rsvpDeadline: deadline.millisecondsSinceEpoch,
+        reminderIntervalHours: _reminderIntervalHours,
         responses: {},
       );
 
-      await appState.firebaseService.saveBandEventAsync(widget.bandId, newEvent);
+      final eventId = await appState.firebaseService.saveBandEventAsync(widget.bandId, newEvent);
+
+      if (_createEventRoom) {
+        final creatorId = appState.currentUserId ?? '';
+        await appState.firebaseService.createTemporaryEventRoomAsync(
+          bandId: widget.bandId,
+          eventId: eventId,
+          roomName: '${_titleController.text.trim()} Room',
+          createdBy: creatorId,
+        );
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text("Event created successfully!"),
+            content: Text("Event published successfully!"),
             backgroundColor: AppTheme.success,
           ),
         );
@@ -505,6 +521,118 @@ class _CreateEventPageState extends State<CreateEventPage> {
                             onChanged: (val) {
                               setState(() {
                                 _requireResponse = val;
+                              });
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Reminder Interval Selector (Task 2830)
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: AppTheme.cardBackground,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'RSVP Reminder Interval',
+                            style: GoogleFonts.inter(
+                              fontSize: 15,
+                              color: Colors.white,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Interval for sending reminder notifications to unanswered members.',
+                            style: GoogleFonts.inter(
+                              fontSize: 11,
+                              color: AppTheme.textSecondary,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          DropdownButtonFormField<int>(
+                            value: _reminderIntervalHours,
+                            dropdownColor: const Color(0xFF16132D),
+                            style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
+                            decoration: const InputDecoration(
+                              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              border: OutlineInputBorder(),
+                            ),
+                            items: const [
+                              DropdownMenuItem(value: 24, child: Text('24 Hours before event')),
+                              DropdownMenuItem(value: 48, child: Text('48 Hours before event')),
+                              DropdownMenuItem(value: 72, child: Text('72 Hours before event')),
+                              DropdownMenuItem(value: 0, child: Text('No automatic reminders')),
+                            ],
+                            onChanged: (val) {
+                              if (val != null) {
+                                setState(() {
+                                  _reminderIntervalHours = val;
+                                });
+                              }
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Temporary Event Room Switch (Tasks 2831 & 2843-2847)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: AppTheme.cardBackground,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: _createEventRoom ? AppTheme.primaryAccent.withOpacity(0.5) : const Color(0xFF2E2A4E),
+                          width: 1,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    const Icon(Icons.forum_outlined, color: AppTheme.primaryAccent, size: 18),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      'Create Event Room',
+                                      style: GoogleFonts.inter(
+                                        fontSize: 15,
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Create a temporary chat room for attending members & approved subs.',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 11,
+                                    color: AppTheme.textSecondary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Switch(
+                            value: _createEventRoom,
+                            activeColor: AppTheme.primaryAccent,
+                            onChanged: (val) {
+                              setState(() {
+                                _createEventRoom = val;
                               });
                             },
                           ),
