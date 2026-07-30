@@ -296,6 +296,22 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                     }
                   },
                 ),
+                ListTile(
+                  leading: const Icon(Icons.person_remove_outlined, color: AppTheme.danger),
+                  title: Text(
+                    'Remove Band Member',
+                    style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w600),
+                  ),
+                  subtitle: Text(
+                    'Remove members from the band roster',
+                    style: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 12),
+                  ),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  onTap: () {
+                    Navigator.pop(context); // Close settings sheet
+                    _tabController.animateTo(4); // Switch to Members tab
+                  },
+                ),
                 const Divider(color: Color(0xFF2E2A4E), height: 16),
 
                 // Manage Sub Requests option
@@ -2065,13 +2081,35 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                       ],
                     ),
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.arrow_forward_ios_rounded, color: AppTheme.textSecondary, size: 16),
-                    onPressed: () {
-                      if (member.userId != null) {
-                        _viewMemberProfile(member.userId!);
-                      }
-                    },
+                  Row(
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.arrow_forward_ios_rounded, color: AppTheme.textSecondary, size: 16),
+                        onPressed: () {
+                          if (member.userId != null) {
+                            _viewMemberProfile(member.userId!);
+                          }
+                        },
+                      ),
+                      Builder(builder: (context) {
+                        final appState = Provider.of<AppState>(context, listen: false);
+                        final currentUserId = appState.currentUserId;
+                        final currentUserMember = _members.firstWhere(
+                          (m) => m.userId == currentUserId,
+                          orElse: () => BandMember(role: 'Member'),
+                        );
+                        final isLeader = currentUserMember.role == 'Leader';
+
+                        if (isLeader && member.userId != currentUserId) {
+                          return IconButton(
+                            icon: const Icon(Icons.person_remove_outlined, color: AppTheme.danger, size: 20),
+                            tooltip: 'Remove Member',
+                            onPressed: () => _confirmRemoveMember(member),
+                          );
+                        }
+                        return const SizedBox.shrink();
+                      }),
+                    ],
                   ),
                 ],
               ),
@@ -2080,6 +2118,64 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
         ),
       ],
     );
+  }
+
+  void _confirmRemoveMember(BandMember member) async {
+    final memberUserId = member.userId;
+    if (memberUserId == null || _loadedBandId == null) return;
+
+    final name = member.nickname ?? 'Member';
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF0F0C20),
+        title: Text(
+          "Remove Member",
+          style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
+        content: Text(
+          "Are you sure you want to remove $name from the band?",
+          style: GoogleFonts.inter(color: AppTheme.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("Cancel", style: TextStyle(color: AppTheme.textSecondary)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.danger),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text("Remove", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      final appState = Provider.of<AppState>(context, listen: false);
+      try {
+        await appState.firebaseService.removeBandMemberAsync(_loadedBandId!, memberUserId);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text("$name removed from band"),
+              backgroundColor: AppTheme.success,
+            ),
+          );
+          _initBand(_loadedBandId);
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text("Failed to remove member: $e"),
+              backgroundColor: AppTheme.danger,
+            ),
+          );
+        }
+      }
+    }
   }
 
   Widget _buildNewsFeedCard(Map<String, dynamic> item, bool isLeaderOrAdmin, String? bandId) {
