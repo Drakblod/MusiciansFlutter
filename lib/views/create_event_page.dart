@@ -24,6 +24,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
   final _descriptionController = TextEditingController();
   final _locationController = TextEditingController();
   final _notesController = TextEditingController();
+  final _customReminderController = TextEditingController();
 
   String _eventType = 'Rehearsal';
   DateTime _selectedDate = DateTime.now().add(const Duration(days: 1));
@@ -32,6 +33,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
   bool _requireResponse = true;
   bool _createEventRoom = true;
   int _reminderIntervalHours = 48;
+  bool _isCustomReminderHours = false;
   bool _isSaving = false;
   bool _isLoadingRole = true;
 
@@ -111,6 +113,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
     _descriptionController.dispose();
     _locationController.dispose();
     _notesController.dispose();
+    _customReminderController.dispose();
     super.dispose();
   }
 
@@ -201,6 +204,12 @@ class _CreateEventPageState extends State<CreateEventPage> {
 
     try {
       final appState = Provider.of<AppState>(context, listen: false);
+      if (_isCustomReminderHours) {
+        final parsed = int.tryParse(_customReminderController.text.trim());
+        if (parsed != null && parsed >= 0) {
+          _reminderIntervalHours = parsed;
+        }
+      }
       final totalEvents = _isRecurring ? _occurrenceCount : 1;
 
       for (int i = 0; i < totalEvents; i++) {
@@ -745,7 +754,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                           ),
                           const SizedBox(height: 6),
                           DropdownButtonFormField<int>(
-                            value: _reminderIntervalHours,
+                            value: _isCustomReminderHours ? -1 : _reminderIntervalHours,
                             dropdownColor: const Color(0xFF16132D),
                             style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
                             decoration: const InputDecoration(
@@ -757,15 +766,61 @@ class _CreateEventPageState extends State<CreateEventPage> {
                               DropdownMenuItem(value: 24, child: Text('24 hours (From event is published)')),
                               DropdownMenuItem(value: 12, child: Text('12 hours (From event is published)')),
                               DropdownMenuItem(value: 0, child: Text('No automatic Reminders')),
+                              DropdownMenuItem(value: -1, child: Text('Custom hours...')),
                             ],
                             onChanged: (val) {
                               if (val != null) {
                                 setState(() {
-                                  _reminderIntervalHours = val;
+                                  if (val == -1) {
+                                    _isCustomReminderHours = true;
+                                  } else {
+                                    _isCustomReminderHours = false;
+                                    _reminderIntervalHours = val;
+                                  }
                                 });
                               }
                             },
                           ),
+                          if (_isCustomReminderHours) ...[
+                            const SizedBox(height: 12),
+                            TextFormField(
+                              controller: _customReminderController,
+                              keyboardType: TextInputType.number,
+                              style: const TextStyle(color: Colors.white),
+                              decoration: const InputDecoration(
+                                labelText: 'Custom Reminder Hours',
+                                hintText: 'e.g. 36, 72, 96',
+                                prefixIcon: Icon(Icons.timer_outlined, color: AppTheme.textSecondary),
+                                suffixText: 'hours',
+                                suffixStyle: TextStyle(color: AppTheme.textSecondary),
+                              ),
+                              validator: (value) {
+                                if (_isCustomReminderHours) {
+                                  if (value == null || value.trim().isEmpty) {
+                                    return 'Please enter custom reminder hours';
+                                  }
+                                  final parsed = int.tryParse(value.trim());
+                                  if (parsed == null || parsed < 0) {
+                                    return 'Please enter a valid positive number';
+                                  }
+                                }
+                                return null;
+                              },
+                              onChanged: (val) {
+                                final parsed = int.tryParse(val.trim());
+                                if (parsed != null && parsed >= 0) {
+                                  setState(() {
+                                    _reminderIntervalHours = parsed;
+                                  });
+                                }
+                              },
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              'Initial response window will be ${_reminderIntervalHours} hours from when event is published.',
+                              style: GoogleFonts.inter(fontSize: 11, color: AppTheme.primaryAccent),
+                            ),
+                          ],
                         ],
                       ),
                     ),
