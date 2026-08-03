@@ -1,21 +1,24 @@
 class EventResponse {
-  final String status; // 'attending', 'maybe', 'declined'
+  final String status; // 'YES', 'NO', 'UNCERTAIN' (legacy: 'attending', 'declined', 'maybe')
   final DateTime timestamp;
   final String? comment;
+  final String? uncertainReason;
 
   EventResponse({
     required this.status,
     required this.timestamp,
     this.comment,
+    this.uncertainReason,
   });
 
   factory EventResponse.fromJson(Map<dynamic, dynamic> json) {
     return EventResponse(
-      status: json['status']?.toString() ?? 'declined',
+      status: json['status']?.toString() ?? 'NO',
       timestamp: json['timestamp'] != null
           ? DateTime.tryParse(json['timestamp'].toString()) ?? DateTime.now()
           : DateTime.now(),
       comment: json['comment']?.toString(),
+      uncertainReason: json['uncertainReason']?.toString(),
     );
   }
 
@@ -24,6 +27,7 @@ class EventResponse {
       'status': status,
       'timestamp': timestamp.toUtc().toIso8601String(),
       if (comment != null) 'comment': comment,
+      if (uncertainReason != null) 'uncertainReason': uncertainReason,
     };
   }
 }

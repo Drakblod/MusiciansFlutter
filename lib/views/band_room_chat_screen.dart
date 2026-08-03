@@ -3110,81 +3110,87 @@ class _AddMemberDialogContentState extends State<_AddMemberDialogContent> {
                         final user = filteredUsers[index];
                         final name = user.displayName ?? user.nickname ?? 'Unknown';
 
-                        return Container(
-                          margin: const EdgeInsets.only(bottom: 8),
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: AppTheme.cardBackground,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Row(
-                            children: [
-                              CircleAvatar(
-                                radius: 16,
-                                backgroundColor: AppTheme.primaryAccent.withOpacity(0.2),
-                                child: Text(
-                                  name.substring(0, 1).toUpperCase(),
-                                  style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                        void _addMember() async {
+                          if (_isAdding) return;
+                          setState(() => _isAdding = true);
+                          try {
+                            await appState.firebaseService.addBandMemberAsync(
+                              widget.bandId,
+                              user.userId!,
+                              'Member',
+                              user.nickname ?? name,
+                            );
+                            widget.onMemberAdded();
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text("$name added to the band!"),
+                                  backgroundColor: AppTheme.success,
                                 ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      name,
-                                      style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
-                                    ),
-                                    if (user.instruments.isNotEmpty)
+                              );
+                              Navigator.pop(context); // Close dialog
+                            }
+                          } catch (e) {
+                            debugPrint("Error adding band member: $e");
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text("Failed to add $name: $e"),
+                                  backgroundColor: AppTheme.danger,
+                                ),
+                              );
+                            }
+                          } finally {
+                            if (mounted) {
+                              setState(() => _isAdding = false);
+                            }
+                          }
+                        }
+
+                        return AnimatedTapDetector(
+                          onTap: _addMember,
+                          child: Container(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: AppTheme.cardBackground,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Row(
+                              children: [
+                                CircleAvatar(
+                                  radius: 16,
+                                  backgroundColor: AppTheme.primaryAccent.withOpacity(0.2),
+                                  child: Text(
+                                    name.substring(0, 1).toUpperCase(),
+                                    style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
                                       Text(
-                                        user.instruments.join(', '),
-                                        style: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 11),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
+                                        name,
+                                        style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
                                       ),
-                                  ],
+                                      if (user.instruments.isNotEmpty)
+                                        Text(
+                                          user.instruments.join(', '),
+                                          style: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 11),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                    ],
+                                  ),
                                 ),
-                              ),
-                              IconButton(
-                                icon: const Icon(Icons.add_circle, color: AppTheme.primaryAccent, size: 24),
-                                onPressed: () async {
-                                  setState(() => _isAdding = true);
-                                  try {
-                                    await appState.firebaseService.addBandMemberAsync(
-                                      widget.bandId,
-                                      user.userId!,
-                                      'Member',
-                                      user.nickname ?? name,
-                                    );
-                                    widget.onMemberAdded();
-                                    if (context.mounted) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(
-                                          content: Text("$name added to the band!"),
-                                          backgroundColor: AppTheme.success,
-                                        ),
-                                      );
-                                      Navigator.pop(context); // Close dialog
-                                    }
-                                  } catch (e) {
-                                    debugPrint("Error adding band member: $e");
-                                    if (context.mounted) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(
-                                          content: Text("Failed to add $name: $e"),
-                                          backgroundColor: AppTheme.danger,
-                                        ),
-                                      );
-                                    }
-                                  } finally {
-                                    if (mounted) {
-                                      setState(() => _isAdding = false);
-                                    }
-                                  }
-                                },
-                              ),
-                            ],
+                                IconButton(
+                                  icon: const Icon(Icons.add_circle, color: AppTheme.primaryAccent, size: 24),
+                                  onPressed: _addMember,
+                                ),
+                              ],
+                            ),
                           ),
                         );
                       },

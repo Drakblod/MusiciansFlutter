@@ -38,7 +38,9 @@ class _CreateEventPageState extends State<CreateEventPage> {
   final List<String> _eventTypes = [
     'Rehearsal',
     'Concert',
-    'Gig',
+    'Club gig',
+    'Private Event',
+    'Show',
     'Recording Session',
     'Meeting',
     'Other'
@@ -469,67 +471,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                     ),
                     const SizedBox(height: 16),
 
-                    // Additional Notes
-                    TextFormField(
-                      controller: _notesController,
-                      style: const TextStyle(color: Colors.white),
-                      maxLines: 2,
-                      decoration: const InputDecoration(
-                        labelText: 'Additional Notes',
-                        hintText: 'e.g. Bring black choir binder, stand light',
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Require Attendance Switch
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: AppTheme.cardBackground,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Require RSVP',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 15,
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  'Require band members to respond with attendance status.',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 11,
-                                    color: AppTheme.textSecondary,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Switch(
-                            value: _requireResponse,
-                            activeColor: AppTheme.primaryAccent,
-                            onChanged: (val) {
-                              setState(() {
-                                _requireResponse = val;
-                              });
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Reminder Interval Selector (Task 2830)
+                    // RSVP Deadlines Selector (CEO Page 2)
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
@@ -541,22 +483,40 @@ class _CreateEventPageState extends State<CreateEventPage> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'RSVP Reminder Interval',
+                            'RSVP Deadlines',
                             style: GoogleFonts.inter(
                               fontSize: 15,
                               color: Colors.white,
-                              fontWeight: FontWeight.w500,
+                              fontWeight: FontWeight.bold,
                             ),
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Interval for sending reminder notifications to unanswered members.',
-                            style: GoogleFonts.inter(
-                              fontSize: 11,
-                              color: AppTheme.textSecondary,
+                          const SizedBox(height: 6),
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: AppTheme.primaryAccent.withOpacity(0.12),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.3)),
+                            ),
+                            child: Text(
+                              'The response time for answering a Reminder will be 50% shorter than the initial response time. An initial response time of 48 hours will become 24 hours after the first Reminder, etc.',
+                              style: GoogleFonts.inter(
+                                fontSize: 11,
+                                color: Colors.white70,
+                                height: 1.3,
+                              ),
                             ),
                           ),
                           const SizedBox(height: 12),
+                          Text(
+                            'Initial Response Window (from Publish Event):',
+                            style: GoogleFonts.inter(
+                              fontSize: 11,
+                              color: AppTheme.textSecondary,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
                           DropdownButtonFormField<int>(
                             value: _reminderIntervalHours,
                             dropdownColor: const Color(0xFF16132D),
@@ -566,10 +526,10 @@ class _CreateEventPageState extends State<CreateEventPage> {
                               border: OutlineInputBorder(),
                             ),
                             items: const [
-                              DropdownMenuItem(value: 24, child: Text('24 Hours before event')),
-                              DropdownMenuItem(value: 48, child: Text('48 Hours before event')),
-                              DropdownMenuItem(value: 72, child: Text('72 Hours before event')),
-                              DropdownMenuItem(value: 0, child: Text('No automatic reminders')),
+                              DropdownMenuItem(value: 48, child: Text('48 hours (from Publish Event)')),
+                              DropdownMenuItem(value: 24, child: Text('24 hours (from Publish Event)')),
+                              DropdownMenuItem(value: 12, child: Text('12 hours (from Publish Event)')),
+                              DropdownMenuItem(value: 0, child: Text('No automatic Reminders')),
                             ],
                             onChanged: (val) {
                               if (val != null) {
@@ -584,7 +544,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                     ),
                     const SizedBox(height: 16),
 
-                    // Temporary Event Room Switch (Tasks 2831 & 2843-2847)
+                    // Temporary Event Chat Switch (Tasks 2831 & 2843-2847)
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       decoration: BoxDecoration(
@@ -607,7 +567,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                                     const Icon(Icons.forum_outlined, color: AppTheme.primaryAccent, size: 18),
                                     const SizedBox(width: 8),
                                     Text(
-                                      'Create Event Room',
+                                      'Create Event Chat',
                                       style: GoogleFonts.inter(
                                         fontSize: 15,
                                         color: Colors.white,

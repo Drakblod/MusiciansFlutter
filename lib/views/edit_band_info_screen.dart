@@ -234,7 +234,7 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Edit Band Info',
+                'Edit Band',
                 style: GoogleFonts.outfit(
                   fontSize: 26,
                   fontWeight: FontWeight.bold,
@@ -303,10 +303,10 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
               ),
               const SizedBox(height: 20),
 
-              // Dynamic Styles/Genres
+              // Dynamic Genres / Band Types
               if (availableStyles.isNotEmpty) ...[
                 Text(
-                  'Styles',
+                  'Genres/Band Types',
                   style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
                 ),
                 const SizedBox(height: 8),
@@ -384,7 +384,7 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
 
               // Location
               Text(
-                'Location (Country, City)',
+                'Location (City, Country)',
                 style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
               ),
               const SizedBox(height: 8),
@@ -420,7 +420,7 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
 
               // Rehearsal Day
               Text(
-                'Rehearsal Day',
+                'Regular Rehearsal Day (if any)',
                 style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
               ),
               const SizedBox(height: 8),
@@ -527,7 +527,7 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
 
               // About/Description
               Text(
-                'About the Band',
+                'About',
                 style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
               ),
               const SizedBox(height: 8),
