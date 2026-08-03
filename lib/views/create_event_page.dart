@@ -35,6 +35,11 @@ class _CreateEventPageState extends State<CreateEventPage> {
   bool _isSaving = false;
   bool _isLoadingRole = true;
 
+  // Recurring Events State
+  bool _isRecurring = false;
+  String _recurrencePattern = 'Weekly'; // 'Weekly', 'Bi-weekly', 'Daily', 'Monthly'
+  int _occurrenceCount = 3; // default 3 times (e.g. 3 tuesdays in a row)
+
   final List<String> _eventTypes = [
     'Rehearsal',
     'Concert',
@@ -45,6 +50,20 @@ class _CreateEventPageState extends State<CreateEventPage> {
     'Meeting',
     'Other'
   ];
+
+  DateTime _getCalculatedDate(DateTime baseDate, String pattern, int index) {
+    if (index == 0) return baseDate;
+    if (pattern == 'Daily') {
+      return baseDate.add(Duration(days: index));
+    } else if (pattern == 'Weekly') {
+      return baseDate.add(Duration(days: index * 7));
+    } else if (pattern == 'Bi-weekly') {
+      return baseDate.add(Duration(days: index * 14));
+    } else if (pattern == 'Monthly') {
+      return DateTime(baseDate.year, baseDate.month + index, baseDate.day);
+    }
+    return baseDate;
+  }
 
   @override
   void initState() {
@@ -182,62 +201,71 @@ class _CreateEventPageState extends State<CreateEventPage> {
 
     try {
       final appState = Provider.of<AppState>(context, listen: false);
+      final totalEvents = _isRecurring ? _occurrenceCount : 1;
 
-      final start = DateTime(
-        _selectedDate.year,
-        _selectedDate.month,
-        _selectedDate.day,
-        _startTime.hour,
-        _startTime.minute,
-      );
+      for (int i = 0; i < totalEvents; i++) {
+        final eventDate = _getCalculatedDate(_selectedDate, _recurrencePattern, i);
 
-      var end = DateTime(
-        _selectedDate.year,
-        _selectedDate.month,
-        _selectedDate.day,
-        _endTime.hour,
-        _endTime.minute,
-      );
-
-      if (end.isBefore(start)) {
-        end = end.add(const Duration(days: 1));
-      }
-
-      final deadline = start.subtract(Duration(hours: _reminderIntervalHours > 0 ? _reminderIntervalHours : 24));
-
-      final newEvent = BandEvent(
-        title: _titleController.text.trim(),
-        description: _descriptionController.text.trim(),
-        eventType: _eventType,
-        location: _locationController.text.trim(),
-        startDateTime: start.toIso8601String(),
-        endDateTime: end.toIso8601String(),
-        additionalNotes: _notesController.text.trim(),
-        createdBy: appState.currentUserId ?? '',
-        createdAt: DateTime.now().millisecondsSinceEpoch,
-        updatedAt: DateTime.now().millisecondsSinceEpoch,
-        requireResponse: _requireResponse,
-        rsvpDeadline: deadline.millisecondsSinceEpoch,
-        reminderIntervalHours: _reminderIntervalHours,
-        responses: {},
-      );
-
-      final eventId = await appState.firebaseService.saveBandEventAsync(widget.bandId, newEvent);
-
-      if (_createEventRoom) {
-        final creatorId = appState.currentUserId ?? '';
-        await appState.firebaseService.createTemporaryEventRoomAsync(
-          bandId: widget.bandId,
-          eventId: eventId,
-          roomName: '${_titleController.text.trim()} Room',
-          createdBy: creatorId,
+        final start = DateTime(
+          eventDate.year,
+          eventDate.month,
+          eventDate.day,
+          _startTime.hour,
+          _startTime.minute,
         );
+
+        var end = DateTime(
+          eventDate.year,
+          eventDate.month,
+          eventDate.day,
+          _endTime.hour,
+          _endTime.minute,
+        );
+
+        if (end.isBefore(start)) {
+          end = end.add(const Duration(days: 1));
+        }
+
+        final deadline = start.subtract(Duration(hours: _reminderIntervalHours > 0 ? _reminderIntervalHours : 24));
+
+        final newEvent = BandEvent(
+          title: _titleController.text.trim(),
+          description: _descriptionController.text.trim(),
+          eventType: _eventType,
+          location: _locationController.text.trim(),
+          startDateTime: start.toIso8601String(),
+          endDateTime: end.toIso8601String(),
+          additionalNotes: _notesController.text.trim(),
+          createdBy: appState.currentUserId ?? '',
+          createdAt: DateTime.now().millisecondsSinceEpoch,
+          updatedAt: DateTime.now().millisecondsSinceEpoch,
+          requireResponse: _requireResponse,
+          rsvpDeadline: deadline.millisecondsSinceEpoch,
+          reminderIntervalHours: _reminderIntervalHours,
+          responses: {},
+        );
+
+        final eventId = await appState.firebaseService.saveBandEventAsync(widget.bandId, newEvent);
+
+        if (_createEventRoom) {
+          final creatorId = appState.currentUserId ?? '';
+          final dateStr = totalEvents > 1 ? ' (${DateFormat('MMM d').format(start)})' : '';
+          await appState.firebaseService.createTemporaryEventRoomAsync(
+            bandId: widget.bandId,
+            eventId: eventId,
+            roomName: '${_titleController.text.trim()}$dateStr Chat',
+            createdBy: creatorId,
+          );
+        }
       }
 
       if (mounted) {
+        final msg = totalEvents > 1
+            ? "$totalEvents recurring events published successfully!"
+            : "Event published successfully!";
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Event published successfully!"),
+          SnackBar(
+            content: Text(msg),
             backgroundColor: AppTheme.success,
           ),
         );
@@ -346,8 +374,8 @@ class _CreateEventPageState extends State<CreateEventPage> {
                       controller: _locationController,
                       style: const TextStyle(color: Colors.white),
                       decoration: const InputDecoration(
-                        labelText: 'Location',
-                        hintText: 'e.g. Culture House, Bollnäs',
+                        labelText: 'Location (City, Country)',
+                        hintText: 'e.g. Globen, Stockholm',
                         prefixIcon: Icon(Icons.location_on_outlined, color: AppTheme.textSecondary),
                       ),
                       validator: (value) {
@@ -471,6 +499,205 @@ class _CreateEventPageState extends State<CreateEventPage> {
                     ),
                     const SizedBox(height: 16),
 
+                    // 🔁 RECURRING / MULTI-EVENT CREATION CARD
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: AppTheme.cardBackground,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: _isRecurring ? AppTheme.primaryAccent.withOpacity(0.5) : const Color(0xFF2E2A4E),
+                          width: 1,
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        const Icon(Icons.repeat_rounded, color: AppTheme.primaryAccent, size: 20),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          'Create Multiple Events',
+                                          style: GoogleFonts.inter(
+                                            fontSize: 15,
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'Repeat this event over multiple days/weeks (e.g. 3 Tuesdays in a row).',
+                                      style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Switch(
+                                value: _isRecurring,
+                                activeColor: AppTheme.primaryAccent,
+                                onChanged: (val) {
+                                  setState(() {
+                                    _isRecurring = val;
+                                  });
+                                },
+                              ),
+                            ],
+                          ),
+                          if (_isRecurring) ...[
+                            const SizedBox(height: 16),
+                            const Divider(color: Color(0xFF2E2A4E)),
+                            const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                // Frequency Dropdown
+                                Expanded(
+                                  flex: 3,
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Frequency',
+                                        style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      DropdownButtonFormField<String>(
+                                        value: _recurrencePattern,
+                                        dropdownColor: const Color(0xFF16132D),
+                                        style: GoogleFonts.inter(color: Colors.white, fontSize: 13),
+                                        decoration: const InputDecoration(
+                                          contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                          border: OutlineInputBorder(),
+                                        ),
+                                        items: const [
+                                          DropdownMenuItem(value: 'Weekly', child: Text('Weekly')),
+                                          DropdownMenuItem(value: 'Bi-weekly', child: Text('Bi-weekly')),
+                                          DropdownMenuItem(value: 'Daily', child: Text('Daily')),
+                                          DropdownMenuItem(value: 'Monthly', child: Text('Monthly')),
+                                        ],
+                                        onChanged: (val) {
+                                          if (val != null) {
+                                            setState(() => _recurrencePattern = val);
+                                          }
+                                        },
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+
+                                // Number of Times Dropdown
+                                Expanded(
+                                  flex: 2,
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Occurrences',
+                                        style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      DropdownButtonFormField<int>(
+                                        value: _occurrenceCount,
+                                        dropdownColor: const Color(0xFF16132D),
+                                        style: GoogleFonts.inter(color: Colors.white, fontSize: 13),
+                                        decoration: const InputDecoration(
+                                          contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                          border: OutlineInputBorder(),
+                                        ),
+                                        items: [2, 3, 4, 5, 6, 8, 10, 12].map((num) {
+                                          return DropdownMenuItem<int>(
+                                            value: num,
+                                            child: Text('$num times'),
+                                          );
+                                        }).toList(),
+                                        onChanged: (val) {
+                                          if (val != null) {
+                                            setState(() => _occurrenceCount = val);
+                                          }
+                                        },
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 14),
+
+                            // Dynamic Dates Preview Box
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF141029),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.3)),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      const Icon(Icons.date_range_rounded, size: 14, color: AppTheme.primaryAccent),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        'Generated Dates Preview ($_occurrenceCount events):',
+                                        style: GoogleFonts.inter(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                          color: AppTheme.primaryAccent,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  ...List.generate(_occurrenceCount, (index) {
+                                    final dt = _getCalculatedDate(_selectedDate, _recurrencePattern, index);
+                                    final dateStr = DateFormat('EEEE, MMM d, yyyy').format(dt);
+                                    final timeStr = '${_startTime.format(context)} - ${_endTime.format(context)}';
+                                    return Padding(
+                                      padding: const EdgeInsets.only(bottom: 4),
+                                      child: Row(
+                                        children: [
+                                          Text(
+                                            'Event ${index + 1}: ',
+                                            style: GoogleFonts.inter(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.bold,
+                                              color: Colors.white70,
+                                            ),
+                                          ),
+                                          Expanded(
+                                            child: Text(
+                                              '$dateStr ($timeStr)',
+                                              style: GoogleFonts.inter(
+                                                fontSize: 11,
+                                                color: Colors.white,
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  }),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
                     // RSVP Deadlines Selector (CEO Page 2)
                     Container(
                       padding: const EdgeInsets.all(16),
@@ -509,7 +736,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                           ),
                           const SizedBox(height: 12),
                           Text(
-                            'Initial Response Window (from Publish Event):',
+                            'Initial Response Window (From event is published):',
                             style: GoogleFonts.inter(
                               fontSize: 11,
                               color: AppTheme.textSecondary,
@@ -526,9 +753,9 @@ class _CreateEventPageState extends State<CreateEventPage> {
                               border: OutlineInputBorder(),
                             ),
                             items: const [
-                              DropdownMenuItem(value: 48, child: Text('48 hours (from Publish Event)')),
-                              DropdownMenuItem(value: 24, child: Text('24 hours (from Publish Event)')),
-                              DropdownMenuItem(value: 12, child: Text('12 hours (from Publish Event)')),
+                              DropdownMenuItem(value: 48, child: Text('48 hours (From event is published)')),
+                              DropdownMenuItem(value: 24, child: Text('24 hours (From event is published)')),
+                              DropdownMenuItem(value: 12, child: Text('12 hours (From event is published)')),
                               DropdownMenuItem(value: 0, child: Text('No automatic Reminders')),
                             ],
                             onChanged: (val) {
@@ -612,7 +839,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                         ),
                         child: Center(
                           child: Text(
-                            "Publish Event",
+                            _isRecurring ? "Publish $_occurrenceCount Events" : "Publish Event",
                             style: GoogleFonts.inter(
                               color: Colors.white,
                               fontSize: 16,
