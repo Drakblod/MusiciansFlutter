@@ -247,6 +247,8 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
           backgroundColor: AppTheme.danger,
         ),
       );
+      return;
+    }
     if (status == 'UNCERTAIN' && (comment.trim().isEmpty)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
