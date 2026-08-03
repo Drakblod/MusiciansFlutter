@@ -247,6 +247,13 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
           backgroundColor: AppTheme.danger,
         ),
       );
+    if (status == 'UNCERTAIN' && (comment.trim().isEmpty)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Why are you uncertain? (mandatory)"),
+          backgroundColor: AppTheme.warning,
+        ),
+      );
       return;
     }
 
@@ -274,7 +281,7 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
         );
       }
 
-      if (status == 'attending' && _event?.temporaryRoomId != null && _event!.temporaryRoomId!.isNotEmpty) {
+      if ((status == 'YES' || status == 'attending') && _event?.temporaryRoomId != null && _event!.temporaryRoomId!.isNotEmpty) {
         await appState.firebaseService.addMemberToEventRoomAsync(
           widget.bandId,
           _event!.temporaryRoomId!,
@@ -285,7 +292,7 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text("RSVP saved: ${status.toUpperCase()}"),
+          content: Text("RSVP saved: $status"),
           backgroundColor: AppTheme.success,
           duration: const Duration(seconds: 1),
         ),
@@ -374,10 +381,10 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
     final dateStr = DateFormat('EEEE, MMMM d, yyyy').format(startLocal);
     final timeStr = '${DateFormat('HH:mm').format(startLocal)} - ${DateFormat('HH:mm').format(endLocal)}';
 
-    // Calculate response counts
-    final attendingList = <String>[];
-    final maybeList = <String>[];
-    final declinedList = <String>[];
+    // Calculate response counts (YES, NO, UNCERTAIN)
+    final yesList = <String>[];
+    final uncertainList = <String>[];
+    final noList = <String>[];
     final noResponseList = <String>[];
 
     for (var member in _members) {
@@ -386,23 +393,23 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
 
       final name = _cachedProfiles[userId]?.displayName ?? _cachedProfiles[userId]?.nickname ?? member.nickname ?? 'Unknown Member';
       final response = event.responses[userId]?.status;
-      final comment = event.responses[userId]?.comment;
+      final comment = event.responses[userId]?.uncertainReason ?? event.responses[userId]?.comment;
       final displayName = comment != null && comment.isNotEmpty ? '$name\n"$comment"' : name;
 
-      if (response == 'attending') {
-        attendingList.add(displayName);
-      } else if (response == 'maybe') {
-        maybeList.add(displayName);
-      } else if (response == 'declined') {
-        declinedList.add(displayName);
+      if (response == 'YES' || response == 'attending') {
+        yesList.add(displayName);
+      } else if (response == 'UNCERTAIN' || response == 'maybe') {
+        uncertainList.add(displayName);
+      } else if (response == 'NO' || response == 'declined') {
+        noList.add(displayName);
       } else {
         noResponseList.add(name);
       }
     }
 
-    final extAttendingList = <String>[];
-    final extMaybeList = <String>[];
-    final extDeclinedList = <String>[];
+    final extYesList = <String>[];
+    final extUncertainList = <String>[];
+    final extNoList = <String>[];
     final extPendingList = <String>[];
 
     // Process external invitees attending for instrument coverage and response groups
@@ -412,12 +419,12 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
       final comment = invitee.comment;
       final displayName = comment != null && comment.isNotEmpty ? '$name\n"$comment"' : name;
 
-      if (status == 'attending') {
-        extAttendingList.add(displayName);
-      } else if (status == 'maybe') {
-        extMaybeList.add(displayName);
-      } else if (status == 'declined') {
-        extDeclinedList.add(displayName);
+      if (status == 'YES' || status == 'attending') {
+        extYesList.add(displayName);
+      } else if (status == 'UNCERTAIN' || status == 'maybe') {
+        extUncertainList.add(displayName);
+      } else if (status == 'NO' || status == 'declined') {
+        extNoList.add(displayName);
       } else {
         extPendingList.add(name);
       }
@@ -595,23 +602,23 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                     const SizedBox(height: 10),
                     Row(
                       children: [
-                        // Attending
+                        // YES
                         Expanded(
                           child: GestureDetector(
                             onTap: () {
                               setState(() {
-                                _localSelectedResponse = 'attending';
+                                _localSelectedResponse = 'YES';
                               });
                             },
                             child: Container(
                               padding: const EdgeInsets.symmetric(vertical: 12),
                               decoration: BoxDecoration(
-                                color: _localSelectedResponse == 'attending'
+                                color: (_localSelectedResponse == 'YES' || _localSelectedResponse == 'attending')
                                     ? AppTheme.success.withOpacity(0.2)
                                     : AppTheme.cardBackground,
                                 borderRadius: BorderRadius.circular(10),
                                 border: Border.all(
-                                  color: _localSelectedResponse == 'attending' ? AppTheme.success : const Color(0xFF2E2A4E),
+                                  color: (_localSelectedResponse == 'YES' || _localSelectedResponse == 'attending') ? AppTheme.success : const Color(0xFF2E2A4E),
                                   width: 1.5,
                                 ),
                               ),
@@ -619,14 +626,14 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                                 children: [
                                   Icon(
                                     Icons.check_circle_outline_rounded,
-                                    color: _localSelectedResponse == 'attending' ? AppTheme.success : AppTheme.textSecondary,
+                                    color: (_localSelectedResponse == 'YES' || _localSelectedResponse == 'attending') ? AppTheme.success : AppTheme.textSecondary,
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
-                                    'Attending',
+                                    'YES',
                                     style: GoogleFonts.inter(
                                       fontSize: 13,
-                                      color: _localSelectedResponse == 'attending' ? Colors.white : AppTheme.textSecondary,
+                                      color: (_localSelectedResponse == 'YES' || _localSelectedResponse == 'attending') ? Colors.white : AppTheme.textSecondary,
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
@@ -637,23 +644,23 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                         ),
                         const SizedBox(width: 8),
 
-                        // Declined
+                        // NO
                         Expanded(
                           child: GestureDetector(
                             onTap: () {
                               setState(() {
-                                _localSelectedResponse = 'declined';
+                                _localSelectedResponse = 'NO';
                               });
                             },
                             child: Container(
                               padding: const EdgeInsets.symmetric(vertical: 12),
                               decoration: BoxDecoration(
-                                color: _localSelectedResponse == 'declined'
+                                color: (_localSelectedResponse == 'NO' || _localSelectedResponse == 'declined')
                                     ? AppTheme.danger.withOpacity(0.2)
                                     : AppTheme.cardBackground,
                                 borderRadius: BorderRadius.circular(10),
                                 border: Border.all(
-                                  color: _localSelectedResponse == 'declined' ? AppTheme.danger : const Color(0xFF2E2A4E),
+                                  color: (_localSelectedResponse == 'NO' || _localSelectedResponse == 'declined') ? AppTheme.danger : const Color(0xFF2E2A4E),
                                   width: 1.5,
                                 ),
                               ),
@@ -661,14 +668,14 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                                 children: [
                                   Icon(
                                     Icons.cancel_outlined,
-                                    color: _localSelectedResponse == 'declined' ? AppTheme.danger : AppTheme.textSecondary,
+                                    color: (_localSelectedResponse == 'NO' || _localSelectedResponse == 'declined') ? AppTheme.danger : AppTheme.textSecondary,
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
-                                    'Declined',
+                                    'NO',
                                     style: GoogleFonts.inter(
                                       fontSize: 13,
-                                      color: _localSelectedResponse == 'declined' ? Colors.white : AppTheme.textSecondary,
+                                      color: (_localSelectedResponse == 'NO' || _localSelectedResponse == 'declined') ? Colors.white : AppTheme.textSecondary,
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
@@ -679,23 +686,23 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                         ),
                         const SizedBox(width: 8),
 
-                        // Maybe
+                        // UNCERTAIN
                         Expanded(
                           child: GestureDetector(
                             onTap: () {
                               setState(() {
-                                _localSelectedResponse = 'maybe';
+                                _localSelectedResponse = 'UNCERTAIN';
                               });
                             },
                             child: Container(
                               padding: const EdgeInsets.symmetric(vertical: 12),
                               decoration: BoxDecoration(
-                                color: _localSelectedResponse == 'maybe'
-                                    ? AppTheme.textSecondary.withOpacity(0.2)
+                                color: (_localSelectedResponse == 'UNCERTAIN' || _localSelectedResponse == 'maybe')
+                                    ? AppTheme.warning.withOpacity(0.2)
                                     : AppTheme.cardBackground,
                                 borderRadius: BorderRadius.circular(10),
                                 border: Border.all(
-                                  color: _localSelectedResponse == 'maybe' ? AppTheme.textSecondary : const Color(0xFF2E2A4E),
+                                  color: (_localSelectedResponse == 'UNCERTAIN' || _localSelectedResponse == 'maybe') ? AppTheme.warning : const Color(0xFF2E2A4E),
                                   width: 1.5,
                                 ),
                               ),
@@ -703,14 +710,14 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                                 children: [
                                   Icon(
                                     Icons.help_outline_rounded,
-                                    color: _localSelectedResponse == 'maybe' ? AppTheme.textSecondary : AppTheme.textSecondary,
+                                    color: (_localSelectedResponse == 'UNCERTAIN' || _localSelectedResponse == 'maybe') ? AppTheme.warning : AppTheme.textSecondary,
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
-                                    'Maybe',
+                                    'UNCERTAIN',
                                     style: GoogleFonts.inter(
-                                      fontSize: 13,
-                                      color: _localSelectedResponse == 'maybe' ? Colors.white : AppTheme.textSecondary,
+                                      fontSize: 12,
+                                      color: (_localSelectedResponse == 'UNCERTAIN' || _localSelectedResponse == 'maybe') ? Colors.white : AppTheme.textSecondary,
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
@@ -721,15 +728,15 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                         ),
                       ],
                     ),
-                    if (_localSelectedResponse == 'maybe') ...[
+                    if (_localSelectedResponse == 'UNCERTAIN' || _localSelectedResponse == 'maybe') ...[
                       const SizedBox(height: 16),
                       Text(
-                        'WHY ARE YOU UNCERTAIN? (OPTIONAL)',
+                        'WHY ARE YOU UNCERTAIN? (mandatory)',
                         style: GoogleFonts.outfit(
-                          fontSize: 11,
+                          fontSize: 12,
                           fontWeight: FontWeight.bold,
-                          color: AppTheme.textSecondary,
-                          letterSpacing: 1.2,
+                          color: AppTheme.warning,
+                          letterSpacing: 1.1,
                         ),
                       ),
                       const SizedBox(height: 8),
@@ -738,7 +745,7 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                         maxLines: 2,
                         style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
                         decoration: const InputDecoration(
-                          hintText: 'e.g. Depends on work travel schedules...',
+                          hintText: 'Why are you uncertain? (mandatory)',
                         ),
                       ),
                     ],
@@ -826,7 +833,7 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
 
 
             if (event.requireResponse) ...[
-              // 5. Attendance Detail Lists
+              // 5. Attendance Detail Lists (CEO Page 3)
               Text(
                 'ATTENDANCE RESPONSES',
                 style: GoogleFonts.outfit(
@@ -845,10 +852,10 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                 ),
                 child: Column(
                   children: [
-                    _buildResponseGroup('Attending (${attendingList.length})', attendingList, AppTheme.success),
-                    _buildResponseGroup('Declined (${declinedList.length})', declinedList, AppTheme.danger),
-                    _buildResponseGroup('Maybe (${maybeList.length})', maybeList, AppTheme.textSecondary),
-                    _buildResponseGroup('No Response (${noResponseList.length})', noResponseList, AppTheme.textSecondary),
+                    _buildResponseGroup('YES (${yesList.length})', yesList, AppTheme.success),
+                    _buildResponseGroup('NO (${noList.length})', noList, AppTheme.danger),
+                    _buildResponseGroup('UNCERTAIN (${uncertainList.length})', uncertainList, AppTheme.warning),
+                    _buildResponseGroup('Unanswered (${noResponseList.length})', noResponseList, AppTheme.textSecondary),
                   ],
                 ),
               ),
@@ -874,9 +881,9 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                   ),
                   child: Column(
                     children: [
-                      _buildResponseGroup('Guest Attending (${extAttendingList.length})', extAttendingList, AppTheme.success),
-                      _buildResponseGroup('Guest Maybe (${extMaybeList.length})', extMaybeList, AppTheme.textSecondary),
-                      _buildResponseGroup('Guest Declined (${extDeclinedList.length})', extDeclinedList, AppTheme.danger),
+                      _buildResponseGroup('Guest YES (${extYesList.length})', extYesList, AppTheme.success),
+                      _buildResponseGroup('Guest UNCERTAIN (${extUncertainList.length})', extUncertainList, AppTheme.warning),
+                      _buildResponseGroup('Guest NO (${extNoList.length})', extNoList, AppTheme.danger),
                       _buildResponseGroup('Guest Pending (${extPendingList.length})', extPendingList, Colors.grey),
                     ],
                   ),
@@ -894,7 +901,7 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                     roomId: event.temporaryRoomId!,
                     eventId: widget.eventId,
                     bandId: widget.bandId,
-                    name: '${event.title} Room',
+                    name: '${event.title} Chat',
                     createdAt: event.createdAt,
                     createdBy: event.createdBy,
                   );
@@ -922,7 +929,7 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                       const Icon(Icons.forum_outlined, color: AppTheme.primaryAccent, size: 20),
                       const SizedBox(width: 10),
                       Text(
-                        "Open Event Room",
+                        "Open Event Chat",
                         style: GoogleFonts.inter(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
@@ -947,7 +954,7 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
               ),
             ],
 
-            // ⚡ GOD MODE / ADMIN CONTROLS
+            // ⚡ REMINDER SETTINGS (CEO Page 3)
             if (currentUserId == event.createdBy || _isAdmin) ...[
               const SizedBox(height: 10),
               Container(
@@ -969,10 +976,10 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                   children: [
                     Row(
                       children: [
-                        const Icon(Icons.bolt_rounded, color: Colors.amber, size: 22),
+                        const Icon(Icons.notifications_active_rounded, color: Colors.amber, size: 22),
                         const SizedBox(width: 8),
                         Text(
-                          'GOD MODE / ADMIN CONTROLS',
+                          'REMINDER SETTINGS',
                           style: GoogleFonts.outfit(
                             fontSize: 13,
                             fontWeight: FontWeight.bold,
@@ -982,10 +989,10 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 6),
                     Text(
-                      'Manually trigger RSVP reminder notifications on demand.',
-                      style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
+                      'Automated reminders count down from when the event is published. Tap below to send manual override reminders.',
+                      style: GoogleFonts.inter(fontSize: 11.5, color: AppTheme.textSecondary, height: 1.3),
                     ),
                     const SizedBox(height: 14),
                     Wrap(
@@ -1067,9 +1074,9 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                             context: context,
                             builder: (ctx) => AlertDialog(
                               backgroundColor: const Color(0xFF0F0C20),
-                              title: Text("Create Event Room?", style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold)),
+                              title: Text("Create Event Chat?", style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold)),
                               content: Text(
-                                "The event is locked! Would you like to create a temporary event room for attending members & subs?",
+                                "The event is locked! Would you like to create a temporary event chat for attending members & subs?",
                                 style: GoogleFonts.inter(color: AppTheme.textSecondary),
                               ),
                               actions: [
@@ -1077,7 +1084,7 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                                 ElevatedButton(
                                   style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryAccent),
                                   onPressed: () => Navigator.pop(ctx, true),
-                                  child: const Text("Create Room", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                  child: const Text("Create Chat", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                                 ),
                               ],
                             ),
@@ -1087,7 +1094,7 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                             await appState.firebaseService.createTemporaryEventRoomAsync(
                               bandId: widget.bandId,
                               eventId: widget.eventId,
-                              roomName: '${event.title} Room',
+                              roomName: '${event.title} Chat',
                               createdBy: currentUserId ?? '',
                             );
                           }
@@ -1156,8 +1163,8 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                         const Icon(Icons.search, color: Colors.white),
                         const SizedBox(width: 8),
                         Text(
-                          "Find Substitute Musician",
-                          style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold),
+                          "FIND SUBSTITUTE(S)",
+                          style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold, letterSpacing: 1.1),
                         ),
                       ],
                     ),
