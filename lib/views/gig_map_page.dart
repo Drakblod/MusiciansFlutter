@@ -7,6 +7,10 @@ import '../providers/app_state.dart';
 import '../theme/app_theme.dart';
 import '../models/sub_request.dart';
 import '../models/user_profile.dart';
+import '../config/feature_flags.dart';
+import '../models/mock_live_rehearsal.dart';
+import '../data/mock_live_rehearsals.dart';
+import '../services/mock_rehearsal_audio_controller.dart';
 
 class GigMapPage extends StatefulWidget {
   const GigMapPage({super.key});
@@ -15,12 +19,16 @@ class GigMapPage extends StatefulWidget {
   State<GigMapPage> createState() => _GigMapPageState();
 }
 
-class _GigMapPageState extends State<GigMapPage> {
+class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
   GoogleMapController? _mapController;
   List<SubRequest> _allGigs = [];
   bool _isLoading = true;
   String _selectedFilter = 'All';
   SubRequest? _selectedGig;
+
+  // Prototype Mock Live Rehearsal Audio State
+  MockRehearsalAudioController? _audioController;
+  MockLiveRehearsal? _selectedRehearsal;
 
   static const String _darkMapStyle = '''
 [
@@ -145,6 +153,30 @@ class _GigMapPageState extends State<GigMapPage> {
   void initState() {
     super.initState();
     _fetchGigs();
+    if (FeatureFlags.enableMockLiveRehearsals) {
+      WidgetsBinding.instance.addObserver(this);
+      _audioController = MockRehearsalAudioController();
+      _audioController!.initialize();
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (!FeatureFlags.enableMockLiveRehearsals || _audioController == null) return;
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+      _audioController!.pauseAudio();
+    } else if (state == AppLifecycleState.resumed) {
+      _audioController!.resumeAudio();
+    }
+  }
+
+  @override
+  void dispose() {
+    if (FeatureFlags.enableMockLiveRehearsals) {
+      WidgetsBinding.instance.removeObserver(this);
+      _audioController?.dispose();
+    }
+    super.dispose();
   }
 
   Future<void> _fetchGigs() async {
@@ -283,7 +315,7 @@ class _GigMapPageState extends State<GigMapPage> {
   }
 
   Set<Marker> _buildMarkers(List<SubRequest> filteredGigs) {
-    return filteredGigs.map((gig) {
+    final gigMarkers = filteredGigs.map((gig) {
       return Marker(
         markerId: MarkerId(gig.id ?? gig.subRequestId ?? UniqueKey().toString()),
         position: LatLng(gig.latitude!, gig.longitude!),
@@ -291,10 +323,35 @@ class _GigMapPageState extends State<GigMapPage> {
         onTap: () {
           setState(() {
             _selectedGig = gig;
+            _selectedRehearsal = null;
           });
         },
       );
     }).toSet();
+
+    if (!FeatureFlags.enableMockLiveRehearsals) {
+      return gigMarkers;
+    }
+
+    final rehearsalMarkers = mockLiveRehearsals.map((rehearsal) {
+      return Marker(
+        markerId: MarkerId(rehearsal.id),
+        position: rehearsal.position,
+        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueMagenta),
+        infoWindow: InfoWindow(
+          title: rehearsal.bandName,
+          snippet: 'LIVE rehearsal · ${rehearsal.city}',
+        ),
+        onTap: () {
+          setState(() {
+            _selectedRehearsal = rehearsal;
+            _selectedGig = null;
+          });
+        },
+      );
+    }).toSet();
+
+    return {...gigMarkers, ...rehearsalMarkers};
   }
 
   @override
@@ -343,15 +400,29 @@ class _GigMapPageState extends State<GigMapPage> {
                     onMapCreated: (controller) {
                       _mapController = controller;
                       _mapController?.setMapStyle(_darkMapStyle);
+                      if (FeatureFlags.enableMockLiveRehearsals) {
+                        _audioController?.updateCameraTarget(const LatLng(59.3293, 18.0686), immediate: true);
+                      }
+                    },
+                    onCameraMove: (position) {
+                      if (FeatureFlags.enableMockLiveRehearsals) {
+                        _audioController?.updateCameraTarget(position.target);
+                      }
+                    },
+                    onCameraIdle: () {
+                      if (FeatureFlags.enableMockLiveRehearsals && _mapController != null) {
+                        _mapController?.getVisibleRegion();
+                      }
                     },
                     markers: markers,
                     mapToolbarEnabled: false,
                     zoomControlsEnabled: false,
                     myLocationButtonEnabled: false,
                     onTap: (_) {
-                      // Deselect gig on tapping map empty space
+                      // Deselect gig and rehearsal on tapping map empty space
                       setState(() {
                         _selectedGig = null;
+                        _selectedRehearsal = null;
                       });
                     },
                   ),
@@ -375,8 +446,209 @@ class _GigMapPageState extends State<GigMapPage> {
               ),
             ),
 
-            // Bottom drawer details card
+            // Audio Controls Overlay
+            _buildAudioControlsOverlay(),
+
+            // Bottom drawer details card for Gigs
             if (_selectedGig != null) _buildBottomCard(_selectedGig!, appState),
+
+            // Bottom drawer details card for Mock Live Rehearsals
+            if (_selectedRehearsal != null) _buildRehearsalBottomCard(_selectedRehearsal!),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAudioControlsOverlay() {
+    if (!FeatureFlags.enableMockLiveRehearsals || _audioController == null) {
+      return const SizedBox.shrink();
+    }
+
+    return Positioned(
+      top: 68,
+      right: 16,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          ValueListenableBuilder<bool>(
+            valueListenable: _audioController!.webAutoplayBlockedNotifier,
+            builder: (context, isBlocked, _) {
+              if (!isBlocked) return const SizedBox.shrink();
+              return Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.warning,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  ),
+                  icon: const Icon(Icons.volume_up_rounded, color: Colors.black, size: 16),
+                  label: Text(
+                    'Enable rehearsal audio',
+                    style: GoogleFonts.inter(color: Colors.black, fontSize: 12, fontWeight: FontWeight.bold),
+                  ),
+                  onPressed: () {
+                    _audioController?.enableWebAudio();
+                  },
+                ),
+              );
+            },
+          ),
+          ValueListenableBuilder<bool>(
+            valueListenable: _audioController!.isMutedNotifier,
+            builder: (context, isMuted, _) {
+              return Tooltip(
+                message: isMuted ? 'Unmute Live Rehearsals' : 'Mute Live Rehearsals',
+                child: GestureDetector(
+                  onTap: () {
+                    _audioController?.toggleMute();
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: AppTheme.cardBackground.withOpacity(0.9),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: isMuted ? AppTheme.danger : AppTheme.primaryAccent,
+                        width: 1.2,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.3),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        )
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          isMuted ? Icons.volume_off_rounded : Icons.volume_up_rounded,
+                          color: isMuted ? AppTheme.danger : AppTheme.primaryAccent,
+                          size: 16,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          isMuted ? 'Muted' : 'Live Audio',
+                          style: GoogleFonts.inter(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRehearsalBottomCard(MockLiveRehearsal rehearsal) {
+    final dist = _audioController?.distancesKm[rehearsal.id];
+    final distStr = dist != null && dist.isFinite ? '${dist.toStringAsFixed(0)} km away' : '';
+
+    return Positioned(
+      bottom: 20,
+      left: 16,
+      right: 16,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppTheme.cardBackground.withOpacity(0.95),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.purpleAccent.withOpacity(0.5), width: 1.5),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.4),
+              blurRadius: 15,
+              offset: const Offset(0, 5),
+            )
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.purpleAccent.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.purpleAccent.withOpacity(0.4)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.sensors_rounded, color: Colors.purpleAccent, size: 14),
+                      const SizedBox(width: 6),
+                      Text(
+                        'LIVE REHEARSAL',
+                        style: GoogleFonts.inter(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1.0,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close_rounded, color: AppTheme.textSecondary, size: 20),
+                  onPressed: () {
+                    setState(() {
+                      _selectedRehearsal = null;
+                    });
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              rehearsal.bandName,
+              style: GoogleFonts.outfit(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                const Icon(Icons.location_on_outlined, color: AppTheme.textSecondary, size: 14),
+                const SizedBox(width: 4),
+                Text(
+                  '${rehearsal.city}${distStr.isNotEmpty ? " · $distStr" : ""}',
+                  style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
+                ),
+                const SizedBox(width: 12),
+                const Icon(Icons.music_note_rounded, color: AppTheme.primaryAccent, size: 14),
+                const SizedBox(width: 4),
+                Text(
+                  rehearsal.genre,
+                  style: GoogleFonts.inter(fontSize: 12, color: AppTheme.primaryAccent),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'Broadcasting live rehearsal audio continuously for prototype testing.',
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                color: Colors.white70,
+                height: 1.3,
+              ),
+            ),
           ],
         ),
       ),
@@ -391,7 +663,8 @@ class _GigMapPageState extends State<GigMapPage> {
         onTap: () {
           setState(() {
             _selectedFilter = label;
-            _selectedGig = null; // Clear details card when switching filter
+            _selectedGig = null;
+            _selectedRehearsal = null;
           });
         },
         child: Container(

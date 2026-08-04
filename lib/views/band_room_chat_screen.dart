@@ -1584,7 +1584,8 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
       (m) => m.userId == selfId,
       orElse: () => BandMember(role: 'Member'),
     );
-    final isLeaderOrAdmin = currentMember.role == 'Leader' || currentMember.role == 'Admin';
+    final roleStr = (currentMember.role ?? _activeBand?.userRole ?? '').toLowerCase();
+    final isLeaderOrAdmin = roleStr.contains('leader') || roleStr.contains('admin');
 
     return Column(
       children: [
@@ -1621,6 +1622,10 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
             itemCount: _members.length,
             itemBuilder: (context, index) {
               final member = _members[index];
+              final mRoleStr = (member.role ?? '').toLowerCase();
+              final isLeaderRole = mRoleStr.contains('leader');
+              final isAdminRole = mRoleStr.contains('admin');
+
               return AnimatedTapDetector(
                 onTap: () {
                   if (member.userId != null) {
@@ -1669,20 +1674,20 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                           ],
                         ),
                       ),
-                      if (member.role == 'Leader')
+                      if (isLeaderRole || isAdminRole)
                         Container(
+                          margin: const EdgeInsets.only(right: 8),
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                           decoration: BoxDecoration(
                             color: AppTheme.primaryAccent.withOpacity(0.2),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
-                            'Leader',
+                            isLeaderRole ? 'Leader' : 'Admin',
                             style: GoogleFonts.inter(fontSize: 10, color: AppTheme.primaryAccent, fontWeight: FontWeight.bold),
                           ),
                         ),
                       if (member.userId != null && member.userId != selfId) ...[
-                        const SizedBox(width: 12),
                         GestureDetector(
                           onTap: () {
                             _navigateTo1on1Chat(member.userId!, member.nickname ?? 'Member');
@@ -1700,6 +1705,24 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                             ),
                           ),
                         ),
+                        if (isLeaderOrAdmin) ...[
+                          const SizedBox(width: 8),
+                          GestureDetector(
+                            onTap: () => _confirmRemoveMember(member),
+                            child: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: AppTheme.danger.withOpacity(0.15),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.person_remove_outlined,
+                                color: AppTheme.danger,
+                                size: 18,
+                              ),
+                            ),
+                          ),
+                        ],
                       ],
                     ],
                   ),
@@ -2098,9 +2121,10 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                           (m) => m.userId == currentUserId,
                           orElse: () => BandMember(role: 'Member'),
                         );
-                        final isLeader = currentUserMember.role == 'Leader';
+                        final roleStr = (currentUserMember.role ?? _activeBand?.userRole ?? '').toLowerCase();
+                        final isLeaderOrAdmin = roleStr.contains('leader') || roleStr.contains('admin');
 
-                        if (isLeader && member.userId != currentUserId) {
+                        if (isLeaderOrAdmin && member.userId != currentUserId) {
                           return IconButton(
                             icon: const Icon(Icons.person_remove_outlined, color: AppTheme.danger, size: 20),
                             tooltip: 'Remove Member',
@@ -2130,6 +2154,7 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF0F0C20),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(
           "Remove Member",
           style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold),
@@ -2144,7 +2169,10 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
             child: const Text("Cancel", style: TextStyle(color: AppTheme.textSecondary)),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.danger),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.danger,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
             onPressed: () => Navigator.pop(context, true),
             child: const Text("Remove", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
@@ -2157,6 +2185,9 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
       try {
         await appState.firebaseService.removeBandMemberAsync(_loadedBandId!, memberUserId);
         if (mounted) {
+          setState(() {
+            _members.removeWhere((m) => m.userId == memberUserId);
+          });
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text("$name removed from band"),
