@@ -59,6 +59,46 @@ class _CreateEventPageState extends State<CreateEventPage> {
   bool _isMultipleEvents = false;
   final List<_EventDraft> _additionalEvents = [];
 
+  @override
+  void initState() {
+    super.initState();
+    _checkPermission();
+  }
+
+  void _checkPermission() async {
+    final appState = Provider.of<AppState>(context, listen: false);
+    final userId = appState.currentUserId;
+    if (userId == null) {
+      if (mounted) Navigator.pop(context);
+      return;
+    }
+    try {
+      final role = await appState.firebaseService.getUserBandRoleAsync(widget.bandId, userId);
+      if (mounted) {
+        if (role != 'Leader' && role != 'Admin') {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Access Denied: Only band Leaders and Admins can create events.'),
+              backgroundColor: AppTheme.danger,
+            ),
+          );
+          Navigator.pop(context);
+        } else {
+          setState(() {
+            _isLoadingRole = false;
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint("Error checking permission: $e");
+      if (mounted) {
+        setState(() {
+          _isLoadingRole = false;
+        });
+      }
+    }
+  }
+
   final List<String> _eventTypes = [
     'Rehearsal',
     'Concert',
