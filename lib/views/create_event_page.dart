@@ -9,6 +9,24 @@ import '../widgets/gradient_scaffold.dart';
 import '../widgets/custom_top_bar.dart';
 import '../widgets/animated_tap_detector.dart';
 
+class _EventDraft {
+  String title;
+  String eventType;
+  DateTime date;
+  TimeOfDay startTime;
+  TimeOfDay endTime;
+  String location;
+
+  _EventDraft({
+    required this.title,
+    required this.eventType,
+    required this.date,
+    required this.startTime,
+    required this.endTime,
+    required this.location,
+  });
+}
+
 class CreateEventPage extends StatefulWidget {
   final String bandId;
 
@@ -37,10 +55,9 @@ class _CreateEventPageState extends State<CreateEventPage> {
   bool _isSaving = false;
   bool _isLoadingRole = true;
 
-  // Recurring Events State
-  bool _isRecurring = false;
-  String _recurrencePattern = 'Weekly'; // 'Weekly', 'Bi-weekly', 'Daily', 'Monthly'
-  int _occurrenceCount = 3; // default 3 times (e.g. 3 tuesdays in a row)
+  // Multiple Events Batch State
+  bool _isMultipleEvents = false;
+  final List<_EventDraft> _additionalEvents = [];
 
   final List<String> _eventTypes = [
     'Rehearsal',
@@ -50,72 +67,8 @@ class _CreateEventPageState extends State<CreateEventPage> {
     'Show',
     'Recording Session',
     'Meeting',
-    'Other'
+    'Other',
   ];
-
-  DateTime _getCalculatedDate(DateTime baseDate, String pattern, int index) {
-    if (index == 0) return baseDate;
-    if (pattern == 'Daily') {
-      return baseDate.add(Duration(days: index));
-    } else if (pattern == 'Weekly') {
-      return baseDate.add(Duration(days: index * 7));
-    } else if (pattern == 'Bi-weekly') {
-      return baseDate.add(Duration(days: index * 14));
-    } else if (pattern == 'Monthly') {
-      return DateTime(baseDate.year, baseDate.month + index, baseDate.day);
-    }
-    return baseDate;
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _checkPermission();
-  }
-
-  void _checkPermission() async {
-    final appState = Provider.of<AppState>(context, listen: false);
-    final userId = appState.currentUserId;
-    if (userId == null) {
-      if (mounted) Navigator.pop(context);
-      return;
-    }
-    try {
-      final role = await appState.firebaseService.getUserBandRoleAsync(widget.bandId, userId);
-      if (mounted) {
-        if (role != 'Leader' && role != 'Admin') {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Access Denied: Only band Leaders and Admins can create events.'),
-              backgroundColor: AppTheme.danger,
-            ),
-          );
-          Navigator.pop(context);
-        } else {
-          setState(() {
-            _isLoadingRole = false;
-          });
-        }
-      }
-    } catch (e) {
-      debugPrint("Error checking permission: $e");
-      if (mounted) {
-        setState(() {
-          _isLoadingRole = false;
-        });
-      }
-    }
-  }
-
-  @override
-  void dispose() {
-    _titleController.dispose();
-    _descriptionController.dispose();
-    _locationController.dispose();
-    _notesController.dispose();
-    _customReminderController.dispose();
-    super.dispose();
-  }
 
   Future<void> _selectDate() async {
     final picked = await showDatePicker(
@@ -197,6 +150,238 @@ class _CreateEventPageState extends State<CreateEventPage> {
     }
   }
 
+  void _showEditEventDraftDialog({int? editIndex}) {
+    final isEditing = editIndex != null;
+    final draftToEdit = isEditing ? _additionalEvents[editIndex] : null;
+
+    DateTime defaultDate;
+    if (isEditing) {
+      defaultDate = draftToEdit!.date;
+    } else if (_additionalEvents.isNotEmpty) {
+      defaultDate = _additionalEvents.last.date.add(const Duration(days: 1));
+    } else {
+      defaultDate = _selectedDate.add(const Duration(days: 1));
+    }
+
+    final draftTitleController = TextEditingController(
+      text: isEditing ? draftToEdit!.title : (_titleController.text.trim().isNotEmpty ? _titleController.text.trim() : 'New Event'),
+    );
+    final draftLocationController = TextEditingController(
+      text: isEditing ? draftToEdit!.location : _locationController.text.trim(),
+    );
+    String draftType = isEditing ? draftToEdit!.eventType : 'Concert';
+    DateTime draftDate = defaultDate;
+    TimeOfDay draftStart = isEditing ? draftToEdit!.startTime : _startTime;
+    TimeOfDay draftEnd = isEditing ? draftToEdit!.endTime : _endTime;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF0F0C20),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setModalState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                left: 20,
+                right: 20,
+                top: 20,
+                bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          isEditing ? "Edit Event" : "Add Event",
+                          style: GoogleFonts.outfit(
+                            fontSize: 18,
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close, color: AppTheme.textSecondary),
+                          onPressed: () => Navigator.pop(ctx),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Event Type Dropdown
+                    DropdownButtonFormField<String>(
+                      value: draftType,
+                      dropdownColor: const Color(0xFF16132D),
+                      style: const TextStyle(color: Colors.white),
+                      decoration: const InputDecoration(labelText: 'Event Type'),
+                      items: _eventTypes.map((type) => DropdownMenuItem(value: type, child: Text(type))).toList(),
+                      onChanged: (val) {
+                        if (val != null) setModalState(() => draftType = val);
+                      },
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Event Title
+                    TextFormField(
+                      controller: draftTitleController,
+                      style: const TextStyle(color: Colors.white),
+                      decoration: const InputDecoration(labelText: 'Event Title'),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Location
+                    TextFormField(
+                      controller: draftLocationController,
+                      style: const TextStyle(color: Colors.white),
+                      decoration: const InputDecoration(
+                        labelText: 'Location (City, Country)',
+                        prefixIcon: Icon(Icons.location_on_outlined, color: AppTheme.textSecondary),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Date Picker Row
+                    InkWell(
+                      onTap: () async {
+                        final picked = await showDatePicker(
+                          context: ctx,
+                          initialDate: draftDate,
+                          firstDate: DateTime.now().subtract(const Duration(days: 365)),
+                          lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
+                        );
+                        if (picked != null) {
+                          setModalState(() => draftDate = picked);
+                        }
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF141029),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: const Color(0xFF2E2A4E)),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.calendar_today_outlined, color: AppTheme.primaryAccent, size: 18),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                DateFormat('EEEE, MMM d, yyyy').format(draftDate),
+                                style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
+                              ),
+                            ),
+                            const Icon(Icons.edit, color: AppTheme.textSecondary, size: 16),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Times Row
+                    Row(
+                      children: [
+                        Expanded(
+                          child: InkWell(
+                            onTap: () async {
+                              final picked = await showTimePicker(context: ctx, initialTime: draftStart);
+                              if (picked != null) setModalState(() => draftStart = picked);
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF141029),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: const Color(0xFF2E2A4E)),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('Start Time', style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary)),
+                                  Text(draftStart.format(ctx), style: GoogleFonts.inter(color: Colors.white, fontSize: 14)),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: InkWell(
+                            onTap: () async {
+                              final picked = await showTimePicker(context: ctx, initialTime: draftEnd);
+                              if (picked != null) setModalState(() => draftEnd = picked);
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF141029),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: const Color(0xFF2E2A4E)),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('End Time', style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary)),
+                                  Text(draftEnd.format(ctx), style: GoogleFonts.inter(color: Colors.white, fontSize: 14)),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+
+                    // Save / Add Button
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryAccent),
+                        onPressed: () {
+                          final title = draftTitleController.text.trim().isEmpty ? 'Event' : draftTitleController.text.trim();
+                          final location = draftLocationController.text.trim();
+                          final newDraft = _EventDraft(
+                            title: title,
+                            eventType: draftType,
+                            date: draftDate,
+                            startTime: draftStart,
+                            endTime: draftEnd,
+                            location: location,
+                          );
+
+                          setState(() {
+                            if (isEditing) {
+                              _additionalEvents[editIndex!] = newDraft;
+                            } else {
+                              _additionalEvents.add(newDraft);
+                            }
+                          });
+
+                          Navigator.pop(ctx);
+                        },
+                        child: Text(
+                          isEditing ? "Save Changes" : "Add Event",
+                          style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   void _saveEvent() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -210,25 +395,37 @@ class _CreateEventPageState extends State<CreateEventPage> {
           _reminderIntervalHours = parsed;
         }
       }
-      final totalEvents = _isRecurring ? _occurrenceCount : 1;
 
-      for (int i = 0; i < totalEvents; i++) {
-        final eventDate = _getCalculatedDate(_selectedDate, _recurrencePattern, i);
+      final allEventsToSave = <_EventDraft>[
+        _EventDraft(
+          title: _titleController.text.trim(),
+          eventType: _eventType,
+          date: _selectedDate,
+          startTime: _startTime,
+          endTime: _endTime,
+          location: _locationController.text.trim(),
+        ),
+      ];
 
+      if (_isMultipleEvents) {
+        allEventsToSave.addAll(_additionalEvents);
+      }
+
+      for (var draft in allEventsToSave) {
         final start = DateTime(
-          eventDate.year,
-          eventDate.month,
-          eventDate.day,
-          _startTime.hour,
-          _startTime.minute,
+          draft.date.year,
+          draft.date.month,
+          draft.date.day,
+          draft.startTime.hour,
+          draft.startTime.minute,
         );
 
         var end = DateTime(
-          eventDate.year,
-          eventDate.month,
-          eventDate.day,
-          _endTime.hour,
-          _endTime.minute,
+          draft.date.year,
+          draft.date.month,
+          draft.date.day,
+          draft.endTime.hour,
+          draft.endTime.minute,
         );
 
         if (end.isBefore(start)) {
@@ -238,10 +435,10 @@ class _CreateEventPageState extends State<CreateEventPage> {
         final deadline = start.subtract(Duration(hours: _reminderIntervalHours > 0 ? _reminderIntervalHours : 24));
 
         final newEvent = BandEvent(
-          title: _titleController.text.trim(),
+          title: draft.title,
           description: _descriptionController.text.trim(),
-          eventType: _eventType,
-          location: _locationController.text.trim(),
+          eventType: draft.eventType,
+          location: draft.location,
           startDateTime: start.toIso8601String(),
           endDateTime: end.toIso8601String(),
           additionalNotes: _notesController.text.trim(),
@@ -258,19 +455,20 @@ class _CreateEventPageState extends State<CreateEventPage> {
 
         if (_createEventRoom) {
           final creatorId = appState.currentUserId ?? '';
-          final dateStr = totalEvents > 1 ? ' (${DateFormat('MMM d').format(start)})' : '';
+          final dateStr = allEventsToSave.length > 1 ? ' (${DateFormat('MMM d').format(start)})' : '';
           await appState.firebaseService.createTemporaryEventRoomAsync(
             bandId: widget.bandId,
             eventId: eventId,
-            roomName: '${_titleController.text.trim()}$dateStr Chat',
+            roomName: '${draft.title}$dateStr Chat',
             createdBy: creatorId,
           );
         }
       }
 
       if (mounted) {
-        final msg = totalEvents > 1
-            ? "$totalEvents recurring events published successfully!"
+        final count = allEventsToSave.length;
+        final msg = count > 1
+            ? "$count events published successfully!"
             : "Event published successfully!";
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -508,14 +706,14 @@ class _CreateEventPageState extends State<CreateEventPage> {
                     ),
                     const SizedBox(height: 16),
 
-                    // 🔁 RECURRING / MULTI-EVENT CREATION CARD
+                    // 🔁 MULTI-EVENT BATCH CREATION CARD
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
                         color: AppTheme.cardBackground,
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                          color: _isRecurring ? AppTheme.primaryAccent.withOpacity(0.5) : const Color(0xFF2E2A4E),
+                          color: _isMultipleEvents ? AppTheme.primaryAccent.withOpacity(0.5) : const Color(0xFF2E2A4E),
                           width: 1,
                         ),
                       ),
@@ -531,7 +729,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                                   children: [
                                     Row(
                                       children: [
-                                        const Icon(Icons.repeat_rounded, color: AppTheme.primaryAccent, size: 20),
+                                        const Icon(Icons.style_rounded, color: AppTheme.primaryAccent, size: 20),
                                         const SizedBox(width: 8),
                                         Text(
                                           'Create Multiple Events',
@@ -545,161 +743,177 @@ class _CreateEventPageState extends State<CreateEventPage> {
                                     ),
                                     const SizedBox(height: 4),
                                     Text(
-                                      'Repeat this event over multiple days/weeks (e.g. 3 Tuesdays in a row).',
-                                      style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary),
+                                      'Example: 1 rehearsal and 2 concerts, 2 shows, 3 days of Recording Session, etc',
+                                      style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary, height: 1.3),
                                     ),
                                   ],
                                 ),
                               ),
                               Switch(
-                                value: _isRecurring,
+                                value: _isMultipleEvents,
                                 activeColor: AppTheme.primaryAccent,
                                 onChanged: (val) {
                                   setState(() {
-                                    _isRecurring = val;
+                                    _isMultipleEvents = val;
                                   });
                                 },
                               ),
                             ],
                           ),
-                          if (_isRecurring) ...[
+                          if (_isMultipleEvents) ...[
                             const SizedBox(height: 16),
                             const Divider(color: Color(0xFF2E2A4E)),
                             const SizedBox(height: 12),
+
                             Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                // Frequency Dropdown
-                                Expanded(
-                                  flex: 3,
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        'Frequency',
-                                        style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      DropdownButtonFormField<String>(
-                                        value: _recurrencePattern,
-                                        dropdownColor: const Color(0xFF16132D),
-                                        style: GoogleFonts.inter(color: Colors.white, fontSize: 13),
-                                        decoration: const InputDecoration(
-                                          contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                                          border: OutlineInputBorder(),
-                                        ),
-                                        items: const [
-                                          DropdownMenuItem(value: 'Weekly', child: Text('Weekly')),
-                                          DropdownMenuItem(value: 'Bi-weekly', child: Text('Bi-weekly')),
-                                          DropdownMenuItem(value: 'Daily', child: Text('Daily')),
-                                          DropdownMenuItem(value: 'Monthly', child: Text('Monthly')),
-                                        ],
-                                        onChanged: (val) {
-                                          if (val != null) {
-                                            setState(() => _recurrencePattern = val);
-                                          }
-                                        },
-                                      ),
-                                    ],
+                                Text(
+                                  'Generated Dates, Summary',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppTheme.primaryAccent,
                                   ),
                                 ),
-                                const SizedBox(width: 12),
-
-                                // Number of Times Dropdown
-                                Expanded(
-                                  flex: 2,
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        'Occurrences',
-                                        style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      DropdownButtonFormField<int>(
-                                        value: _occurrenceCount,
-                                        dropdownColor: const Color(0xFF16132D),
-                                        style: GoogleFonts.inter(color: Colors.white, fontSize: 13),
-                                        decoration: const InputDecoration(
-                                          contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                                          border: OutlineInputBorder(),
-                                        ),
-                                        items: [2, 3, 4, 5, 6, 8, 10, 12].map((num) {
-                                          return DropdownMenuItem<int>(
-                                            value: num,
-                                            child: Text('$num times'),
-                                          );
-                                        }).toList(),
-                                        onChanged: (val) {
-                                          if (val != null) {
-                                            setState(() => _occurrenceCount = val);
-                                          }
-                                        },
-                                      ),
-                                    ],
-                                  ),
+                                Text(
+                                  '${1 + _additionalEvents.length} events',
+                                  style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary),
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 14),
+                            const SizedBox(height: 12),
 
-                            // Dynamic Dates Preview Box
+                            // Event 1 (Primary Event Card)
                             Container(
+                              margin: const EdgeInsets.only(bottom: 8),
                               padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
                                 color: const Color(0xFF141029),
                                 borderRadius: BorderRadius.circular(10),
-                                border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.3)),
+                                border: Border.all(color: const Color(0xFF2E2A4E)),
                               ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                              child: Row(
                                 children: [
-                                  Row(
-                                    children: [
-                                      const Icon(Icons.date_range_rounded, size: 14, color: AppTheme.primaryAccent),
-                                      const SizedBox(width: 6),
-                                      Text(
-                                        'Generated Dates Preview ($_occurrenceCount events):',
-                                        style: GoogleFonts.inter(
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.bold,
-                                          color: AppTheme.primaryAccent,
-                                        ),
-                                      ),
-                                    ],
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: AppTheme.primaryAccent.withOpacity(0.2),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      _eventType,
+                                      style: GoogleFonts.inter(fontSize: 11, color: Colors.white, fontWeight: FontWeight.bold),
+                                    ),
                                   ),
-                                  const SizedBox(height: 8),
-                                  ...List.generate(_occurrenceCount, (index) {
-                                    final dt = _getCalculatedDate(_selectedDate, _recurrencePattern, index);
-                                    final dateStr = DateFormat('EEEE, MMM d, yyyy').format(dt);
-                                    final timeStr = '${_startTime.format(context)} - ${_endTime.format(context)}';
-                                    return Padding(
-                                      padding: const EdgeInsets.only(bottom: 4),
-                                      child: Row(
-                                        children: [
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          _titleController.text.trim().isEmpty ? 'Event 1 (Main)' : _titleController.text.trim(),
+                                          style: GoogleFonts.inter(fontSize: 13, color: Colors.white, fontWeight: FontWeight.bold),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          '${DateFormat('EEEE, MMM d').format(_selectedDate)} (${_startTime.format(context)} - ${_endTime.format(context)})',
+                                          style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary),
+                                        ),
+                                        if (_locationController.text.trim().isNotEmpty)
                                           Text(
-                                            'Event ${index + 1}: ',
-                                            style: GoogleFonts.inter(
-                                              fontSize: 11,
-                                              fontWeight: FontWeight.bold,
-                                              color: Colors.white70,
-                                            ),
+                                            '@ ${_locationController.text.trim()}',
+                                            style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary),
                                           ),
-                                          Expanded(
-                                            child: Text(
-                                              '$dateStr ($timeStr)',
-                                              style: GoogleFonts.inter(
-                                                fontSize: 11,
-                                                color: Colors.white,
-                                              ),
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    );
-                                  }),
+                                      ],
+                                    ),
+                                  ),
+                                  const Tooltip(
+                                    message: 'Primary event (edit fields above)',
+                                    child: Icon(Icons.info_outline, size: 16, color: AppTheme.textSecondary),
+                                  ),
                                 ],
                               ),
+                            ),
+
+                            // Additional Events List Cards
+                            ...List.generate(_additionalEvents.length, (index) {
+                              final draft = _additionalEvents[index];
+                              return Container(
+                                margin: const EdgeInsets.only(bottom: 8),
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF141029),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.3)),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: Colors.amber.withOpacity(0.2),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: Text(
+                                        draft.eventType,
+                                        style: GoogleFonts.inter(fontSize: 11, color: Colors.amber, fontWeight: FontWeight.bold),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            draft.title,
+                                            style: GoogleFonts.inter(fontSize: 13, color: Colors.white, fontWeight: FontWeight.bold),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            '${DateFormat('EEEE, MMM d').format(draft.date)} (${draft.startTime.format(context)} - ${draft.endTime.format(context)})',
+                                            style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary),
+                                          ),
+                                          if (draft.location.isNotEmpty)
+                                            Text(
+                                              '@ ${draft.location}',
+                                              style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary),
+                                            ),
+                                        ],
+                                      ),
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.edit_outlined, color: AppTheme.primaryAccent, size: 18),
+                                      onPressed: () => _showEditEventDraftDialog(editIndex: index),
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.delete_outline, color: AppTheme.danger, size: 18),
+                                      onPressed: () {
+                                        setState(() {
+                                          _additionalEvents.removeAt(index);
+                                        });
+                                      },
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }),
+
+                            const SizedBox(height: 8),
+
+                            // "+ Add Event" Button
+                            OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(
+                                side: const BorderSide(color: AppTheme.primaryAccent),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                minimumSize: const Size(double.infinity, 44),
+                              ),
+                              icon: const Icon(Icons.add_circle_outline, color: AppTheme.primaryAccent, size: 18),
+                              label: Text(
+                                "+ Add Event",
+                                style: GoogleFonts.inter(color: AppTheme.primaryAccent, fontWeight: FontWeight.bold, fontSize: 13),
+                              ),
+                              onPressed: () => _showEditEventDraftDialog(),
                             ),
                           ],
                         ],
@@ -762,11 +976,11 @@ class _CreateEventPageState extends State<CreateEventPage> {
                               border: OutlineInputBorder(),
                             ),
                             items: const [
+                              DropdownMenuItem(value: -1, child: Text('Set hours...')),
                               DropdownMenuItem(value: 48, child: Text('48 hours (From event is published)')),
                               DropdownMenuItem(value: 24, child: Text('24 hours (From event is published)')),
                               DropdownMenuItem(value: 12, child: Text('12 hours (From event is published)')),
                               DropdownMenuItem(value: 0, child: Text('No automatic Reminders')),
-                              DropdownMenuItem(value: -1, child: Text('Custom hours...')),
                             ],
                             onChanged: (val) {
                               if (val != null) {
@@ -894,7 +1108,9 @@ class _CreateEventPageState extends State<CreateEventPage> {
                         ),
                         child: Center(
                           child: Text(
-                            _isRecurring ? "Publish $_occurrenceCount Events" : "Publish Event",
+                            (_isMultipleEvents && _additionalEvents.isNotEmpty)
+                                ? "Publish ${1 + _additionalEvents.length} Events"
+                                : "Publish Event",
                             style: GoogleFonts.inter(
                               color: Colors.white,
                               fontSize: 16,
