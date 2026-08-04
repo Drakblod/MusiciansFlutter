@@ -75,6 +75,7 @@ flutter:
   assets:
     - assets/images/header_base.png
     - assets/images/header_m.png
+    - assets/audio/
 
   # To add assets to your application, add an assets section, like this:
   # assets:
