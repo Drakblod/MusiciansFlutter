@@ -1625,6 +1625,7 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
               final mRoleStr = (member.role ?? '').toLowerCase();
               final isLeaderRole = mRoleStr.contains('leader');
               final isAdminRole = mRoleStr.contains('admin');
+              final isMODRole = mRoleStr.contains('mod');
 
               return AnimatedTapDetector(
                 onTap: () {
@@ -1674,17 +1675,22 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                           ],
                         ),
                       ),
-                      if (isLeaderRole || isAdminRole)
+                      if (isLeaderRole || isAdminRole || isMODRole)
                         Container(
                           margin: const EdgeInsets.only(right: 8),
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                           decoration: BoxDecoration(
-                            color: AppTheme.primaryAccent.withOpacity(0.2),
+                            color: isMODRole ? Colors.purple.withOpacity(0.2) : AppTheme.primaryAccent.withOpacity(0.2),
                             borderRadius: BorderRadius.circular(8),
+                            border: isMODRole ? Border.all(color: Colors.purple.withOpacity(0.4)) : null,
                           ),
                           child: Text(
-                            isLeaderRole ? 'Leader' : 'Admin',
-                            style: GoogleFonts.inter(fontSize: 10, color: AppTheme.primaryAccent, fontWeight: FontWeight.bold),
+                            isLeaderRole ? 'Leader' : isAdminRole ? 'Admin' : 'MOD',
+                            style: GoogleFonts.inter(
+                              fontSize: 10,
+                              color: isMODRole ? Colors.purpleAccent : AppTheme.primaryAccent,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
                       if (member.userId != null && member.userId != selfId) ...[
@@ -1706,7 +1712,59 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                           ),
                         ),
                         if (isLeaderOrAdmin) ...[
-                          const SizedBox(width: 8),
+                          const SizedBox(width: 4),
+                          PopupMenuButton<String>(
+                            icon: const Icon(Icons.shield_outlined, color: AppTheme.primaryAccent, size: 20),
+                            tooltip: 'Change Member Role',
+                            color: const Color(0xFF16132D),
+                            onSelected: (newRole) async {
+                              if (bandId != null && member.userId != null) {
+                                await appState.firebaseService.updateBandMemberRoleAsync(bandId, member.userId!, newRole);
+                                await _initBand(bandId);
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('${member.nickname ?? "Member"}\'s role updated to $newRole'),
+                                      backgroundColor: AppTheme.success,
+                                    ),
+                                  );
+                                }
+                              }
+                            },
+                            itemBuilder: (context) => [
+                              const PopupMenuItem(
+                                value: 'Member',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.person_outline, color: Colors.white, size: 16),
+                                    SizedBox(width: 8),
+                                    Text('Set as Member', style: TextStyle(color: Colors.white)),
+                                  ],
+                                ),
+                              ),
+                              const PopupMenuItem(
+                                value: 'MOD',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.security_rounded, color: Colors.purpleAccent, size: 16),
+                                    SizedBox(width: 8),
+                                    Text('Set as MOD', style: TextStyle(color: Colors.purpleAccent)),
+                                  ],
+                                ),
+                              ),
+                              const PopupMenuItem(
+                                value: 'Leader',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.star_outline_rounded, color: AppTheme.primaryAccent, size: 16),
+                                    SizedBox(width: 8),
+                                    Text('Set as Leader', style: TextStyle(color: AppTheme.primaryAccent)),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(width: 4),
                           GestureDetector(
                             onTap: () => _confirmRemoveMember(member),
                             child: Container(
@@ -2369,7 +2427,7 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                             borderRadius: BorderRadius.circular(4),
                           ),
                           child: Text(
-                            isUpcoming ? 'UPCOMING EVENT' : 'PAST EVENT',
+                            isUpcoming ? 'NEW EVENT' : 'PAST EVENT',
                             style: GoogleFonts.inter(
                               fontSize: 9,
                               fontWeight: FontWeight.bold,
@@ -2924,11 +2982,8 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
     }
 
     final selfId = appState.currentUserId;
-    final currentMember = _members.firstWhere(
-      (m) => m.userId == selfId,
-      orElse: () => BandMember(role: 'Member'),
-    );
-    final isLeaderOrAdmin = currentMember.role == 'Leader' || currentMember.role == 'Admin';
+    final cRole = (currentMember.role ?? '').toLowerCase();
+    final isLeaderAdminOrMod = cRole.contains('leader') || cRole.contains('admin') || cRole.contains('mod');
 
     // Separate upcoming and past events
     final now = DateTime.now();
@@ -2960,8 +3015,8 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
 
     return Column(
       children: [
-        // Create Event Button for Leaders/Admins
-        if (isLeaderOrAdmin)
+        // Create Event Button for Leaders/Admins/MODs
+        if (isLeaderAdminOrMod)
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: AnimatedTapDetector(
@@ -2986,7 +3041,7 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                       Icon(Icons.add_circle_outline, color: Colors.white),
                       SizedBox(width: 8),
                       Text(
-                        "Create Event",
+                        "Create New Event",
                         style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                       ),
                     ],
@@ -3011,7 +3066,7 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                       Padding(
                         padding: const EdgeInsets.only(top: 8, bottom: 12),
                         child: Text(
-                          "UPCOMING EVENTS",
+                          "NEW EVENTS",
                           style: GoogleFonts.outfit(
                             fontSize: 12,
                             fontWeight: FontWeight.bold,
