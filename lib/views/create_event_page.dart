@@ -1077,8 +1077,8 @@ class _CreateEventPageState extends State<CreateEventPage> {
                               keyboardType: TextInputType.number,
                               style: const TextStyle(color: Colors.white),
                               decoration: const InputDecoration(
-                                labelText: 'Custom Reminder Hours',
-                                hintText: 'e.g. 36, 72, 96',
+                                labelText: 'Set hours here',
+                                hintText: 'e.g. 48, 24, 12',
                                 prefixIcon: Icon(Icons.timer_outlined, color: AppTheme.textSecondary),
                                 suffixText: 'hours',
                                 suffixStyle: TextStyle(color: AppTheme.textSecondary),
@@ -1086,7 +1086,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                               validator: (value) {
                                 if (_isCustomReminderHours) {
                                   if (value == null || value.trim().isEmpty) {
-                                    return 'Please enter custom reminder hours';
+                                    return 'Please enter response window in hours';
                                   }
                                   final parsed = int.tryParse(value.trim());
                                   if (parsed == null || parsed < 0) {
