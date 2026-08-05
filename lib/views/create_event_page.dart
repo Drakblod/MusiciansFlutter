@@ -16,6 +16,7 @@ class _EventDraft {
   TimeOfDay startTime;
   TimeOfDay endTime;
   String location;
+  String description;
 
   _EventDraft({
     required this.title,
@@ -24,6 +25,7 @@ class _EventDraft {
     required this.startTime,
     required this.endTime,
     required this.location,
+    this.description = '',
   });
 }
 
@@ -223,6 +225,9 @@ class _CreateEventPageState extends State<CreateEventPage> {
     final draftLocationController = TextEditingController(
       text: isEditing ? draftToEdit!.location : _locationController.text.trim(),
     );
+    final draftDescriptionController = TextEditingController(
+      text: isEditing ? draftToEdit!.description : '',
+    );
     String draftType = isEditing ? draftToEdit!.eventType : 'Concert';
     DateTime draftDate = defaultDate;
     TimeOfDay draftStart = isEditing ? draftToEdit!.startTime : _startTime;
@@ -297,6 +302,18 @@ class _CreateEventPageState extends State<CreateEventPage> {
                       decoration: const InputDecoration(
                         labelText: 'Location (City, Country)',
                         prefixIcon: Icon(Icons.location_on_outlined, color: AppTheme.textSecondary),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Description
+                    TextFormField(
+                      controller: draftDescriptionController,
+                      style: const TextStyle(color: Colors.white),
+                      maxLines: 2,
+                      decoration: const InputDecoration(
+                        labelText: 'Description (Optional)',
+                        hintText: 'e.g. Warmup rehearsal, Tutti, Soundcheck',
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -401,6 +418,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                         onPressed: () {
                           final title = draftTitleController.text.trim().isEmpty ? 'Event' : draftTitleController.text.trim();
                           final location = draftLocationController.text.trim();
+                          final description = draftDescriptionController.text.trim();
                           final newDraft = _EventDraft(
                             title: title,
                             eventType: draftType,
@@ -408,6 +426,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                             startTime: draftStart,
                             endTime: draftEnd,
                             location: location,
+                            description: description,
                           );
 
                           setState(() {
@@ -458,6 +477,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
           startTime: _startTime,
           endTime: _endTime,
           location: _locationController.text.trim(),
+          description: _descriptionController.text.trim(),
         ),
       ];
 
@@ -490,7 +510,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
 
         final newEvent = BandEvent(
           title: draft.title,
-          description: _descriptionController.text.trim(),
+          description: draft.description.isNotEmpty ? draft.description : _descriptionController.text.trim(),
           eventType: draft.eventType,
           location: draft.location,
           startDateTime: start.toIso8601String(),
@@ -900,6 +920,15 @@ class _CreateEventPageState extends State<CreateEventPage> {
                                             '@ ${_locationController.text.trim()}',
                                             style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary),
                                           ),
+                                        if (_descriptionController.text.trim().isNotEmpty) ...[
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            _descriptionController.text.trim(),
+                                            style: GoogleFonts.inter(fontSize: 11, color: Colors.white70),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ],
                                       ],
                                     ),
                                   ),
@@ -911,72 +940,85 @@ class _CreateEventPageState extends State<CreateEventPage> {
                               ),
                             ),
 
-                            // Additional Events List Cards
+                            // Additional Events List Cards (Fully Clickable)
                             ...List.generate(_additionalEvents.length, (index) {
                               final draft = _additionalEvents[index];
-                              return Container(
-                                margin: const EdgeInsets.only(bottom: 8),
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF141029),
-                                  borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.3)),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                      decoration: BoxDecoration(
-                                        color: Colors.amber.withOpacity(0.2),
-                                        borderRadius: BorderRadius.circular(6),
+                              return GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onTap: () => _showEditEventDraftDialog(editIndex: index),
+                                child: Container(
+                                  margin: const EdgeInsets.only(bottom: 8),
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF141029),
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.3)),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: Colors.amber.withOpacity(0.2),
+                                          borderRadius: BorderRadius.circular(6),
+                                        ),
+                                        child: Text(
+                                          draft.eventType,
+                                          style: GoogleFonts.inter(fontSize: 11, color: Colors.amber, fontWeight: FontWeight.bold),
+                                        ),
                                       ),
-                                      child: Text(
-                                        draft.eventType,
-                                        style: GoogleFonts.inter(fontSize: 11, color: Colors.amber, fontWeight: FontWeight.bold),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 10),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            draft.title,
-                                            style: GoogleFonts.inter(fontSize: 13, color: Colors.white, fontWeight: FontWeight.bold),
-                                          ),
-                                          const SizedBox(height: 2),
-                                          Text(
-                                            '${DateFormat('EEEE, MMM d').format(draft.date)} (${draft.startTime.format(context)} - ${draft.endTime.format(context)})',
-                                            style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary),
-                                          ),
-                                          if (draft.location.isNotEmpty)
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
                                             Text(
-                                              '@ ${draft.location}',
+                                              draft.title,
+                                              style: GoogleFonts.inter(fontSize: 13, color: Colors.white, fontWeight: FontWeight.bold),
+                                            ),
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              '${DateFormat('EEEE, MMM d').format(draft.date)} (${draft.startTime.format(context)} - ${draft.endTime.format(context)})',
                                               style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary),
                                             ),
-                                        ],
+                                            if (draft.location.isNotEmpty)
+                                              Text(
+                                                '@ ${draft.location}',
+                                                style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary),
+                                              ),
+                                            if (draft.description.isNotEmpty) ...[
+                                              const SizedBox(height: 2),
+                                              Text(
+                                                draft.description,
+                                                style: GoogleFonts.inter(fontSize: 11, color: Colors.white70),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ],
+                                          ],
+                                        ),
                                       ),
-                                    ),
-                                    IconButton(
-                                      icon: const Icon(Icons.edit_outlined, color: AppTheme.primaryAccent, size: 18),
-                                      onPressed: () => _showEditEventDraftDialog(editIndex: index),
-                                    ),
-                                    IconButton(
-                                      icon: const Icon(Icons.delete_outline, color: AppTheme.danger, size: 18),
-                                      onPressed: () {
-                                        setState(() {
-                                          _additionalEvents.removeAt(index);
-                                        });
-                                      },
-                                    ),
-                                  ],
+                                      IconButton(
+                                        icon: const Icon(Icons.edit_outlined, color: AppTheme.primaryAccent, size: 18),
+                                        onPressed: () => _showEditEventDraftDialog(editIndex: index),
+                                      ),
+                                      IconButton(
+                                        icon: const Icon(Icons.delete_outline, color: AppTheme.danger, size: 18),
+                                        onPressed: () {
+                                          setState(() {
+                                            _additionalEvents.removeAt(index);
+                                          });
+                                        },
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               );
                             }),
 
                             const SizedBox(height: 8),
 
-                            // "+ Add Event" Button
+                            // "+ Add Tour Date / Event" Button
                             OutlinedButton.icon(
                               style: OutlinedButton.styleFrom(
                                 side: const BorderSide(color: AppTheme.primaryAccent),
@@ -985,7 +1027,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                               ),
                               icon: const Icon(Icons.add_circle_outline, color: AppTheme.primaryAccent, size: 18),
                               label: Text(
-                                "+ Add Event",
+                                "+ Add Tour Date / Event",
                                 style: GoogleFonts.inter(color: AppTheme.primaryAccent, fontWeight: FontWeight.bold, fontSize: 13),
                               ),
                               onPressed: () => _showEditEventDraftDialog(),
