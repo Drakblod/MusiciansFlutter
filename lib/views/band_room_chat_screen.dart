@@ -2982,6 +2982,10 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
     }
 
     final selfId = appState.currentUserId;
+    final currentMember = _members.firstWhere(
+      (m) => m.userId == selfId,
+      orElse: () => BandMember(role: 'Member'),
+    );
     final cRole = (currentMember.role ?? '').toLowerCase();
     final isLeaderAdminOrMod = cRole.contains('leader') || cRole.contains('admin') || cRole.contains('mod');
 
