@@ -1315,6 +1315,10 @@ class FirebaseService {
     await _dbRef('bandconversations/$bandId/members/$userId').remove();
   }
 
+  Future<void> updateBandMemberRoleAsync(String bandId, String userId, String newRole) async {
+    await _dbRef('Bands/$bandId/Members_band/$userId/Role').set(newRole);
+  }
+
   Future<void> postGigsNewsAsync(String bandId, Map<String, dynamic> data) async {
     final ref = _dbRef('Bands/$bandId/GigsNews').push();
     final updatedData = {

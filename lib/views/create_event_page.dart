@@ -16,6 +16,7 @@ class _EventDraft {
   TimeOfDay startTime;
   TimeOfDay endTime;
   String location;
+  String description;
 
   _EventDraft({
     required this.title,
@@ -24,6 +25,7 @@ class _EventDraft {
     required this.startTime,
     required this.endTime,
     required this.location,
+    this.description = '',
   });
 }
 
@@ -43,6 +45,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
   final _locationController = TextEditingController();
   final _notesController = TextEditingController();
   final _customReminderController = TextEditingController();
+  final _otherEventTypeController = TextEditingController();
 
   String _eventType = 'Rehearsal';
   DateTime _selectedDate = DateTime.now().add(const Duration(days: 1));
@@ -65,6 +68,17 @@ class _CreateEventPageState extends State<CreateEventPage> {
     _checkPermission();
   }
 
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _descriptionController.dispose();
+    _locationController.dispose();
+    _notesController.dispose();
+    _customReminderController.dispose();
+    _otherEventTypeController.dispose();
+    super.dispose();
+  }
+
   void _checkPermission() async {
     final appState = Provider.of<AppState>(context, listen: false);
     final userId = appState.currentUserId;
@@ -74,11 +88,12 @@ class _CreateEventPageState extends State<CreateEventPage> {
     }
     try {
       final role = await appState.firebaseService.getUserBandRoleAsync(widget.bandId, userId);
+      final r = (role ?? '').toLowerCase();
       if (mounted) {
-        if (role != 'Leader' && role != 'Admin') {
+        if (!r.contains('leader') && !r.contains('admin') && !r.contains('mod')) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Access Denied: Only band Leaders and Admins can create events.'),
+              content: Text('Access Denied: Only band Leaders, Admins, and MODs can create events.'),
               backgroundColor: AppTheme.danger,
             ),
           );
@@ -106,6 +121,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
     'Private Event',
     'Show',
     'Recording Session',
+    'Tour',
     'Meeting',
     'Other',
   ];
@@ -209,6 +225,9 @@ class _CreateEventPageState extends State<CreateEventPage> {
     final draftLocationController = TextEditingController(
       text: isEditing ? draftToEdit!.location : _locationController.text.trim(),
     );
+    final draftDescriptionController = TextEditingController(
+      text: isEditing ? draftToEdit!.description : '',
+    );
     String draftType = isEditing ? draftToEdit!.eventType : 'Concert';
     DateTime draftDate = defaultDate;
     TimeOfDay draftStart = isEditing ? draftToEdit!.startTime : _startTime;
@@ -283,6 +302,18 @@ class _CreateEventPageState extends State<CreateEventPage> {
                       decoration: const InputDecoration(
                         labelText: 'Location (City, Country)',
                         prefixIcon: Icon(Icons.location_on_outlined, color: AppTheme.textSecondary),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Description
+                    TextFormField(
+                      controller: draftDescriptionController,
+                      style: const TextStyle(color: Colors.white),
+                      maxLines: 2,
+                      decoration: const InputDecoration(
+                        labelText: 'Description (Optional)',
+                        hintText: 'e.g. Warmup rehearsal, Tutti, Soundcheck',
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -387,6 +418,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                         onPressed: () {
                           final title = draftTitleController.text.trim().isEmpty ? 'Event' : draftTitleController.text.trim();
                           final location = draftLocationController.text.trim();
+                          final description = draftDescriptionController.text.trim();
                           final newDraft = _EventDraft(
                             title: title,
                             eventType: draftType,
@@ -394,6 +426,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                             startTime: draftStart,
                             endTime: draftEnd,
                             location: location,
+                            description: description,
                           );
 
                           setState(() {
@@ -444,6 +477,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
           startTime: _startTime,
           endTime: _endTime,
           location: _locationController.text.trim(),
+          description: _descriptionController.text.trim(),
         ),
       ];
 
@@ -476,7 +510,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
 
         final newEvent = BandEvent(
           title: draft.title,
-          description: _descriptionController.text.trim(),
+          description: draft.description.isNotEmpty ? draft.description : _descriptionController.text.trim(),
           eventType: draft.eventType,
           location: draft.location,
           startDateTime: start.toIso8601String(),
@@ -539,7 +573,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
   Widget build(BuildContext context) {
     return GradientScaffold(
       appBar: const CustomTopBar(
-        title: 'Create Event',
+        title: 'Create New Event',
         showBack: true,
       ),
       body: SafeArea(
@@ -602,6 +636,23 @@ class _CreateEventPageState extends State<CreateEventPage> {
                         }
                       },
                     ),
+                    if (_eventType == 'Other') ...[
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _otherEventTypeController,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: const InputDecoration(
+                          labelText: 'Specify Event Type',
+                          hintText: 'e.g. Workshop, Radio Show, Masterclass',
+                        ),
+                        validator: (value) {
+                          if (_eventType == 'Other' && (value == null || value.trim().isEmpty)) {
+                            return 'Please specify the event type';
+                          }
+                          return null;
+                        },
+                      ),
+                    ],
                     const SizedBox(height: 16),
 
                     // Description
@@ -634,117 +685,119 @@ class _CreateEventPageState extends State<CreateEventPage> {
                     ),
                     const SizedBox(height: 20),
 
-                    // Date & Time pickers
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: AppTheme.cardBackground,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
+                    // Date & Time pickers (Hidden when Multiple Events is ON)
+                    if (!_isMultipleEvents) ...[
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: AppTheme.cardBackground,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'DATE & TIME',
+                              style: GoogleFonts.outfit(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: AppTheme.primaryAccent,
+                                letterSpacing: 1.2,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+
+                            // Date picker trigger
+                            GestureDetector(
+                              onTap: _selectDate,
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.calendar_today_outlined, color: AppTheme.textSecondary, size: 20),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'Date',
+                                          style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          DateFormat('EEEE, MMM d, yyyy').format(_selectedDate),
+                                          style: GoogleFonts.inter(fontSize: 15, color: Colors.white, fontWeight: FontWeight.w500),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const Icon(Icons.arrow_forward_ios_rounded, color: AppTheme.textSecondary, size: 14),
+                                ],
+                              ),
+                            ),
+                            const Divider(height: 24, color: Color(0xFF2E2A4E)),
+
+                            // Start Time picker trigger
+                            GestureDetector(
+                              onTap: _selectStartTime,
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.access_time, color: AppTheme.textSecondary, size: 20),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'Start Time',
+                                          style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          _startTime.format(context),
+                                          style: GoogleFonts.inter(fontSize: 15, color: Colors.white, fontWeight: FontWeight.w500),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const Icon(Icons.arrow_forward_ios_rounded, color: AppTheme.textSecondary, size: 14),
+                                ],
+                              ),
+                            ),
+                            const Divider(height: 24, color: Color(0xFF2E2A4E)),
+
+                            // End Time picker trigger
+                            GestureDetector(
+                              onTap: _selectEndTime,
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.access_time, color: AppTheme.textSecondary, size: 20),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'End Time',
+                                          style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          _endTime.format(context),
+                                          style: GoogleFonts.inter(fontSize: 15, color: Colors.white, fontWeight: FontWeight.w500),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const Icon(Icons.arrow_forward_ios_rounded, color: AppTheme.textSecondary, size: 14),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'DATE & TIME',
-                            style: GoogleFonts.outfit(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                              color: AppTheme.primaryAccent,
-                              letterSpacing: 1.2,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-
-                          // Date picker trigger
-                          GestureDetector(
-                            onTap: _selectDate,
-                            child: Row(
-                              children: [
-                                const Icon(Icons.calendar_today_outlined, color: AppTheme.textSecondary, size: 20),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        'Date',
-                                        style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary),
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        DateFormat('EEEE, MMM d, yyyy').format(_selectedDate),
-                                        style: GoogleFonts.inter(fontSize: 15, color: Colors.white, fontWeight: FontWeight.w500),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const Icon(Icons.arrow_forward_ios_rounded, color: AppTheme.textSecondary, size: 14),
-                              ],
-                            ),
-                          ),
-                          const Divider(height: 24, color: Color(0xFF2E2A4E)),
-
-                          // Start Time picker trigger
-                          GestureDetector(
-                            onTap: _selectStartTime,
-                            child: Row(
-                              children: [
-                                const Icon(Icons.access_time, color: AppTheme.textSecondary, size: 20),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        'Start Time',
-                                        style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary),
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        _startTime.format(context),
-                                        style: GoogleFonts.inter(fontSize: 15, color: Colors.white, fontWeight: FontWeight.w500),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const Icon(Icons.arrow_forward_ios_rounded, color: AppTheme.textSecondary, size: 14),
-                              ],
-                            ),
-                          ),
-                          const Divider(height: 24, color: Color(0xFF2E2A4E)),
-
-                          // End Time picker trigger
-                          GestureDetector(
-                            onTap: _selectEndTime,
-                            child: Row(
-                              children: [
-                                const Icon(Icons.access_time, color: AppTheme.textSecondary, size: 20),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        'End Time',
-                                        style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary),
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        _endTime.format(context),
-                                        style: GoogleFonts.inter(fontSize: 15, color: Colors.white, fontWeight: FontWeight.w500),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const Icon(Icons.arrow_forward_ios_rounded, color: AppTheme.textSecondary, size: 14),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 16),
+                      const SizedBox(height: 16),
+                    ],
 
                     // 🔁 MULTI-EVENT BATCH CREATION CARD
                     Container(
@@ -842,7 +895,9 @@ class _CreateEventPageState extends State<CreateEventPage> {
                                       borderRadius: BorderRadius.circular(6),
                                     ),
                                     child: Text(
-                                      _eventType,
+                                      _eventType == 'Other' && _otherEventTypeController.text.trim().isNotEmpty
+                                          ? _otherEventTypeController.text.trim()
+                                          : _eventType,
                                       style: GoogleFonts.inter(fontSize: 11, color: Colors.white, fontWeight: FontWeight.bold),
                                     ),
                                   ),
@@ -852,7 +907,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
                                         Text(
-                                          _titleController.text.trim().isEmpty ? 'Event 1 (Main)' : _titleController.text.trim(),
+                                          _titleController.text.trim().isEmpty ? 'Event 1' : _titleController.text.trim(),
                                           style: GoogleFonts.inter(fontSize: 13, color: Colors.white, fontWeight: FontWeight.bold),
                                         ),
                                         const SizedBox(height: 2),
@@ -865,83 +920,105 @@ class _CreateEventPageState extends State<CreateEventPage> {
                                             '@ ${_locationController.text.trim()}',
                                             style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary),
                                           ),
+                                        if (_descriptionController.text.trim().isNotEmpty) ...[
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            _descriptionController.text.trim(),
+                                            style: GoogleFonts.inter(fontSize: 11, color: Colors.white70),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ],
                                       ],
                                     ),
                                   ),
                                   const Tooltip(
-                                    message: 'Primary event (edit fields above)',
+                                    message: 'Event 1',
                                     child: Icon(Icons.info_outline, size: 16, color: AppTheme.textSecondary),
                                   ),
                                 ],
                               ),
                             ),
 
-                            // Additional Events List Cards
+                            // Additional Events List Cards (Fully Clickable)
                             ...List.generate(_additionalEvents.length, (index) {
                               final draft = _additionalEvents[index];
-                              return Container(
-                                margin: const EdgeInsets.only(bottom: 8),
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF141029),
-                                  borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.3)),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                      decoration: BoxDecoration(
-                                        color: Colors.amber.withOpacity(0.2),
-                                        borderRadius: BorderRadius.circular(6),
+                              return GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onTap: () => _showEditEventDraftDialog(editIndex: index),
+                                child: Container(
+                                  margin: const EdgeInsets.only(bottom: 8),
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF141029),
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.3)),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: Colors.amber.withOpacity(0.2),
+                                          borderRadius: BorderRadius.circular(6),
+                                        ),
+                                        child: Text(
+                                          draft.eventType,
+                                          style: GoogleFonts.inter(fontSize: 11, color: Colors.amber, fontWeight: FontWeight.bold),
+                                        ),
                                       ),
-                                      child: Text(
-                                        draft.eventType,
-                                        style: GoogleFonts.inter(fontSize: 11, color: Colors.amber, fontWeight: FontWeight.bold),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 10),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            draft.title,
-                                            style: GoogleFonts.inter(fontSize: 13, color: Colors.white, fontWeight: FontWeight.bold),
-                                          ),
-                                          const SizedBox(height: 2),
-                                          Text(
-                                            '${DateFormat('EEEE, MMM d').format(draft.date)} (${draft.startTime.format(context)} - ${draft.endTime.format(context)})',
-                                            style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary),
-                                          ),
-                                          if (draft.location.isNotEmpty)
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
                                             Text(
-                                              '@ ${draft.location}',
+                                              draft.title,
+                                              style: GoogleFonts.inter(fontSize: 13, color: Colors.white, fontWeight: FontWeight.bold),
+                                            ),
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              '${DateFormat('EEEE, MMM d').format(draft.date)} (${draft.startTime.format(context)} - ${draft.endTime.format(context)})',
                                               style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary),
                                             ),
-                                        ],
+                                            if (draft.location.isNotEmpty)
+                                              Text(
+                                                '@ ${draft.location}',
+                                                style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary),
+                                              ),
+                                            if (draft.description.isNotEmpty) ...[
+                                              const SizedBox(height: 2),
+                                              Text(
+                                                draft.description,
+                                                style: GoogleFonts.inter(fontSize: 11, color: Colors.white70),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ],
+                                          ],
+                                        ),
                                       ),
-                                    ),
-                                    IconButton(
-                                      icon: const Icon(Icons.edit_outlined, color: AppTheme.primaryAccent, size: 18),
-                                      onPressed: () => _showEditEventDraftDialog(editIndex: index),
-                                    ),
-                                    IconButton(
-                                      icon: const Icon(Icons.delete_outline, color: AppTheme.danger, size: 18),
-                                      onPressed: () {
-                                        setState(() {
-                                          _additionalEvents.removeAt(index);
-                                        });
-                                      },
-                                    ),
-                                  ],
+                                      IconButton(
+                                        icon: const Icon(Icons.edit_outlined, color: AppTheme.primaryAccent, size: 18),
+                                        onPressed: () => _showEditEventDraftDialog(editIndex: index),
+                                      ),
+                                      IconButton(
+                                        icon: const Icon(Icons.delete_outline, color: AppTheme.danger, size: 18),
+                                        onPressed: () {
+                                          setState(() {
+                                            _additionalEvents.removeAt(index);
+                                          });
+                                        },
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               );
                             }),
 
                             const SizedBox(height: 8),
 
-                            // "+ Add Event" Button
+                            // "+ Add Tour Date / Event" Button
                             OutlinedButton.icon(
                               style: OutlinedButton.styleFrom(
                                 side: const BorderSide(color: AppTheme.primaryAccent),
@@ -950,7 +1027,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                               ),
                               icon: const Icon(Icons.add_circle_outline, color: AppTheme.primaryAccent, size: 18),
                               label: Text(
-                                "+ Add Event",
+                                "+ Add Tour Date / Event",
                                 style: GoogleFonts.inter(color: AppTheme.primaryAccent, fontWeight: FontWeight.bold, fontSize: 13),
                               ),
                               onPressed: () => _showEditEventDraftDialog(),
@@ -1016,7 +1093,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                               border: OutlineInputBorder(),
                             ),
                             items: const [
-                              DropdownMenuItem(value: -1, child: Text('Set hours...')),
+                              DropdownMenuItem(value: -1, child: Text('Set hours here')),
                               DropdownMenuItem(value: 48, child: Text('48 hours (From event is published)')),
                               DropdownMenuItem(value: 24, child: Text('24 hours (From event is published)')),
                               DropdownMenuItem(value: 12, child: Text('12 hours (From event is published)')),
@@ -1042,8 +1119,8 @@ class _CreateEventPageState extends State<CreateEventPage> {
                               keyboardType: TextInputType.number,
                               style: const TextStyle(color: Colors.white),
                               decoration: const InputDecoration(
-                                labelText: 'Custom Reminder Hours',
-                                hintText: 'e.g. 36, 72, 96',
+                                labelText: 'Set hours here',
+                                hintText: 'e.g. 48, 24, 12',
                                 prefixIcon: Icon(Icons.timer_outlined, color: AppTheme.textSecondary),
                                 suffixText: 'hours',
                                 suffixStyle: TextStyle(color: AppTheme.textSecondary),
@@ -1051,7 +1128,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                               validator: (value) {
                                 if (_isCustomReminderHours) {
                                   if (value == null || value.trim().isEmpty) {
-                                    return 'Please enter custom reminder hours';
+                                    return 'Please enter response window in hours';
                                   }
                                   final parsed = int.tryParse(value.trim());
                                   if (parsed == null || parsed < 0) {
