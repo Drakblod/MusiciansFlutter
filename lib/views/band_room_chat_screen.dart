@@ -3237,49 +3237,53 @@ class _AddMemberDialogContentState extends State<_AddMemberDialogContent> {
                           }
                         }
 
-                        return AnimatedTapDetector(
+                        return GestureDetector(
+                          behavior: HitTestBehavior.opaque,
                           onTap: _addMember,
                           child: Container(
                             margin: const EdgeInsets.only(bottom: 8),
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                             decoration: BoxDecoration(
                               color: AppTheme.cardBackground,
                               borderRadius: BorderRadius.circular(12),
                             ),
-                            child: Row(
-                              children: [
-                                CircleAvatar(
-                                  radius: 16,
-                                  backgroundColor: AppTheme.primaryAccent.withOpacity(0.2),
-                                  child: Text(
-                                    name.substring(0, 1).toUpperCase(),
-                                    style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        name,
-                                        style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(12),
+                              onTap: _addMember,
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                child: Row(
+                                  children: [
+                                    CircleAvatar(
+                                      radius: 16,
+                                      backgroundColor: AppTheme.primaryAccent.withOpacity(0.2),
+                                      child: Text(
+                                        name.substring(0, 1).toUpperCase(),
+                                        style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
                                       ),
-                                      if (user.instruments.isNotEmpty)
-                                        Text(
-                                          user.instruments.join(', '),
-                                          style: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 11),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                    ],
-                                  ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            name,
+                                            style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
+                                          ),
+                                          if (user.instruments.isNotEmpty)
+                                            Text(
+                                              user.instruments.join(', '),
+                                              style: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 11),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                        ],
+                                      ),
+                                    ),
+                                    const Icon(Icons.add_circle, color: AppTheme.primaryAccent, size: 24),
+                                  ],
                                 ),
-                                IconButton(
-                                  icon: const Icon(Icons.add_circle, color: AppTheme.primaryAccent, size: 24),
-                                  onPressed: _addMember,
-                                ),
-                              ],
+                              ),
                             ),
                           ),
                         );
