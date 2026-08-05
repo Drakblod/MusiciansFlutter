@@ -19,4 +19,12 @@ const List<MockLiveRehearsal> mockLiveRehearsals = [
     audioAssetPath: 'audio/bandrep2.mp3',
     genre: 'Alternative / Post-Rock',
   ),
+  MockLiveRehearsal(
+    id: 'live_rehearsal_la',
+    bandName: "Guns N' Roses (1980s Mock Tape)",
+    city: 'Los Angeles',
+    position: LatLng(34.0522, -118.2437),
+    audioAssetPath: 'audio/bandrep3.mp3',
+    genre: 'Hard Rock',
+  ),
 ];
