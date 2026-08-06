@@ -8,6 +8,7 @@ import '../widgets/animated_tap_detector.dart';
 import '../widgets/custom_top_bar.dart';
 import '../widgets/gradient_scaffold.dart';
 import '../widgets/audio_snippet_player.dart';
+import 'edit_band_info_screen.dart';
 
 class ProfileTabScreen extends StatefulWidget {
   const ProfileTabScreen({super.key});
@@ -197,47 +198,100 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                           ],
                           const SizedBox(height: 16),
 
-                          // Edit Profile & Logout Row
-                          Row(
+                          // Settings Action Row: Edit Profile, Edit Band & Logout
+                          Column(
                             children: [
-                              Expanded(
-                                child: AnimatedTapDetector(
-                                  onTap: () async {
-                                    await Navigator.pushNamed(context, '/edit-profile');
-                                    appState.refreshProfile();
-                                  },
-                                  child: Container(
-                                    height: 48,
-                                    decoration: BoxDecoration(
-                                      gradient: AppTheme.primaryGradient,
-                                      borderRadius: BorderRadius.circular(12),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: AppTheme.primaryAccent.withOpacity(0.35),
-                                          blurRadius: 8,
-                                          offset: const Offset(0, 3),
-                                        )
-                                      ],
-                                    ),
-                                    child: Row(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        const Icon(Icons.edit_rounded, color: Colors.white, size: 18),
-                                        const SizedBox(width: 8),
-                                        Text(
-                                          'Edit Profile',
-                                          style: GoogleFonts.inter(
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.bold,
-                                            color: Colors.white,
-                                          ),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: AnimatedTapDetector(
+                                      onTap: () async {
+                                        await Navigator.pushNamed(context, '/edit-profile');
+                                        appState.refreshProfile();
+                                      },
+                                      child: Container(
+                                        height: 44,
+                                        decoration: BoxDecoration(
+                                          gradient: AppTheme.primaryGradient,
+                                          borderRadius: BorderRadius.circular(12),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: AppTheme.primaryAccent.withOpacity(0.35),
+                                              blurRadius: 8,
+                                              offset: const Offset(0, 3),
+                                            )
+                                          ],
                                         ),
-                                      ],
+                                        child: Row(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: [
+                                            const Icon(Icons.person_outline_rounded, color: Colors.white, size: 18),
+                                            const SizedBox(width: 6),
+                                            Text(
+                                              'Edit Profile',
+                                              style: GoogleFonts.inter(
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.bold,
+                                                color: Colors.white,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
                                     ),
                                   ),
-                                ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: AnimatedTapDetector(
+                                      onTap: () async {
+                                        final activeBandId = appState.activeBandId;
+                                        if (activeBandId != null) {
+                                          final band = await appState.firebaseService.getBandByIdAsync(activeBandId);
+                                          if (band != null && context.mounted) {
+                                            await Navigator.push(
+                                              context,
+                                              MaterialPageRoute(
+                                                builder: (context) => EditBandInfoScreen(band: band),
+                                              ),
+                                            );
+                                          }
+                                        } else {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            const SnackBar(
+                                              content: Text('No active band selected to edit.'),
+                                              backgroundColor: AppTheme.warning,
+                                            ),
+                                          );
+                                        }
+                                      },
+                                      child: Container(
+                                        height: 44,
+                                        decoration: BoxDecoration(
+                                          color: AppTheme.cardBackground,
+                                          borderRadius: BorderRadius.circular(12),
+                                          border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.4)),
+                                        ),
+                                        child: Row(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: [
+                                            const Icon(Icons.groups_outlined, color: AppTheme.primaryAccent, size: 18),
+                                            const SizedBox(width: 6),
+                                            Text(
+                                              'Edit Band',
+                                              style: GoogleFonts.inter(
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.bold,
+                                                color: Colors.white,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
-                              const SizedBox(width: 16),
+                              const SizedBox(height: 10),
                               AnimatedTapDetector(
                                 onTap: () async {
                                   final confirmed = await showDialog<bool>(
@@ -258,27 +312,33 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                                       ],
                                     ),
                                   );
-                                  if (confirmed == true) {
-                                    await appState.logout();
-                                    if (context.mounted) {
-                                      Navigator.pushReplacementNamed(context, '/login');
-                                    }
+                                  if (confirmed == true && context.mounted) {
+                                    await appState.firebaseService.signOut();
+                                    Navigator.pushReplacementNamed(context, '/login');
                                   }
                                 },
                                 child: Container(
-                                  width: 48,
-                                  height: 48,
+                                  width: double.infinity,
+                                  height: 38,
                                   decoration: BoxDecoration(
-                                    color: AppTheme.cardBackground,
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(color: const Color(0xFF231F45), width: 1),
+                                    color: Colors.redAccent.withOpacity(0.12),
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(color: Colors.redAccent.withOpacity(0.3)),
                                   ),
-                                  child: const Center(
-                                    child: Icon(
-                                      Icons.logout_rounded,
-                                      color: Colors.redAccent,
-                                      size: 20,
-                                    ),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      const Icon(Icons.logout_rounded, color: Colors.redAccent, size: 16),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        'Logout',
+                                        style: GoogleFonts.inter(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.redAccent,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ),

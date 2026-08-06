@@ -876,17 +876,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               ),
               const SizedBox(height: 24),
 
-              // 4. Skills/Talents (5 Main Category Cards)
-              Text(
-                'Skills/Talents',
-                style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Tap a category below to select your instruments, voices, or roles.',
-                style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
-              ),
-              const SizedBox(height: 12),
+              // 4. Primary Skills Selection Categories
               _buildCategoryCard(
                 title: 'Instruments',
                 subtitle: 'Woodwinds, Brass, Strings, Keyboards, Percussion',
@@ -928,15 +918,15 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               ),
               const SizedBox(height: 24),
 
-              // 5. Primary Skill/Talents
+              // 5. Primary Skills Selection
               if (_selectedInstruments.isNotEmpty) ...[
                 Text(
-                  'Primary Skill/Talents',
+                  'Primary Skills',
                   style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Tap to input max. 3 Primary Skills/Talents. Put your No. 1 Skill/Instrument, etc first...',
+                  'Tap to select max. 3 Primary Skills. Put your No. 1 Skill/Instrument first...',
                   style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
                 ),
                 const SizedBox(height: 10),
@@ -966,9 +956,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 ),
                 const SizedBox(height: 24),
 
-                // 6. Secondary Skills/Talents
+                // 6. Secondary Skills
                 Text(
-                  'Secondary Skills/Talents',
+                  'Secondary Skills',
                   style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
                 ),
                 const SizedBox(height: 4),

@@ -7,6 +7,7 @@ import '../models/band.dart';
 import '../widgets/gradient_scaffold.dart';
 import '../widgets/custom_top_bar.dart';
 import '../widgets/animated_tap_detector.dart';
+import '../widgets/searchable_category_multi_select_sheet.dart';
 
 class EditBandInfoScreen extends StatefulWidget {
   final Band band;
@@ -24,7 +25,6 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
   late TextEditingController _rehearsalLocationController;
   late TextEditingController _aboutController;
 
-  late String _ensembleType;
   late String _level;
   late String _rehearsalDay;
   
@@ -34,7 +34,6 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
   late List<String> _selectedStyles;
   bool _isSaving = false;
 
-  final List<String> _ensembleTypes = ['Choir', 'Big band', 'Pop/Rock band'];
   final List<String> _levels = [
     'A = PRO',
     'B = SEMI PRO',
@@ -52,10 +51,88 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
     'Sunday'
   ];
 
-  final dictionaryStyles = const {
-    'Choir': ['A Capella', 'Classical', 'Gospel', 'Pop', 'Gregorian'],
-    'Big band': ['Swing', 'Jazz', 'Fusion', 'Salsa'],
-    'Pop/Rock band': ['Pop', 'Rock', 'Metal', 'Blues', 'Reggae'],
+  static final Map<String, List<String>> _genreCategoryMap = {
+    '🎸 Rock, Pop, R&B, Hip Hop, etc': [
+      'Rock',
+      'Pop',
+      'R&B',
+      'Hip Hop',
+      'Electronic Dance Music (EDM)',
+      'Soul',
+      'Funk',
+      'Country',
+      'Reggae',
+      'Latin',
+      'Indie / Alternative',
+    ],
+    '🗣️ Choir': [
+      'Choir',
+      'Medieval',
+      'Renaissance',
+      'Baroque',
+      'Classical',
+      'Romanticism',
+      'Impressionism',
+      'Modernism',
+      'Contemporary',
+      'Barbershop',
+      'Gospel',
+      'Pop',
+    ],
+    '🎼 Classical': [
+      'Classical',
+      'Medieval',
+      'Renaissance',
+      'Baroque',
+      'Romanticism',
+      'Impressionism',
+      'Modernism',
+      'Contemporary',
+    ],
+    '🎺 Wind, Concert & Brass Band': [
+      'Wind Band',
+      'Concert Band',
+      'Brass Band',
+      'Classical',
+      'March & Ceremonial',
+      'Contemporary',
+      'Film & Popular',
+      'Crossover',
+    ],
+    '🎷 Jazz': [
+      'Jazz',
+      'New Orleans/Dixieland',
+      'Swing',
+      'Bebop',
+      'Cool',
+      'Hardbop',
+      'Free Jazz/Avantgarde',
+      'Fusion',
+      'Latin',
+      'Modern/Contemporary',
+    ],
+    '🥁 Big Band': [
+      'Big Band',
+      'Mainstream (Basie, Miller, Sinatra, etc)',
+      'New Orleans/Dixieland',
+      'Swing',
+      'Bebop',
+      'Latin',
+      'Fusion',
+      'Modern/Contemporary',
+      'Free Jazz/Avantgarde',
+    ],
+    '🌍 World Music': [
+      'African',
+      'Latin',
+      'Caribbean',
+      'Middle Eastern & Arabic',
+      'South Asian',
+      'East Asian',
+      'Celtic & European',
+      'Indigenous',
+      'Global Fusion',
+    ],
   };
 
   String _formatTime(TimeOfDay t) {
@@ -110,21 +187,18 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
     super.dispose();
   }
 
-  void _onBandTypeChanged(String newType) {
-    setState(() {
-      _ensembleType = newType;
-      _selectedStyles.clear();
-    });
-  }
-
-  void _toggleStyle(String style) {
-    setState(() {
-      if (_selectedStyles.contains(style)) {
-        _selectedStyles.remove(style);
-      } else {
-        _selectedStyles.add(style);
-      }
-    });
+  Future<void> _openGenrePicker() async {
+    final result = await SearchableCategoryMultiSelectSheet.show(
+      context: context,
+      title: 'Select Genres/Band Types',
+      categoryMap: _genreCategoryMap,
+      initialSelected: _selectedStyles,
+    );
+    if (result != null) {
+      setState(() {
+        _selectedStyles = result;
+      });
+    }
   }
 
   Future<void> _pickTime(bool isStart) async {
@@ -173,10 +247,14 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
     setState(() => _isSaving = true);
 
     try {
+      final derivedType = _selectedStyles.isNotEmpty
+          ? _selectedStyles.first
+          : (widget.band.ensembleType ?? 'Pop/Rock band');
+
       final updated = Band(
         id: bandId,
         name: _nameController.text.trim(),
-        ensembleType: _ensembleType,
+        ensembleType: derivedType,
         genres: _selectedStyles,
         styleBand: _selectedStyles,
         level: _level,
@@ -219,8 +297,6 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final availableStyles = dictionaryStyles[_ensembleType] ?? [];
-
     return GradientScaffold(
       appBar: const CustomTopBar(
         showBack: true,
@@ -264,82 +340,78 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
               ),
               const SizedBox(height: 20),
 
-              // Ensemble Type
-              Text(
-                'Band Type',
-                style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+              // Genres / Band Types
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Genres/Band Types',
+                    style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                  ),
+                  AnimatedTapDetector(
+                    onTap: _openGenrePicker,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryAccent.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.4)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.tune_rounded, color: AppTheme.primaryAccent, size: 16),
+                          const SizedBox(width: 6),
+                          Text(
+                            _selectedStyles.isEmpty ? 'Select Genres/Types' : 'Edit (${_selectedStyles.length})',
+                            style: GoogleFonts.inter(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                decoration: BoxDecoration(
-                  color: AppTheme.inputBackground,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
-                ),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButtonFormField<String>(
-                    value: _ensembleType,
-                    dropdownColor: AppTheme.cardBackground,
-                    style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
-                    icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppTheme.textSecondary),
-                    decoration: const InputDecoration(
-                      border: InputBorder.none,
-                      contentPadding: EdgeInsets.zero,
-                    ),
-                    items: _ensembleTypes.map((String val) {
-                      return DropdownMenuItem<String>(
-                        value: val,
-                        child: Text(val),
-                      );
-                    }).toList(),
-                    onChanged: (newValue) {
-                      if (newValue != null) {
-                        _onBandTypeChanged(newValue);
-                      }
-                    },
+              if (_selectedStyles.isEmpty)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppTheme.cardBackground,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFF231F45)),
                   ),
-                ),
-              ),
-              const SizedBox(height: 20),
-
-              // Dynamic Genres / Band Types
-              if (availableStyles.isNotEmpty) ...[
-                Text(
-                  'Genres/Band Types',
-                  style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
-                ),
-                const SizedBox(height: 8),
+                  child: Text(
+                    'No genres or band types selected yet.',
+                    style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textMuted),
+                  ),
+                )
+              else
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
-                  children: availableStyles.map((style) {
-                    final isSelected = _selectedStyles.contains(style);
-                    return FilterChip(
-                      label: Text(
-                        style,
-                        style: GoogleFonts.inter(
-                          fontSize: 12,
-                          color: isSelected ? Colors.white : AppTheme.textSecondary,
-                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                        ),
-                      ),
-                      selected: isSelected,
-                      selectedColor: AppTheme.primaryAccent,
-                      checkmarkColor: Colors.white,
-                      backgroundColor: const Color(0xFF1E1A3C),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20),
-                        side: BorderSide(
-                          color: isSelected ? AppTheme.primaryAccent : const Color(0xFF2E2A4E),
-                        ),
-                      ),
-                      onSelected: (_) => _toggleStyle(style),
+                  children: _selectedStyles.map((style) {
+                    return Chip(
+                      label: Text(style),
+                      onDeleted: () {
+                        setState(() {
+                          _selectedStyles.remove(style);
+                        });
+                      },
+                      deleteIcon: const Icon(Icons.close_rounded, size: 16, color: Colors.white70),
+                      backgroundColor: const Color(0xFF1E1A3A),
+                      labelStyle: GoogleFonts.inter(fontSize: 12, color: Colors.white),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                      side: const BorderSide(color: AppTheme.primaryAccent),
                     );
                   }).toList(),
                 ),
-                const SizedBox(height: 20),
-              ],
+              const SizedBox(height: 20),
 
               // Band Level
               Text(

@@ -273,7 +273,7 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                 ListTile(
                   leading: const Icon(Icons.edit_outlined, color: AppTheme.primaryAccent),
                   title: Text(
-                    'Edit Band Info',
+                    'Edit Band',
                     style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w600),
                   ),
                   subtitle: Text(
