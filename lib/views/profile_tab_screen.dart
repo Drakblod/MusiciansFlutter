@@ -246,7 +246,7 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                                       onTap: () async {
                                         final activeBandId = appState.activeBandId;
                                         if (activeBandId != null) {
-                                          final band = await appState.firebaseService.getBandByIdAsync(activeBandId);
+                                          final band = await appState.firebaseService.getBandInfoAsync(activeBandId);
                                           if (band != null && context.mounted) {
                                             await Navigator.push(
                                               context,
@@ -313,7 +313,7 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                                     ),
                                   );
                                   if (confirmed == true && context.mounted) {
-                                    await appState.firebaseService.signOut();
+                                    await appState.logout();
                                     Navigator.pushReplacementNamed(context, '/login');
                                   }
                                 },
