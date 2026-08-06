@@ -147,9 +147,6 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
     _rehearsalLocationController = TextEditingController(text: widget.band.rehearsalLocation);
     _aboutController = TextEditingController(text: widget.band.about ?? widget.band.description);
 
-    _ensembleType = _ensembleTypes.contains(widget.band.ensembleType)
-        ? widget.band.ensembleType!
-        : 'Pop/Rock band';
     _level = _levels.contains(widget.band.level)
         ? widget.band.level!
         : 'C = INTERMEDIATE';
