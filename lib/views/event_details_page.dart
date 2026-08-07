@@ -574,6 +574,92 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                             ),
                           ],
                         ),
+
+                        // Quick Sub-Event / Part Switcher Buttons inside the Header Box
+                        if (_linkedSubEvents.length > 1) ...[
+                          const SizedBox(height: 14),
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF16132D),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.purpleAccent.withOpacity(0.4), width: 1),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      "SWITCH EVENT DATES (${_linkedSubEvents.length} PARTS):",
+                                      style: GoogleFonts.outfit(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.purpleAccent,
+                                        letterSpacing: 1.1,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                SingleChildScrollView(
+                                  scrollDirection: Axis.horizontal,
+                                  child: Row(
+                                    children: _linkedSubEvents.map((sub) {
+                                      final isCurrent = sub.id == _event?.id;
+                                      final subStart = DateTime.tryParse(sub.startDateTime)?.toLocal() ?? DateTime.now();
+                                      final dateLabel = DateFormat('EEE, MMM d').format(subStart);
+                                      final seqStr = sub.subEventSequence != null ? 'Part ${sub.subEventSequence}' : sub.title;
+
+                                      return Container(
+                                        margin: const EdgeInsets.only(right: 8),
+                                        child: AnimatedTapDetector(
+                                          onTap: () {
+                                            setState(() {
+                                              _event = sub;
+                                            });
+                                          },
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                                            decoration: BoxDecoration(
+                                              gradient: isCurrent ? AppTheme.primaryGradient : null,
+                                              color: isCurrent ? null : const Color(0xFF231F45),
+                                              borderRadius: BorderRadius.circular(8),
+                                              border: Border.all(
+                                                color: isCurrent ? Colors.white : Colors.transparent,
+                                                width: isCurrent ? 1.5 : 0,
+                                              ),
+                                            ),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Icon(
+                                                  isCurrent ? Icons.check_circle_rounded : Icons.calendar_today_rounded,
+                                                  size: 13,
+                                                  color: Colors.white,
+                                                ),
+                                                const SizedBox(width: 6),
+                                                Text(
+                                                  '$seqStr: $dateLabel',
+                                                  style: GoogleFonts.inter(
+                                                    fontSize: 12,
+                                                    color: Colors.white,
+                                                    fontWeight: isCurrent ? FontWeight.bold : FontWeight.w500,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      );
+                                    }).toList(),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),
