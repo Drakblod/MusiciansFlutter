@@ -2889,7 +2889,18 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
 
   Widget _buildEventCard(BandEvent event, String bandId) {
     final startLocal = DateTime.tryParse(event.startDateTime)?.toLocal() ?? DateTime.now();
-    final formattedTime = DateFormat('EEEE HH:mm').format(startLocal);
+    final endLocal = DateTime.tryParse(event.endDateTime)?.toLocal() ?? startLocal;
+
+    final isSameDay = startLocal.year == endLocal.year &&
+        startLocal.month == endLocal.month &&
+        startLocal.day == endLocal.day;
+
+    final String timeOrDateRangeStr;
+    if (isSameDay) {
+      timeOrDateRangeStr = '${DateFormat('EEE, MMM d').format(startLocal)} • ${DateFormat('HH:mm').format(startLocal)} - ${DateFormat('HH:mm').format(endLocal)}';
+    } else {
+      timeOrDateRangeStr = '${DateFormat('EEE, MMM d').format(startLocal)} – ${DateFormat('EEE, MMM d').format(endLocal)}';
+    }
 
     return GestureDetector(
       onTap: () {
@@ -2914,12 +2925,30 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
         ),
         child: Row(
           children: [
-            _getEventTypeBadge(event.eventType),
-            const SizedBox(width: 16),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: AppTheme.primaryAccent.withOpacity(0.18),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          event.eventType,
+                          style: GoogleFonts.inter(
+                            fontSize: 10,
+                            color: AppTheme.primaryAccent,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
                   Text(
                     event.title,
                     style: GoogleFonts.outfit(
@@ -2928,22 +2957,22 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 6),
                   Row(
                     children: [
-                      const Icon(Icons.access_time_outlined, size: 12, color: AppTheme.textSecondary),
-                      const SizedBox(width: 4),
+                      const Icon(Icons.access_time_outlined, size: 13, color: AppTheme.textSecondary),
+                      const SizedBox(width: 6),
                       Text(
-                        formattedTime,
-                        style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
+                        timeOrDateRangeStr,
+                        style: GoogleFonts.inter(fontSize: 12, color: Colors.white70),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 2),
+                  const SizedBox(height: 4),
                   Row(
                     children: [
-                      const Icon(Icons.location_on_outlined, size: 12, color: AppTheme.textSecondary),
-                      const SizedBox(width: 4),
+                      const Icon(Icons.location_on_outlined, size: 13, color: AppTheme.textSecondary),
+                      const SizedBox(width: 6),
                       Expanded(
                         child: Text(
                           event.location,
@@ -2978,7 +3007,7 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
     final appState = Provider.of<AppState>(context, listen: false);
     final bandId = appState.activeBandId;
     if (bandId == null) {
-      return const Center(child: Text("No band selected"));
+      return const Center(child: Text("No active band", style: TextStyle(color: AppTheme.textSecondary)));
     }
 
     final selfId = appState.currentUserId;
@@ -3016,6 +3045,9 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
       final bTime = DateTime.tryParse(b.startDateTime) ?? DateTime.now();
       return bTime.compareTo(aTime);
     });
+
+    final needRsvpEvents = upcomingEvents.where((e) => e.requireResponse && !e.isLocked).toList();
+    final finalizedUpcomingEvents = upcomingEvents.where((e) => !e.requireResponse || e.isLocked).toList();
 
     return Column(
       children: [
@@ -3066,20 +3098,34 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
               : ListView(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   children: [
-                    if (upcomingEvents.isNotEmpty) ...[
+                    if (needRsvpEvents.isNotEmpty) ...[
                       Padding(
                         padding: const EdgeInsets.only(top: 8, bottom: 12),
                         child: Text(
-                          "NEW EVENTS",
+                          "New Events (need RSVP)",
                           style: GoogleFonts.outfit(
-                            fontSize: 12,
+                            fontSize: 18,
                             fontWeight: FontWeight.bold,
                             color: AppTheme.primaryAccent,
-                            letterSpacing: 1.5,
                           ),
                         ),
                       ),
-                      ...upcomingEvents.map((event) => _buildEventCard(event, bandId)),
+                      ...needRsvpEvents.map((event) => _buildEventCard(event, bandId)),
+                    ],
+
+                    if (finalizedUpcomingEvents.isNotEmpty) ...[
+                      Padding(
+                        padding: const EdgeInsets.only(top: 16, bottom: 12),
+                        child: Text(
+                          "Upcoming Events",
+                          style: GoogleFonts.outfit(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                      ...finalizedUpcomingEvents.map((event) => _buildEventCard(event, bandId)),
                     ],
 
                     if (pastEvents.isNotEmpty) ...[
@@ -3090,10 +3136,9 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                           title: Text(
                             "Past Events (${pastEvents.length})",
                             style: GoogleFonts.outfit(
-                              fontSize: 14,
+                              fontSize: 16,
                               color: AppTheme.textSecondary,
                               fontWeight: FontWeight.bold,
-                              letterSpacing: 1.2,
                             ),
                           ),
                           iconColor: AppTheme.textSecondary,

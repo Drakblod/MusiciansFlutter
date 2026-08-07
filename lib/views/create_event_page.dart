@@ -1018,7 +1018,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
 
                             const SizedBox(height: 8),
 
-                            // "+ Add Tour Date / Event" Button
+                            // "+ Add Event(s)" Button
                             OutlinedButton.icon(
                               style: OutlinedButton.styleFrom(
                                 side: const BorderSide(color: AppTheme.primaryAccent),
@@ -1027,7 +1027,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                               ),
                               icon: const Icon(Icons.add_circle_outline, color: AppTheme.primaryAccent, size: 18),
                               label: Text(
-                                "+ Add Tour Date / Event",
+                                "+ Add Event(s)",
                                 style: GoogleFonts.inter(color: AppTheme.primaryAccent, fontWeight: FontWeight.bold, fontSize: 13),
                               ),
                               onPressed: () => _showEditEventDraftDialog(),
@@ -1076,7 +1076,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                           ),
                           const SizedBox(height: 12),
                           Text(
-                            'Initial Response Window (From event is published):',
+                            'Response Time Settings:',
                             style: GoogleFonts.inter(
                               fontSize: 11,
                               color: AppTheme.textSecondary,
