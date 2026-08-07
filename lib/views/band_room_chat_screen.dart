@@ -1477,7 +1477,7 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
 
     return Column(
       children: [
-        if (isLeaderOrAdmin && bandId != null)
+        if (isLeaderOrAdmin && bandId != null) ...[
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: AnimatedTapDetector(
@@ -1504,6 +1504,30 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
               ),
             ),
           ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'BAND MEMBERS',
+                  style: GoogleFonts.outfit(fontSize: 13, color: AppTheme.textSecondary, fontWeight: FontWeight.bold, letterSpacing: 1.2),
+                ),
+                Row(
+                  children: [
+                    const Icon(Icons.shield_outlined, size: 14, color: AppTheme.primaryAccent),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Set Admin Roles',
+                      style: GoogleFonts.inter(fontSize: 12, color: AppTheme.primaryAccent, fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+        ],
         Expanded(
           child: ListView.builder(
             padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -1568,15 +1592,27 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                           margin: const EdgeInsets.only(right: 8),
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                           decoration: BoxDecoration(
-                            color: isMODRole ? Colors.purple.withOpacity(0.2) : AppTheme.primaryAccent.withOpacity(0.2),
+                            color: isMODRole
+                                ? Colors.purple.withOpacity(0.2)
+                                : isAdminRole
+                                    ? Colors.amber.withOpacity(0.2)
+                                    : AppTheme.primaryAccent.withOpacity(0.2),
                             borderRadius: BorderRadius.circular(8),
-                            border: isMODRole ? Border.all(color: Colors.purple.withOpacity(0.4)) : null,
+                            border: isMODRole
+                                ? Border.all(color: Colors.purple.withOpacity(0.4))
+                                : isAdminRole
+                                    ? Border.all(color: Colors.amber.withOpacity(0.4))
+                                    : null,
                           ),
                           child: Text(
                             isLeaderRole ? 'Leader' : isAdminRole ? 'Admin' : 'MOD',
                             style: GoogleFonts.inter(
                               fontSize: 10,
-                              color: isMODRole ? Colors.purpleAccent : AppTheme.primaryAccent,
+                              color: isMODRole
+                                  ? Colors.purpleAccent
+                                  : isAdminRole
+                                      ? Colors.amber
+                                      : AppTheme.primaryAccent,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
@@ -1603,10 +1639,18 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                           const SizedBox(width: 4),
                           PopupMenuButton<String>(
                             icon: const Icon(Icons.shield_outlined, color: AppTheme.primaryAccent, size: 20),
-                            tooltip: 'Change Member Role',
+                            tooltip: 'Set Admin Roles',
                             color: const Color(0xFF16132D),
                             onSelected: (newRole) async {
                               if (bandId != null && member.userId != null) {
+                                if (newRole == 'Leader') {
+                                  // Enforce 1 Leader limit: Demote previous leader to Admin
+                                  for (var m in _members) {
+                                    if (m.userId != null && (m.role ?? '').toLowerCase().contains('leader') && m.userId != member.userId) {
+                                      await appState.firebaseService.updateBandMemberRoleAsync(bandId, m.userId!, 'Admin');
+                                    }
+                                  }
+                                }
                                 await appState.firebaseService.updateBandMemberRoleAsync(bandId, member.userId!, newRole);
                                 await _initBand(bandId);
                                 if (mounted) {
@@ -1641,12 +1685,22 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                                 ),
                               ),
                               const PopupMenuItem(
+                                value: 'Admin',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.admin_panel_settings_outlined, color: Colors.amber, size: 16),
+                                    SizedBox(width: 8),
+                                    Text('Set as Admin', style: TextStyle(color: Colors.amber)),
+                                  ],
+                                ),
+                              ),
+                              const PopupMenuItem(
                                 value: 'Leader',
                                 child: Row(
                                   children: [
                                     Icon(Icons.star_outline_rounded, color: AppTheme.primaryAccent, size: 16),
                                     SizedBox(width: 8),
-                                    Text('Set as Leader', style: TextStyle(color: AppTheme.primaryAccent)),
+                                    Text('Transfer Leadership', style: TextStyle(color: AppTheme.primaryAccent)),
                                   ],
                                 ),
                               ),
