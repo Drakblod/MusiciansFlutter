@@ -22,6 +22,33 @@ import 'event_details_page.dart';
 import 'event_room_chat_screen.dart';
 import 'edit_band_info_screen.dart';
 
+class _EventGroup {
+  final BandEvent mainEvent;
+  final List<BandEvent> subEvents;
+
+  _EventGroup({required this.mainEvent, required this.subEvents});
+
+  bool get isGroup => subEvents.length > 1;
+
+  DateTime get overallStart {
+    DateTime earliest = DateTime.tryParse(mainEvent.startDateTime)?.toLocal() ?? DateTime.now();
+    for (var e in subEvents) {
+      final t = DateTime.tryParse(e.startDateTime)?.toLocal();
+      if (t != null && t.isBefore(earliest)) earliest = t;
+    }
+    return earliest;
+  }
+
+  DateTime get overallEnd {
+    DateTime latest = DateTime.tryParse(mainEvent.endDateTime)?.toLocal() ?? DateTime.now();
+    for (var e in subEvents) {
+      final t = DateTime.tryParse(e.endDateTime)?.toLocal();
+      if (t != null && t.isAfter(latest)) latest = t;
+    }
+    return latest;
+  }
+}
+
 class BandRoomChatScreen extends StatefulWidget {
   const BandRoomChatScreen({super.key});
 
@@ -2944,33 +2971,6 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
       ),
     );
   }
-
-class _EventGroup {
-  final BandEvent mainEvent;
-  final List<BandEvent> subEvents;
-
-  _EventGroup({required this.mainEvent, required this.subEvents});
-
-  bool get isGroup => subEvents.length > 1;
-
-  DateTime get overallStart {
-    DateTime earliest = DateTime.tryParse(mainEvent.startDateTime)?.toLocal() ?? DateTime.now();
-    for (var e in subEvents) {
-      final t = DateTime.tryParse(e.startDateTime)?.toLocal();
-      if (t != null && t.isBefore(earliest)) earliest = t;
-    }
-    return earliest;
-  }
-
-  DateTime get overallEnd {
-    DateTime latest = DateTime.tryParse(mainEvent.endDateTime)?.toLocal() ?? DateTime.now();
-    for (var e in subEvents) {
-      final t = DateTime.tryParse(e.endDateTime)?.toLocal();
-      if (t != null && t.isAfter(latest)) latest = t;
-    }
-    return latest;
-  }
-}
 
   Widget _buildGroupCard(_EventGroup group, String bandId) {
     if (!group.isGroup) {
