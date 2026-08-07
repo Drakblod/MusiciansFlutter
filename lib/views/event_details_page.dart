@@ -14,6 +14,7 @@ import '../widgets/custom_top_bar.dart';
 import '../widgets/animated_tap_detector.dart';
 import 'find_sub_screen.dart';
 import 'event_room_chat_screen.dart';
+import 'create_event_page.dart';
 
 class EventDetailsPage extends StatefulWidget {
   final String bandId;
@@ -83,7 +84,7 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
       final members = await appState.firebaseService.getBandMembersAsync(widget.bandId);
 
       if (_event?.parentEventId != null && _event!.parentEventId!.isNotEmpty) {
-        final allEvents = await appState.firebaseService.getBandEventsAsync(widget.bandId);
+        final allEvents = await appState.firebaseService.getBandEventsListAsync(widget.bandId);
         _linkedSubEvents = allEvents.where((e) => e.parentEventId == _event!.parentEventId).toList();
         _linkedSubEvents.sort((a, b) {
           final seqA = a.subEventSequence ?? 0;
@@ -578,6 +579,7 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                   ),
                 ],
               ),
+            ),
             const SizedBox(height: 12),
 
             // Event Series Schedule (If grouped multi-part event)
