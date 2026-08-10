@@ -233,7 +233,7 @@ class HomeScreen extends StatelessWidget {
       HomeActionItem(
         id: 'browse_musicians',
         icon: Icons.search_rounded,
-        title: 'Browse Musicians',
+        title: 'Profiles',
         subtitle: 'Explore profiles and discover new collaborators',
         onTap: () {
           appState.trackButtonClick('browse_musicians');
@@ -873,7 +873,7 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
       HomeActionItem(
         id: 'browse_musicians',
         icon: Icons.search_rounded,
-        title: 'Browse Musicians',
+        title: 'Profiles',
         subtitle: 'Explore profiles and discover new collaborators',
         onTap: () async {
           await HomeUsageTracker.incrementClick('browse_musicians');
