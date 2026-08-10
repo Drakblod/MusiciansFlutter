@@ -468,20 +468,20 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                 margin: const EdgeInsets.only(bottom: 20),
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 decoration: BoxDecoration(
-                  color: AppTheme.danger.withOpacity(0.15),
+                  color: AppTheme.success.withOpacity(0.15),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppTheme.danger.withOpacity(0.5), width: 1.5),
+                  border: Border.all(color: AppTheme.success.withOpacity(0.5), width: 1.5),
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.lock_rounded, color: AppTheme.danger, size: 20),
+                    const Icon(Icons.check_circle_rounded, color: AppTheme.success, size: 22),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Event Locked',
+                            'Event Finalized & Confirmed',
                             style: GoogleFonts.inter(
                               fontSize: 14,
                               fontWeight: FontWeight.bold,
@@ -491,8 +491,8 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                           const SizedBox(height: 2),
                           Text(
                             event.lockedAt != null
-                                ? 'Locked by ${_cachedProfiles[event.lockedBy]?.displayName ?? _cachedProfiles[event.lockedBy]?.nickname ?? "Organizer"} on ${DateFormat('MMM d, yyyy HH:mm').format(DateTime.fromMillisecondsSinceEpoch(event.lockedAt!))}'
-                                : 'Responses can no longer be modified.',
+                                ? 'Finalized by ${_cachedProfiles[event.lockedBy]?.displayName ?? _cachedProfiles[event.lockedBy]?.nickname ?? "Organizer"} on ${DateFormat('MMM d, yyyy HH:mm').format(DateTime.fromMillisecondsSinceEpoch(event.lockedAt!))}'
+                                : 'All subs and members confirmed. RSVPs locked.',
                             style: GoogleFonts.inter(
                               fontSize: 11,
                               color: AppTheme.textSecondary,
@@ -1294,14 +1294,14 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                       context: context,
                       builder: (context) => AlertDialog(
                         backgroundColor: const Color(0xFF0F0C20),
-                        title: Text("Lock Event", style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold)),
-                        content: Text("Are you sure you want to lock this event? Once locked, members can no longer change their RSVP status.", style: GoogleFonts.inter(color: AppTheme.textSecondary)),
+                        title: Text("Finalize Event?", style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold)),
+                        content: Text("Are you sure all subs and members are confirmed and everything is a go? Finalizing locks RSVPs and sets the event status to Finalized.", style: GoogleFonts.inter(color: AppTheme.textSecondary)),
                         actions: [
                           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancel", style: TextStyle(color: AppTheme.textSecondary))),
                           ElevatedButton(
-                            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryAccent),
+                            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.success),
                             onPressed: () => Navigator.pop(context, true),
-                            child: const Text("Lock", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                            child: const Text("Finalize Event", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                           ),
                         ],
                       ),
@@ -1310,7 +1310,7 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                       try {
                         await appState.firebaseService.lockBandEventAsync(widget.bandId, widget.eventId);
                         
-                        // Tasks 2851-2853: Ask creator if they want to create an event room if none exists yet
+                        // Ask creator if they want to create an event room if none exists yet
                         if (event.temporaryRoomId == null || event.temporaryRoomId!.isEmpty) {
                           if (!mounted) return;
                           final createRoom = await showDialog<bool>(
@@ -1319,7 +1319,7 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                               backgroundColor: const Color(0xFF0F0C20),
                               title: Text("Create Event Chat?", style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold)),
                               content: Text(
-                                "The event is locked! Would you like to create a temporary event chat for attending members & subs?",
+                                "The event is finalized! Would you like to create a temporary event chat for attending members & subs?",
                                 style: GoogleFonts.inter(color: AppTheme.textSecondary),
                               ),
                               actions: [
@@ -1345,13 +1345,13 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
 
                         if (mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text("Event locked successfully"), backgroundColor: AppTheme.success),
+                            const SnackBar(content: Text("Event finalized successfully! All subs/members confirmed."), backgroundColor: AppTheme.success),
                           );
                         }
                       } catch (e) {
                         if (mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text("Failed to lock event: $e"), backgroundColor: AppTheme.danger),
+                            SnackBar(content: Text("Failed to finalize event: $e"), backgroundColor: AppTheme.danger),
                           );
                         }
                       }
@@ -1363,16 +1363,75 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                     decoration: BoxDecoration(
                       color: AppTheme.cardBackground,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppTheme.primaryAccent, width: 1.5),
+                      border: Border.all(color: AppTheme.success, width: 1.5),
                     ),
                     child: Center(
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Icon(Icons.lock_outline, color: AppTheme.primaryAccent),
+                          const Icon(Icons.check_circle_outline, color: AppTheme.success),
                           const SizedBox(width: 8),
                           Text(
-                            "Lock Event Responses",
+                            "Finalize Event & Lock RSVPs",
+                            style: GoogleFonts.inter(color: AppTheme.success, fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                )
+              else
+                AnimatedTapDetector(
+                  onTap: () async {
+                    final confirmed = await showDialog<bool>(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        backgroundColor: const Color(0xFF0F0C20),
+                        title: Text("Re-open RSVPs?", style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold)),
+                        content: Text("Do you want to unlock this event and allow members/subs to modify their RSVP status again?", style: GoogleFonts.inter(color: AppTheme.textSecondary)),
+                        actions: [
+                          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancel", style: TextStyle(color: AppTheme.textSecondary))),
+                          ElevatedButton(
+                            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryAccent),
+                            onPressed: () => Navigator.pop(context, true),
+                            child: const Text("Re-open RSVPs", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (confirmed == true && mounted) {
+                      try {
+                        await appState.firebaseService.unlockBandEventAsync(widget.bandId, widget.eventId);
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text("Event unlocked. RSVPs re-opened."), backgroundColor: AppTheme.success),
+                          );
+                        }
+                      } catch (e) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text("Failed to unlock event: $e"), backgroundColor: AppTheme.danger),
+                          );
+                        }
+                      }
+                    }
+                  },
+                  child: Container(
+                    height: 50,
+                    margin: const EdgeInsets.only(bottom: 12),
+                    decoration: BoxDecoration(
+                      color: AppTheme.cardBackground,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.6), width: 1.5),
+                    ),
+                    child: Center(
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.lock_open_rounded, color: AppTheme.primaryAccent),
+                          const SizedBox(width: 8),
+                          Text(
+                            "Re-open RSVPs / Unlock",
                             style: GoogleFonts.inter(color: AppTheme.primaryAccent, fontWeight: FontWeight.bold),
                           ),
                         ],
