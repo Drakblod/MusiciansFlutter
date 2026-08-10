@@ -86,8 +86,13 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
     final userId = appState.currentUserProfile?.userId ?? appState.firebaseService.currentUser?.uid;
     if (userId == null) return;
 
+    final now = DateTime.now();
     for (final event in _bandEvents) {
-      if (event.requireResponse && !event.isLocked) {
+      final start = DateTime.tryParse(event.startDateTime)?.toLocal();
+      final end = DateTime.tryParse(event.endDateTime)?.toLocal() ?? start;
+      final isUpcoming = (end != null && end.isAfter(now)) || (start != null && start.isAfter(now));
+
+      if (event.requireResponse && !event.isLocked && isUpcoming) {
         final userResp = event.responses[userId];
         if (userResp == null) {
           _hasPromptedRsvpReminder = true;
