@@ -22,6 +22,33 @@ import 'event_details_page.dart';
 import 'event_room_chat_screen.dart';
 import 'edit_band_info_screen.dart';
 
+class _EventGroup {
+  final BandEvent mainEvent;
+  final List<BandEvent> subEvents;
+
+  _EventGroup({required this.mainEvent, required this.subEvents});
+
+  bool get isGroup => subEvents.length > 1;
+
+  DateTime get overallStart {
+    DateTime earliest = DateTime.tryParse(mainEvent.startDateTime)?.toLocal() ?? DateTime.now();
+    for (var e in subEvents) {
+      final t = DateTime.tryParse(e.startDateTime)?.toLocal();
+      if (t != null && t.isBefore(earliest)) earliest = t;
+    }
+    return earliest;
+  }
+
+  DateTime get overallEnd {
+    DateTime latest = DateTime.tryParse(mainEvent.endDateTime)?.toLocal() ?? DateTime.now();
+    for (var e in subEvents) {
+      final t = DateTime.tryParse(e.endDateTime)?.toLocal();
+      if (t != null && t.isAfter(latest)) latest = t;
+    }
+    return latest;
+  }
+}
+
 class BandRoomChatScreen extends StatefulWidget {
   const BandRoomChatScreen({super.key});
 
@@ -2945,6 +2972,186 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
     );
   }
 
+  Widget _buildGroupCard(_EventGroup group, String bandId) {
+    if (!group.isGroup) {
+      return _buildEventCard(group.mainEvent, bandId);
+    }
+
+    final startLocal = group.overallStart;
+    final endLocal = group.overallEnd;
+    final dateRangeStr = '${DateFormat('EEE, MMM d').format(startLocal)} – ${DateFormat('EEE, MMM d').format(endLocal)}';
+
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => EventDetailsPage(
+              bandId: bandId,
+              eventId: group.mainEvent.id!,
+              initialEvent: group.mainEvent,
+            ),
+          ),
+        );
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 14),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppTheme.cardBackground,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.5), width: 1.5),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: Colors.purple.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: Colors.purpleAccent.withOpacity(0.4)),
+                        ),
+                        child: Text(
+                          'Multi-Part / Tour',
+                          style: GoogleFonts.inter(
+                            fontSize: 10,
+                            color: Colors.purpleAccent,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: AppTheme.primaryAccent.withOpacity(0.18),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          '${group.subEvents.length} Events',
+                          style: GoogleFonts.inter(
+                            fontSize: 10,
+                            color: AppTheme.primaryAccent,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    group.mainEvent.title,
+                    style: GoogleFonts.outfit(
+                      fontSize: 17,
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      const Icon(Icons.calendar_today_outlined, size: 13, color: AppTheme.textSecondary),
+                      const SizedBox(width: 6),
+                      Text(
+                        dateRangeStr,
+                        style: GoogleFonts.inter(fontSize: 12, color: Colors.white70, fontWeight: FontWeight.w600),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF16132D),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: group.subEvents.map((sub) {
+                        final subStart = DateTime.tryParse(sub.startDateTime)?.toLocal() ?? DateTime.now();
+                        final subTimeStr = DateFormat('EEE, MMM d • HH:mm').format(subStart);
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 4),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.check_circle_outline, size: 12, color: AppTheme.primaryAccent),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  '${sub.title} ($subTimeStr)',
+                                  style: GoogleFonts.inter(fontSize: 11, color: Colors.white70),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                  if (group.mainEvent.requireResponse) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      '${group.mainEvent.responses.length}/${_members.length} responded',
+                      style: GoogleFonts.inter(
+                        fontSize: 11,
+                        color: AppTheme.primaryAccent,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const Icon(Icons.arrow_forward_ios_rounded, color: AppTheme.textSecondary, size: 14),
+          ],
+        ),
+      ),
+    );
+  }
+
+  List<_EventGroup> _groupEventsList(List<BandEvent> rawEvents) {
+    final Map<String, List<BandEvent>> parentMap = {};
+
+    for (var e in rawEvents) {
+      if (e.parentEventId != null && e.parentEventId!.isNotEmpty) {
+        parentMap.putIfAbsent(e.parentEventId!, () => []).add(e);
+      }
+    }
+
+    final List<_EventGroup> result = [];
+    final Set<String> processedParentIds = {};
+
+    for (var e in rawEvents) {
+      final pId = e.parentEventId;
+      if (pId != null && pId.isNotEmpty) {
+        if (!processedParentIds.contains(pId)) {
+          processedParentIds.add(pId);
+          final subList = parentMap[pId] ?? [e];
+          subList.sort((a, b) {
+            final seqA = a.subEventSequence ?? 0;
+            final seqB = b.subEventSequence ?? 0;
+            if (seqA != seqB) return seqA.compareTo(seqB);
+            final aTime = DateTime.tryParse(a.startDateTime) ?? DateTime.now();
+            final bTime = DateTime.tryParse(b.startDateTime) ?? DateTime.now();
+            return aTime.compareTo(bTime);
+          });
+          result.add(_EventGroup(mainEvent: subList.first, subEvents: subList));
+        }
+      } else {
+        result.add(_EventGroup(mainEvent: e, subEvents: [e]));
+      }
+    }
+
+    return result;
+  }
+
   Widget _buildEventsTab() {
     final appState = Provider.of<AppState>(context, listen: false);
     final bandId = appState.activeBandId;
@@ -2974,22 +3181,12 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
       }
     }
 
-    // Sort upcoming chronologically ascending (earliest first)
-    upcomingEvents.sort((a, b) {
-      final aTime = DateTime.tryParse(a.startDateTime) ?? DateTime.now();
-      final bTime = DateTime.tryParse(b.startDateTime) ?? DateTime.now();
-      return aTime.compareTo(bTime);
-    });
+    // Group multi-part events
+    final upcomingGroups = _groupEventsList(upcomingEvents);
+    final pastGroups = _groupEventsList(pastEvents);
 
-    // Sort past chronologically descending (latest first)
-    pastEvents.sort((a, b) {
-      final aTime = DateTime.tryParse(a.startDateTime) ?? DateTime.now();
-      final bTime = DateTime.tryParse(b.startDateTime) ?? DateTime.now();
-      return bTime.compareTo(aTime);
-    });
-
-    final needRsvpEvents = upcomingEvents.where((e) => e.requireResponse && !e.isLocked).toList();
-    final finalizedUpcomingEvents = upcomingEvents.where((e) => !e.requireResponse || e.isLocked).toList();
+    final needRsvpGroups = upcomingGroups.where((g) => g.mainEvent.requireResponse && !g.mainEvent.isLocked).toList();
+    final finalizedUpcomingGroups = upcomingGroups.where((g) => !g.mainEvent.requireResponse || g.mainEvent.isLocked).toList();
 
     return Column(
       children: [
@@ -3040,7 +3237,7 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
               : ListView(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   children: [
-                    if (needRsvpEvents.isNotEmpty) ...[
+                    if (needRsvpGroups.isNotEmpty) ...[
                       Padding(
                         padding: const EdgeInsets.only(top: 8, bottom: 12),
                         child: Text(
@@ -3052,10 +3249,10 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                           ),
                         ),
                       ),
-                      ...needRsvpEvents.map((event) => _buildEventCard(event, bandId)),
+                      ...needRsvpGroups.map((g) => _buildGroupCard(g, bandId)),
                     ],
 
-                    if (finalizedUpcomingEvents.isNotEmpty) ...[
+                    if (finalizedUpcomingGroups.isNotEmpty) ...[
                       Padding(
                         padding: const EdgeInsets.only(top: 16, bottom: 12),
                         child: Text(
@@ -3067,16 +3264,16 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                           ),
                         ),
                       ),
-                      ...finalizedUpcomingEvents.map((event) => _buildEventCard(event, bandId)),
+                      ...finalizedUpcomingGroups.map((g) => _buildGroupCard(g, bandId)),
                     ],
 
-                    if (pastEvents.isNotEmpty) ...[
+                    if (pastGroups.isNotEmpty) ...[
                       const SizedBox(height: 16),
                       Theme(
                         data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
                         child: ExpansionTile(
                           title: Text(
-                            "Past Events (${pastEvents.length})",
+                            "Past Events (${pastGroups.length})",
                             style: GoogleFonts.outfit(
                               fontSize: 16,
                               color: AppTheme.textSecondary,
@@ -3085,7 +3282,7 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                           ),
                           iconColor: AppTheme.textSecondary,
                           collapsedIconColor: AppTheme.textSecondary,
-                          children: pastEvents.map((event) => _buildEventCard(event, bandId)).toList(),
+                          children: pastGroups.map((g) => _buildGroupCard(g, bandId)).toList(),
                         ),
                       ),
                     ],

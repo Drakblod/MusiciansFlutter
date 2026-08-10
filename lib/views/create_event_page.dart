@@ -31,8 +31,13 @@ class _EventDraft {
 
 class CreateEventPage extends StatefulWidget {
   final String bandId;
+  final List<BandEvent>? existingGroupEvents;
 
-  const CreateEventPage({super.key, required this.bandId});
+  const CreateEventPage({
+    super.key,
+    required this.bandId,
+    this.existingGroupEvents,
+  });
 
   @override
   State<CreateEventPage> createState() => _CreateEventPageState();
@@ -65,7 +70,46 @@ class _CreateEventPageState extends State<CreateEventPage> {
   @override
   void initState() {
     super.initState();
+    _initFromExisting();
     _checkPermission();
+  }
+
+  void _initFromExisting() {
+    final group = widget.existingGroupEvents;
+    if (group != null && group.isNotEmpty) {
+      final first = group.first;
+      _titleController.text = first.title;
+      _descriptionController.text = first.description;
+      _locationController.text = first.location;
+      _notesController.text = first.additionalNotes;
+      _eventType = first.eventType;
+      _requireResponse = first.requireResponse;
+
+      final startLocal = DateTime.tryParse(first.startDateTime)?.toLocal() ?? DateTime.now();
+      final endLocal = DateTime.tryParse(first.endDateTime)?.toLocal() ?? startLocal;
+
+      _selectedDate = DateTime(startLocal.year, startLocal.month, startLocal.day);
+      _startTime = TimeOfDay(hour: startLocal.hour, minute: startLocal.minute);
+      _endTime = TimeOfDay(hour: endLocal.hour, minute: endLocal.minute);
+
+      if (group.length > 1) {
+        _isMultipleEvents = true;
+        for (int i = 1; i < group.length; i++) {
+          final sub = group[i];
+          final subStart = DateTime.tryParse(sub.startDateTime)?.toLocal() ?? DateTime.now();
+          final subEnd = DateTime.tryParse(sub.endDateTime)?.toLocal() ?? subStart;
+          _additionalEvents.add(_EventDraft(
+            title: sub.title,
+            eventType: sub.eventType,
+            date: DateTime(subStart.year, subStart.month, subStart.day),
+            startTime: TimeOfDay(hour: subStart.hour, minute: subStart.minute),
+            endTime: TimeOfDay(hour: subEnd.hour, minute: subEnd.minute),
+            location: sub.location,
+            description: sub.description,
+          ));
+        }
+      }
+    }
   }
 
   @override
@@ -485,7 +529,12 @@ class _CreateEventPageState extends State<CreateEventPage> {
         allEventsToSave.addAll(_additionalEvents);
       }
 
-      for (var draft in allEventsToSave) {
+      final String? groupId = allEventsToSave.length > 1
+          ? 'group_${DateTime.now().millisecondsSinceEpoch}'
+          : null;
+
+      for (int i = 0; i < allEventsToSave.length; i++) {
+        final draft = allEventsToSave[i];
         final start = DateTime(
           draft.date.year,
           draft.date.month,
@@ -523,6 +572,8 @@ class _CreateEventPageState extends State<CreateEventPage> {
           rsvpDeadline: deadline.millisecondsSinceEpoch,
           reminderIntervalHours: _reminderIntervalHours,
           responses: {},
+          parentEventId: groupId,
+          subEventSequence: groupId != null ? i + 1 : null,
         );
 
         final eventId = await appState.firebaseService.saveBandEventAsync(widget.bandId, newEvent);

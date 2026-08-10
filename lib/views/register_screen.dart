@@ -187,69 +187,28 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 ),
                 const SizedBox(height: 30),
 
-                // Nickname field
+                // 1. Profile Name field
                 TextFormField(
                   controller: _nicknameController,
                   style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
                   decoration: const InputDecoration(
-                    labelText: 'Nickname',
-                    hintText: 'Enter your stage name/nickname',
+                    labelText: 'Profile Name',
+                    hintText: 'Enter your name or stage name',
                     prefixIcon: Icon(Icons.person_outline_rounded, color: AppTheme.textSecondary),
                   ),
                   validator: (value) {
                     if (value == null || value.trim().isEmpty) {
-                      return 'Please enter a nickname';
+                      return 'Please enter a profile name';
                     }
-                    if (value.length < 3) {
-                      return 'Nickname must be at least 3 characters';
+                    if (value.trim().length < 2) {
+                      return 'Profile name must be at least 2 characters';
                     }
                     return null;
                   },
                 ),
                 const SizedBox(height: 16),
 
-                // User Type Selection Dropdown
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: AppTheme.inputBackground,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
-                  ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButtonFormField<String>(
-                      value: _selectedUserType,
-                      decoration: const InputDecoration(
-                        labelText: 'Primary Role',
-                        filled: false,
-                        border: InputBorder.none,
-                        enabledBorder: InputBorder.none,
-                        focusedBorder: InputBorder.none,
-                        contentPadding: EdgeInsets.zero,
-                        prefixIcon: Icon(Icons.music_note_outlined, color: AppTheme.textSecondary),
-                      ),
-                      dropdownColor: AppTheme.cardBackground,
-                      style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
-                      icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppTheme.textSecondary),
-                      items: _userTypes.map((String value) {
-                        return DropdownMenuItem<String>(
-                          value: value,
-                          child: Text(value),
-                        );
-                      }).toList(),
-                      onChanged: (newValue) {
-                        if (newValue != null) {
-                          setState(() {
-                            _selectedUserType = newValue;
-                          });
-                        }
-                      },
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                // Email field
+                // 2. Email field
                 TextFormField(
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
@@ -271,7 +230,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 ),
                 const SizedBox(height: 16),
 
-                // Password field
+                // 3. Password field
                 TextFormField(
                   controller: _passwordController,
                   obscureText: _obscurePassword,
@@ -301,6 +260,47 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     }
                     return null;
                   },
+                ),
+                const SizedBox(height: 16),
+
+                // 4. Primary Skill/Talent Selection (Exactly 1 choice)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppTheme.inputBackground,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButtonFormField<String>(
+                      initialValue: _selectedUserType,
+                      decoration: const InputDecoration(
+                        labelText: 'Primary Skill / Talent (Select 1)',
+                        filled: false,
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        contentPadding: EdgeInsets.zero,
+                        prefixIcon: Icon(Icons.music_note_outlined, color: AppTheme.textSecondary),
+                      ),
+                      dropdownColor: AppTheme.cardBackground,
+                      style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
+                      icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppTheme.textSecondary),
+                      items: _userTypes.map((String value) {
+                        return DropdownMenuItem<String>(
+                          value: value,
+                          child: Text(value),
+                        );
+                      }).toList(),
+                      onChanged: (newValue) {
+                        if (newValue != null) {
+                          setState(() {
+                            _selectedUserType = newValue;
+                          });
+                        }
+                      },
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 30),
 

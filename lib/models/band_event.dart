@@ -106,6 +106,8 @@ class BandEvent {
   final int? rsvpDeadline; // epoch millis
   final int? reminderIntervalHours; // e.g. 24, 48, 72
   final String? temporaryRoomId;
+  final String? parentEventId;
+  final int? subEventSequence;
 
   BandEvent({
     this.id,
@@ -132,6 +134,8 @@ class BandEvent {
     this.rsvpDeadline,
     this.reminderIntervalHours,
     this.temporaryRoomId,
+    this.parentEventId,
+    this.subEventSequence,
   });
 
   factory BandEvent.fromJson(Map<dynamic, dynamic> json, String keyId) {
@@ -190,6 +194,10 @@ class BandEvent {
           ? json['reminderIntervalHours'] as int
           : int.tryParse(json['reminderIntervalHours']?.toString() ?? ''),
       temporaryRoomId: json['temporaryRoomId']?.toString(),
+      parentEventId: json['parentEventId']?.toString(),
+      subEventSequence: json['subEventSequence'] is int
+          ? json['subEventSequence'] as int
+          : int.tryParse(json['subEventSequence']?.toString() ?? ''),
     );
   }
 
@@ -228,6 +236,8 @@ class BandEvent {
       if (rsvpDeadline != null) 'rsvpDeadline': rsvpDeadline,
       if (reminderIntervalHours != null) 'reminderIntervalHours': reminderIntervalHours,
       if (temporaryRoomId != null) 'temporaryRoomId': temporaryRoomId,
+      if (parentEventId != null) 'parentEventId': parentEventId,
+      if (subEventSequence != null) 'subEventSequence': subEventSequence,
     };
   }
 }

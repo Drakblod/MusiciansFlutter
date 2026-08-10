@@ -14,6 +14,7 @@ import '../widgets/custom_top_bar.dart';
 import '../widgets/animated_tap_detector.dart';
 import 'find_sub_screen.dart';
 import 'event_room_chat_screen.dart';
+import 'create_event_page.dart';
 
 class EventDetailsPage extends StatefulWidget {
   final String bandId;
@@ -72,6 +73,8 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
     });
   }
 
+  List<BandEvent> _linkedSubEvents = [];
+
   Future<void> _loadMembersAndProfiles() async {
     if (!mounted) return;
     setState(() => _isLoadingMembers = true);
@@ -79,6 +82,19 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
     try {
       final appState = Provider.of<AppState>(context, listen: false);
       final members = await appState.firebaseService.getBandMembersAsync(widget.bandId);
+
+      if (_event?.parentEventId != null && _event!.parentEventId!.isNotEmpty) {
+        final allEvents = await appState.firebaseService.getBandEventsListAsync(widget.bandId);
+        _linkedSubEvents = allEvents.where((e) => e.parentEventId == _event!.parentEventId).toList();
+        _linkedSubEvents.sort((a, b) {
+          final seqA = a.subEventSequence ?? 0;
+          final seqB = b.subEventSequence ?? 0;
+          if (seqA != seqB) return seqA.compareTo(seqB);
+          final aTime = DateTime.tryParse(a.startDateTime) ?? DateTime.now();
+          final bTime = DateTime.tryParse(b.startDateTime) ?? DateTime.now();
+          return aTime.compareTo(bTime);
+        });
+      }
       
       // Cache profiles in parallel
       final Map<String, UserProfile> profiles = {};
@@ -558,6 +574,92 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                             ),
                           ],
                         ),
+
+                        // Quick Sub-Event / Part Switcher Buttons inside the Header Box
+                        if (_linkedSubEvents.length > 1) ...[
+                          const SizedBox(height: 14),
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF16132D),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.purpleAccent.withOpacity(0.4), width: 1),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      "SWITCH EVENT DATES (${_linkedSubEvents.length} PARTS):",
+                                      style: GoogleFonts.outfit(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.purpleAccent,
+                                        letterSpacing: 1.1,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                SingleChildScrollView(
+                                  scrollDirection: Axis.horizontal,
+                                  child: Row(
+                                    children: _linkedSubEvents.map((sub) {
+                                      final isCurrent = sub.id == _event?.id;
+                                      final subStart = DateTime.tryParse(sub.startDateTime)?.toLocal() ?? DateTime.now();
+                                      final dateLabel = DateFormat('EEE, MMM d').format(subStart);
+                                      final seqStr = sub.subEventSequence != null ? 'Part ${sub.subEventSequence}' : sub.title;
+
+                                      return Container(
+                                        margin: const EdgeInsets.only(right: 8),
+                                        child: AnimatedTapDetector(
+                                          onTap: () {
+                                            setState(() {
+                                              _event = sub;
+                                            });
+                                          },
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                                            decoration: BoxDecoration(
+                                              gradient: isCurrent ? AppTheme.primaryGradient : null,
+                                              color: isCurrent ? null : const Color(0xFF231F45),
+                                              borderRadius: BorderRadius.circular(8),
+                                              border: Border.all(
+                                                color: isCurrent ? Colors.white : Colors.transparent,
+                                                width: isCurrent ? 1.5 : 0,
+                                              ),
+                                            ),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Icon(
+                                                  isCurrent ? Icons.check_circle_rounded : Icons.calendar_today_rounded,
+                                                  size: 13,
+                                                  color: Colors.white,
+                                                ),
+                                                const SizedBox(width: 6),
+                                                Text(
+                                                  '$seqStr: $dateLabel',
+                                                  style: GoogleFonts.inter(
+                                                    fontSize: 12,
+                                                    color: Colors.white,
+                                                    fontWeight: isCurrent ? FontWeight.bold : FontWeight.w500,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      );
+                                    }).toList(),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -565,6 +667,110 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
               ),
             ),
             const SizedBox(height: 12),
+
+            // Event Series Schedule (If grouped multi-part event)
+            if (_linkedSubEvents.length > 1) ...[
+              Container(
+                padding: const EdgeInsets.all(16),
+                margin: const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(
+                  color: AppTheme.cardBackground,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.purpleAccent.withOpacity(0.4), width: 1.5),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          "EVENT SERIES SCHEDULE",
+                          style: GoogleFonts.outfit(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.purpleAccent,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.purple.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            '${_linkedSubEvents.length} Parts',
+                            style: GoogleFonts.inter(fontSize: 10, color: Colors.purpleAccent, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Column(
+                      children: _linkedSubEvents.map((sub) {
+                        final isCurrent = sub.id == _event?.id;
+                        final subStart = DateTime.tryParse(sub.startDateTime)?.toLocal() ?? DateTime.now();
+                        final subTimeStr = DateFormat('EEE, MMM d • HH:mm').format(subStart);
+
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: isCurrent ? AppTheme.primaryAccent.withOpacity(0.15) : const Color(0xFF16132D),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: isCurrent ? AppTheme.primaryAccent : const Color(0xFF2E2A4E),
+                              width: isCurrent ? 1.5 : 1,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                isCurrent ? Icons.play_circle_fill_rounded : Icons.radio_button_unchecked_rounded,
+                                size: 16,
+                                color: isCurrent ? AppTheme.primaryAccent : AppTheme.textSecondary,
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      sub.title,
+                                      style: GoogleFonts.outfit(
+                                        fontSize: 14,
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      '$subTimeStr • ${sub.location}',
+                                      style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              if (!isCurrent)
+                                TextButton(
+                                  onPressed: () {
+                                    setState(() {
+                                      _event = sub;
+                                    });
+                                  },
+                                  child: const Text('View', style: TextStyle(color: AppTheme.primaryAccent, fontSize: 12)),
+                                ),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ],
+                ),
+              ),
+            ],
 
             // Open Event Chat (Prominent Top Placement)
             if (event.temporaryRoomId != null && event.temporaryRoomId!.isNotEmpty) ...[
@@ -1045,6 +1251,42 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                 ),
               ),
               const SizedBox(height: 10),
+              if (_linkedSubEvents.length > 1)
+                AnimatedTapDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => CreateEventPage(
+                          bandId: widget.bandId,
+                          existingGroupEvents: _linkedSubEvents,
+                        ),
+                      ),
+                    );
+                  },
+                  child: Container(
+                    height: 50,
+                    margin: const EdgeInsets.only(bottom: 12),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primaryAccent.withOpacity(0.18),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppTheme.primaryAccent, width: 1.5),
+                    ),
+                    child: Center(
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.edit_calendar_outlined, color: AppTheme.primaryAccent),
+                          const SizedBox(width: 8),
+                          Text(
+                            "Edit Event Series",
+                            style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
               if (!event.isLocked)
                 AnimatedTapDetector(
                   onTap: () async {
