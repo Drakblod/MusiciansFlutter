@@ -17,6 +17,7 @@ import '../models/event_room.dart';
 import '../widgets/animated_tap_detector.dart';
 import '../widgets/custom_top_bar.dart';
 import '../widgets/gradient_scaffold.dart';
+import '../widgets/rsvp_reminder_dialog.dart';
 import 'create_event_page.dart';
 import 'event_details_page.dart';
 import 'event_room_chat_screen.dart';
@@ -77,6 +78,34 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
   StreamSubscription<List<EventRoom>>? _eventRoomsSubscription;
   StreamSubscription? _gigsNewsSubscription;
   List<Map<String, dynamic>> _gigsNews = [];
+  bool _hasPromptedRsvpReminder = false;
+
+  void _checkAndShowRsvpReminder() {
+    if (_hasPromptedRsvpReminder || !mounted) return;
+    final appState = Provider.of<AppState>(context, listen: false);
+    final userId = appState.currentUserProfile?.userId ?? appState.firebaseService.currentUser?.uid;
+    if (userId == null) return;
+
+    for (final event in _bandEvents) {
+      if (event.requireResponse && !event.isLocked) {
+        final userResp = event.responses[userId];
+        if (userResp == null) {
+          _hasPromptedRsvpReminder = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              RsvpReminderDialog.show(
+                context: context,
+                event: event,
+                bandId: _activeBand?.id ?? '',
+                currentUserId: userId,
+              );
+            }
+          });
+          break;
+        }
+      }
+    }
+  }
   String _gigsTabFilter = 'All';
   String? _loadedBandId;
 
@@ -178,6 +207,7 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
             setState(() {
               _bandEvents = events;
             });
+            _checkAndShowRsvpReminder();
           }
         });
 
@@ -2489,16 +2519,30 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
               GestureDetector(
                 onTap: () {
                   if (bandId != null && event.id != null) {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => EventDetailsPage(
-                          bandId: bandId,
-                          eventId: event.id!,
-                          initialEvent: event,
+                    final appState = Provider.of<AppState>(context, listen: false);
+                    final userId = appState.currentUserProfile?.userId ?? appState.firebaseService.currentUser?.uid ?? '';
+                    if (isUpcoming && event.requireResponse) {
+                      RsvpReminderDialog.show(
+                        context: context,
+                        event: event,
+                        bandId: bandId,
+                        currentUserId: userId,
+                        onResponded: () {
+                          if (mounted) setState(() {});
+                        },
+                      );
+                    } else {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => EventDetailsPage(
+                            bandId: bandId,
+                            eventId: event.id!,
+                            initialEvent: event,
+                          ),
                         ),
-                      ),
-                    );
+                      );
+                    }
                   }
                 },
                 child: Container(
