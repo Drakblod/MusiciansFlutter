@@ -107,24 +107,27 @@ class UserProfile {
 
   /// Returns top 3 main skills parsed from mainInstrument or fallback to first instrument
   List<String> get mainSkills {
+    List<String> result = [];
     if (mainInstrument != null && mainInstrument!.isNotEmpty) {
       final parsed = mainInstrument!.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
       final valid = parsed.where((item) => instruments.contains(item)).take(3).toList();
-      if (valid.isNotEmpty) return valid;
+      if (valid.isNotEmpty) result = valid;
     }
-    if (instruments.isNotEmpty) {
-      return [instruments.first];
+    if (result.isEmpty && instruments.isNotEmpty) {
+      result = [instruments.first];
     }
-    if (userType != null && userType!.isNotEmpty) {
-      return [userType!];
+    if (result.isEmpty && userType != null && userType!.isNotEmpty) {
+      result = [userType!];
     }
-    return [];
+    return result
+        .where((s) => s != 'Browse Musicians' && s != 'Browse Profiles' && s != 'browse_musicians')
+        .toList();
   }
 
   /// Returns remaining selected instruments/skills excluding mainSkills
   List<String> get secondarySkills {
     final mains = mainSkills.toSet();
-    return instruments.where((item) => !mains.contains(item)).toList();
+    return instruments.where((item) => !mains.contains(item) && item != 'Browse Musicians' && item != 'Browse Profiles' && item != 'browse_musicians').toList();
   }
 
   /// Single formatted string of main skills for headers and subtitles
@@ -133,7 +136,14 @@ class UserProfile {
     if (skills.isNotEmpty) {
       return skills.join(' • ');
     }
-    return userType ?? 'Musician';
+    if (userType != null &&
+        userType!.isNotEmpty &&
+        userType != 'Browse Musicians' &&
+        userType != 'Browse Profiles' &&
+        userType != 'browse_musicians') {
+      return userType!;
+    }
+    return 'Musician';
   }
 
   static List<String> _toList(dynamic val) {

@@ -259,9 +259,15 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         }
       }
       
-      _selectedInstruments = List<String>.from(user.instruments);
+      _selectedInstruments = List<String>.from(user.instruments)
+          .where((i) => i != 'Browse Musicians' && i != 'Browse Profiles' && i != 'browse_musicians')
+          .toList();
       final role = user.userType ?? '';
-      if (role.isNotEmpty && !_selectedInstruments.contains(role)) {
+      if (role.isNotEmpty &&
+          role != 'Browse Musicians' &&
+          role != 'Browse Profiles' &&
+          role != 'browse_musicians' &&
+          !_selectedInstruments.contains(role)) {
         _selectedInstruments.add(role);
       }
 
