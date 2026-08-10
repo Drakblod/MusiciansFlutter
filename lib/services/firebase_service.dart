@@ -1438,6 +1438,16 @@ class FirebaseService {
     });
   }
 
+  Future<void> unlockBandEventAsync(String bandId, String eventId) async {
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    await _dbRef('Bands/$bandId/Events/$eventId').update({
+      'isLocked': false,
+      'lockedAt': null,
+      'lockedBy': null,
+      'updatedAt': timestamp,
+    });
+  }
+
   Future<String?> getUserBandRoleAsync(String bandId, String userId) async {
     final snapshot = await _dbRef('Bands/$bandId/Members_band/$userId/Role').get();
     if (snapshot.exists) {
