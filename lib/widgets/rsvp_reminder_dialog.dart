@@ -152,9 +152,8 @@ class _RsvpReminderDialogState extends State<RsvpReminderDialog> with SingleTick
   String _formatEventDate(String dateIso) {
     final dt = DateTime.tryParse(dateIso)?.toLocal();
     if (dt == null) return dateIso;
-    final DateFormat formatter = DateFormat('EEEE d MMMM kl HH:mm', 'sv');
     try {
-      return formatter.format(dt);
+      return DateFormat('EEEE d MMMM, HH:mm').format(dt);
     } catch (_) {
       return DateFormat('EEE, MMM d HH:mm').format(dt);
     }
