@@ -83,9 +83,20 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
       final appState = Provider.of<AppState>(context, listen: false);
       final members = await appState.firebaseService.getBandMembersAsync(widget.bandId);
 
-      if (_event?.parentEventId != null && _event!.parentEventId!.isNotEmpty) {
+      if (_event != null) {
         final allEvents = await appState.firebaseService.getBandEventsListAsync(widget.bandId);
-        _linkedSubEvents = allEvents.where((e) => e.parentEventId == _event!.parentEventId).toList();
+        
+        String normalizeTitle(String rawTitle) {
+          return rawTitle.replaceAll(RegExp(r'\s*[\-\(]?\s*(Part|Date|Day)\s*\d+[\)]?', caseSensitive: false), '').trim().toLowerCase();
+        }
+
+        if (_event!.parentEventId != null && _event!.parentEventId!.isNotEmpty) {
+          _linkedSubEvents = allEvents.where((e) => e.parentEventId == _event!.parentEventId).toList();
+        } else {
+          final normTarget = normalizeTitle(_event!.title);
+          _linkedSubEvents = allEvents.where((e) => normalizeTitle(e.title) == normTarget).toList();
+        }
+
         _linkedSubEvents.sort((a, b) {
           final seqA = a.subEventSequence ?? 0;
           final seqB = b.subEventSequence ?? 0;
