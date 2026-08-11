@@ -7,12 +7,16 @@ class SearchableCategoryMultiSelectSheet extends StatefulWidget {
   final String title;
   final Map<String, List<String>> categoryMap;
   final List<String> initialSelected;
+  final bool isSingleSelect;
+  final int? maxSelection;
 
   const SearchableCategoryMultiSelectSheet({
     super.key,
     required this.title,
     required this.categoryMap,
     required this.initialSelected,
+    this.isSingleSelect = false,
+    this.maxSelection,
   });
 
   static Future<List<String>?> show({
@@ -20,6 +24,8 @@ class SearchableCategoryMultiSelectSheet extends StatefulWidget {
     required String title,
     required Map<String, List<String>> categoryMap,
     required List<String> initialSelected,
+    bool isSingleSelect = false,
+    int? maxSelection,
   }) {
     return showModalBottomSheet<List<String>>(
       context: context,
@@ -29,6 +35,8 @@ class SearchableCategoryMultiSelectSheet extends StatefulWidget {
         title: title,
         categoryMap: categoryMap,
         initialSelected: initialSelected,
+        isSingleSelect: isSingleSelect,
+        maxSelection: maxSelection,
       ),
     );
   }
@@ -57,10 +65,24 @@ class _SearchableCategoryMultiSelectSheetState
   }
 
   void _toggleItem(String item) {
+    if (widget.isSingleSelect) {
+      Navigator.pop(context, [item]);
+      return;
+    }
     setState(() {
       if (_tempSelected.contains(item)) {
         _tempSelected.remove(item);
       } else {
+        if (widget.maxSelection != null && _tempSelected.length >= widget.maxSelection!) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('You can select a maximum of ${widget.maxSelection} items.'),
+              backgroundColor: AppTheme.warning,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+          return;
+        }
         _tempSelected.add(item);
       }
     });
@@ -123,43 +145,51 @@ class _SearchableCategoryMultiSelectSheetState
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  children: [
-                    Text(
-                      widget.title.toUpperCase(),
-                      style: GoogleFonts.outfit(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                        letterSpacing: 1.5,
-                      ),
-                    ),
-                    if (_tempSelected.isNotEmpty) ...[
-                      const SizedBox(width: 10),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: AppTheme.primaryAccent.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                              color: AppTheme.primaryAccent.withOpacity(0.5)),
-                        ),
+                Expanded(
+                  child: Row(
+                    children: [
+                      Flexible(
                         child: Text(
-                          '${_tempSelected.length}',
-                          style: GoogleFonts.inter(
-                            fontSize: 12,
+                          widget.title.toUpperCase(),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.outfit(
+                            fontSize: 16,
                             fontWeight: FontWeight.bold,
-                            color: AppTheme.primaryAccent,
+                            color: Colors.white,
+                            letterSpacing: 1.0,
                           ),
                         ),
                       ),
+                      if (_tempSelected.isNotEmpty) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: AppTheme.primaryAccent.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                                color: AppTheme.primaryAccent.withOpacity(0.5)),
+                          ),
+                          child: Text(
+                            '${_tempSelected.length}',
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: AppTheme.primaryAccent,
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
                 IconButton(
                   icon: const Icon(Icons.close_rounded, color: Colors.white70),
                   onPressed: () => Navigator.pop(context),
+                  constraints: const BoxConstraints(),
+                  padding: const EdgeInsets.all(4),
                 ),
               ],
             ),

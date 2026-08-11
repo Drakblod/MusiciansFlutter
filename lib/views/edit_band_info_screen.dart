@@ -23,6 +23,7 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
   late TextEditingController _nameController;
   late TextEditingController _locationController;
   late TextEditingController _rehearsalLocationController;
+  late TextEditingController _mapViewLocationController;
   late TextEditingController _aboutController;
 
   late String _level;
@@ -32,6 +33,7 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
   late TimeOfDay _endTime;
   
   late List<String> _selectedStyles;
+  bool _isMapDisclaimerAccepted = false;
   bool _isSaving = false;
 
   final List<String> _levels = [
@@ -145,6 +147,7 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
     _nameController = TextEditingController(text: widget.band.name);
     _locationController = TextEditingController(text: widget.band.location);
     _rehearsalLocationController = TextEditingController(text: widget.band.rehearsalLocation);
+    _mapViewLocationController = TextEditingController(text: widget.band.address ?? '');
     _aboutController = TextEditingController(text: widget.band.about ?? widget.band.description);
 
     _level = _levels.contains(widget.band.level)
@@ -180,6 +183,7 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
     _nameController.dispose();
     _locationController.dispose();
     _rehearsalLocationController.dispose();
+    _mapViewLocationController.dispose();
     _aboutController.dispose();
     super.dispose();
   }
@@ -187,7 +191,7 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
   Future<void> _openGenrePicker() async {
     final result = await SearchableCategoryMultiSelectSheet.show(
       context: context,
-      title: 'Select Genres/Band Types',
+      title: 'Genres & Band Types',
       categoryMap: _genreCategoryMap,
       initialSelected: _selectedStyles,
     );
@@ -246,7 +250,7 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
     try {
       final derivedType = _selectedStyles.isNotEmpty
           ? _selectedStyles.first
-          : (widget.band.ensembleType ?? 'Pop/Rock band');
+          : (widget.band.ensembleType ?? 'Band');
 
       final updated = Band(
         id: bandId,
@@ -257,6 +261,7 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
         level: _level,
         location: _locationController.text.trim(),
         rehearsalLocation: _rehearsalLocationController.text.trim(),
+        address: _mapViewLocationController.text.trim(),
         rehearsalDayOfWeek: _rehearsalDay,
         rehearsalStartTime: _formatTime(_startTime),
         rehearsalEndTime: _formatTime(_endTime),
@@ -337,77 +342,75 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
               ),
               const SizedBox(height: 20),
 
-              // Genres / Band Types
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Genres/Band Types',
-                    style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
-                  ),
-                  AnimatedTapDetector(
-                    onTap: _openGenrePicker,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: AppTheme.primaryAccent.withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.4)),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.tune_rounded, color: AppTheme.primaryAccent, size: 16),
-                          const SizedBox(width: 6),
-                          Text(
-                            _selectedStyles.isEmpty ? 'Select Genres/Types' : 'Edit (${_selectedStyles.length})',
-                            style: GoogleFonts.inter(
-                              color: Colors.white,
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              if (_selectedStyles.isEmpty)
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: AppTheme.cardBackground,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: const Color(0xFF231F45)),
-                  ),
-                  child: Text(
-                    'No genres or band types selected yet.',
-                    style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textMuted),
-                  ),
-                )
-              else
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: _selectedStyles.map((style) {
-                    return Chip(
-                      label: Text(style),
-                      onDeleted: () {
-                        setState(() {
-                          _selectedStyles.remove(style);
-                        });
-                      },
-                      deleteIcon: const Icon(Icons.close_rounded, size: 16, color: Colors.white70),
-                      backgroundColor: const Color(0xFF1E1A3A),
-                      labelStyle: GoogleFonts.inter(fontSize: 12, color: Colors.white),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                      side: const BorderSide(color: AppTheme.primaryAccent),
-                    );
-                  }).toList(),
+              // Genres / Band Types Container Card (Exact match with Create Band & Edit Profile)
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppTheme.cardBackground,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFF2E2A4E), width: 1.2),
                 ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.music_note_rounded, color: AppTheme.primaryAccent, size: 18),
+                            const SizedBox(width: 8),
+                            Text(
+                              'GENRES & BAND TYPES',
+                              style: GoogleFonts.outfit(
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                                letterSpacing: 1.2,
+                              ),
+                            ),
+                          ],
+                        ),
+                        AnimatedTapDetector(
+                          onTap: _openGenrePicker,
+                          child: Text(
+                            _selectedStyles.isEmpty ? '+ Add' : 'Edit (${_selectedStyles.length})',
+                            style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.primaryAccent),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    if (_selectedStyles.isEmpty)
+                      InkWell(
+                        onTap: _openGenrePicker,
+                        child: Text(
+                          'No genres selected yet. Tap to add...',
+                          style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textMuted, fontStyle: FontStyle.italic),
+                        ),
+                      )
+                    else
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: _selectedStyles.map((genre) {
+                          return InputChip(
+                            label: Text(genre),
+                            selected: false,
+                            onDeleted: () => setState(() => _selectedStyles.remove(genre)),
+                            deleteIcon: const Icon(Icons.close_rounded, size: 14, color: Colors.white70),
+                            backgroundColor: const Color(0xFF1B1735),
+                            labelStyle: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.white),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                            side: const BorderSide(color: AppTheme.primaryAccent, width: 1),
+                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+                            visualDensity: VisualDensity.compact,
+                          );
+                        }).toList(),
+                      ),
+                  ],
+                ),
+              ),
               const SizedBox(height: 20),
 
               // Band Level
@@ -451,7 +454,7 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
               ),
               const SizedBox(height: 20),
 
-              // Location
+              // Location (City, Country)
               Text(
                 'Location (City, Country)',
                 style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
@@ -461,7 +464,7 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
                 controller: _locationController,
                 style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
                 decoration: const InputDecoration(
-                  hintText: 'e.g. Stockholm, Sweden',
+                  hintText: 'Stockholm, Sweden',
                 ),
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) {
@@ -472,9 +475,9 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
               ),
               const SizedBox(height: 20),
 
-              // Rehearsal Location
+              // Rehearsal Location (if any)
               Text(
-                'Rehearsal Location',
+                'Rehearsal Location (if any)',
                 style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
               ),
               const SizedBox(height: 8),
@@ -487,9 +490,81 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
               ),
               const SizedBox(height: 20),
 
+              // Map view location (if other than Rehearsal Location)
+              Text(
+                'Map view location (if other than Rehearsal Location)',
+                style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '(= the band’s "official" location: rehearsal space, bandleader’s address, etc)',
+                style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary, fontStyle: FontStyle.italic),
+              ),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: _mapViewLocationController,
+                style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
+                decoration: const InputDecoration(
+                  hintText: 'Tap to input location for Map View Pin',
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // Map Location & Media Permission Disclaimer Container
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: AppTheme.cardBackground,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFF2E2A4E), width: 1.2),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Checkbox(
+                      value: _isMapDisclaimerAccepted,
+                      activeColor: AppTheme.primaryAccent,
+                      checkColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                      side: const BorderSide(color: Colors.white54),
+                      onChanged: (val) {
+                        setState(() {
+                          _isMapDisclaimerAccepted = val ?? false;
+                        });
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            _isMapDisclaimerAccepted = !_isMapDisclaimerAccepted;
+                          });
+                        },
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Location Sharing & Media Disclaimer',
+                              style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'By checking this box, you grant permission to display your band’s location on the Map View and confirm that all necessary rights/permissions for uploaded media have been obtained.',
+                              style: GoogleFonts.inter(fontSize: 11, color: Colors.white70, height: 1.4),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+
               // Rehearsal Day
               Text(
-                'Regular Rehearsal Day (if any)',
+                'Rehearsal Day',
                 style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
               ),
               const SizedBox(height: 8),
@@ -596,7 +671,7 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
 
               // About/Description
               Text(
-                'About',
+                'About the Band',
                 style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
               ),
               const SizedBox(height: 8),
