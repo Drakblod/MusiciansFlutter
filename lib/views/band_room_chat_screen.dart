@@ -3167,22 +3167,38 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
 
   List<_EventGroup> _groupEventsList(List<BandEvent> rawEvents) {
     final Map<String, List<BandEvent>> parentMap = {};
+    final Map<String, List<BandEvent>> titleMap = {};
+
+    String normalizeTitle(String rawTitle) {
+      final t = rawTitle.replaceAll(RegExp(r'\s*[\-\(]?\s*(Part|Date|Day)\s*\d+[\)]?', caseSensitive: false), '').trim();
+      return t.toLowerCase();
+    }
 
     for (var e in rawEvents) {
       if (e.parentEventId != null && e.parentEventId!.isNotEmpty) {
         parentMap.putIfAbsent(e.parentEventId!, () => []).add(e);
+      } else {
+        final norm = normalizeTitle(e.title);
+        if (norm.isNotEmpty) {
+          titleMap.putIfAbsent(norm, () => []).add(e);
+        }
       }
     }
 
     final List<_EventGroup> result = [];
     final Set<String> processedParentIds = {};
+    final Set<String> processedEventIds = {};
 
+    // 1. Process explicit parentEventId groups first
     for (var e in rawEvents) {
       final pId = e.parentEventId;
       if (pId != null && pId.isNotEmpty) {
         if (!processedParentIds.contains(pId)) {
           processedParentIds.add(pId);
           final subList = parentMap[pId] ?? [e];
+          for (var sub in subList) {
+            if (sub.id != null) processedEventIds.add(sub.id!);
+          }
           subList.sort((a, b) {
             final seqA = a.subEventSequence ?? 0;
             final seqB = b.subEventSequence ?? 0;
@@ -3193,9 +3209,38 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
           });
           result.add(_EventGroup(mainEvent: subList.first, subEvents: subList));
         }
-      } else {
-        result.add(_EventGroup(mainEvent: e, subEvents: [e]));
       }
+    }
+
+    // 2. Process title-matched events for remaining un-grouped events
+    for (var e in rawEvents) {
+      if (e.id != null && processedEventIds.contains(e.id)) continue;
+      if (e.parentEventId != null && e.parentEventId!.isNotEmpty) continue;
+
+      final norm = normalizeTitle(e.title);
+      final candidateList = titleMap[norm];
+
+      if (candidateList != null && candidateList.length > 1) {
+        final unProcessedGroup = candidateList.where((item) => item.id == null || !processedEventIds.contains(item.id)).toList();
+        if (unProcessedGroup.length > 1) {
+          for (var item in unProcessedGroup) {
+            if (item.id != null) processedEventIds.add(item.id!);
+          }
+          unProcessedGroup.sort((a, b) {
+            final seqA = a.subEventSequence ?? 0;
+            final seqB = b.subEventSequence ?? 0;
+            if (seqA != seqB) return seqA.compareTo(seqB);
+            final aTime = DateTime.tryParse(a.startDateTime) ?? DateTime.now();
+            final bTime = DateTime.tryParse(b.startDateTime) ?? DateTime.now();
+            return aTime.compareTo(bTime);
+          });
+          result.add(_EventGroup(mainEvent: unProcessedGroup.first, subEvents: unProcessedGroup));
+          continue;
+        }
+      }
+
+      if (e.id != null) processedEventIds.add(e.id!);
+      result.add(_EventGroup(mainEvent: e, subEvents: [e]));
     }
 
     return result;

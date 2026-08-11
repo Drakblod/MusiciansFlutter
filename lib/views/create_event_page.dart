@@ -525,7 +525,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
         ),
       ];
 
-      if (_isMultipleEvents) {
+      if (_isMultipleEvents || _additionalEvents.isNotEmpty) {
         allEventsToSave.addAll(_additionalEvents);
       }
 
