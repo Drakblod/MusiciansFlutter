@@ -427,6 +427,56 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                     },
                   ),
 
+            // Center Map Crosshair Overlay
+            Center(
+              child: IgnorePointer(
+                child: Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: AppTheme.primaryAccent.withOpacity(0.65),
+                      width: 1.5,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppTheme.primaryAccent.withOpacity(0.25),
+                        blurRadius: 10,
+                        spreadRadius: 1,
+                      ),
+                    ],
+                  ),
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      // Center dot
+                      Container(
+                        width: 6,
+                        height: 6,
+                        decoration: const BoxDecoration(
+                          color: AppTheme.primaryAccent,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      // Horizontal reticle line
+                      Container(
+                        width: 18,
+                        height: 1.5,
+                        color: AppTheme.primaryAccent.withOpacity(0.75),
+                      ),
+                      // Vertical reticle line
+                      Container(
+                        width: 1.5,
+                        height: 18,
+                        color: AppTheme.primaryAccent.withOpacity(0.75),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
             // Top Filter Row
             Positioned(
               top: 16,

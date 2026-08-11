@@ -10,6 +10,7 @@ import '../models/band.dart';
 import '../widgets/custom_top_bar.dart';
 import '../widgets/gradient_scaffold.dart';
 import '../widgets/animated_tap_detector.dart';
+import '../widgets/searchable_category_multi_select_sheet.dart';
 
 class FindSubScreen extends StatefulWidget {
   final String? eventId;
@@ -261,6 +262,61 @@ class _FindSubScreenState extends State<FindSubScreen> {
     "Steel Guitar",
     "Steel Pan"
   ];
+
+  static final Map<String, List<String>> _allSkillsCategoryMap = {
+    '🎷 Woodwinds': [
+      'Flute', 'Piccolo Flute', 'Alto Flute', 'Bass Flute',
+      'Oboe', 'English Horn', 'Clarinet', 'Eb Clarinet', 'Alto Clarinet', 'Bass Clarinet',
+      'Bassoon', 'Contra Bassoon', 'Soprano Sax', 'Alto Sax', 'Tenor Sax', 'Bari Sax',
+      'Recorder', 'Soprano Recorder', 'Alto Recorder', 'Tenor Recorder', 'Bass Recorder'
+    ],
+    '🎺 Brass': [
+      'Trumpet', 'Cornet', 'Piccolo Trumpet', 'Trombone', 'Alto Trombone',
+      'French Horn', 'Euphonium', 'Tuba'
+    ],
+    '🎻 Strings': [
+      'Acoustic Guitar', 'Electric Guitar', 'Electric Bass', 'Violin', 'Viola', 'Cello',
+      'Contrabass', 'Harp', 'Viola da Gamba', 'Steel Guitar', 'Steel Pan'
+    ],
+    '🎹 Keyboards': [
+      'Piano', 'Keyboard/Synth', 'Harpsichord', 'Organ (Hammond)'
+    ],
+    '🥁 Percussion': [
+      'Drums', 'Latin Percussion (congas, timbales, etc)', 'Classical Percussion (timpani, cymbals, etc)'
+    ],
+    '🗣️ Voices': [
+      'Soprano', 'Alto', 'Tenor', 'Baritone', 'Bass',
+      'Mezzo Soprano', 'Contralto', 'Counter Tenor',
+      'Male Lead Vocals', 'Female Lead vocals', 'Male Backing vocals', 'Female Backing vocals'
+    ],
+    '🎧 Songwriters & Producers': [
+      'Songwriter', 'Producer', 'Composer', 'Lyricist', 'Beatmaker', 'DJ'
+    ],
+    '🎛️ Studios & Engineers': [
+      'Studio', 'Home Studio', 'Recording Engineer', 'Mix engineer', 'Live Engineer'
+    ],
+    '💼 PR & Management': [
+      'Manager', 'Promotor', 'Agency', 'Other'
+    ],
+  };
+
+  Future<void> _openInstrumentPicker() async {
+    final result = await SearchableCategoryMultiSelectSheet.show(
+      context: context,
+      title: 'Instrument / Skills',
+      categoryMap: _allSkillsCategoryMap,
+      initialSelected: [_selectedInstrument],
+      maxSelection: 1,
+    );
+    if (result != null && result.isNotEmpty) {
+      setState(() {
+        _selectedInstrument = result.first;
+        if (_showFavoritesList) {
+          _updateFilteredFavorites();
+        }
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -782,41 +838,84 @@ class _FindSubScreenState extends State<FindSubScreen> {
             ),
             const SizedBox(height: 20),
 
-            // Instrument Picker Dropdown
+            // Instrument / Skills Container Card (Exact match with Edit Profile, Edit Band & Create Band)
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
+              padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: AppTheme.inputBackground,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
+                color: AppTheme.cardBackground,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFF2E2A4E), width: 1.2),
               ),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<String>(
-                  value: _selectedInstrument,
-                  isExpanded: true,
-                  dropdownColor: AppTheme.cardBackground,
-                  style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
-                  icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppTheme.textSecondary),
-                  items: _instruments.map((String value) {
-                    return DropdownMenuItem<String>(
-                      value: value,
-                      child: Text(value),
-                    );
-                  }).toList(),
-                  onChanged: (newValue) {
-                    if (newValue != null) {
-                      setState(() {
-                        _selectedInstrument = newValue;
-                        if (_showFavoritesList) {
-                          _updateFilteredFavorites();
-                        }
-                      });
-                    }
-                  },
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.music_note_rounded, color: AppTheme.primaryAccent, size: 18),
+                          const SizedBox(width: 8),
+                          Text(
+                            'INSTRUMENT / SKILLS',
+                            style: GoogleFonts.outfit(
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                              letterSpacing: 1.2,
+                            ),
+                          ),
+                        ],
+                      ),
+                      AnimatedTapDetector(
+                        onTap: _openInstrumentPicker,
+                        child: Text(
+                          _selectedInstrument.isEmpty ? '+ Select' : 'Change',
+                          style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.primaryAccent),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  if (_selectedInstrument.isEmpty)
+                    InkWell(
+                      onTap: _openInstrumentPicker,
+                      child: Text(
+                        'No instrument selected. Tap to select...',
+                        style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textMuted, fontStyle: FontStyle.italic),
+                      ),
+                    )
+                  else
+                    Wrap(
+                      children: [
+                        InputChip(
+                          label: Text(_selectedInstrument),
+                          selected: false,
+                          onPressed: _openInstrumentPicker,
+                          backgroundColor: const Color(0xFF1B1735),
+                          labelStyle: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.white),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                          side: const BorderSide(color: AppTheme.primaryAccent, width: 1),
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                      ],
+                    ),
+                ],
               ),
             ),
             const SizedBox(height: 24),
+
+            // What are you looking for? Header
+            Text(
+              'What are you looking for?',
+              style: GoogleFonts.outfit(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+            const SizedBox(height: 12),
 
             // Gig/Rehearsal Details card
             Container(
@@ -844,19 +943,43 @@ class _FindSubScreenState extends State<FindSubScreen> {
                     ],
                   ),
                   const SizedBox(height: 16),
+
+                  // Event Description Text Input
                   Text(
-                    'Location / Address',
+                    'Gig / Event Details',
+                    style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _messageController,
+                    maxLines: 4,
+                    maxLength: 250,
+                    style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
+                    decoration: const InputDecoration(
+                      hintText: 'Describe what the gig/rehearsal is about...',
+                      counterStyle: TextStyle(color: AppTheme.textSecondary),
+                      contentPadding: EdgeInsets.all(12),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Location (City, Country)
+                  Text(
+                    'Location (City, Country)',
                     style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
                   ),
                   const SizedBox(height: 8),
                   TextField(
                     controller: _locationController,
+                    style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
                     decoration: const InputDecoration(
-                      hintText: 'Location (e.g. Stockholm, Gothenburg, Malmö)',
+                      hintText: 'Stockholm, Sweden',
                       prefixIcon: Icon(Icons.location_on_rounded, color: AppTheme.textSecondary),
                     ),
                   ),
                   const SizedBox(height: 16),
+
+                  // Date
                   Text(
                     'Date',
                     style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
@@ -950,56 +1073,6 @@ class _FindSubScreenState extends State<FindSubScreen> {
                         ),
                       ),
                     ],
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            // Optional Message Card
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: AppTheme.cardBackground,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFF231F45), width: 1),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      const Icon(Icons.chat_bubble_outline_rounded, color: AppTheme.primaryAccent, size: 18),
-                      const SizedBox(width: 8),
-                      Text(
-                        'More details..',
-                        style: GoogleFonts.outfit(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        '(optional)',
-                        style: GoogleFonts.inter(
-                          fontSize: 12,
-                          color: AppTheme.textSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: _messageController,
-                    maxLines: 4,
-                    maxLength: 200,
-                    style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
-                    decoration: const InputDecoration(
-                      hintText: 'More details..',
-                      counterStyle: TextStyle(color: AppTheme.textSecondary),
-                      contentPadding: EdgeInsets.all(12),
-                    ),
                   ),
                 ],
               ),
@@ -1165,7 +1238,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
                 )
               else ...[
                 Text(
-                  'SELECT RECIPIENTS',
+                  'SELECT FAVORITE(S)',
                   style: GoogleFonts.outfit(
                     fontSize: 12,
                     fontWeight: FontWeight.bold,
