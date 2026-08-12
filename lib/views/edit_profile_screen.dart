@@ -35,7 +35,16 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   List<String> _secondarySkills = [];
   List<String> _otherSkills = [];
   List<String> _selectedGenres = [];
+  late String _level;
   bool _isSaving = false;
+
+  final List<String> _levels = [
+    'A = PRO',
+    'B = SEMI PRO',
+    'C = INTERMEDIATE',
+    'D = AMATEUR',
+    'E = BEGINNER'
+  ];
 
   String? _profilePictureUrl;
   bool _isUploadingProfilePic = false;
@@ -170,10 +179,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   Future<void> _openPrimarySkillPicker() async {
     final result = await SearchableCategoryMultiSelectSheet.show(
       context: context,
-      title: 'Primary Skills (1 to 3)',
+      title: 'Primary Skill / Talent (Select 1)',
       categoryMap: _allSkillsCategoryMap,
       initialSelected: _primarySkills,
-      maxSelection: 3,
+      maxSelection: 1,
     );
     if (result != null) {
       setState(() {
@@ -262,7 +271,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       final role = user.userType ?? '';
       if (user.mainInstrument != null && user.mainInstrument!.isNotEmpty) {
         final parsed = user.mainInstrument!.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty && e != 'Browse Musicians' && e != 'Browse Profiles').toList();
-        _primarySkills = parsed.take(3).toList();
+        _primarySkills = parsed.take(1).toList();
       } else if (role.isNotEmpty && role != 'Browse Musicians' && role != 'Browse Profiles' && role != 'browse_musicians') {
         _primarySkills = [role];
       } else if (rawAll.isNotEmpty) {
@@ -274,7 +283,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       final remaining = rawAll.where((i) => !_primarySkills.contains(i)).toList();
       if (user.mainInstrument != null && user.mainInstrument!.isNotEmpty) {
         final parsedAllMain = user.mainInstrument!.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
-        final secondaryFromMain = parsedAllMain.skip(3).toList();
+        final secondaryFromMain = parsedAllMain.skip(1).toList();
         _secondarySkills = [...secondaryFromMain, ...remaining.take(3 - secondaryFromMain.length)].toSet().toList();
         _otherSkills = remaining.where((i) => !_secondarySkills.contains(i)).toList();
       } else {
@@ -283,8 +292,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       }
 
       _selectedGenres = List<String>.from(user.genres);
+      _level = _levels.contains(user.level) ? user.level! : 'C = INTERMEDIATE';
     } else {
       _emailController.text = appState.firebaseService.currentUser?.email ?? '';
+      _level = 'C = INTERMEDIATE';
     }
   }
 
@@ -323,10 +334,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       builder: (context) {
         return Container(
           decoration: BoxDecoration(
-            color: const Color(0xFF0F0C22).withOpacity(0.95),
+            color: const Color(0xFF16132D).withOpacity(0.95),
             borderRadius: const BorderRadius.only(
-              topLeft: Radius.circular(20),
-              topRight: Radius.circular(20),
+              topLeft: Radius.circular(24),
+              topRight: Radius.circular(24),
             ),
             border: Border.all(color: const Color(0xFF2E2A4E), width: 1.5),
           ),
@@ -334,31 +345,39 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                const SizedBox(height: 12),
+                Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.white24,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
                 const SizedBox(height: 16),
                 Text(
-                  'PROFILE PICTURE',
+                  'Profile Picture',
                   style: GoogleFonts.outfit(
-                    fontSize: 16,
+                    fontSize: 18,
                     fontWeight: FontWeight.bold,
                     color: Colors.white,
-                    letterSpacing: 2,
                   ),
                 ),
                 const SizedBox(height: 16),
                 ListTile(
-                  leading: const Icon(Icons.camera_alt_outlined, color: AppTheme.primaryAccent),
-                  title: Text('Take Photo', style: GoogleFonts.inter(color: Colors.white)),
-                  onTap: () {
-                    Navigator.pop(context);
-                    _pickAndUploadProfilePicture(ImageSource.camera);
-                  },
-                ),
-                ListTile(
-                  leading: const Icon(Icons.photo_library_outlined, color: AppTheme.primaryAccent),
+                  leading: const Icon(Icons.photo_library_rounded, color: AppTheme.primaryAccent),
                   title: Text('Choose from Gallery', style: GoogleFonts.inter(color: Colors.white)),
                   onTap: () {
                     Navigator.pop(context);
                     _pickAndUploadProfilePicture(ImageSource.gallery);
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.camera_alt_rounded, color: AppTheme.primaryAccent),
+                  title: Text('Take a Photo', style: GoogleFonts.inter(color: Colors.white)),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _pickAndUploadProfilePicture(ImageSource.camera);
                   },
                 ),
                 if (_profilePictureUrl != null && _profilePictureUrl!.isNotEmpty)
@@ -449,45 +468,43 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     try {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
-        allowedExtensions: ['mp3'],
+        allowedExtensions: ['mp3', 'm4a', 'wav', 'aac', 'ogg', 'flac'],
         withData: true,
       );
 
-      if (result != null) {
-        final file = result.files.single;
-        Uint8List? bytes = file.bytes;
-        if (bytes == null && file.path != null) {
-          bytes = await File(file.path!).readAsBytes();
-        }
+      if (result != null && result.files.isNotEmpty) {
+        final file = result.files.first;
+        final bytes = file.bytes;
+        final name = file.name;
 
-        setState(() {
-          _isUploadingAudio = true;
-          _pickedAudioFileName = file.name;
-        });
+        if (bytes != null) {
+          setState(() {
+            _isUploadingAudio = true;
+          });
 
-        final appState = Provider.of<AppState>(context, listen: false);
-        final userId = appState.currentUserProfile?.userId;
-        if (userId == null) {
-          throw Exception("User is not logged in");
-        }
+          final appState = Provider.of<AppState>(context, listen: false);
+          final userId = appState.currentUserProfile?.userId;
+          if (userId == null) throw Exception("User is not logged in");
 
-        final url = await appState.firebaseService.uploadAudioSnippetAsync(
-          userId,
-          bytes,
-          file.path,
-        );
-
-        setState(() {
-          _audioSnippetUrl = url;
-        });
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Track uploaded successfully!'),
-              backgroundColor: AppTheme.success,
-            ),
+          final url = await appState.firebaseService.uploadAudioSnippetAsync(
+            userId,
+            bytes,
+            name,
           );
+
+          setState(() {
+            _audioSnippetUrl = url;
+            _pickedAudioFileName = name;
+          });
+
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Track uploaded successfully!'),
+                backgroundColor: AppTheme.success,
+              ),
+            );
+          }
         }
       }
     } catch (e) {
@@ -552,6 +569,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           email: _emailController.text.trim().isEmpty ? null : _emailController.text.trim(),
           userType: _primarySkills.first,
           location: _locationController.text.trim(),
+          level: _level,
           about: _aboutController.text.trim(),
           profilePictureUrl: _profilePictureUrl,
           genres: _selectedGenres,
@@ -849,6 +867,47 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   hintText: 'Stockholm, Sweden',
                 ),
               ),
+              const SizedBox(height: 20),
+
+              // 4. Level
+              Text(
+                'Level',
+                style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+              ),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppTheme.inputBackground,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButtonFormField<String>(
+                    value: _level,
+                    dropdownColor: AppTheme.cardBackground,
+                    style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
+                    icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppTheme.textSecondary),
+                    decoration: const InputDecoration(
+                      border: InputBorder.none,
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                    items: _levels.map((String val) {
+                      return DropdownMenuItem<String>(
+                        value: val,
+                        child: Text(val),
+                      );
+                    }).toList(),
+                    onChanged: (newValue) {
+                      if (newValue != null) {
+                        setState(() {
+                          _level = newValue;
+                        });
+                      }
+                    },
+                  ),
+                ),
+              ),
               const SizedBox(height: 24),
 
               // ================= SKILLS & TALENTS CARD =================
@@ -879,18 +938,18 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     ),
                     const SizedBox(height: 16),
 
-                    // Primary Skills (1-3)
+                    // Primary Skill (Select 1)
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          'Primary Skills (1 to 3)',
+                          'Primary Skill / Talent (Select 1)',
                           style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white70),
                         ),
                         AnimatedTapDetector(
                           onTap: _openPrimarySkillPicker,
                           child: Text(
-                            _primarySkills.isEmpty ? '+ Add' : 'Edit (${_primarySkills.length}/3)',
+                            _primarySkills.isEmpty ? '+ Select' : 'Change',
                             style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.primaryAccent),
                           ),
                         ),
@@ -901,7 +960,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       InkWell(
                         onTap: _openPrimarySkillPicker,
                         child: Text(
-                          'Tap to select your Primary Skills...',
+                          'Tap to select your Primary Skill / Talent...',
                           style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textMuted, fontStyle: FontStyle.italic),
                         ),
                       )
@@ -913,18 +972,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                           return InputChip(
                             label: Text(skill),
                             selected: false,
-                            onDeleted: _primarySkills.length > 1
-                                ? () => setState(() => _primarySkills.remove(skill))
-                                : null,
-                            deleteIcon: _primarySkills.length > 1
-                                ? const Icon(Icons.close_rounded, size: 14, color: Colors.white70)
-                                : null,
+                            onPressed: _openPrimarySkillPicker,
                             backgroundColor: AppTheme.primaryAccent.withOpacity(0.25),
                             labelStyle: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                             side: const BorderSide(color: AppTheme.primaryAccent, width: 1),
                             padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
-                            visualDensity: VisualDensity.compact,
                           );
                         }).toList(),
                       ),

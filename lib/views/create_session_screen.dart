@@ -75,6 +75,8 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
             _selectedTime = TimeOfDay.fromDateTime(dt);
           }
         }
+      } else if (args is String && args == 'Jam') {
+        _sessionCategory = 'Jam';
       }
       _initialized = true;
     }

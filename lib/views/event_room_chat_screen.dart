@@ -162,8 +162,8 @@ class _EventRoomChatScreenState extends State<EventRoomChatScreen> {
                         }
                       },
                       itemBuilder: (ctx) => [
-                        const PopupMenuItem(value: 'close', child: Text('Close Event Room', style: TextStyle(color: Colors.white))),
-                        const PopupMenuItem(value: 'delete', child: Text('Delete Room', style: TextStyle(color: Colors.redAccent))),
+                        PopupMenuItem(value: 'close', child: Text('Close Event Room', style: GoogleFonts.inter(color: Colors.white))),
+                        PopupMenuItem(value: 'delete', child: Text('Delete Room', style: GoogleFonts.inter(color: Colors.redAccent))),
                       ],
                     ),
                 ],

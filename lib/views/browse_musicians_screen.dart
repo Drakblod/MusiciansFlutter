@@ -829,7 +829,7 @@ class _BrowseMusiciansScreenState extends State<BrowseMusiciansScreen> {
                               (user.displayName != null && user.displayName!.isNotEmpty)
                                   ? user.displayName!.substring(0, 1).toUpperCase()
                                   : 'U',
-                              style: const TextStyle(
+                              style: GoogleFonts.inter(
                                 color: Colors.white,
                                 fontSize: 24,
                                 fontWeight: FontWeight.bold,

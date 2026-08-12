@@ -152,7 +152,7 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
                               (widget.musician.displayName != null && widget.musician.displayName!.isNotEmpty)
                                   ? widget.musician.displayName!.substring(0, 1).toUpperCase()
                                   : 'U',
-                              style: const TextStyle(
+                              style: GoogleFonts.inter(
                                 color: Colors.white,
                                 fontSize: 44,
                                 fontWeight: FontWeight.bold,
@@ -196,7 +196,7 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
                   ),
                   const SizedBox(height: 6),
 
-                  // Location (incl. Country)
+                  // Location & Level Row
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -213,6 +213,27 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
                           color: AppTheme.textSecondary,
                         ),
                       ),
+                      if (widget.musician.level != null && widget.musician.level!.isNotEmpty) ...[
+                        const SizedBox(width: 8),
+                        Text('•', style: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 13)),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: AppTheme.primaryAccent.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.4), width: 1),
+                          ),
+                          child: Text(
+                            widget.musician.level!,
+                            style: GoogleFonts.inter(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: AppTheme.primaryAccent,
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                   if (widget.musician.genres.isNotEmpty) ...[
@@ -510,7 +531,7 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
                             child: OutlinedButton.icon(
                               onPressed: () => _launchUrl(widget.musician.spotifyUrl!),
                               icon: const Icon(Icons.music_note, color: Colors.green),
-                              label: const Text('Spotify', style: TextStyle(color: Colors.white)),
+                              label: Text('Spotify', style: GoogleFonts.inter(color: Colors.white)),
                               style: OutlinedButton.styleFrom(
                                 side: const BorderSide(color: Colors.green),
                                 padding: const EdgeInsets.symmetric(vertical: 12),
@@ -526,7 +547,7 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
                             child: OutlinedButton.icon(
                               onPressed: () => _launchUrl(widget.musician.youtubeUrl!),
                               icon: const Icon(Icons.play_circle_fill, color: Colors.red),
-                              label: const Text('YouTube', style: TextStyle(color: Colors.white)),
+                              label: Text('YouTube', style: GoogleFonts.inter(color: Colors.white)),
                               style: OutlinedButton.styleFrom(
                                 side: const BorderSide(color: Colors.red),
                                 padding: const EdgeInsets.symmetric(vertical: 12),

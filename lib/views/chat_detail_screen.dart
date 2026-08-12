@@ -112,7 +112,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                         widget.receiverName.isNotEmpty
                             ? widget.receiverName.substring(0, 1).toUpperCase()
                             : 'U',
-                        style: const TextStyle(
+                        style: GoogleFonts.inter(
                           color: Colors.white,
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
@@ -389,7 +389,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                               backgroundColor: AppTheme.primaryAccent.withOpacity(0.12),
                               child: Text(
                                 widget.receiverName.isNotEmpty ? widget.receiverName.substring(0, 1).toUpperCase() : 'U',
-                                style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold),
+                                style: GoogleFonts.inter(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold),
                               ),
                             ),
                             const SizedBox(width: 8),
@@ -423,7 +423,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                                     msg.timestamp != null
                                         ? DateFormat('HH:mm').format(msg.timestamp!.toLocal())
                                         : '',
-                                    style: TextStyle(
+                                    style: GoogleFonts.inter(
                                       fontSize: 9,
                                       color: isMe ? Colors.white70 : AppTheme.textMuted,
                                     ),

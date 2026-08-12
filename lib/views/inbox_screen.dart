@@ -274,7 +274,7 @@ class _InboxScreenState extends State<InboxScreen> {
                                             : AppTheme.primaryAccent.withOpacity(0.15),
                                         child: Text(
                                           otherUserName.isNotEmpty ? otherUserName.substring(0, 1).toUpperCase() : 'U',
-                                          style: TextStyle(
+                                          style: GoogleFonts.inter(
                                             color: isAgreement ? Colors.greenAccent : Colors.white,
                                             fontSize: 18,
                                             fontWeight: FontWeight.bold,

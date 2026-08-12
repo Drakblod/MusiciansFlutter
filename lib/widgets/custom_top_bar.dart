@@ -61,6 +61,10 @@ class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
                   Expanded(
                     child: _buildFavorites(context, appState),
                   ),
+                  if (FeatureToggles.showMapInTopBar)
+                    Expanded(
+                      child: _buildMapIcon(context, appState),
+                    ),
                   // Column 2: Home Logo
                   Expanded(
                     child: _buildHomeLogo(context, appState),
@@ -77,6 +81,21 @@ class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMapIcon(BuildContext context, AppState appState) {
+    return AnimatedTapDetector(
+      onTap: () {
+        Navigator.pushNamed(context, '/gig-map');
+      },
+      child: const Center(
+        child: Icon(
+          Icons.map_outlined,
+          color: Colors.white,
+          size: 22,
         ),
       ),
     );
@@ -115,7 +134,7 @@ class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
                     (userProfile?.displayName != null && userProfile!.displayName!.isNotEmpty)
                         ? userProfile.displayName!.substring(0, 1).toUpperCase()
                         : 'U',
-                    style: const TextStyle(
+                    style: GoogleFonts.inter(
                       color: Colors.white,
                       fontSize: 14,
                       fontWeight: FontWeight.bold,

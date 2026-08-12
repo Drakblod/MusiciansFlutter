@@ -31,11 +31,11 @@ class _StudioDetailsScreenState extends State<StudioDetailsScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
+            child: Text('Cancel', style: GoogleFonts.inter(color: Colors.white70)),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete', style: TextStyle(color: AppTheme.danger)),
+            child: Text('Delete', style: GoogleFonts.inter(color: AppTheme.danger)),
           ),
         ],
       ),

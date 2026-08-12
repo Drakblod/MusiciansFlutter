@@ -4,12 +4,13 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../providers/app_state.dart';
 import '../theme/app_theme.dart';
-import '../models/sub_request.dart';
 import '../models/user_profile.dart';
+import '../models/sub_request.dart';
 import '../models/band.dart';
 import '../widgets/custom_top_bar.dart';
 import '../widgets/gradient_scaffold.dart';
 import '../widgets/animated_tap_detector.dart';
+import '../widgets/searchable_category_multi_select_sheet.dart';
 
 class CollabsLandingScreen extends StatefulWidget {
   const CollabsLandingScreen({super.key});
@@ -19,68 +20,94 @@ class CollabsLandingScreen extends StatefulWidget {
 }
 
 class _CollabsLandingScreenState extends State<CollabsLandingScreen> {
-  final _messageController = TextEditingController();
+  final _detailsController = TextEditingController();
   final _locationController = TextEditingController();
 
-  String _selectedMainCategory = 'Songwriters/Producers';
-  String _selectedSubcategory = 'Songwriter';
+  // Major Category: 'Songwriters/Producers', 'Studios/Engineers', 'Sessions'
+  String _selectedCategory = 'Songwriters/Producers';
+  // Sub Role: depends on category
+  String _selectedSubRole = 'Songwriters';
 
-  DateTime _selectedDate = DateTime.now().add(const Duration(days: 4));
-  TimeOfDay _startTime = const TimeOfDay(hour: 18, minute: 0);
-  TimeOfDay _endTime = const TimeOfDay(hour: 21, minute: 0);
-  bool _isPaid = true;
+  // Selected Collaboration Area / Skills
+  List<String> _selectedCollabAreas = [];
+
   bool _isSubmitting = false;
 
+  // Favorites Selection State
+  bool _sendToFavoritesOnly = false;
   bool _showFavoritesList = false;
   List<UserProfile> _favorites = [];
   List<UserProfile> _filteredFavorites = [];
   Map<String, bool> _selectedFavorites = {};
   bool _isLoadingFavorites = false;
 
-  List<String> _getSubcategories() {
-    if (_selectedMainCategory == 'Songwriters/Producers') {
-      return ['Songwriter', 'Producer', 'Other'];
-    } else if (_selectedMainCategory == 'Studios/Engineers') {
-      return ['Studio', 'Engineer', 'Other'];
+  // Master Skills & Talents Category Map
+  static final Map<String, List<String>> _allSkillsCategoryMap = {
+    '🎼 Songwriters & Producers': [
+      'Songwriter', 'Composer', 'Lyricist', 'Beatmaker', 'Producer', 'Co-Writer'
+    ],
+    '🎛️ Studios & Engineers': [
+      'Studio', 'Home Studio', 'Recording Engineer', 'Mix Engineer', 'Live Engineer', 'Mastering Engineer'
+    ],
+    '🎷 Woodwinds': [
+      'Flute', 'Piccolo Flute', 'Alto Flute', 'Bass Flute',
+      'Clarinet', 'Eb Clarinet', 'Alto Clarinet', 'Bass Clarinet',
+      'Oboe', 'English Horn', 'Bassoon', 'Contra Bassoon',
+      'Soprano Sax', 'Alto Sax', 'Tenor Sax', 'Bari Sax',
+      'Recorder', 'Soprano Recorder', 'Alto Recorder', 'Tenor Recorder', 'Bass Recorder'
+    ],
+    '🎺 Brass': [
+      'Trumpet', 'Piccolo Trumpet', 'Cornet', 'French Horn',
+      'Trombone', 'Alto Trombone', 'Euphonium', 'Tuba'
+    ],
+    '🎻 Strings': [
+      'Violin', 'Viola', 'Viola da Gamba', 'Cello', 'Contrabass',
+      'Acoustic Guitar', 'Electric Guitar', 'Steel Guitar', 'Electric Bass', 'Harp'
+    ],
+    '🎹 Keyboards': [
+      'Piano', 'Keyboard/Synth', 'Organ (Hammond)', 'Harpsichord'
+    ],
+    '🥁 Percussion': [
+      'Drums', 'Latin Percussion (congas, timbales, etc)',
+      'Classical Percussion (timpani, cymbals, etc)', 'Steel Pan'
+    ],
+    '🎤 Voices': [
+      'Female Lead vocals', 'Male Lead Vocals',
+      'Female Backing vocals', 'Male Backing vocals',
+      'Soprano', 'Mezzo Soprano', 'Contralto',
+      'Counter Tenor', 'Tenor', 'Baritone', 'Bass'
+    ],
+    '📢 PR & Management': [
+      'Manager', 'Promotor', 'Agency', 'PR Specialist'
+    ],
+  };
+
+  @override
+  void initState() {
+    super.initState();
+    _loadFavorites();
+    _initDefaultLocation();
+  }
+
+  void _initDefaultLocation() {
+    final appState = Provider.of<AppState>(context, listen: false);
+    final userLoc = appState.currentUserProfile?.location;
+    if (userLoc != null && userLoc.isNotEmpty) {
+      _locationController.text = userLoc;
     } else {
-      return ['Create Session', 'Find Session'];
+      _locationController.text = 'Stockholm, Sweden';
     }
   }
 
-  void _updateFilteredFavorites() {
-    final subLower = _selectedSubcategory.toLowerCase();
-    _filteredFavorites = _favorites.where((m) {
-      if (subLower == 'songwriter') {
-        return m.collabRoles.contains('songwriter') ||
-            (m.userType?.toLowerCase().contains('songwriter') ?? false);
-      } else if (subLower == 'producer') {
-        return m.collabRoles.contains('producer') ||
-            (m.userType?.toLowerCase().contains('producer') ?? false) ||
-            m.instruments.any((i) => i.toLowerCase().contains('producer'));
-      } else if (subLower == 'engineer') {
-        return m.collabRoles.contains('engineer') ||
-            (m.userType?.toLowerCase().contains('engineer') ?? false) ||
-            (m.userType?.toLowerCase().contains('mix') ?? false) ||
-            (m.userType?.toLowerCase().contains('mastering') ?? false);
-      } else if (subLower == 'studio') {
-        return m.userType?.toLowerCase().contains('studio') ?? false;
-      }
-      // 'Other' or 'Sessions' matches any favorites
-      return true;
-    }).toList();
-    
-    _selectedFavorites.clear();
-    for (final f in _filteredFavorites) {
-      if (f.userId != null) {
-        _selectedFavorites[f.userId!] = true;
-      }
-    }
+  @override
+  void dispose() {
+    _detailsController.dispose();
+    _locationController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadFavorites() async {
-    setState(() {
-      _isLoadingFavorites = true;
-    });
+    setState(() => _isLoadingFavorites = true);
     try {
       final appState = Provider.of<AppState>(context, listen: false);
       final favIds = await appState.firebaseService.getFavoriteUserIdsAsync();
@@ -101,235 +128,149 @@ class _CollabsLandingScreenState extends State<CollabsLandingScreen> {
       debugPrint("Error loading favorites: $e");
     } finally {
       if (mounted) {
-        setState(() {
-          _isLoadingFavorites = false;
-        });
+        setState(() => _isLoadingFavorites = false);
       }
     }
   }
 
-  TimeOfDay _parseTime(String? timeStr, TimeOfDay defaultTime) {
-    if (timeStr == null || timeStr.isEmpty) return defaultTime;
-    try {
-      final parts = timeStr.split(':');
-      if (parts.length == 2) {
-        final hour = int.parse(parts[0]);
-        final minute = int.parse(parts[1]);
-        return TimeOfDay(hour: hour, minute: minute);
-      }
-    } catch (e) {
-      debugPrint("Error parsing time: $e");
-    }
-    return defaultTime;
-  }
-
-  Future<void> _loadBandInfo() async {
-    final appState = Provider.of<AppState>(context, listen: false);
-    final bandId = appState.activeBandId;
-    if (bandId != null) {
-      try {
-        final Band? band = await appState.firebaseService.getBandInfoAsync(bandId);
-        if (band != null && mounted) {
-          setState(() {
-            if (band.rehearsalLocation != null && band.rehearsalLocation!.isNotEmpty) {
-              _locationController.text = band.rehearsalLocation!;
-            } else if (band.location != null && band.location!.isNotEmpty) {
-              _locationController.text = band.location!;
-            }
-
-            if (band.rehearsalStartTime != null && band.rehearsalStartTime!.isNotEmpty) {
-              _startTime = _parseTime(band.rehearsalStartTime, _startTime);
-            }
-            if (band.rehearsalEndTime != null && band.rehearsalEndTime!.isNotEmpty) {
-              _endTime = _parseTime(band.rehearsalEndTime, _endTime);
-            }
-          });
-        }
-      } catch (e) {
-        debugPrint("Error loading band details: $e");
+  void _updateFilteredFavorites() {
+    _filteredFavorites = List.from(_favorites);
+    _selectedFavorites.clear();
+    for (final f in _filteredFavorites) {
+      if (f.userId != null) {
+        _selectedFavorites[f.userId!] = true;
       }
     }
   }
 
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final appState = Provider.of<AppState>(context, listen: false);
-      if (appState.currentUserProfile?.location != null) {
-        _locationController.text = appState.currentUserProfile!.location!;
+  List<String> get _currentSubRoles {
+    switch (_selectedCategory) {
+      case 'Songwriters/Producers':
+        return ['Songwriters', 'Producers', 'Other'];
+      case 'Studios/Engineers':
+        return ['Studios', 'Engineers', 'Other'];
+      case 'Sessions':
+        return ['Create Session', 'Create Jam', 'Find Session'];
+      default:
+        return ['Songwriters', 'Producers', 'Other'];
+    }
+  }
+
+  void _onCategoryChanged(String newCat) {
+    setState(() {
+      _selectedCategory = newCat;
+      final subs = _currentSubRoles;
+      _selectedSubRole = subs.first;
+      if (newCat == 'Songwriters/Producers') {
+        _selectedCollabAreas = ['Songwriter'];
+      } else if (newCat == 'Studios/Engineers') {
+        _selectedCollabAreas = ['Studio'];
       } else {
-        _locationController.text = 'Stockholm, Sweden';
+        _selectedCollabAreas = ['Session Musician'];
       }
-      _loadBandInfo();
-      _loadFavorites();
     });
   }
 
-  @override
-  void dispose() {
-    _messageController.dispose();
-    _locationController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _pickDate() async {
-    final picked = await showDatePicker(
+  Future<void> _openCollabAreaPicker() async {
+    final result = await SearchableCategoryMultiSelectSheet.show(
       context: context,
-      initialDate: _selectedDate,
-      firstDate: DateTime.now(),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
-      builder: (context, child) {
-        return Theme(
-          data: ThemeData.dark().copyWith(
-            colorScheme: const ColorScheme.dark(
-              primary: AppTheme.primaryAccent,
-              onPrimary: Colors.white,
-              surface: AppTheme.cardBackground,
-              onSurface: Colors.white,
-            ),
-          ),
-          child: child!,
-        );
-      },
+      title: 'Collaboration Area',
+      categoryMap: _allSkillsCategoryMap,
+      initialSelected: _selectedCollabAreas,
     );
-    if (picked != null) {
+    if (result != null) {
       setState(() {
-        _selectedDate = picked;
+        _selectedCollabAreas = result;
       });
     }
   }
 
-  Future<void> _pickTime(bool isStart) async {
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: isStart ? _startTime : _endTime,
-      builder: (context, child) {
-        return Theme(
-          data: ThemeData.dark().copyWith(
-            colorScheme: const ColorScheme.dark(
-              primary: AppTheme.primaryAccent,
-              surface: AppTheme.cardBackground,
-            ),
-          ),
-          child: child!,
-        );
-      },
-    );
-    if (picked != null) {
-      setState(() {
-        if (isStart) {
-          _startTime = picked;
-        } else {
-          _endTime = picked;
-        }
-      });
+  Future<void> _submitCollabRequest() async {
+    if (_detailsController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please describe what your collaboration is about'),
+          backgroundColor: AppTheme.danger,
+        ),
+      );
+      return;
     }
-  }
 
-  Future<void> _submitRequest({required bool sendToAll}) async {
     setState(() => _isSubmitting = true);
+    final appState = Provider.of<AppState>(context, listen: false);
+    final userId = appState.currentUserId;
+
     try {
-      final appState = Provider.of<AppState>(context, listen: false);
-      final profile = appState.currentUserProfile;
-
-      List<String>? targetUserIds;
-
-      if (!sendToAll) {
-        if (_favorites.isEmpty) {
+      List<String>? targetIds;
+      if (_sendToFavoritesOnly) {
+        targetIds = _selectedFavorites.entries.where((e) => e.value).map((e) => e.key).toList();
+        if (targetIds.isEmpty) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('You have no favorited collaborators. Go to the Browse tab to add favorites.'),
+              content: Text('Please select at least 1 favorite recipient.'),
               backgroundColor: AppTheme.danger,
             ),
           );
           setState(() => _isSubmitting = false);
           return;
         }
-        if (_filteredFavorites.isEmpty) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('None of your favorites match $_selectedSubcategory. Add matching favorites or use Send to All.'),
-              backgroundColor: AppTheme.danger,
-            ),
-          );
-          setState(() => _isSubmitting = false);
-          return;
-        }
-        final checkedUserIds = _selectedFavorites.entries
-            .where((e) => e.value)
-            .map((e) => e.key)
-            .toList();
-        if (checkedUserIds.isEmpty) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Please check at least one favorite collaborator to send the request to.'),
-              backgroundColor: AppTheme.danger,
-            ),
-          );
-          setState(() => _isSubmitting = false);
-          return;
-        }
-        targetUserIds = checkedUserIds;
       }
 
-      final resolvedLoc = _locationController.text.trim().isNotEmpty
-          ? _locationController.text.trim()
-          : (profile?.location ?? 'Stockholm, Sweden');
+      final nowStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
 
-      // Create model (Marked as collab request)
-      final request = SubRequest(
-        voicePart: _selectedSubcategory,
-        location: resolvedLoc,
-        startTime: '${_startTime.hour.toString().padLeft(2, '0')}:${_startTime.minute.toString().padLeft(2, '0')}:00',
-        endTime: '${_endTime.hour.toString().padLeft(2, '0')}:${_endTime.minute.toString().padLeft(2, '0')}:00',
-        description: _messageController.text,
-        date: _selectedDate.toIso8601String(),
-        role: 'Collab', // Mark as Collab
-        isPaid: _isPaid,
-        bandName: appState.activeBandName ?? 'Collab Project',
-        rehearsalDayOfWeek: DateFormat('EEEE').format(_selectedDate),
-        targetUserIds: targetUserIds,
+      final collabReq = SubRequest(
+        creatorUserId: userId,
+        userId: userId,
+        role: _selectedCategory,
+        voicePart: _selectedSubRole,
+        level: _selectedCollabAreas.isEmpty ? 'Collaboration' : _selectedCollabAreas.join(', '),
+        location: _locationController.text.trim().isEmpty ? 'Stockholm, Sweden' : _locationController.text.trim(),
+        description: _detailsController.text.trim(),
+        date: nowStr,
+        bandName: appState.activeBandName ?? "Freelance Collab",
+        bandId: appState.activeBandId,
+        targetUserIds: targetIds,
       );
 
-      await appState.firebaseService.saveSubRequestAsync(request);
+      final reqId = await appState.firebaseService.saveSubRequestAsync(collabReq);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Collaboration request posted successfully!'),
-            backgroundColor: AppTheme.success,
-          ),
-        );
-        Navigator.pop(context);
+        if (reqId != null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Collaboration Request sent successfully!'),
+              backgroundColor: AppTheme.success,
+            ),
+          );
+          Navigator.pop(context);
+        } else {
+          throw Exception("Failed to save collaboration request.");
+        }
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to post request: $e'),
+            content: Text('Failed to send collaboration request: $e'),
             backgroundColor: AppTheme.danger,
           ),
         );
       }
     } finally {
-      if (mounted) setState(() => _isSubmitting = false);
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+      }
     }
   }
 
-  void _showBandSelectorBottomSheet(
-    BuildContext context,
-    AppState appState,
-    Map<String, String> bands,
-  ) {
+  void _showBandSelectorBottomSheet(BuildContext context, AppState appState, Map<String, String> bands) {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      isScrollControlled: true,
       builder: (context) {
         return Container(
           decoration: BoxDecoration(
-            color: const Color(0xFF0F0C22).withOpacity(0.95),
+            color: const Color(0xFF16132D).withOpacity(0.95),
             borderRadius: const BorderRadius.only(
               topLeft: Radius.circular(24),
               topRight: Radius.circular(24),
@@ -368,7 +309,7 @@ class _CollabsLandingScreenState extends State<CollabsLandingScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                'Choose which band/project you are posting this request for.',
+                'Choose which band you are posting this collaboration request for.',
                 style: GoogleFonts.inter(
                   fontSize: 13,
                   color: AppTheme.textSecondary,
@@ -401,26 +342,47 @@ class _CollabsLandingScreenState extends State<CollabsLandingScreen> {
                             color: isSelected
                                 ? AppTheme.primaryAccent.withOpacity(0.12)
                                 : AppTheme.cardBackground,
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(14),
                             border: Border.all(
                               color: isSelected
                                   ? AppTheme.primaryAccent
-                                  : const Color(0xFF231F45),
-                              width: 1,
+                                  : const Color(0xFF2E2A4E),
+                              width: 1.5,
                             ),
                           ),
                           child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Text(
-                                bandName,
-                                style: GoogleFonts.inter(
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: isSelected
+                                      ? AppTheme.primaryAccent.withOpacity(0.2)
+                                      : Colors.white.withOpacity(0.05),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.groups_rounded,
                                   color: Colors.white,
-                                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                  size: 20,
+                                ),
+                              ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Text(
+                                  bandName,
+                                  style: GoogleFonts.inter(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.white,
+                                  ),
                                 ),
                               ),
                               if (isSelected)
-                                const Icon(Icons.check_circle_rounded, color: AppTheme.primaryAccent, size: 20),
+                                const Icon(
+                                  Icons.check_circle_rounded,
+                                  color: AppTheme.primaryAccent,
+                                  size: 20,
+                                ),
                             ],
                           ),
                         ),
@@ -436,11 +398,43 @@ class _CollabsLandingScreenState extends State<CollabsLandingScreen> {
     );
   }
 
+  Widget _buildCategoryButton(String categoryKey, String label) {
+    final isSelected = _selectedCategory == categoryKey;
+    return Expanded(
+      child: AnimatedTapDetector(
+        onTap: () => _onCategoryChanged(categoryKey),
+        child: Container(
+          height: 48,
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? AppTheme.primaryAccent.withOpacity(0.12)
+                : AppTheme.cardBackground,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: isSelected ? AppTheme.primaryAccent : const Color(0xFF2E2A4E),
+              width: 1.5,
+            ),
+          ),
+          child: Center(
+            child: Text(
+              label,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.inter(
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                color: isSelected ? Colors.white : AppTheme.textSecondary,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final appState = Provider.of<AppState>(context);
-    final formatTime = (TimeOfDay t) =>
-        '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
 
     return GradientScaffold(
       appBar: const CustomTopBar(
@@ -449,6 +443,7 @@ class _CollabsLandingScreenState extends State<CollabsLandingScreen> {
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20.0),
+        physics: const BouncingScrollPhysics(),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -462,6 +457,8 @@ class _CollabsLandingScreenState extends State<CollabsLandingScreen> {
               ),
             ),
             const SizedBox(height: 8),
+
+            // Active Band Chip Selector
             GestureDetector(
               onTap: () async {
                 final userId = appState.currentUserId;
@@ -477,9 +474,7 @@ class _CollabsLandingScreenState extends State<CollabsLandingScreen> {
 
                 try {
                   final bands = await appState.firebaseService.getUserBandsAsync(userId);
-                  if (context.mounted) {
-                    Navigator.pop(context);
-                  }
+                  if (context.mounted) Navigator.pop(context);
 
                   if (bands.isNotEmpty) {
                     if (context.mounted) {
@@ -496,9 +491,7 @@ class _CollabsLandingScreenState extends State<CollabsLandingScreen> {
                     }
                   }
                 } catch (e) {
-                  if (context.mounted) {
-                    Navigator.pop(context);
-                  }
+                  if (context.mounted) Navigator.pop(context);
                 }
               },
               child: Container(
@@ -514,7 +507,7 @@ class _CollabsLandingScreenState extends State<CollabsLandingScreen> {
                     const Icon(Icons.groups_rounded, color: AppTheme.primaryAccent, size: 20),
                     const SizedBox(width: 10),
                     Text(
-                      appState.activeBandName ?? "Collab Project",
+                      appState.activeBandName ?? "Freelance Collab",
                       style: GoogleFonts.outfit(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
@@ -529,432 +522,396 @@ class _CollabsLandingScreenState extends State<CollabsLandingScreen> {
             ),
             const SizedBox(height: 24),
 
-            // Collab Main Category selector
-            Text(
-              'COLLABORATION AREA',
-              style: GoogleFonts.outfit(
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-                color: AppTheme.textSecondary,
-                letterSpacing: 1.5,
-              ),
+            // 1. Major Category Selector (Songwriters/Producers, Studios/Engineers, Sessions)
+            Row(
+              children: [
+                _buildCategoryButton('Songwriters/Producers', 'Songwriters /\nProducers'),
+                const SizedBox(width: 6),
+                _buildCategoryButton('Studios/Engineers', 'Studios /\nEngineers'),
+                const SizedBox(width: 6),
+                _buildCategoryButton('Sessions', 'Sessions'),
+              ],
             ),
-            const SizedBox(height: 8),
-            SizedBox(
-              height: 38,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                physics: const BouncingScrollPhysics(),
-                children: [
-                  ChoiceChip(
-                    label: const Text('Songwriters/Producers'),
-                    selected: _selectedMainCategory == 'Songwriters/Producers',
-                    onSelected: (val) {
-                      if (val) {
-                        setState(() {
-                          _selectedMainCategory = 'Songwriters/Producers';
-                          _selectedSubcategory = 'Songwriter';
-                          _updateFilteredFavorites();
-                        });
-                      }
-                    },
-                    selectedColor: AppTheme.primaryAccent,
-                    backgroundColor: AppTheme.inputBackground,
-                    labelStyle: GoogleFonts.inter(
-                      fontSize: 12,
-                      fontWeight: _selectedMainCategory == 'Songwriters/Producers' ? FontWeight.bold : FontWeight.normal,
-                      color: Colors.white,
-                    ),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                  const SizedBox(width: 8),
-                  ChoiceChip(
-                    label: const Text('Studios/Engineers'),
-                    selected: _selectedMainCategory == 'Studios/Engineers',
-                    onSelected: (val) {
-                      if (val) {
-                        setState(() {
-                          _selectedMainCategory = 'Studios/Engineers';
-                          _selectedSubcategory = 'Studio';
-                          _updateFilteredFavorites();
-                        });
-                      }
-                    },
-                    selectedColor: AppTheme.primaryAccent,
-                    backgroundColor: AppTheme.inputBackground,
-                    labelStyle: GoogleFonts.inter(
-                      fontSize: 12,
-                      fontWeight: _selectedMainCategory == 'Studios/Engineers' ? FontWeight.bold : FontWeight.normal,
-                      color: Colors.white,
-                    ),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                  const SizedBox(width: 8),
-                  ChoiceChip(
-                    label: const Text('Sessions'),
-                    selected: _selectedMainCategory == 'Sessions',
-                    onSelected: (val) {
-                      if (val) {
-                        setState(() {
-                          _selectedMainCategory = 'Sessions';
-                          _selectedSubcategory = 'Create Session';
-                          _updateFilteredFavorites();
-                        });
-                      }
-                    },
-                    selectedColor: AppTheme.primaryAccent,
-                    backgroundColor: AppTheme.inputBackground,
-                    labelStyle: GoogleFonts.inter(
-                      fontSize: 12,
-                      fontWeight: _selectedMainCategory == 'Sessions' ? FontWeight.bold : FontWeight.normal,
-                      color: Colors.white,
-                    ),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 14),
 
-            // Collab Role / Subcategory selector
-            Text(
-              'SKILLS/TALENTS',
-              style: GoogleFonts.outfit(
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-                color: AppTheme.textSecondary,
-                letterSpacing: 1.5,
-              ),
-            ),
-            const SizedBox(height: 8),
-            SizedBox(
-              height: 38,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                physics: const BouncingScrollPhysics(),
-                children: _getSubcategories().map((sub) {
-                  final isSelected = _selectedSubcategory == sub;
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: ChoiceChip(
-                      label: Text(sub),
-                      selected: isSelected,
-                      onSelected: (val) {
-                        if (val) {
-                          setState(() {
-                            _selectedSubcategory = sub;
-                            _updateFilteredFavorites();
-                          });
-                        }
-                      },
-                      selectedColor: AppTheme.primaryAccent.withOpacity(0.4),
-                      backgroundColor: AppTheme.cardBackground,
-                      labelStyle: GoogleFonts.inter(
-                        fontSize: 12,
-                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                        color: Colors.white,
-                      ),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            // Sub-Role Pill Chips
+            Wrap(
+              spacing: 8,
+              children: _currentSubRoles.map((subRole) {
+                final isSel = _selectedSubRole == subRole;
+                return ChoiceChip(
+                  label: Text(subRole),
+                  selected: isSel,
+                  selectedColor: AppTheme.primaryAccent,
+                  backgroundColor: AppTheme.cardBackground,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                    side: BorderSide(
+                      color: isSel ? AppTheme.primaryAccent : const Color(0xFF2E2A4E),
                     ),
-                  );
-                }).toList(),
-              ),
+                  ),
+                  labelStyle: GoogleFonts.inter(
+                    color: Colors.white,
+                    fontWeight: isSel ? FontWeight.bold : FontWeight.w500,
+                    fontSize: 12,
+                  ),
+                  onSelected: (_) {
+                    if (subRole == 'Create Session') {
+                      Navigator.pushNamed(context, '/create-session');
+                    } else if (subRole == 'Create Jam') {
+                      Navigator.pushNamed(context, '/create-session', arguments: 'Jam');
+                    } else if (subRole == 'Find Session') {
+                      Navigator.pushNamed(context, '/find-sessions');
+                    } else {
+                      setState(() {
+                        _selectedSubRole = subRole;
+                      });
+                    }
+                  },
+                );
+              }).toList(),
             ),
             const SizedBox(height: 24),
 
-            // Collaboration Details Card (Free Text Only)
+            // 2. COLLABORATION AREA Card Container (Matching Edit Profile / Genres style)
+            AnimatedTapDetector(
+              onTap: _openCollabAreaPicker,
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppTheme.cardBackground,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: _selectedCollabAreas.isNotEmpty
+                        ? AppTheme.primaryAccent
+                        : const Color(0xFF2E2A4E),
+                    width: 1.5,
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.hub_rounded, color: AppTheme.primaryAccent, size: 20),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            'COLLABORATION AREA',
+                            style: GoogleFonts.outfit(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                              letterSpacing: 1.2,
+                            ),
+                          ),
+                        ),
+                        if (_selectedCollabAreas.isNotEmpty) ...[
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: AppTheme.primaryAccent,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              '${_selectedCollabAreas.length} selected',
+                              style: GoogleFonts.inter(
+                                color: Colors.white,
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                        ],
+                        const Icon(Icons.chevron_right_rounded, color: Colors.white54, size: 22),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    if (_selectedCollabAreas.isEmpty)
+                      Text(
+                        'Tap to add area of collaboration...',
+                        style: GoogleFonts.inter(
+                          fontSize: 13,
+                          color: AppTheme.textSecondary,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      )
+                    else
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: _selectedCollabAreas.map((area) {
+                          return Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: AppTheme.primaryAccent.withOpacity(0.18),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.4)),
+                            ),
+                            child: Text(
+                              area,
+                              style: GoogleFonts.inter(
+                                fontSize: 12,
+                                color: Colors.white,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // 3. COLLABORATION DETAILS Card Container
             Container(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: AppTheme.cardBackground,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFF231F45), width: 1),
+                border: Border.all(color: const Color(0xFF2E2A4E)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      const Icon(Icons.chat_bubble_outline_rounded, color: AppTheme.primaryAccent, size: 18),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Collaboration Details',
-                        style: GoogleFonts.outfit(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ],
+                  Text(
+                    'COLLABORATION DETAILS',
+                    style: GoogleFonts.outfit(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                      letterSpacing: 1.2,
+                    ),
                   ),
                   const SizedBox(height: 16),
-                  TextField(
-                    controller: _messageController,
-                    maxLines: 4,
-                    maxLength: 200,
+
+                  // Location (City, Country)
+                  Text(
+                    'Location (City, Country)',
+                    style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
+                  ),
+                  const SizedBox(height: 6),
+                  TextFormField(
+                    controller: _locationController,
                     style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
                     decoration: const InputDecoration(
-                      hintText: "I'm looking for a co-writer to compose on the weekends...",
-                      counterStyle: TextStyle(color: AppTheme.textSecondary),
-                      contentPadding: EdgeInsets.all(12),
+                      hintText: 'Stockholm, Sweden',
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Details Multiline Text Field
+                  Text(
+                    'Collaboration Description',
+                    style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
+                  ),
+                  const SizedBox(height: 6),
+                  TextFormField(
+                    controller: _detailsController,
+                    maxLines: 4,
+                    style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
+                    decoration: const InputDecoration(
+                      hintText: "Describe what the collaboration is about (e.g. 'I am looking for a co-writer to compose acoustic tracks on weekends')",
                     ),
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 16),
-            const Divider(color: Color(0xFF2E2A4E), height: 32),
+            const SizedBox(height: 24),
 
-            // Action Buttons Row: FAVORITES LIST & SEND TO ALL
-            Row(
-              children: [
-                Expanded(
-                  child: AnimatedTapDetector(
-                    onTap: () {
-                      setState(() {
-                        _showFavoritesList = !_showFavoritesList;
-                      });
-                      if (_showFavoritesList && _favorites.isEmpty) {
-                        _loadFavorites();
-                      }
-                    },
-                    child: Container(
-                      height: 52,
-                      decoration: BoxDecoration(
-                        color: _showFavoritesList
-                            ? AppTheme.primaryAccent.withOpacity(0.15)
-                            : AppTheme.cardBackground,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: _showFavoritesList
-                              ? AppTheme.primaryAccent
-                              : const Color(0xFF2E2A4E),
-                          width: 1.5,
-                        ),
-                      ),
-                      child: Center(
-                        child: Text(
-                          'FAVORITES LIST',
-                          style: GoogleFonts.inter(
-                            color: _showFavoritesList ? Colors.white : AppTheme.textSecondary,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
-                            letterSpacing: 0.5,
+            // 4. SELECT FAVORITE(S) Container
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppTheme.cardBackground,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFF2E2A4E)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'SELECT FAVORITE(S)',
+                    style: GoogleFonts.outfit(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                      letterSpacing: 1.2,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: AnimatedTapDetector(
+                          onTap: () {
+                            setState(() {
+                              _sendToFavoritesOnly = true;
+                              _showFavoritesList = true;
+                            });
+                          },
+                          child: Container(
+                            height: 44,
+                            decoration: BoxDecoration(
+                              color: _sendToFavoritesOnly
+                                  ? AppTheme.primaryAccent.withOpacity(0.15)
+                                  : AppTheme.inputBackground,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: _sendToFavoritesOnly
+                                    ? AppTheme.primaryAccent
+                                    : const Color(0xFF2E2A4E),
+                                width: 1.5,
+                              ),
+                            ),
+                            child: Center(
+                              child: Text(
+                                'FAVORITES LIST',
+                                style: GoogleFonts.inter(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: _sendToFavoritesOnly
+                                      ? Colors.white
+                                      : AppTheme.textSecondary,
+                                ),
+                              ),
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: _isSubmitting
-                      ? const Center(child: CircularProgressIndicator(color: AppTheme.primaryAccent))
-                      : AnimatedTapDetector(
-                          onTap: () => _submitRequest(sendToAll: true),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: AnimatedTapDetector(
+                          onTap: () {
+                            setState(() {
+                              _sendToFavoritesOnly = false;
+                              _showFavoritesList = false;
+                            });
+                          },
                           child: Container(
-                            height: 52,
+                            height: 44,
                             decoration: BoxDecoration(
-                              gradient: AppTheme.primaryGradient,
-                              borderRadius: BorderRadius.circular(12),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: AppTheme.primaryAccent.withOpacity(0.3),
-                                  blurRadius: 8,
-                                  offset: const Offset(0, 3),
-                                )
-                              ],
+                              color: !_sendToFavoritesOnly
+                                  ? AppTheme.primaryAccent.withOpacity(0.15)
+                                  : AppTheme.inputBackground,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: !_sendToFavoritesOnly
+                                    ? AppTheme.primaryAccent
+                                    : const Color(0xFF2E2A4E),
+                                width: 1.5,
+                              ),
                             ),
                             child: Center(
                               child: Text(
                                 'SEND TO ALL',
                                 style: GoogleFonts.inter(
-                                  color: Colors.white,
+                                  fontSize: 11,
                                   fontWeight: FontWeight.bold,
-                                  fontSize: 14,
-                                  letterSpacing: 0.5,
+                                  color: !_sendToFavoritesOnly
+                                      ? Colors.white
+                                      : AppTheme.textSecondary,
                                 ),
                               ),
                             ),
                           ),
                         ),
-                ),
-              ],
-            ),
-
-            if (_showFavoritesList) ...[
-              const SizedBox(height: 24),
-              if (_isLoadingFavorites)
-                const Center(
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(vertical: 20),
-                    child: CircularProgressIndicator(color: AppTheme.primaryAccent),
-                  ),
-                )
-              else if (_favorites.isEmpty)
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: AppTheme.danger.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppTheme.danger.withOpacity(0.3)),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.warning_amber_rounded, color: AppTheme.danger),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          'You have no favorited collaborators. Go to the Browse tab to add favorites.',
-                          style: GoogleFonts.inter(color: Colors.white, fontSize: 13),
-                        ),
                       ),
                     ],
                   ),
-                )
-              else if (_filteredFavorites.isEmpty)
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: AppTheme.warning.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppTheme.warning.withOpacity(0.3)),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.info_outline_rounded, color: AppTheme.warning),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          'None of your favorites match $_selectedSubcategory. Add matching favorites or use Send to All.',
-                          style: GoogleFonts.inter(color: Colors.white, fontSize: 13),
-                        ),
-                      ),
-                    ],
-                  ),
-                )
-              else ...[
-                Text(
-                  'SELECT RECIPIENTS',
-                  style: GoogleFonts.outfit(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.textSecondary,
-                    letterSpacing: 1.5,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                ListView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: _filteredFavorites.length,
-                  itemBuilder: (context, index) {
-                    final musician = _filteredFavorites[index];
-                    final userId = musician.userId ?? '';
-                    final isChecked = _selectedFavorites[userId] ?? false;
-
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: AppTheme.cardBackground,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: isChecked ? AppTheme.primaryAccent.withOpacity(0.5) : const Color(0xFF231F45),
-                          width: 1,
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          Checkbox(
-                            value: isChecked,
-                            onChanged: (val) {
-                              setState(() {
-                                _selectedFavorites[userId] = val ?? false;
-                              });
-                            },
-                            activeColor: AppTheme.primaryAccent,
-                            checkColor: Colors.white,
-                          ),
-                          const SizedBox(width: 4),
-                          CircleAvatar(
-                            radius: 20,
-                            backgroundColor: AppTheme.primaryAccent.withOpacity(0.2),
-                            backgroundImage: musician.profilePictureUrl != null &&
-                                    musician.profilePictureUrl!.isNotEmpty
-                                ? NetworkImage(musician.profilePictureUrl!)
-                                : null,
-                            child: musician.profilePictureUrl == null ||
-                                    musician.profilePictureUrl!.isEmpty
-                                ? Text(
-                                    (musician.displayName ?? 'U').substring(0, 1).toUpperCase(),
-                                    style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
-                                  )
-                                : null,
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  musician.displayName ?? 'Unknown',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                                if (musician.location != null)
-                                  Text(
-                                    musician.location!,
+                  if (_showFavoritesList) ...[
+                    const SizedBox(height: 16),
+                    _isLoadingFavorites
+                        ? const Center(
+                            child: Padding(
+                              padding: EdgeInsets.all(16.0),
+                              child: CircularProgressIndicator(color: AppTheme.primaryAccent),
+                            ),
+                          )
+                        : _filteredFavorites.isEmpty
+                            ? Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 12.0),
+                                child: Center(
+                                  child: Text(
+                                    'No favorite collaborators found.',
                                     style: GoogleFonts.inter(
-                                      fontSize: 11,
                                       color: AppTheme.textSecondary,
+                                      fontSize: 13,
                                     ),
                                   ),
-                              ],
-                            ),
-                          ),
+                                ),
+                              )
+                            : Column(
+                                children: _filteredFavorites.map((fav) {
+                                  final isChecked = _selectedFavorites[fav.userId] ?? false;
+                                  return CheckboxListTile(
+                                    value: isChecked,
+                                    activeColor: AppTheme.primaryAccent,
+                                    checkColor: Colors.white,
+                                    title: Text(
+                                      fav.displayName ?? 'Artist',
+                                      style: GoogleFonts.inter(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    subtitle: Text(
+                                      fav.mainSkillsSubtitle,
+                                      style: GoogleFonts.inter(
+                                        color: AppTheme.textSecondary,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                    onChanged: (val) {
+                                      if (fav.userId != null) {
+                                        setState(() {
+                                          _selectedFavorites[fav.userId!] = val ?? false;
+                                        });
+                                      }
+                                    },
+                                  );
+                                }).toList(),
+                              ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 30),
+
+            // Submit Collaboration Request Button
+            _isSubmitting
+                ? const Center(child: CircularProgressIndicator(color: AppTheme.primaryAccent))
+                : AnimatedTapDetector(
+                    onTap: _submitCollabRequest,
+                    child: Container(
+                      height: 55,
+                      decoration: BoxDecoration(
+                        gradient: AppTheme.primaryGradient,
+                        borderRadius: BorderRadius.circular(14),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppTheme.primaryAccent.withOpacity(0.3),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          )
                         ],
                       ),
-                    );
-                  },
-                ),
-                const SizedBox(height: 20),
-                _isSubmitting
-                    ? const Center(child: CircularProgressIndicator(color: AppTheme.primaryAccent))
-                    : AnimatedTapDetector(
-                        onTap: () => _submitRequest(sendToAll: false),
-                        child: Container(
-                          height: 52,
-                          width: double.infinity,
-                          decoration: BoxDecoration(
-                            gradient: AppTheme.primaryGradient,
-                            borderRadius: BorderRadius.circular(12),
-                            boxShadow: [
-                              BoxShadow(
-                                color: AppTheme.primaryAccent.withOpacity(0.3),
-                                blurRadius: 8,
-                                offset: const Offset(0, 3),
-                              )
-                            ],
-                          ),
-                          child: Center(
-                            child: Text(
-                              'Send to Favorites Only',
-                              style: GoogleFonts.inter(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 15,
-                              ),
-                            ),
+                      child: Center(
+                        child: Text(
+                          'Send Collaboration Request',
+                          style: GoogleFonts.inter(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
                           ),
                         ),
                       ),
-              ],
-            ],
-            const SizedBox(height: 40),
+                    ),
+                  ),
+            const SizedBox(height: 30),
           ],
         ),
       ),

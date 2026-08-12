@@ -949,15 +949,15 @@ class _FindSubScreenState extends State<FindSubScreen> {
                     'Gig / Event Details',
                     style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
                   ),
-                  const SizedBox(height: 8),
+                  SizedBox(height: 8),
                   TextField(
                     controller: _messageController,
                     maxLines: 4,
                     maxLength: 250,
                     style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       hintText: 'Describe what the gig/rehearsal is about...',
-                      counterStyle: TextStyle(color: AppTheme.textSecondary),
+                      counterStyle: GoogleFonts.inter(color: AppTheme.textSecondary),
                       contentPadding: EdgeInsets.all(12),
                     ),
                   ),
@@ -1291,7 +1291,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
                                     musician.profilePictureUrl!.isEmpty
                                 ? Text(
                                     (musician.displayName ?? 'U').substring(0, 1).toUpperCase(),
-                                    style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                                    style: GoogleFonts.inter(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
                                   )
                                 : null,
                           ),

@@ -173,11 +173,11 @@ class _SubRequestResponseDetailsScreenState
                   style: GoogleFonts.inter(color: AppTheme.textSecondary),
                 ),
                 actions: [
-                  TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("No thanks", style: TextStyle(color: AppTheme.textSecondary))),
+                  TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text("No thanks", style: GoogleFonts.inter(color: AppTheme.textSecondary))),
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryAccent),
                     onPressed: () => Navigator.pop(ctx, true),
-                    child: const Text("Create Room", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    child: Text("Create Room", style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold)),
                   ),
                 ],
               ),

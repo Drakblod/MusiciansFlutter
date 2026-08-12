@@ -54,8 +54,9 @@ class FirebaseService {
     String email,
     String password,
     String userType,
-    String nickname,
-  ) async {
+    String nickname, [
+    String? level,
+  ]) async {
     final credential = await _auth.createUserWithEmailAndPassword(
       email: email,
       password: password,
@@ -69,6 +70,7 @@ class FirebaseService {
         nickname: nickname,
         displayName: nickname,
         location: 'Stockholm, Sweden',
+        level: level ?? 'C = INTERMEDIATE',
         about: 'Hey! I am a musician ready to play.',
         instruments: [userType],
       );

@@ -20,7 +20,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _nicknameController = TextEditingController();
   
   String _selectedUserType = 'Electric Guitar';
+  String _selectedLevel = 'C = INTERMEDIATE';
   bool _obscurePassword = true;
+
+  final List<String> _levels = [
+    'A = PRO',
+    'B = SEMI PRO',
+    'C = INTERMEDIATE',
+    'D = AMATEUR',
+    'E = BEGINNER'
+  ];
 
   final List<String> _userTypes = [
     "BANDLEADER",
@@ -110,6 +119,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         _passwordController.text.trim(),
         _selectedUserType,
         _nicknameController.text.trim(),
+        _selectedLevel,
       );
       if (mounted) {
         Navigator.pushReplacementNamed(context, '/main-nav');
@@ -296,6 +306,47 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         if (newValue != null) {
                           setState(() {
                             _selectedUserType = newValue;
+                          });
+                        }
+                      },
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // 5. Level Selection
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppTheme.inputBackground,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButtonFormField<String>(
+                      value: _selectedLevel,
+                      decoration: const InputDecoration(
+                        labelText: 'Level',
+                        filled: false,
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        contentPadding: EdgeInsets.zero,
+                        prefixIcon: Icon(Icons.star_outline_rounded, color: AppTheme.textSecondary),
+                      ),
+                      dropdownColor: AppTheme.cardBackground,
+                      style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
+                      icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppTheme.textSecondary),
+                      items: _levels.map((String value) {
+                        return DropdownMenuItem<String>(
+                          value: value,
+                          child: Text(value),
+                        );
+                      }).toList(),
+                      onChanged: (newValue) {
+                        if (newValue != null) {
+                          setState(() {
+                            _selectedLevel = newValue;
                           });
                         }
                       },

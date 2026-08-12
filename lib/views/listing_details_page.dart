@@ -519,7 +519,7 @@ class _ListingDetailsPageState extends State<ListingDetailsPage> {
                             child: _sellerPhotoUrl == null || _sellerPhotoUrl!.isEmpty
                                 ? Text(
                                     _sellerName.isNotEmpty ? _sellerName.substring(0, 1).toUpperCase() : 'S',
-                                    style: const TextStyle(
+                                    style: GoogleFonts.inter(
                                       color: Colors.white,
                                       fontSize: 18,
                                       fontWeight: FontWeight.bold,

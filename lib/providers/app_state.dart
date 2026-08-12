@@ -193,12 +193,13 @@ class AppState extends ChangeNotifier {
     String email,
     String password,
     String userType,
-    String nickname,
-  ) async {
+    String nickname, [
+    String? level,
+  ]) async {
     _isLoading = true;
     notifyListeners();
     try {
-      await firebaseService.registerAsync(email, password, userType, nickname);
+      await firebaseService.registerAsync(email, password, userType, nickname, level);
       await _loadProfileAndSubscribe();
     } catch (e) {
       _isLoading = false;

@@ -257,7 +257,7 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
       ),
       child: Text(
         emoji,
-        style: const TextStyle(fontSize: 28),
+        style: GoogleFonts.inter(fontSize: 28),
       ),
     );
   }
@@ -358,12 +358,12 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text("Cancel", style: TextStyle(color: AppTheme.textSecondary)),
+            child: Text("Cancel", style: GoogleFonts.inter(color: AppTheme.textSecondary)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: AppTheme.danger),
             onPressed: () => Navigator.pop(context, true),
-            child: const Text("Delete", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            child: Text("Delete", style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -771,7 +771,7 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                                       _event = sub;
                                     });
                                   },
-                                  child: const Text('View', style: TextStyle(color: AppTheme.primaryAccent, fontSize: 12)),
+                                  child: Text('View', style: GoogleFonts.inter(color: AppTheme.primaryAccent, fontSize: 12)),
                                 ),
                             ],
                           ),
@@ -1308,11 +1308,11 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                         title: Text("Finalize Event?", style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold)),
                         content: Text("Are you sure all subs and members are confirmed and everything is a go? Finalizing locks RSVPs and sets the event status to Finalized.", style: GoogleFonts.inter(color: AppTheme.textSecondary)),
                         actions: [
-                          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancel", style: TextStyle(color: AppTheme.textSecondary))),
+                          TextButton(onPressed: () => Navigator.pop(context, false), child: Text("Cancel", style: GoogleFonts.inter(color: AppTheme.textSecondary))),
                           ElevatedButton(
                             style: ElevatedButton.styleFrom(backgroundColor: AppTheme.success),
                             onPressed: () => Navigator.pop(context, true),
-                            child: const Text("Finalize Event", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                            child: Text("Finalize Event", style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold)),
                           ),
                         ],
                       ),
@@ -1334,11 +1334,11 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                                 style: GoogleFonts.inter(color: AppTheme.textSecondary),
                               ),
                               actions: [
-                                TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("No thanks", style: TextStyle(color: AppTheme.textSecondary))),
+                                TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text("No thanks", style: GoogleFonts.inter(color: AppTheme.textSecondary))),
                                 ElevatedButton(
                                   style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryAccent),
                                   onPressed: () => Navigator.pop(ctx, true),
-                                  child: const Text("Create Chat", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                  child: Text("Create Chat", style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold)),
                                 ),
                               ],
                             ),
@@ -1401,11 +1401,11 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                         title: Text("Re-open RSVPs?", style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold)),
                         content: Text("Do you want to unlock this event and allow members/subs to modify their RSVP status again?", style: GoogleFonts.inter(color: AppTheme.textSecondary)),
                         actions: [
-                          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancel", style: TextStyle(color: AppTheme.textSecondary))),
+                          TextButton(onPressed: () => Navigator.pop(context, false), child: Text("Cancel", style: GoogleFonts.inter(color: AppTheme.textSecondary))),
                           ElevatedButton(
                             style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryAccent),
                             onPressed: () => Navigator.pop(context, true),
-                            child: const Text("Re-open RSVPs", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                            child: Text("Re-open RSVPs", style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold)),
                           ),
                         ],
                       ),
@@ -1556,7 +1556,7 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                   backgroundColor: color.withOpacity(0.2),
                   child: Text(
                     displayName.isNotEmpty ? displayName.substring(0, 1).toUpperCase() : 'M',
-                    style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold),
+                    style: GoogleFonts.inter(color: color, fontSize: 10, fontWeight: FontWeight.bold),
                   ),
                 ),
                 const SizedBox(width: 12),

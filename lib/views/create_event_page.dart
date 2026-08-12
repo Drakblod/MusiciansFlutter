@@ -322,7 +322,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                     DropdownButtonFormField<String>(
                       value: draftType,
                       dropdownColor: const Color(0xFF16132D),
-                      style: const TextStyle(color: Colors.white),
+                      style: GoogleFonts.inter(color: Colors.white),
                       decoration: const InputDecoration(labelText: 'Event Type'),
                       items: _eventTypes.map((type) => DropdownMenuItem(value: type, child: Text(type))).toList(),
                       onChanged: (val) {
@@ -334,7 +334,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                     // Event Title
                     TextFormField(
                       controller: draftTitleController,
-                      style: const TextStyle(color: Colors.white),
+                      style: GoogleFonts.inter(color: Colors.white),
                       decoration: const InputDecoration(labelText: 'Event Title'),
                     ),
                     const SizedBox(height: 12),
@@ -342,7 +342,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                     // Location
                     TextFormField(
                       controller: draftLocationController,
-                      style: const TextStyle(color: Colors.white),
+                      style: GoogleFonts.inter(color: Colors.white),
                       decoration: const InputDecoration(
                         labelText: 'Location (City, Country)',
                         prefixIcon: Icon(Icons.location_on_outlined, color: AppTheme.textSecondary),
@@ -353,7 +353,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                     // Description
                     TextFormField(
                       controller: draftDescriptionController,
-                      style: const TextStyle(color: Colors.white),
+                      style: GoogleFonts.inter(color: Colors.white),
                       maxLines: 2,
                       decoration: const InputDecoration(
                         labelText: 'Description (Optional)',
@@ -651,7 +651,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                     // Event Title
                     TextFormField(
                       controller: _titleController,
-                      style: const TextStyle(color: Colors.white),
+                      style: GoogleFonts.inter(color: Colors.white),
                       decoration: const InputDecoration(
                         labelText: 'Event Title',
                         hintText: 'e.g. Choir Rehearsal, Friday Gig',
@@ -669,7 +669,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                     DropdownButtonFormField<String>(
                       value: _eventType,
                       dropdownColor: const Color(0xFF16132D),
-                      style: const TextStyle(color: Colors.white),
+                      style: GoogleFonts.inter(color: Colors.white),
                       decoration: const InputDecoration(
                         labelText: 'Event Type',
                       ),
@@ -691,7 +691,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                       const SizedBox(height: 12),
                       TextFormField(
                         controller: _otherEventTypeController,
-                        style: const TextStyle(color: Colors.white),
+                        style: GoogleFonts.inter(color: Colors.white),
                         decoration: const InputDecoration(
                           labelText: 'Specify Event Type',
                           hintText: 'e.g. Workshop, Radio Show, Masterclass',
@@ -709,7 +709,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                     // Description
                     TextFormField(
                       controller: _descriptionController,
-                      style: const TextStyle(color: Colors.white),
+                      style: GoogleFonts.inter(color: Colors.white),
                       maxLines: 3,
                       decoration: const InputDecoration(
                         labelText: 'Description',
@@ -721,7 +721,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                     // Location
                     TextFormField(
                       controller: _locationController,
-                      style: const TextStyle(color: Colors.white),
+                      style: GoogleFonts.inter(color: Colors.white),
                       decoration: const InputDecoration(
                         labelText: 'Location (City, Country)',
                         hintText: 'e.g. Globen, Stockholm',
@@ -1164,17 +1164,17 @@ class _CreateEventPageState extends State<CreateEventPage> {
                             },
                           ),
                           if (_isCustomReminderHours) ...[
-                            const SizedBox(height: 12),
+                            SizedBox(height: 12),
                             TextFormField(
                               controller: _customReminderController,
                               keyboardType: TextInputType.number,
-                              style: const TextStyle(color: Colors.white),
-                              decoration: const InputDecoration(
+                              style: GoogleFonts.inter(color: Colors.white),
+                              decoration: InputDecoration(
                                 labelText: 'Set hours here',
                                 hintText: 'e.g. 48, 24, 12',
                                 prefixIcon: Icon(Icons.timer_outlined, color: AppTheme.textSecondary),
                                 suffixText: 'hours',
-                                suffixStyle: TextStyle(color: AppTheme.textSecondary),
+                                suffixStyle: GoogleFonts.inter(color: AppTheme.textSecondary),
                               ),
                               validator: (value) {
                                 if (_isCustomReminderHours) {

@@ -177,11 +177,11 @@ class _SessionDetailsScreenState extends State<SessionDetailsScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
+            child: Text('Cancel', style: GoogleFonts.inter(color: Colors.white70)),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete', style: TextStyle(color: AppTheme.danger)),
+            child: Text('Delete', style: GoogleFonts.inter(color: AppTheme.danger)),
           ),
         ],
       ),
@@ -467,7 +467,7 @@ class _SessionDetailsScreenState extends State<SessionDetailsScreen> {
                           child: _creatorProfile!.profilePictureUrl == null || _creatorProfile!.profilePictureUrl!.isEmpty
                               ? Text(
                                   _creatorProfile!.displayName != null ? _creatorProfile!.displayName!.substring(0, 1).toUpperCase() : 'H',
-                                  style: const TextStyle(color: Colors.white, fontSize: 16),
+                                  style: GoogleFonts.inter(color: Colors.white, fontSize: 16),
                                 )
                               : null,
                         ),
@@ -530,7 +530,7 @@ class _SessionDetailsScreenState extends State<SessionDetailsScreen> {
                             backgroundColor: AppTheme.primaryAccent,
                             child: Text(
                               profile?.displayName?.substring(0, 1).toUpperCase() ?? 'U',
-                              style: const TextStyle(color: Colors.white, fontSize: 11),
+                              style: GoogleFonts.inter(color: Colors.white, fontSize: 11),
                             ),
                           ),
                           const SizedBox(width: 12),
@@ -597,7 +597,7 @@ class _SessionDetailsScreenState extends State<SessionDetailsScreen> {
                                         backgroundColor: AppTheme.primaryAccent,
                                         child: Text(
                                           profile?.displayName?.substring(0, 1).toUpperCase() ?? 'U',
-                                          style: const TextStyle(color: Colors.white, fontSize: 14),
+                                          style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
                                         ),
                                       ),
                                     ),

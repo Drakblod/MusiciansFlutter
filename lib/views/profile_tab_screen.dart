@@ -106,7 +106,7 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                                       (user.displayName != null && user.displayName!.isNotEmpty)
                                           ? user.displayName!.substring(0, 1).toUpperCase()
                                           : 'U',
-                                      style: const TextStyle(
+                                      style: GoogleFonts.inter(
                                         color: Colors.white,
                                         fontSize: 44,
                                         fontWeight: FontWeight.bold,
@@ -150,7 +150,7 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                           ),
                           const SizedBox(height: 8),
 
-                          // Location (incl. Country)
+                          // Location & Level Row
                           Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
@@ -167,6 +167,27 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                                   color: AppTheme.textSecondary,
                                 ),
                               ),
+                              if (user.level != null && user.level!.isNotEmpty) ...[
+                                const SizedBox(width: 8),
+                                Text('•', style: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 12)),
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.primaryAccent.withOpacity(0.15),
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.4), width: 1),
+                                  ),
+                                  child: Text(
+                                    user.level!,
+                                    style: GoogleFonts.inter(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppTheme.primaryAccent,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ],
                           ),
                           if (user.genres.isNotEmpty) ...[
@@ -303,11 +324,11 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                                       actions: [
                                         TextButton(
                                           onPressed: () => Navigator.pop(context, false),
-                                          child: const Text('Cancel', style: TextStyle(color: Colors.white)),
+                                          child: Text('Cancel', style: GoogleFonts.inter(color: Colors.white)),
                                         ),
                                         TextButton(
                                           onPressed: () => Navigator.pop(context, true),
-                                          child: const Text('Logout', style: TextStyle(color: Colors.redAccent)),
+                                          child: Text('Logout', style: GoogleFonts.inter(color: Colors.redAccent)),
                                         ),
                                       ],
                                     ),
@@ -542,7 +563,7 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                     child: OutlinedButton.icon(
                       onPressed: () {},
                       icon: const Icon(Icons.music_note, color: Colors.green),
-                      label: const Text('Spotify', style: TextStyle(color: Colors.white)),
+                      label: Text('Spotify', style: GoogleFonts.inter(color: Colors.white)),
                       style: OutlinedButton.styleFrom(
                         side: const BorderSide(color: Colors.green),
                         padding: const EdgeInsets.symmetric(vertical: 12),
@@ -558,7 +579,7 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                     child: OutlinedButton.icon(
                       onPressed: () {},
                       icon: const Icon(Icons.play_circle_fill, color: Colors.red),
-                      label: const Text('YouTube', style: TextStyle(color: Colors.white)),
+                      label: Text('YouTube', style: GoogleFonts.inter(color: Colors.white)),
                       style: OutlinedButton.styleFrom(
                         side: const BorderSide(color: Colors.red),
                         padding: const EdgeInsets.symmetric(vertical: 12),
@@ -710,7 +731,7 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                                       (musician.displayName != null && musician.displayName!.isNotEmpty)
                                           ? musician.displayName!.substring(0, 1).toUpperCase()
                                           : 'U',
-                                      style: const TextStyle(color: Colors.white),
+                                      style: GoogleFonts.inter(color: Colors.white),
                                     )
                                   : null,
                             ),
