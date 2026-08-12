@@ -27,7 +27,9 @@ class MockRehearsalAudioController {
   Map<String, double> get distancesKm => Map.unmodifiable(_distancesKm);
 
   final ValueNotifier<bool> isMutedNotifier = ValueNotifier<bool>(false);
-  final ValueNotifier<bool> webAutoplayBlockedNotifier = ValueNotifier<bool>(false);
+  final ValueNotifier<bool> webAutoplayBlockedNotifier = ValueNotifier<bool>(
+    false,
+  );
 
   /// Initializes audio players for all mock live rehearsals.
   Future<void> initialize() async {
@@ -45,12 +47,11 @@ class MockRehearsalAudioController {
         await player.setReleaseMode(ReleaseMode.loop);
 
         // Try playing at 0 volume
-        await player.play(
-          AssetSource(rehearsal.audioAssetPath),
-          volume: 0.0,
-        );
+        await player.play(AssetSource(rehearsal.audioAssetPath), volume: 0.0);
       } catch (e) {
-        debugPrint("[MockRehearsalAudio] Playback initialization error for ${rehearsal.id}: $e");
+        debugPrint(
+          "[MockRehearsalAudio] Playback initialization error for ${rehearsal.id}: $e",
+        );
         if (kIsWeb) {
           _isWebAutoplayBlocked = true;
           webAutoplayBlockedNotifier.value = true;
@@ -71,7 +72,9 @@ class MockRehearsalAudioController {
         try {
           await player.resume();
         } catch (e) {
-          debugPrint("[MockRehearsalAudio] Error resuming ${rehearsal.id} on web: $e");
+          debugPrint(
+            "[MockRehearsalAudio] Error resuming ${rehearsal.id} on web: $e",
+          );
         }
       }
     }
@@ -108,7 +111,10 @@ class MockRehearsalAudioController {
     double minDistance = double.infinity;
 
     for (final rehearsal in mockLiveRehearsals) {
-      final dist = calculateHaversineDistanceKm(cameraTarget, rehearsal.position);
+      final dist = calculateHaversineDistanceKm(
+        cameraTarget,
+        rehearsal.position,
+      );
       _distancesKm[rehearsal.id] = dist;
 
       if (dist < audibleRadiusKm && dist < minDistance) {
@@ -152,7 +158,9 @@ class MockRehearsalAudioController {
         final double interpolated = start + (target - start) * progress;
         _currentVolumes[id] = interpolated;
 
-        final double effectiveVolume = _isMuted ? 0.0 : interpolated.clamp(0.0, 1.0);
+        final double effectiveVolume = _isMuted
+            ? 0.0
+            : interpolated.clamp(0.0, 1.0);
         _players[id]?.setVolume(effectiveVolume);
       }
 
@@ -169,7 +177,9 @@ class MockRehearsalAudioController {
     isMutedNotifier.value = _isMuted;
 
     for (final id in _players.keys) {
-      final double effectiveVolume = _isMuted ? 0.0 : (_currentVolumes[id] ?? 0.0).clamp(0.0, 1.0);
+      final double effectiveVolume = _isMuted
+          ? 0.0
+          : (_currentVolumes[id] ?? 0.0).clamp(0.0, 1.0);
       _players[id]?.setVolume(effectiveVolume);
     }
   }

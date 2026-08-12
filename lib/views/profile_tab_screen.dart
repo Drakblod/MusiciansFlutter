@@ -29,19 +29,21 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
     });
   }
 
-
-
   Future<void> _loadFavorites() async {
     setState(() => _isLoadingFavorites = true);
     try {
       final appState = Provider.of<AppState>(context, listen: false);
-      final favoriteUserIds = await appState.firebaseService.getFavoriteUserIdsAsync();
+      final favoriteUserIds = await appState.firebaseService
+          .getFavoriteUserIdsAsync();
       final setOfFavorites = favoriteUserIds.toSet();
-      
+
       final allUsers = await appState.firebaseService.getAllUsersAsync();
-      
+
       final List<UserProfile> favList = allUsers
-          .where((user) => user.userId != null && setOfFavorites.contains(user.userId))
+          .where(
+            (user) =>
+                user.userId != null && setOfFavorites.contains(user.userId),
+          )
           .toList();
 
       if (mounted) {
@@ -62,19 +64,22 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
   Widget build(BuildContext context) {
     final appState = Provider.of<AppState>(context);
     final user = appState.currentUserProfile;
-    const defaultAbout = "Passionate musician looking to collaborate. Love playing live gigs and creating fresh arrangements in the studio.";
+    const defaultAbout =
+        "Passionate musician looking to collaborate. Love playing live gigs and creating fresh arrangements in the studio.";
 
     return GradientScaffold(
-      appBar: const CustomTopBar(
-        title: 'Profile',
-        showBack: true,
-      ),
+      appBar: const CustomTopBar(title: 'Profile', showBack: true),
       body: SafeArea(
         child: user == null
-            ? const Center(child: CircularProgressIndicator(color: AppTheme.primaryAccent))
+            ? const Center(
+                child: CircularProgressIndicator(color: AppTheme.primaryAccent),
+              )
             : SingleChildScrollView(
                 physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 10,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -89,11 +94,16 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                             height: 110,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              border: Border.all(color: AppTheme.primaryAccent, width: 2),
+                              border: Border.all(
+                                color: AppTheme.primaryAccent,
+                                width: 2,
+                              ),
                               color: AppTheme.inputBackground,
                             ),
                             child: Center(
-                              child: user.profilePictureUrl != null && user.profilePictureUrl!.isNotEmpty
+                              child:
+                                  user.profilePictureUrl != null &&
+                                      user.profilePictureUrl!.isNotEmpty
                                   ? ClipOval(
                                       child: Image.network(
                                         user.profilePictureUrl!,
@@ -103,8 +113,11 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                                       ),
                                     )
                                   : Text(
-                                      (user.displayName != null && user.displayName!.isNotEmpty)
-                                          ? user.displayName!.substring(0, 1).toUpperCase()
+                                      (user.displayName != null &&
+                                              user.displayName!.isNotEmpty)
+                                          ? user.displayName!
+                                                .substring(0, 1)
+                                                .toUpperCase()
                                           : 'U',
                                       style: GoogleFonts.inter(
                                         color: Colors.white,
@@ -167,16 +180,33 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                                   color: AppTheme.textSecondary,
                                 ),
                               ),
-                              if (user.level != null && user.level!.isNotEmpty) ...[
+                              if (user.level != null &&
+                                  user.level!.isNotEmpty) ...[
                                 const SizedBox(width: 8),
-                                Text('•', style: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 12)),
+                                Text(
+                                  '•',
+                                  style: GoogleFonts.inter(
+                                    color: AppTheme.textSecondary,
+                                    fontSize: 12,
+                                  ),
+                                ),
                                 const SizedBox(width: 8),
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 2,
+                                  ),
                                   decoration: BoxDecoration(
-                                    color: AppTheme.primaryAccent.withOpacity(0.15),
+                                    color: AppTheme.primaryAccent.withOpacity(
+                                      0.15,
+                                    ),
                                     borderRadius: BorderRadius.circular(10),
-                                    border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.4), width: 1),
+                                    border: Border.all(
+                                      color: AppTheme.primaryAccent.withOpacity(
+                                        0.4,
+                                      ),
+                                      width: 1,
+                                    ),
                                   ),
                                   child: Text(
                                     user.level!,
@@ -207,7 +237,9 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                                     textAlign: TextAlign.center,
                                     style: GoogleFonts.inter(
                                       fontSize: 12,
-                                      color: AppTheme.primaryAccent.withOpacity(0.9),
+                                      color: AppTheme.primaryAccent.withOpacity(
+                                        0.9,
+                                      ),
                                       fontWeight: FontWeight.w500,
                                     ),
                                     maxLines: 1,
@@ -227,26 +259,37 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                                   Expanded(
                                     child: AnimatedTapDetector(
                                       onTap: () async {
-                                        await Navigator.pushNamed(context, '/edit-profile');
+                                        await Navigator.pushNamed(
+                                          context,
+                                          '/edit-profile',
+                                        );
                                         appState.refreshProfile();
                                       },
                                       child: Container(
                                         height: 44,
                                         decoration: BoxDecoration(
                                           gradient: AppTheme.primaryGradient,
-                                          borderRadius: BorderRadius.circular(12),
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
                                           boxShadow: [
                                             BoxShadow(
-                                              color: AppTheme.primaryAccent.withOpacity(0.35),
+                                              color: AppTheme.primaryAccent
+                                                  .withOpacity(0.35),
                                               blurRadius: 8,
                                               offset: const Offset(0, 3),
-                                            )
+                                            ),
                                           ],
                                         ),
                                         child: Row(
-                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
                                           children: [
-                                            const Icon(Icons.person_outline_rounded, color: Colors.white, size: 18),
+                                            const Icon(
+                                              Icons.person_outline_rounded,
+                                              color: Colors.white,
+                                              size: 18,
+                                            ),
                                             const SizedBox(width: 6),
                                             Text(
                                               'Edit Profile',
@@ -265,21 +308,31 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                                   Expanded(
                                     child: AnimatedTapDetector(
                                       onTap: () async {
-                                        final activeBandId = appState.activeBandId;
+                                        final activeBandId =
+                                            appState.activeBandId;
                                         if (activeBandId != null) {
-                                          final band = await appState.firebaseService.getBandInfoAsync(activeBandId);
+                                          final band = await appState
+                                              .firebaseService
+                                              .getBandInfoAsync(activeBandId);
                                           if (band != null && context.mounted) {
                                             await Navigator.push(
                                               context,
                                               MaterialPageRoute(
-                                                builder: (context) => EditBandInfoScreen(band: band),
+                                                builder: (context) =>
+                                                    EditBandInfoScreen(
+                                                      band: band,
+                                                    ),
                                               ),
                                             );
                                           }
                                         } else {
-                                          ScaffoldMessenger.of(context).showSnackBar(
+                                          ScaffoldMessenger.of(
+                                            context,
+                                          ).showSnackBar(
                                             const SnackBar(
-                                              content: Text('No active band selected to edit.'),
+                                              content: Text(
+                                                'No active band selected to edit.',
+                                              ),
                                               backgroundColor: AppTheme.warning,
                                             ),
                                           );
@@ -289,13 +342,23 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                                         height: 44,
                                         decoration: BoxDecoration(
                                           color: AppTheme.cardBackground,
-                                          borderRadius: BorderRadius.circular(12),
-                                          border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.4)),
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                          border: Border.all(
+                                            color: AppTheme.primaryAccent
+                                                .withOpacity(0.4),
+                                          ),
                                         ),
                                         child: Row(
-                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
                                           children: [
-                                            const Icon(Icons.groups_outlined, color: AppTheme.primaryAccent, size: 18),
+                                            const Icon(
+                                              Icons.groups_outlined,
+                                              color: AppTheme.primaryAccent,
+                                              size: 18,
+                                            ),
                                             const SizedBox(width: 6),
                                             Text(
                                               'Edit Band',
@@ -320,22 +383,39 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                                     builder: (context) => AlertDialog(
                                       backgroundColor: AppTheme.cardBackground,
                                       title: const Text('Logout?'),
-                                      content: const Text('Are you sure you want to logout?'),
+                                      content: const Text(
+                                        'Are you sure you want to logout?',
+                                      ),
                                       actions: [
                                         TextButton(
-                                          onPressed: () => Navigator.pop(context, false),
-                                          child: Text('Cancel', style: GoogleFonts.inter(color: Colors.white)),
+                                          onPressed: () =>
+                                              Navigator.pop(context, false),
+                                          child: Text(
+                                            'Cancel',
+                                            style: GoogleFonts.inter(
+                                              color: Colors.white,
+                                            ),
+                                          ),
                                         ),
                                         TextButton(
-                                          onPressed: () => Navigator.pop(context, true),
-                                          child: Text('Logout', style: GoogleFonts.inter(color: Colors.redAccent)),
+                                          onPressed: () =>
+                                              Navigator.pop(context, true),
+                                          child: Text(
+                                            'Logout',
+                                            style: GoogleFonts.inter(
+                                              color: Colors.redAccent,
+                                            ),
+                                          ),
                                         ),
                                       ],
                                     ),
                                   );
                                   if (confirmed == true && context.mounted) {
                                     await appState.logout();
-                                    Navigator.pushReplacementNamed(context, '/login');
+                                    Navigator.pushReplacementNamed(
+                                      context,
+                                      '/login',
+                                    );
                                   }
                                 },
                                 child: Container(
@@ -344,12 +424,18 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                                   decoration: BoxDecoration(
                                     color: Colors.redAccent.withOpacity(0.12),
                                     borderRadius: BorderRadius.circular(10),
-                                    border: Border.all(color: Colors.redAccent.withOpacity(0.3)),
+                                    border: Border.all(
+                                      color: Colors.redAccent.withOpacity(0.3),
+                                    ),
                                   ),
                                   child: Row(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
-                                      const Icon(Icons.logout_rounded, color: Colors.redAccent, size: 16),
+                                      const Icon(
+                                        Icons.logout_rounded,
+                                        color: Colors.redAccent,
+                                        size: 16,
+                                      ),
                                       const SizedBox(width: 6),
                                       Text(
                                         'Logout',
@@ -370,398 +456,520 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                     ),
                     const SizedBox(height: 24),
 
-          // 1. PRIMARY Skills/Talents
-          if (user.mainSkills.isNotEmpty) ...[
-            Text(
-              'PRIMARY Skills/Talents',
-              style: GoogleFonts.outfit(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: user.mainSkills.map((skill) {
-                return Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: AppTheme.primaryAccent.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.5), width: 1.5),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.star_rounded, color: AppTheme.primaryAccent, size: 16),
-                      const SizedBox(width: 6),
+                    // 1. PRIMARY Skills/Talents
+                    if (user.mainSkills.isNotEmpty) ...[
                       Text(
-                        skill,
-                        style: GoogleFonts.inter(
-                          fontSize: 13,
-                          color: Colors.white,
+                        'PRIMARY Skills/Talents',
+                        style: GoogleFonts.outfit(
+                          fontSize: 18,
                           fontWeight: FontWeight.bold,
+                          color: Colors.white,
                         ),
                       ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: user.mainSkills.map((skill) {
+                          return Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 8,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppTheme.primaryAccent.withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: AppTheme.primaryAccent.withOpacity(0.5),
+                                width: 1.5,
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(
+                                  Icons.star_rounded,
+                                  color: AppTheme.primaryAccent,
+                                  size: 16,
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  skill,
+                                  style: GoogleFonts.inter(
+                                    fontSize: 13,
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: 24),
                     ],
-                  ),
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 24),
-          ],
 
-          // 2. SECONDARY Skills/Talents
-          if (user.secondarySkills.isNotEmpty) ...[
-            Text(
-              'SECONDARY Skills/Talents',
-              style: GoogleFonts.outfit(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: user.secondarySkills.map((skill) {
-                return Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1E1A3A),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
-                  ),
-                  child: Text(
-                    skill,
-                    style: GoogleFonts.inter(
-                      fontSize: 12,
-                      color: Colors.white70,
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 24),
-          ],
+                    // 2. SECONDARY Skills/Talents
+                    if (user.secondarySkills.isNotEmpty) ...[
+                      Text(
+                        'SECONDARY Skills/Talents',
+                        style: GoogleFonts.outfit(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: user.secondarySkills.map((skill) {
+                          return Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF1E1A3A),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: const Color(0xFF2E2A4E),
+                                width: 1,
+                              ),
+                            ),
+                            child: Text(
+                              skill,
+                              style: GoogleFonts.inter(
+                                fontSize: 12,
+                                color: Colors.white70,
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: 24),
+                    ],
 
-          // 3. Genres/Band Types
-          if (user.genres.isNotEmpty) ...[
-            Text(
-              'Genres/Band Types',
-              style: GoogleFonts.outfit(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: user.genres.map((genre) {
-                return Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: AppTheme.cardBackground,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.4), width: 1),
-                  ),
-                  child: Text(
-                    genre,
-                    style: GoogleFonts.inter(
-                      fontSize: 12,
-                      color: Colors.white,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 24),
-          ],
+                    // 3. Genres/Band Types
+                    if (user.genres.isNotEmpty) ...[
+                      Text(
+                        'Genres/Band Types',
+                        style: GoogleFonts.outfit(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: user.genres.map((genre) {
+                          return Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppTheme.cardBackground,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: AppTheme.primaryAccent.withOpacity(0.4),
+                                width: 1,
+                              ),
+                            ),
+                            child: Text(
+                              genre,
+                              style: GoogleFonts.inter(
+                                fontSize: 12,
+                                color: Colors.white,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: 24),
+                    ],
 
-          // 4. About Info section
-          Text(
-            'About',
-            style: GoogleFonts.outfit(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: AppTheme.cardBackground,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFF231F45), width: 1),
-            ),
-            child: Text(
-              user.about != null && user.about!.isNotEmpty ? user.about! : defaultAbout,
-              style: GoogleFonts.inter(
-                fontSize: 14,
-                color: AppTheme.textSecondary,
-                height: 1.4,
-              ),
-            ),
-          ),
-          const SizedBox(height: 24),
-
-          // 5. Collaborations
-          Text(
-            'Collaborations',
-            style: GoogleFonts.outfit(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: AppTheme.cardBackground,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFF231F45), width: 1),
-            ),
-            child: Text(
-              user.collabBio != null && user.collabBio!.isNotEmpty
-                  ? user.collabBio!
-                  : "I'm looking for musical collaborations!",
-              style: GoogleFonts.inter(
-                fontSize: 14,
-                color: AppTheme.textSecondary,
-                height: 1.4,
-              ),
-            ),
-          ),
-          const SizedBox(height: 24),
-
-          // 6. SOCIAL LINKS
-          if ((user.spotifyUrl != null && user.spotifyUrl!.isNotEmpty) ||
-              (user.youtubeUrl != null && user.youtubeUrl!.isNotEmpty)) ...[
-            Text(
-              'SOCIAL LINKS',
-              style: GoogleFonts.outfit(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                if (user.spotifyUrl != null && user.spotifyUrl!.isNotEmpty)
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () {},
-                      icon: const Icon(Icons.music_note, color: Colors.green),
-                      label: Text('Spotify', style: GoogleFonts.inter(color: Colors.white)),
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: Colors.green),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    // 4. About Info section
+                    Text(
+                      'About',
+                      style: GoogleFonts.outfit(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
                       ),
                     ),
-                  ),
-                if (user.spotifyUrl != null && user.spotifyUrl!.isNotEmpty &&
-                    user.youtubeUrl != null && user.youtubeUrl!.isNotEmpty)
-                  const SizedBox(width: 12),
-                if (user.youtubeUrl != null && user.youtubeUrl!.isNotEmpty)
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () {},
-                      icon: const Icon(Icons.play_circle_fill, color: Colors.red),
-                      label: Text('YouTube', style: GoogleFonts.inter(color: Colors.white)),
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: Colors.red),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 24),
-          ],
-
-          // 7. TRACKS
-          if (user.audioSnippetUrl != null && user.audioSnippetUrl!.isNotEmpty) ...[
-            Text(
-              'TRACKS',
-              style: GoogleFonts.outfit(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-            ),
-            const SizedBox(height: 8),
-            AudioSnippetPlayer(audioUrl: user.audioSnippetUrl!),
-            const SizedBox(height: 24),
-          ],
-// 3. Bands / Rehearsals section
-          Text(
-            'Active Band',
-            style: GoogleFonts.outfit(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-            ),
-          ),
-          const SizedBox(height: 10),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: AppTheme.cardBackground,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFF231F45), width: 1),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  children: [
+                    const SizedBox(height: 8),
                     Container(
-                      padding: const EdgeInsets.all(8),
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: AppTheme.primaryAccent.withOpacity(0.12),
-                        borderRadius: BorderRadius.circular(8),
+                        color: AppTheme.cardBackground,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: const Color(0xFF231F45),
+                          width: 1,
+                        ),
                       ),
-                      child: const Icon(Icons.groups_rounded, color: AppTheme.primaryAccent, size: 22),
+                      child: Text(
+                        user.about != null && user.about!.isNotEmpty
+                            ? user.about!
+                            : defaultAbout,
+                        style: GoogleFonts.inter(
+                          fontSize: 14,
+                          color: AppTheme.textSecondary,
+                          height: 1.4,
+                        ),
+                      ),
                     ),
-                    const SizedBox(width: 12),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    const SizedBox(height: 24),
+
+                    // 5. Collaborations
+                    Text(
+                      'Collaborations',
+                      style: GoogleFonts.outfit(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: AppTheme.cardBackground,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: const Color(0xFF231F45),
+                          width: 1,
+                        ),
+                      ),
+                      child: Text(
+                        user.collabBio != null && user.collabBio!.isNotEmpty
+                            ? user.collabBio!
+                            : "I'm looking for musical collaborations!",
+                        style: GoogleFonts.inter(
+                          fontSize: 14,
+                          color: AppTheme.textSecondary,
+                          height: 1.4,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+
+                    // 6. SOCIAL LINKS
+                    if ((user.spotifyUrl != null &&
+                            user.spotifyUrl!.isNotEmpty) ||
+                        (user.youtubeUrl != null &&
+                            user.youtubeUrl!.isNotEmpty)) ...[
+                      Text(
+                        'SOCIAL LINKS',
+                        style: GoogleFonts.outfit(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          if (user.spotifyUrl != null &&
+                              user.spotifyUrl!.isNotEmpty)
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                onPressed: () {},
+                                icon: const Icon(
+                                  Icons.music_note,
+                                  color: Colors.green,
+                                ),
+                                label: Text(
+                                  'Spotify',
+                                  style: GoogleFonts.inter(color: Colors.white),
+                                ),
+                                style: OutlinedButton.styleFrom(
+                                  side: const BorderSide(color: Colors.green),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 12,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          if (user.spotifyUrl != null &&
+                              user.spotifyUrl!.isNotEmpty &&
+                              user.youtubeUrl != null &&
+                              user.youtubeUrl!.isNotEmpty)
+                            const SizedBox(width: 12),
+                          if (user.youtubeUrl != null &&
+                              user.youtubeUrl!.isNotEmpty)
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                onPressed: () {},
+                                icon: const Icon(
+                                  Icons.play_circle_fill,
+                                  color: Colors.red,
+                                ),
+                                label: Text(
+                                  'YouTube',
+                                  style: GoogleFonts.inter(color: Colors.white),
+                                ),
+                                style: OutlinedButton.styleFrom(
+                                  side: const BorderSide(color: Colors.red),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 12,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 24),
+                    ],
+
+                    // 7. TRACKS
+                    if (user.audioSnippetUrl != null &&
+                        user.audioSnippetUrl!.isNotEmpty) ...[
+                      Text(
+                        'TRACKS',
+                        style: GoogleFonts.outfit(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      AudioSnippetPlayer(audioUrl: user.audioSnippetUrl!),
+                      const SizedBox(height: 24),
+                    ],
+                    // 3. Bands / Rehearsals section
+                    Text(
+                      'Active Band',
+                      style: GoogleFonts.outfit(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: AppTheme.cardBackground,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: const Color(0xFF231F45),
+                          width: 1,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.primaryAccent.withOpacity(
+                                    0.12,
+                                  ),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Icon(
+                                  Icons.groups_rounded,
+                                  color: AppTheme.primaryAccent,
+                                  size: 22,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    appState.activeBandName ??
+                                        'Deku Tree Bongo',
+                                    style: GoogleFonts.outfit(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    appState.activeBandId != null
+                                        ? 'Active'
+                                        : 'Default Mock Band',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 11,
+                                      color: AppTheme.textSecondary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+
+                    // 4. Favorites / Followed musicians
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          appState.activeBandName ?? 'Deku Tree Bongo',
+                          'Favorite Musicians',
                           style: GoogleFonts.outfit(
-                            fontSize: 16,
+                            fontSize: 18,
                             fontWeight: FontWeight.bold,
                             color: Colors.white,
                           ),
                         ),
-                        const SizedBox(height: 2),
-                        Text(
-                          appState.activeBandId != null ? 'Active' : 'Default Mock Band',
-                          style: GoogleFonts.inter(
-                            fontSize: 11,
-                            color: AppTheme.textSecondary,
+                        GestureDetector(
+                          onTap: _loadFavorites,
+                          child: const Icon(
+                            Icons.refresh_rounded,
+                            color: AppTheme.primaryAccent,
+                            size: 20,
                           ),
                         ),
                       ],
                     ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 24),
-
-          // 4. Favorites / Followed musicians
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Favorite Musicians',
-                style: GoogleFonts.outfit(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-              ),
-              GestureDetector(
-                onTap: _loadFavorites,
-                child: const Icon(Icons.refresh_rounded, color: AppTheme.primaryAccent, size: 20),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          _isLoadingFavorites
-              ? const Center(child: Padding(
-                  padding: EdgeInsets.all(20.0),
-                  child: CircularProgressIndicator(color: AppTheme.primaryAccent),
-                ))
-              : _favoriteMusicians.isEmpty
-                  ? Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(24),
-                      decoration: BoxDecoration(
-                        color: AppTheme.cardBackground,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: const Color(0xFF231F45), width: 1),
-                      ),
-                      child: Center(
-                        child: Text(
-                          'No favorited musicians yet.',
-                          style: GoogleFonts.inter(color: AppTheme.textSecondary),
-                        ),
-                      ),
-                    )
-                  : ListView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: _favoriteMusicians.length,
-                      itemBuilder: (context, index) {
-                        final musician = _favoriteMusicians[index];
-                        return Container(
-                          margin: const EdgeInsets.only(bottom: 12),
-                          decoration: BoxDecoration(
-                            color: AppTheme.cardBackground,
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: const Color(0xFF231F45), width: 1),
-                          ),
-                          child: ListTile(
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                            leading: CircleAvatar(
-                              backgroundColor: AppTheme.primaryAccent.withOpacity(0.1),
-                              backgroundImage: musician.profilePictureUrl != null && musician.profilePictureUrl!.isNotEmpty
-                                  ? NetworkImage(musician.profilePictureUrl!)
-                                  : null,
-                              child: musician.profilePictureUrl == null || musician.profilePictureUrl!.isEmpty
-                                  ? Text(
-                                      (musician.displayName != null && musician.displayName!.isNotEmpty)
-                                          ? musician.displayName!.substring(0, 1).toUpperCase()
-                                          : 'U',
-                                      style: GoogleFonts.inter(color: Colors.white),
-                                    )
-                                  : null,
+                    const SizedBox(height: 10),
+                    _isLoadingFavorites
+                        ? const Center(
+                            child: Padding(
+                              padding: EdgeInsets.all(20.0),
+                              child: CircularProgressIndicator(
+                                color: AppTheme.primaryAccent,
+                              ),
                             ),
-                            title: Text(
-                              musician.displayName ?? 'Unknown',
-                              style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: Colors.white),
+                          )
+                        : _favoriteMusicians.isEmpty
+                        ? Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(24),
+                            decoration: BoxDecoration(
+                              color: AppTheme.cardBackground,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: const Color(0xFF231F45),
+                                width: 1,
+                              ),
                             ),
-                            subtitle: Text(
-                              musician.userType ?? 'Musician',
-                              style: GoogleFonts.inter(color: AppTheme.primaryAccent, fontSize: 12),
+                            child: Center(
+                              child: Text(
+                                'No favorited musicians yet.',
+                                style: GoogleFonts.inter(
+                                  color: AppTheme.textSecondary,
+                                ),
+                              ),
                             ),
-                            trailing: GestureDetector(
-                              onTap: () async {
-                                await appState.firebaseService.toggleFavoriteAsync(musician.userId ?? '', false);
-                                _loadFavorites();
-                              },
-                              child: const Icon(Icons.star_rounded, color: AppTheme.primaryAccent, size: 24),
-                            ),
-                            onTap: () {
-                              Navigator.pushNamed(context, '/profile-detail', arguments: musician);
+                          )
+                        : ListView.builder(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            itemCount: _favoriteMusicians.length,
+                            itemBuilder: (context, index) {
+                              final musician = _favoriteMusicians[index];
+                              return Container(
+                                margin: const EdgeInsets.only(bottom: 12),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.cardBackground,
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(
+                                    color: const Color(0xFF231F45),
+                                    width: 1,
+                                  ),
+                                ),
+                                child: ListTile(
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 4,
+                                  ),
+                                  leading: CircleAvatar(
+                                    backgroundColor: AppTheme.primaryAccent
+                                        .withOpacity(0.1),
+                                    backgroundImage:
+                                        musician.profilePictureUrl != null &&
+                                            musician
+                                                .profilePictureUrl!
+                                                .isNotEmpty
+                                        ? NetworkImage(
+                                            musician.profilePictureUrl!,
+                                          )
+                                        : null,
+                                    child:
+                                        musician.profilePictureUrl == null ||
+                                            musician.profilePictureUrl!.isEmpty
+                                        ? Text(
+                                            (musician.displayName != null &&
+                                                    musician
+                                                        .displayName!
+                                                        .isNotEmpty)
+                                                ? musician.displayName!
+                                                      .substring(0, 1)
+                                                      .toUpperCase()
+                                                : 'U',
+                                            style: GoogleFonts.inter(
+                                              color: Colors.white,
+                                            ),
+                                          )
+                                        : null,
+                                  ),
+                                  title: Text(
+                                    musician.displayName ?? 'Unknown',
+                                    style: GoogleFonts.outfit(
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                  subtitle: Text(
+                                    musician.userType ?? 'Musician',
+                                    style: GoogleFonts.inter(
+                                      color: AppTheme.primaryAccent,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                  trailing: GestureDetector(
+                                    onTap: () async {
+                                      await appState.firebaseService
+                                          .toggleFavoriteAsync(
+                                            musician.userId ?? '',
+                                            false,
+                                          );
+                                      _loadFavorites();
+                                    },
+                                    child: const Icon(
+                                      Icons.star_rounded,
+                                      color: AppTheme.primaryAccent,
+                                      size: 24,
+                                    ),
+                                  ),
+                                  onTap: () {
+                                    Navigator.pushNamed(
+                                      context,
+                                      '/profile-detail',
+                                      arguments: musician,
+                                    );
+                                  },
+                                ),
+                              );
                             },
                           ),
-                        );
-                      },
-                    ),
-          const SizedBox(height: 40),
-          ],
-        ),
+                    const SizedBox(height: 40),
+                  ],
+                ),
+              ),
       ),
-    ),
-  );
-}
+    );
+  }
 }

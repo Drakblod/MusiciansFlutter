@@ -29,10 +29,8 @@
       ".write": "auth != null"
     },
     "conversations": {
-      "$conversationId": {
-        ".read": "auth != null && data.child('participants').child(auth.uid).val() == true",
-        ".write": false
-      }
+      ".read": "auth != null",
+      ".write": "auth != null"
     },
     "userConversations": {
       "$userId": {

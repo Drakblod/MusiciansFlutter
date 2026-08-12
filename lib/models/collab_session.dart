@@ -3,7 +3,8 @@ class CollabSession {
   final String title;
   final String description;
   final String sessionType; // 'In person', 'Remote', 'Hybrid'
-  final String sessionCategory; // 'Songwriting', 'Recording', 'Production', 'Jam', 'Other'
+  final String
+  sessionCategory; // 'Songwriting', 'Recording', 'Production', 'Jam', 'Other'
   final bool isDateFlexible;
   final String? startDateTime; // ISO 8601 string, nullable
   final String? location; // nullable for remote
@@ -95,7 +96,10 @@ class CollabSessionApplication {
     this.status = 'pending',
   });
 
-  factory CollabSessionApplication.fromJson(Map<dynamic, dynamic> json, String userId) {
+  factory CollabSessionApplication.fromJson(
+    Map<dynamic, dynamic> json,
+    String userId,
+  ) {
     return CollabSessionApplication(
       userId: userId,
       sessionId: json['SessionId']?.toString() ?? '',

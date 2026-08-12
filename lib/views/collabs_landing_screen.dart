@@ -44,42 +44,92 @@ class _CollabsLandingScreenState extends State<CollabsLandingScreen> {
   // Master Skills & Talents Category Map
   static final Map<String, List<String>> _allSkillsCategoryMap = {
     '🎼 Songwriters & Producers': [
-      'Songwriter', 'Composer', 'Lyricist', 'Beatmaker', 'Producer', 'Co-Writer'
+      'Songwriter',
+      'Composer',
+      'Lyricist',
+      'Beatmaker',
+      'Producer',
+      'Co-Writer',
     ],
     '🎛️ Studios & Engineers': [
-      'Studio', 'Home Studio', 'Recording Engineer', 'Mix Engineer', 'Live Engineer', 'Mastering Engineer'
+      'Studio',
+      'Home Studio',
+      'Recording Engineer',
+      'Mix Engineer',
+      'Live Engineer',
+      'Mastering Engineer',
     ],
     '🎷 Woodwinds': [
-      'Flute', 'Piccolo Flute', 'Alto Flute', 'Bass Flute',
-      'Clarinet', 'Eb Clarinet', 'Alto Clarinet', 'Bass Clarinet',
-      'Oboe', 'English Horn', 'Bassoon', 'Contra Bassoon',
-      'Soprano Sax', 'Alto Sax', 'Tenor Sax', 'Bari Sax',
-      'Recorder', 'Soprano Recorder', 'Alto Recorder', 'Tenor Recorder', 'Bass Recorder'
+      'Flute',
+      'Piccolo Flute',
+      'Alto Flute',
+      'Bass Flute',
+      'Clarinet',
+      'Eb Clarinet',
+      'Alto Clarinet',
+      'Bass Clarinet',
+      'Oboe',
+      'English Horn',
+      'Bassoon',
+      'Contra Bassoon',
+      'Soprano Sax',
+      'Alto Sax',
+      'Tenor Sax',
+      'Bari Sax',
+      'Recorder',
+      'Soprano Recorder',
+      'Alto Recorder',
+      'Tenor Recorder',
+      'Bass Recorder',
     ],
     '🎺 Brass': [
-      'Trumpet', 'Piccolo Trumpet', 'Cornet', 'French Horn',
-      'Trombone', 'Alto Trombone', 'Euphonium', 'Tuba'
+      'Trumpet',
+      'Piccolo Trumpet',
+      'Cornet',
+      'French Horn',
+      'Trombone',
+      'Alto Trombone',
+      'Euphonium',
+      'Tuba',
     ],
     '🎻 Strings': [
-      'Violin', 'Viola', 'Viola da Gamba', 'Cello', 'Contrabass',
-      'Acoustic Guitar', 'Electric Guitar', 'Steel Guitar', 'Electric Bass', 'Harp'
+      'Violin',
+      'Viola',
+      'Viola da Gamba',
+      'Cello',
+      'Contrabass',
+      'Acoustic Guitar',
+      'Electric Guitar',
+      'Steel Guitar',
+      'Electric Bass',
+      'Harp',
     ],
     '🎹 Keyboards': [
-      'Piano', 'Keyboard/Synth', 'Organ (Hammond)', 'Harpsichord'
+      'Piano',
+      'Keyboard/Synth',
+      'Organ (Hammond)',
+      'Harpsichord',
     ],
     '🥁 Percussion': [
-      'Drums', 'Latin Percussion (congas, timbales, etc)',
-      'Classical Percussion (timpani, cymbals, etc)', 'Steel Pan'
+      'Drums',
+      'Latin Percussion (congas, timbales, etc)',
+      'Classical Percussion (timpani, cymbals, etc)',
+      'Steel Pan',
     ],
     '🎤 Voices': [
-      'Female Lead vocals', 'Male Lead Vocals',
-      'Female Backing vocals', 'Male Backing vocals',
-      'Soprano', 'Mezzo Soprano', 'Contralto',
-      'Counter Tenor', 'Tenor', 'Baritone', 'Bass'
+      'Female Lead vocals',
+      'Male Lead Vocals',
+      'Female Backing vocals',
+      'Male Backing vocals',
+      'Soprano',
+      'Mezzo Soprano',
+      'Contralto',
+      'Counter Tenor',
+      'Tenor',
+      'Baritone',
+      'Bass',
     ],
-    '📢 PR & Management': [
-      'Manager', 'Promotor', 'Agency', 'PR Specialist'
-    ],
+    '📢 PR & Management': ['Manager', 'Promotor', 'Agency', 'PR Specialist'],
   };
 
   @override
@@ -111,7 +161,7 @@ class _CollabsLandingScreenState extends State<CollabsLandingScreen> {
     try {
       final appState = Provider.of<AppState>(context, listen: false);
       final favIds = await appState.firebaseService.getFavoriteUserIdsAsync();
-      
+
       final List<UserProfile> loaded = [];
       for (final id in favIds) {
         final profile = await appState.firebaseService.getUserProfileAsync(id);
@@ -119,7 +169,7 @@ class _CollabsLandingScreenState extends State<CollabsLandingScreen> {
           loaded.add(profile);
         }
       }
-      
+
       setState(() {
         _favorites = loaded;
         _updateFilteredFavorites();
@@ -203,7 +253,10 @@ class _CollabsLandingScreenState extends State<CollabsLandingScreen> {
     try {
       List<String>? targetIds;
       if (_sendToFavoritesOnly) {
-        targetIds = _selectedFavorites.entries.where((e) => e.value).map((e) => e.key).toList();
+        targetIds = _selectedFavorites.entries
+            .where((e) => e.value)
+            .map((e) => e.key)
+            .toList();
         if (targetIds.isEmpty) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -223,8 +276,12 @@ class _CollabsLandingScreenState extends State<CollabsLandingScreen> {
         userId: userId,
         role: _selectedCategory,
         voicePart: _selectedSubRole,
-        level: _selectedCollabAreas.isEmpty ? 'Collaboration' : _selectedCollabAreas.join(', '),
-        location: _locationController.text.trim().isEmpty ? 'Stockholm, Sweden' : _locationController.text.trim(),
+        level: _selectedCollabAreas.isEmpty
+            ? 'Collaboration'
+            : _selectedCollabAreas.join(', '),
+        location: _locationController.text.trim().isEmpty
+            ? 'Stockholm, Sweden'
+            : _locationController.text.trim(),
         description: _detailsController.text.trim(),
         date: nowStr,
         bandName: appState.activeBandName ?? "Freelance Collab",
@@ -232,7 +289,9 @@ class _CollabsLandingScreenState extends State<CollabsLandingScreen> {
         targetUserIds: targetIds,
       );
 
-      final reqId = await appState.firebaseService.saveSubRequestAsync(collabReq);
+      final reqId = await appState.firebaseService.saveSubRequestAsync(
+        collabReq,
+      );
 
       if (mounted) {
         if (reqId != null) {
@@ -263,7 +322,11 @@ class _CollabsLandingScreenState extends State<CollabsLandingScreen> {
     }
   }
 
-  void _showBandSelectorBottomSheet(BuildContext context, AppState appState, Map<String, String> bands) {
+  void _showBandSelectorBottomSheet(
+    BuildContext context,
+    AppState appState,
+    Map<String, String> bands,
+  ) {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -337,7 +400,10 @@ class _CollabsLandingScreenState extends State<CollabsLandingScreen> {
                           setState(() {});
                         },
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 14,
+                          ),
                           decoration: BoxDecoration(
                             color: isSelected
                                 ? AppTheme.primaryAccent.withOpacity(0.12)
@@ -412,7 +478,9 @@ class _CollabsLandingScreenState extends State<CollabsLandingScreen> {
                 : AppTheme.cardBackground,
             borderRadius: BorderRadius.circular(10),
             border: Border.all(
-              color: isSelected ? AppTheme.primaryAccent : const Color(0xFF2E2A4E),
+              color: isSelected
+                  ? AppTheme.primaryAccent
+                  : const Color(0xFF2E2A4E),
               width: 1.5,
             ),
           ),
@@ -437,10 +505,7 @@ class _CollabsLandingScreenState extends State<CollabsLandingScreen> {
     final appState = Provider.of<AppState>(context);
 
     return GradientScaffold(
-      appBar: const CustomTopBar(
-        title: 'Collabs',
-        showBack: true,
-      ),
+      appBar: const CustomTopBar(title: 'Collabs', showBack: true),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20.0),
         physics: const BouncingScrollPhysics(),
@@ -468,12 +533,15 @@ class _CollabsLandingScreenState extends State<CollabsLandingScreen> {
                   context: context,
                   barrierDismissible: false,
                   builder: (context) => const Center(
-                    child: CircularProgressIndicator(color: AppTheme.primaryAccent),
+                    child: CircularProgressIndicator(
+                      color: AppTheme.primaryAccent,
+                    ),
                   ),
                 );
 
                 try {
-                  final bands = await appState.firebaseService.getUserBandsAsync(userId);
+                  final bands = await appState.firebaseService
+                      .getUserBandsAsync(userId);
                   if (context.mounted) Navigator.pop(context);
 
                   if (bands.isNotEmpty) {
@@ -484,7 +552,9 @@ class _CollabsLandingScreenState extends State<CollabsLandingScreen> {
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
-                          content: Text('You are not a member of any bands yet.'),
+                          content: Text(
+                            'You are not a member of any bands yet.',
+                          ),
                           backgroundColor: AppTheme.danger,
                         ),
                       );
@@ -495,16 +565,25 @@ class _CollabsLandingScreenState extends State<CollabsLandingScreen> {
                 }
               },
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
                 decoration: BoxDecoration(
                   color: AppTheme.primaryAccent.withOpacity(0.12),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.3)),
+                  border: Border.all(
+                    color: AppTheme.primaryAccent.withOpacity(0.3),
+                  ),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.groups_rounded, color: AppTheme.primaryAccent, size: 20),
+                    const Icon(
+                      Icons.groups_rounded,
+                      color: AppTheme.primaryAccent,
+                      size: 20,
+                    ),
                     const SizedBox(width: 10),
                     Text(
                       appState.activeBandName ?? "Freelance Collab",
@@ -515,7 +594,11 @@ class _CollabsLandingScreenState extends State<CollabsLandingScreen> {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    const Icon(Icons.edit_rounded, color: AppTheme.primaryAccent, size: 14),
+                    const Icon(
+                      Icons.edit_rounded,
+                      color: AppTheme.primaryAccent,
+                      size: 14,
+                    ),
                   ],
                 ),
               ),
@@ -525,9 +608,15 @@ class _CollabsLandingScreenState extends State<CollabsLandingScreen> {
             // 1. Major Category Selector (Songwriters/Producers, Studios/Engineers, Sessions)
             Row(
               children: [
-                _buildCategoryButton('Songwriters/Producers', 'Songwriters /\nProducers'),
+                _buildCategoryButton(
+                  'Songwriters/Producers',
+                  'Songwriters /\nProducers',
+                ),
                 const SizedBox(width: 6),
-                _buildCategoryButton('Studios/Engineers', 'Studios /\nEngineers'),
+                _buildCategoryButton(
+                  'Studios/Engineers',
+                  'Studios /\nEngineers',
+                ),
                 const SizedBox(width: 6),
                 _buildCategoryButton('Sessions', 'Sessions'),
               ],
@@ -547,7 +636,9 @@ class _CollabsLandingScreenState extends State<CollabsLandingScreen> {
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(20),
                     side: BorderSide(
-                      color: isSel ? AppTheme.primaryAccent : const Color(0xFF2E2A4E),
+                      color: isSel
+                          ? AppTheme.primaryAccent
+                          : const Color(0xFF2E2A4E),
                     ),
                   ),
                   labelStyle: GoogleFonts.inter(
@@ -559,7 +650,11 @@ class _CollabsLandingScreenState extends State<CollabsLandingScreen> {
                     if (subRole == 'Create Session') {
                       Navigator.pushNamed(context, '/create-session');
                     } else if (subRole == 'Create Jam') {
-                      Navigator.pushNamed(context, '/create-session', arguments: 'Jam');
+                      Navigator.pushNamed(
+                        context,
+                        '/create-session',
+                        arguments: 'Jam',
+                      );
                     } else if (subRole == 'Find Session') {
                       Navigator.pushNamed(context, '/find-sessions');
                     } else {
@@ -593,7 +688,11 @@ class _CollabsLandingScreenState extends State<CollabsLandingScreen> {
                   children: [
                     Row(
                       children: [
-                        const Icon(Icons.hub_rounded, color: AppTheme.primaryAccent, size: 20),
+                        const Icon(
+                          Icons.hub_rounded,
+                          color: AppTheme.primaryAccent,
+                          size: 20,
+                        ),
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
@@ -608,7 +707,10 @@ class _CollabsLandingScreenState extends State<CollabsLandingScreen> {
                         ),
                         if (_selectedCollabAreas.isNotEmpty) ...[
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 4,
+                            ),
                             decoration: BoxDecoration(
                               color: AppTheme.primaryAccent,
                               borderRadius: BorderRadius.circular(12),
@@ -624,7 +726,11 @@ class _CollabsLandingScreenState extends State<CollabsLandingScreen> {
                           ),
                           const SizedBox(width: 4),
                         ],
-                        const Icon(Icons.chevron_right_rounded, color: Colors.white54, size: 22),
+                        const Icon(
+                          Icons.chevron_right_rounded,
+                          color: Colors.white54,
+                          size: 22,
+                        ),
                       ],
                     ),
                     const SizedBox(height: 10),
@@ -643,11 +749,16 @@ class _CollabsLandingScreenState extends State<CollabsLandingScreen> {
                         runSpacing: 6,
                         children: _selectedCollabAreas.map((area) {
                           return Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 4,
+                            ),
                             decoration: BoxDecoration(
                               color: AppTheme.primaryAccent.withOpacity(0.18),
                               borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.4)),
+                              border: Border.all(
+                                color: AppTheme.primaryAccent.withOpacity(0.4),
+                              ),
                             ),
                             child: Text(
                               area,
@@ -691,7 +802,11 @@ class _CollabsLandingScreenState extends State<CollabsLandingScreen> {
                   // Location (City, Country)
                   Text(
                     'Location (City, Country)',
-                    style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
+                    style: GoogleFonts.outfit(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
                   ),
                   const SizedBox(height: 6),
                   TextFormField(
@@ -706,7 +821,11 @@ class _CollabsLandingScreenState extends State<CollabsLandingScreen> {
                   // Details Multiline Text Field
                   Text(
                     'Collaboration Description',
-                    style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
+                    style: GoogleFonts.outfit(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
                   ),
                   const SizedBox(height: 6),
                   TextFormField(
@@ -714,7 +833,8 @@ class _CollabsLandingScreenState extends State<CollabsLandingScreen> {
                     maxLines: 4,
                     style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
                     decoration: const InputDecoration(
-                      hintText: "Describe what the collaboration is about (e.g. 'I am looking for a co-writer to compose acoustic tracks on weekends')",
+                      hintText:
+                          "Describe what the collaboration is about (e.g. 'I am looking for a co-writer to compose acoustic tracks on weekends')",
                     ),
                   ),
                 ],
@@ -828,53 +948,57 @@ class _CollabsLandingScreenState extends State<CollabsLandingScreen> {
                         ? const Center(
                             child: Padding(
                               padding: EdgeInsets.all(16.0),
-                              child: CircularProgressIndicator(color: AppTheme.primaryAccent),
+                              child: CircularProgressIndicator(
+                                color: AppTheme.primaryAccent,
+                              ),
                             ),
                           )
                         : _filteredFavorites.isEmpty
-                            ? Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 12.0),
-                                child: Center(
-                                  child: Text(
-                                    'No favorite collaborators found.',
-                                    style: GoogleFonts.inter(
-                                      color: AppTheme.textSecondary,
-                                      fontSize: 13,
-                                    ),
+                        ? Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 12.0),
+                            child: Center(
+                              child: Text(
+                                'No favorite collaborators found.',
+                                style: GoogleFonts.inter(
+                                  color: AppTheme.textSecondary,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ),
+                          )
+                        : Column(
+                            children: _filteredFavorites.map((fav) {
+                              final isChecked =
+                                  _selectedFavorites[fav.userId] ?? false;
+                              return CheckboxListTile(
+                                value: isChecked,
+                                activeColor: AppTheme.primaryAccent,
+                                checkColor: Colors.white,
+                                title: Text(
+                                  fav.displayName ?? 'Artist',
+                                  style: GoogleFonts.inter(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w600,
                                   ),
                                 ),
-                              )
-                            : Column(
-                                children: _filteredFavorites.map((fav) {
-                                  final isChecked = _selectedFavorites[fav.userId] ?? false;
-                                  return CheckboxListTile(
-                                    value: isChecked,
-                                    activeColor: AppTheme.primaryAccent,
-                                    checkColor: Colors.white,
-                                    title: Text(
-                                      fav.displayName ?? 'Artist',
-                                      style: GoogleFonts.inter(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                    subtitle: Text(
-                                      fav.mainSkillsSubtitle,
-                                      style: GoogleFonts.inter(
-                                        color: AppTheme.textSecondary,
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                    onChanged: (val) {
-                                      if (fav.userId != null) {
-                                        setState(() {
-                                          _selectedFavorites[fav.userId!] = val ?? false;
-                                        });
-                                      }
-                                    },
-                                  );
-                                }).toList(),
-                              ),
+                                subtitle: Text(
+                                  fav.mainSkillsSubtitle,
+                                  style: GoogleFonts.inter(
+                                    color: AppTheme.textSecondary,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                                onChanged: (val) {
+                                  if (fav.userId != null) {
+                                    setState(() {
+                                      _selectedFavorites[fav.userId!] =
+                                          val ?? false;
+                                    });
+                                  }
+                                },
+                              );
+                            }).toList(),
+                          ),
                   ],
                 ],
               ),
@@ -883,7 +1007,11 @@ class _CollabsLandingScreenState extends State<CollabsLandingScreen> {
 
             // Submit Collaboration Request Button
             _isSubmitting
-                ? const Center(child: CircularProgressIndicator(color: AppTheme.primaryAccent))
+                ? const Center(
+                    child: CircularProgressIndicator(
+                      color: AppTheme.primaryAccent,
+                    ),
+                  )
                 : AnimatedTapDetector(
                     onTap: _submitCollabRequest,
                     child: Container(
@@ -896,7 +1024,7 @@ class _CollabsLandingScreenState extends State<CollabsLandingScreen> {
                             color: AppTheme.primaryAccent.withOpacity(0.3),
                             blurRadius: 10,
                             offset: const Offset(0, 4),
-                          )
+                          ),
                         ],
                       ),
                       child: Center(

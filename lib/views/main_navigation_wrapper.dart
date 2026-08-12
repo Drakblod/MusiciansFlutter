@@ -12,11 +12,7 @@ class MainNavigationWrapper extends StatelessWidget {
     const useExperimental = FeatureToggles.useExperimentalHomeView;
 
     return const GradientScaffold(
-      appBar: useExperimental
-          ? null
-          : CustomTopBar(
-              showBack: false,
-            ),
+      appBar: useExperimental ? null : CustomTopBar(showBack: false),
       extendBodyBehindAppBar: true,
       body: HomeScreen(),
     );

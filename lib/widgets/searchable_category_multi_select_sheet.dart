@@ -73,10 +73,13 @@ class _SearchableCategoryMultiSelectSheetState
       if (_tempSelected.contains(item)) {
         _tempSelected.remove(item);
       } else {
-        if (widget.maxSelection != null && _tempSelected.length >= widget.maxSelection!) {
+        if (widget.maxSelection != null &&
+            _tempSelected.length >= widget.maxSelection!) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('You can select a maximum of ${widget.maxSelection} items.'),
+              content: Text(
+                'You can select a maximum of ${widget.maxSelection} items.',
+              ),
               backgroundColor: AppTheme.warning,
               duration: const Duration(seconds: 2),
             ),
@@ -100,15 +103,17 @@ class _SearchableCategoryMultiSelectSheetState
       if (_searchQuery.isEmpty) {
         filteredCategories[category] = items;
       } else {
-        final categoryMatches =
-            category.toLowerCase().contains(_searchQuery.toLowerCase());
+        final categoryMatches = category.toLowerCase().contains(
+          _searchQuery.toLowerCase(),
+        );
         final matchingItems = items.where((item) {
           return item.toLowerCase().contains(_searchQuery.toLowerCase());
         }).toList();
 
         if (categoryMatches || matchingItems.isNotEmpty) {
-          filteredCategories[category] =
-              categoryMatches ? items : matchingItems;
+          filteredCategories[category] = categoryMatches
+              ? items
+              : matchingItems;
         }
       }
     });
@@ -165,12 +170,15 @@ class _SearchableCategoryMultiSelectSheetState
                         const SizedBox(width: 8),
                         Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 3),
+                            horizontal: 8,
+                            vertical: 3,
+                          ),
                           decoration: BoxDecoration(
                             color: AppTheme.primaryAccent.withOpacity(0.2),
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
-                                color: AppTheme.primaryAccent.withOpacity(0.5)),
+                              color: AppTheme.primaryAccent.withOpacity(0.5),
+                            ),
                           ),
                           child: Text(
                             '${_tempSelected.length}',
@@ -209,13 +217,21 @@ class _SearchableCategoryMultiSelectSheetState
               decoration: InputDecoration(
                 hintText: 'Search options...',
                 hintStyle: GoogleFonts.inter(
-                    color: AppTheme.textSecondary, fontSize: 14),
-                prefixIcon: const Icon(Icons.search_rounded,
-                    color: AppTheme.primaryAccent, size: 20),
+                  color: AppTheme.textSecondary,
+                  fontSize: 14,
+                ),
+                prefixIcon: const Icon(
+                  Icons.search_rounded,
+                  color: AppTheme.primaryAccent,
+                  size: 20,
+                ),
                 suffixIcon: _searchQuery.isNotEmpty
                     ? IconButton(
-                        icon: const Icon(Icons.clear_rounded,
-                            color: Colors.white54, size: 18),
+                        icon: const Icon(
+                          Icons.clear_rounded,
+                          color: Colors.white54,
+                          size: 18,
+                        ),
                         onPressed: () {
                           _searchController.clear();
                           setState(() {
@@ -253,13 +269,17 @@ class _SearchableCategoryMultiSelectSheetState
                       child: Text(
                         'No matching options found.',
                         style: GoogleFonts.inter(
-                            color: AppTheme.textSecondary, fontSize: 14),
+                          color: AppTheme.textSecondary,
+                          fontSize: 14,
+                        ),
                       ),
                     ),
                   )
                 : ListView(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 4),
+                      horizontal: 16,
+                      vertical: 4,
+                    ),
                     physics: const BouncingScrollPhysics(),
                     children: filteredCategories.entries.map((entry) {
                       final categoryName = entry.key;
@@ -271,8 +291,9 @@ class _SearchableCategoryMultiSelectSheetState
                       final isSearching = _searchQuery.isNotEmpty;
 
                       return Theme(
-                        data: Theme.of(context)
-                            .copyWith(dividerColor: Colors.transparent),
+                        data: Theme.of(
+                          context,
+                        ).copyWith(dividerColor: Colors.transparent),
                         child: Container(
                           margin: const EdgeInsets.only(bottom: 10),
                           decoration: BoxDecoration(
@@ -287,8 +308,8 @@ class _SearchableCategoryMultiSelectSheetState
                           ),
                           child: ExpansionTile(
                             key: PageStorageKey<String>(categoryName),
-                            initiallyExpanded: isSearching ||
-                                selectedInCategoryCount > 0,
+                            initiallyExpanded:
+                                isSearching || selectedInCategoryCount > 0,
                             iconColor: AppTheme.primaryAccent,
                             collapsedIconColor: AppTheme.textSecondary,
                             title: Row(
@@ -306,10 +327,13 @@ class _SearchableCategoryMultiSelectSheetState
                                 if (selectedInCategoryCount > 0)
                                   Container(
                                     padding: const EdgeInsets.symmetric(
-                                        horizontal: 8, vertical: 2),
+                                      horizontal: 8,
+                                      vertical: 2,
+                                    ),
                                     decoration: BoxDecoration(
-                                      color: AppTheme.primaryAccent
-                                          .withOpacity(0.2),
+                                      color: AppTheme.primaryAccent.withOpacity(
+                                        0.2,
+                                      ),
                                       borderRadius: BorderRadius.circular(10),
                                     ),
                                     child: Text(
@@ -326,13 +350,17 @@ class _SearchableCategoryMultiSelectSheetState
                             children: [
                               Padding(
                                 padding: const EdgeInsets.only(
-                                    left: 12, right: 12, bottom: 12),
+                                  left: 12,
+                                  right: 12,
+                                  bottom: 12,
+                                ),
                                 child: Wrap(
                                   spacing: 8,
                                   runSpacing: 8,
                                   children: items.map((item) {
-                                    final isSelected =
-                                        _tempSelected.contains(item);
+                                    final isSelected = _tempSelected.contains(
+                                      item,
+                                    );
                                     return ChoiceChip(
                                       label: Text(item),
                                       selected: isSelected,
@@ -347,8 +375,7 @@ class _SearchableCategoryMultiSelectSheetState
                                         color: Colors.white,
                                       ),
                                       shape: RoundedRectangleBorder(
-                                        borderRadius:
-                                            BorderRadius.circular(8),
+                                        borderRadius: BorderRadius.circular(8),
                                       ),
                                       side: BorderSide(
                                         color: isSelected
@@ -415,7 +442,7 @@ class _SearchableCategoryMultiSelectSheetState
                             color: AppTheme.primaryAccent.withOpacity(0.3),
                             blurRadius: 8,
                             offset: const Offset(0, 3),
-                          )
+                          ),
                         ],
                       ),
                       child: Center(

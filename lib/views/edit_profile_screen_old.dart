@@ -28,7 +28,7 @@ class _EditProfileScreenOldState extends State<EditProfileScreenOld> {
   final _aboutController = TextEditingController();
   final _spotifyController = TextEditingController();
   final _youtubeController = TextEditingController();
-  
+
   List<String> _selectedInstruments = [];
   List<String> _mainSkills = [];
   List<String> _selectedGenres = [];
@@ -112,7 +112,7 @@ class _EditProfileScreenOldState extends State<EditProfileScreenOld> {
     "Alto Trombone",
     "Viola da Gamba",
     "Steel Guitar",
-    "Steel Pan"
+    "Steel Pan",
   ];
 
   static final Map<String, List<String>> _instrumentCategoryMap = {
@@ -166,13 +166,7 @@ class _EditProfileScreenOldState extends State<EditProfileScreenOld> {
       'Latin Percussion (congas, timbales, etc)',
       'Classical Percussion (timpani, cymbals, etc)',
     ],
-    '🗣️ Voices (Choir)': [
-      'Soprano',
-      'Alto',
-      'Tenor',
-      'Baritone',
-      'Bass',
-    ],
+    '🗣️ Voices (Choir)': ['Soprano', 'Alto', 'Tenor', 'Baritone', 'Bass'],
     '🎼 Misc Voices (Classical & Choir)': [
       'Mezzo Soprano',
       'Contralto',
@@ -207,28 +201,41 @@ class _EditProfileScreenOldState extends State<EditProfileScreenOld> {
 
   static final Map<String, List<String>> _genreCategoryMap = {
     '🎸 Rock & Metal': [
-      'Mainstream Rock', 'Hard Rock', 'Metal', 'Death Metal', 'Psychedelic',
-      'Rock and Roll', 'Rockabilly', 'Punk', 'Grunge', 'Glam Rock', 'Blues-Rock'
+      'Mainstream Rock',
+      'Hard Rock',
+      'Metal',
+      'Death Metal',
+      'Psychedelic',
+      'Rock and Roll',
+      'Rockabilly',
+      'Punk',
+      'Grunge',
+      'Glam Rock',
+      'Blues-Rock',
     ],
     '🎶 Pop, Country & Latin': [
-      'Pop', 'K-pop', 'Country', 'Salsa', 'Fusion', "20's-40's"
+      'Pop',
+      'K-pop',
+      'Country',
+      'Salsa',
+      'Fusion',
+      "20's-40's",
     ],
-    '🎤 Soul, Gospel & Reggae': [
-      'Soul', 'Reggae', 'Gospel'
-    ],
+    '🎤 Soul, Gospel & Reggae': ['Soul', 'Reggae', 'Gospel'],
     '🎼 Classical & Choral': [
-      'Classical', 'A Capella', 'Chamber', "Men's choir", "Women's choir",
-      "Children's choir", 'Barbershop', 'Madrigals', 'Gregorian'
+      'Classical',
+      'A Capella',
+      'Chamber',
+      "Men's choir",
+      "Women's choir",
+      "Children's choir",
+      'Barbershop',
+      'Madrigals',
+      'Gregorian',
     ],
-    '🎧 Urban & World': [
-      'Hip-Hop', 'Trip-hop', 'Balkan', 'Klezmer'
-    ],
-    '🎚️ Audio & Studio': [
-      'Mixing', 'Mastering'
-    ],
-    '⭐ All Styles': [
-      'All styles'
-    ],
+    '🎧 Urban & World': ['Hip-Hop', 'Trip-hop', 'Balkan', 'Klezmer'],
+    '🎚️ Audio & Studio': ['Mixing', 'Mastering'],
+    '⭐ All Styles': ['All styles'],
   };
 
   Future<void> _openInstrumentPicker() async {
@@ -241,7 +248,9 @@ class _EditProfileScreenOldState extends State<EditProfileScreenOld> {
     if (result != null) {
       setState(() {
         _selectedInstruments = result;
-        _mainSkills.removeWhere((skill) => !_selectedInstruments.contains(skill));
+        _mainSkills.removeWhere(
+          (skill) => !_selectedInstruments.contains(skill),
+        );
         if (_mainSkills.isEmpty && _selectedInstruments.isNotEmpty) {
           _mainSkills = [_selectedInstruments.first];
         }
@@ -285,12 +294,14 @@ class _EditProfileScreenOldState extends State<EditProfileScreenOld> {
         try {
           final uri = Uri.parse(user.audioSnippetUrl!);
           final name = uri.pathSegments.last;
-          _pickedAudioFileName = name.contains('/') ? name.split('/').last : name;
+          _pickedAudioFileName = name.contains('/')
+              ? name.split('/').last
+              : name;
         } catch (_) {
           _pickedAudioFileName = 'audio_snippet.mp3';
         }
       }
-      
+
       _selectedInstruments = List<String>.from(user.instruments);
       final role = user.userType ?? '';
       if (role.isNotEmpty && !_selectedInstruments.contains(role)) {
@@ -299,8 +310,15 @@ class _EditProfileScreenOldState extends State<EditProfileScreenOld> {
 
       // Parse Main Skills from user.mainInstrument
       if (user.mainInstrument != null && user.mainInstrument!.isNotEmpty) {
-        final parsed = user.mainInstrument!.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
-        _mainSkills = parsed.where((item) => _selectedInstruments.contains(item)).take(3).toList();
+        final parsed = user.mainInstrument!
+            .split(',')
+            .map((e) => e.trim())
+            .where((e) => e.isNotEmpty)
+            .toList();
+        _mainSkills = parsed
+            .where((item) => _selectedInstruments.contains(item))
+            .take(3)
+            .toList();
       }
       if (_mainSkills.isEmpty && _selectedInstruments.isNotEmpty) {
         _mainSkills = [_selectedInstruments.first];
@@ -328,13 +346,23 @@ class _EditProfileScreenOldState extends State<EditProfileScreenOld> {
     if (value == null || value.trim().isEmpty) return null;
     final url = value.trim();
     final uri = Uri.tryParse(url);
-    if (uri == null || !uri.hasAbsolutePath || !(uri.scheme == 'http' || uri.scheme == 'https' || uri.scheme == 'spotify' || uri.scheme == 'youtube')) {
+    if (uri == null ||
+        !uri.hasAbsolutePath ||
+        !(uri.scheme == 'http' ||
+            uri.scheme == 'https' ||
+            uri.scheme == 'spotify' ||
+            uri.scheme == 'youtube')) {
       return 'Please enter a valid URL (starting with http:// or https://)';
     }
-    if (platform == 'Spotify' && !url.toLowerCase().contains('spotify.com') && !url.toLowerCase().contains('spotify:')) {
+    if (platform == 'Spotify' &&
+        !url.toLowerCase().contains('spotify.com') &&
+        !url.toLowerCase().contains('spotify:')) {
       return 'Please enter a valid Spotify link';
     }
-    if (platform == 'YouTube' && !url.toLowerCase().contains('youtube.com') && !url.toLowerCase().contains('youtu.be') && !url.toLowerCase().contains('youtube:')) {
+    if (platform == 'YouTube' &&
+        !url.toLowerCase().contains('youtube.com') &&
+        !url.toLowerCase().contains('youtu.be') &&
+        !url.toLowerCase().contains('youtube:')) {
       return 'Please enter a valid YouTube link';
     }
     return null;
@@ -434,25 +462,44 @@ class _EditProfileScreenOldState extends State<EditProfileScreenOld> {
                 ),
                 const SizedBox(height: 16),
                 ListTile(
-                  leading: const Icon(Icons.camera_alt_outlined, color: AppTheme.primaryAccent),
-                  title: Text('Take Photo', style: GoogleFonts.inter(color: Colors.white)),
+                  leading: const Icon(
+                    Icons.camera_alt_outlined,
+                    color: AppTheme.primaryAccent,
+                  ),
+                  title: Text(
+                    'Take Photo',
+                    style: GoogleFonts.inter(color: Colors.white),
+                  ),
                   onTap: () {
                     Navigator.pop(context);
                     _pickAndUploadProfilePicture(ImageSource.camera);
                   },
                 ),
                 ListTile(
-                  leading: const Icon(Icons.photo_library_outlined, color: AppTheme.primaryAccent),
-                  title: Text('Choose from Gallery', style: GoogleFonts.inter(color: Colors.white)),
+                  leading: const Icon(
+                    Icons.photo_library_outlined,
+                    color: AppTheme.primaryAccent,
+                  ),
+                  title: Text(
+                    'Choose from Gallery',
+                    style: GoogleFonts.inter(color: Colors.white),
+                  ),
                   onTap: () {
                     Navigator.pop(context);
                     _pickAndUploadProfilePicture(ImageSource.gallery);
                   },
                 ),
-                if (_profilePictureUrl != null && _profilePictureUrl!.isNotEmpty)
+                if (_profilePictureUrl != null &&
+                    _profilePictureUrl!.isNotEmpty)
                   ListTile(
-                    leading: const Icon(Icons.delete_outline_rounded, color: AppTheme.danger),
-                    title: Text('Remove Photo', style: GoogleFonts.inter(color: AppTheme.danger)),
+                    leading: const Icon(
+                      Icons.delete_outline_rounded,
+                      color: AppTheme.danger,
+                    ),
+                    title: Text(
+                      'Remove Photo',
+                      style: GoogleFonts.inter(color: AppTheme.danger),
+                    ),
                     onTap: () {
                       Navigator.pop(context);
                       setState(() {
@@ -460,7 +507,9 @@ class _EditProfileScreenOldState extends State<EditProfileScreenOld> {
                       });
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
-                          content: Text('Profile picture removed (save to apply changes)'),
+                          content: Text(
+                            'Profile picture removed (save to apply changes)',
+                          ),
                           backgroundColor: AppTheme.warning,
                         ),
                       );
@@ -475,7 +524,9 @@ class _EditProfileScreenOldState extends State<EditProfileScreenOld> {
     );
   }
 
-  Future<void> _pickAndUploadProfilePicture([ImageSource source = ImageSource.gallery]) async {
+  Future<void> _pickAndUploadProfilePicture([
+    ImageSource source = ImageSource.gallery,
+  ]) async {
     try {
       final ImagePicker picker = ImagePicker();
       final XFile? image = await picker.pickImage(
@@ -602,22 +653,39 @@ class _EditProfileScreenOldState extends State<EditProfileScreenOld> {
           userId: user.userId,
           nickname: user.nickname,
           displayName: _nameController.text.trim(),
-          userType: _mainSkills.isNotEmpty ? _mainSkills.first : (_selectedInstruments.isNotEmpty ? _selectedInstruments.first : 'Electric Guitar'),
+          userType: _mainSkills.isNotEmpty
+              ? _mainSkills.first
+              : (_selectedInstruments.isNotEmpty
+                    ? _selectedInstruments.first
+                    : 'Electric Guitar'),
           location: _locationController.text.trim(),
           about: _aboutController.text.trim(),
           profilePictureUrl: _profilePictureUrl,
           genres: _selectedGenres,
           instruments: _selectedInstruments,
-          spotifyUrl: _spotifyController.text.trim().isEmpty ? null : _spotifyController.text.trim(),
-          youtubeUrl: _youtubeController.text.trim().isEmpty ? null : _youtubeController.text.trim(),
+          spotifyUrl: _spotifyController.text.trim().isEmpty
+              ? null
+              : _spotifyController.text.trim(),
+          youtubeUrl: _youtubeController.text.trim().isEmpty
+              ? null
+              : _youtubeController.text.trim(),
           audioSnippetUrl: _audioSnippetUrl,
           collabRoles: _selectedCollabRoles,
           collabRemote: _collabRemote,
-          collabBio: _collabBioController.text.trim().isEmpty ? null : _collabBioController.text.trim(),
-          mainInstrument: _mainSkills.isNotEmpty ? _mainSkills.join(', ') : (_selectedInstruments.isNotEmpty ? _selectedInstruments.first : null),
+          collabBio: _collabBioController.text.trim().isEmpty
+              ? null
+              : _collabBioController.text.trim(),
+          mainInstrument: _mainSkills.isNotEmpty
+              ? _mainSkills.join(', ')
+              : (_selectedInstruments.isNotEmpty
+                    ? _selectedInstruments.first
+                    : null),
         );
 
-        await appState.firebaseService.saveUserProfileAsync(user.userId ?? '', updatedProfile);
+        await appState.firebaseService.saveUserProfileAsync(
+          user.userId ?? '',
+          updatedProfile,
+        );
         await appState.refreshProfile();
 
         if (mounted) {
@@ -649,9 +717,7 @@ class _EditProfileScreenOldState extends State<EditProfileScreenOld> {
   @override
   Widget build(BuildContext context) {
     return GradientScaffold(
-      appBar: const CustomTopBar(
-        showBack: true,
-      ),
+      appBar: const CustomTopBar(showBack: true),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20.0),
         physics: const BouncingScrollPhysics(),
@@ -684,10 +750,15 @@ class _EditProfileScreenOldState extends State<EditProfileScreenOld> {
                             height: 105,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              border: Border.all(color: AppTheme.primaryAccent, width: 2.5),
+                              border: Border.all(
+                                color: AppTheme.primaryAccent,
+                                width: 2.5,
+                              ),
                               boxShadow: [
                                 BoxShadow(
-                                  color: AppTheme.primaryAccent.withOpacity(0.3),
+                                  color: AppTheme.primaryAccent.withOpacity(
+                                    0.3,
+                                  ),
                                   blurRadius: 12,
                                   spreadRadius: 2,
                                 ),
@@ -695,25 +766,31 @@ class _EditProfileScreenOldState extends State<EditProfileScreenOld> {
                             ),
                             child: ClipOval(
                               child: _isUploadingProfilePic
-                                  ? const Center(child: CircularProgressIndicator(color: AppTheme.primaryAccent))
-                                  : _profilePictureUrl != null && _profilePictureUrl!.isNotEmpty
-                                      ? Image.network(
-                                          _profilePictureUrl!,
-                                          fit: BoxFit.cover,
-                                          errorBuilder: (ctx, err, stack) => const Icon(
+                                  ? const Center(
+                                      child: CircularProgressIndicator(
+                                        color: AppTheme.primaryAccent,
+                                      ),
+                                    )
+                                  : _profilePictureUrl != null &&
+                                        _profilePictureUrl!.isNotEmpty
+                                  ? Image.network(
+                                      _profilePictureUrl!,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (ctx, err, stack) =>
+                                          const Icon(
                                             Icons.person_rounded,
                                             size: 60,
                                             color: Colors.white70,
                                           ),
-                                        )
-                                      : Container(
-                                          color: AppTheme.cardBackground,
-                                          child: const Icon(
-                                            Icons.person_rounded,
-                                            size: 60,
-                                            color: Colors.white70,
-                                          ),
-                                        ),
+                                    )
+                                  : Container(
+                                      color: AppTheme.cardBackground,
+                                      child: const Icon(
+                                        Icons.person_rounded,
+                                        size: 60,
+                                        color: Colors.white70,
+                                      ),
+                                    ),
                             ),
                           ),
                         ),
@@ -742,12 +819,17 @@ class _EditProfileScreenOldState extends State<EditProfileScreenOld> {
                     TextButton(
                       onPressed: _showImagePickerOptions,
                       style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 4,
+                        ),
                         minimumSize: Size.zero,
                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       ),
                       child: Text(
-                        _profilePictureUrl != null ? 'Change Profile Picture' : 'Upload Profile Picture',
+                        _profilePictureUrl != null
+                            ? 'Change Profile Picture'
+                            : 'Upload Profile Picture',
                         style: GoogleFonts.inter(
                           color: AppTheme.primaryAccent,
                           fontSize: 13,
@@ -762,15 +844,17 @@ class _EditProfileScreenOldState extends State<EditProfileScreenOld> {
               // Profile Name
               Text(
                 'Profile Name',
-                style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                style: GoogleFonts.outfit(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
               ),
               const SizedBox(height: 8),
               TextFormField(
                 controller: _nameController,
                 style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
-                decoration: const InputDecoration(
-                  hintText: 'Alex Hill',
-                ),
+                decoration: const InputDecoration(hintText: 'Alex Hill'),
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) {
                     return 'Please enter your profile name';
@@ -786,24 +870,39 @@ class _EditProfileScreenOldState extends State<EditProfileScreenOld> {
                 children: [
                   Text(
                     'Skills & Talents',
-                    style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                    style: GoogleFonts.outfit(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
                   ),
                   AnimatedTapDetector(
                     onTap: _openInstrumentPicker,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
                       decoration: BoxDecoration(
                         color: AppTheme.primaryAccent.withOpacity(0.15),
                         borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.4)),
+                        border: Border.all(
+                          color: AppTheme.primaryAccent.withOpacity(0.4),
+                        ),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.tune_rounded, color: AppTheme.primaryAccent, size: 16),
+                          const Icon(
+                            Icons.tune_rounded,
+                            color: AppTheme.primaryAccent,
+                            size: 16,
+                          ),
                           const SizedBox(width: 6),
                           Text(
-                            _selectedInstruments.isEmpty ? 'Select Skills & Talents' : 'Edit (${_selectedInstruments.length})',
+                            _selectedInstruments.isEmpty
+                                ? 'Select Skills & Talents'
+                                : 'Edit (${_selectedInstruments.length})',
                             style: GoogleFonts.inter(
                               color: Colors.white,
                               fontSize: 12,
@@ -830,7 +929,10 @@ class _EditProfileScreenOldState extends State<EditProfileScreenOld> {
                     ),
                     child: Text(
                       'No skills or talents selected yet. Tap to add yours...',
-                      style: GoogleFonts.inter(fontSize: 13, color: AppTheme.textSecondary),
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        color: AppTheme.textSecondary,
+                      ),
                     ),
                   ),
                 )
@@ -843,14 +945,20 @@ class _EditProfileScreenOldState extends State<EditProfileScreenOld> {
                       label: Text(instrument),
                       selected: false,
                       onDeleted: () => _toggleInstrument(instrument),
-                      deleteIcon: const Icon(Icons.close_rounded, size: 16, color: Colors.white70),
+                      deleteIcon: const Icon(
+                        Icons.close_rounded,
+                        size: 16,
+                        color: Colors.white70,
+                      ),
                       backgroundColor: AppTheme.cardBackground,
                       labelStyle: GoogleFonts.inter(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
                         color: Colors.white,
                       ),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                       side: const BorderSide(color: AppTheme.primaryAccent),
                     );
                   }).toList(),
@@ -870,7 +978,10 @@ class _EditProfileScreenOldState extends State<EditProfileScreenOld> {
                 const SizedBox(height: 4),
                 Text(
                   'Tap to select your top 3 main skills/talents from your list above.',
-                  style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    color: AppTheme.textSecondary,
+                  ),
                 ),
                 const SizedBox(height: 10),
                 Wrap(
@@ -887,12 +998,18 @@ class _EditProfileScreenOldState extends State<EditProfileScreenOld> {
                       checkmarkColor: Colors.white,
                       labelStyle: GoogleFonts.inter(
                         fontSize: 12,
-                        fontWeight: isMain ? FontWeight.bold : FontWeight.normal,
+                        fontWeight: isMain
+                            ? FontWeight.bold
+                            : FontWeight.normal,
                         color: Colors.white,
                       ),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                       side: BorderSide(
-                        color: isMain ? AppTheme.primaryAccent : const Color(0xFF2E2A4E),
+                        color: isMain
+                            ? AppTheme.primaryAccent
+                            : const Color(0xFF2E2A4E),
                       ),
                     );
                   }).toList(),
@@ -911,7 +1028,10 @@ class _EditProfileScreenOldState extends State<EditProfileScreenOld> {
                 const SizedBox(height: 4),
                 Text(
                   'Remaining skills automatically listed as secondary skills.',
-                  style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    color: AppTheme.textSecondary,
+                  ),
                 ),
                 const SizedBox(height: 10),
                 Builder(
@@ -930,7 +1050,10 @@ class _EditProfileScreenOldState extends State<EditProfileScreenOld> {
                         ),
                         child: Text(
                           'All selected skills are assigned as Main Skills.',
-                          style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textMuted),
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            color: AppTheme.textMuted,
+                          ),
                         ),
                       );
                     }
@@ -945,7 +1068,9 @@ class _EditProfileScreenOldState extends State<EditProfileScreenOld> {
                             fontSize: 12,
                             color: Colors.white70,
                           ),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
                           side: const BorderSide(color: Color(0xFF2E2A4E)),
                         );
                       }).toList(),
@@ -958,7 +1083,11 @@ class _EditProfileScreenOldState extends State<EditProfileScreenOld> {
               // Location
               Text(
                 'Location',
-                style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                style: GoogleFonts.outfit(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
               ),
               const SizedBox(height: 8),
               TextFormField(
@@ -979,7 +1108,11 @@ class _EditProfileScreenOldState extends State<EditProfileScreenOld> {
               // About
               Text(
                 'About',
-                style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                style: GoogleFonts.outfit(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
               ),
               const SizedBox(height: 8),
               TextFormField(
@@ -987,7 +1120,8 @@ class _EditProfileScreenOldState extends State<EditProfileScreenOld> {
                 maxLines: 4,
                 style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
                 decoration: const InputDecoration(
-                  hintText: 'Tell other musicians about your musical journey, experience, or what bands you are looking for...',
+                  hintText:
+                      'Tell other musicians about your musical journey, experience, or what bands you are looking for...',
                 ),
               ),
               const SizedBox(height: 24),
@@ -998,24 +1132,39 @@ class _EditProfileScreenOldState extends State<EditProfileScreenOld> {
                 children: [
                   Text(
                     'Genres',
-                    style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                    style: GoogleFonts.outfit(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
                   ),
                   AnimatedTapDetector(
                     onTap: _openGenrePicker,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
                       decoration: BoxDecoration(
                         color: AppTheme.primaryAccent.withOpacity(0.15),
                         borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.4)),
+                        border: Border.all(
+                          color: AppTheme.primaryAccent.withOpacity(0.4),
+                        ),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.tune_rounded, color: AppTheme.primaryAccent, size: 16),
+                          const Icon(
+                            Icons.tune_rounded,
+                            color: AppTheme.primaryAccent,
+                            size: 16,
+                          ),
                           const SizedBox(width: 6),
                           Text(
-                            _selectedGenres.isEmpty ? 'Select Genres' : 'Edit (${_selectedGenres.length})',
+                            _selectedGenres.isEmpty
+                                ? 'Select Genres'
+                                : 'Edit (${_selectedGenres.length})',
                             style: GoogleFonts.inter(
                               color: Colors.white,
                               fontSize: 12,
@@ -1042,7 +1191,10 @@ class _EditProfileScreenOldState extends State<EditProfileScreenOld> {
                     ),
                     child: Text(
                       'No genres selected yet. Tap to add your musical styles...',
-                      style: GoogleFonts.inter(fontSize: 13, color: AppTheme.textSecondary),
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        color: AppTheme.textSecondary,
+                      ),
                     ),
                   ),
                 )
@@ -1055,14 +1207,20 @@ class _EditProfileScreenOldState extends State<EditProfileScreenOld> {
                       label: Text(genre),
                       selected: false,
                       onDeleted: () => _toggleGenre(genre),
-                      deleteIcon: const Icon(Icons.close_rounded, size: 16, color: Colors.white70),
+                      deleteIcon: const Icon(
+                        Icons.close_rounded,
+                        size: 16,
+                        color: Colors.white70,
+                      ),
                       backgroundColor: AppTheme.cardBackground,
                       labelStyle: GoogleFonts.inter(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
                         color: Colors.white,
                       ),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                       side: const BorderSide(color: AppTheme.primaryAccent),
                     );
                   }).toList(),
@@ -1080,11 +1238,15 @@ class _EditProfileScreenOldState extends State<EditProfileScreenOld> {
                 ),
               ),
               const SizedBox(height: 16),
-              
+
               // Spotify URL
               Text(
                 'Spotify Profile or Track Link',
-                style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
+                style: GoogleFonts.outfit(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
               ),
               const SizedBox(height: 8),
               TextFormField(
@@ -1101,7 +1263,11 @@ class _EditProfileScreenOldState extends State<EditProfileScreenOld> {
               // YouTube URL
               Text(
                 'YouTube Channel or Video Link',
-                style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
+                style: GoogleFonts.outfit(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
               ),
               const SizedBox(height: 8),
               TextFormField(
@@ -1147,107 +1313,128 @@ class _EditProfileScreenOldState extends State<EditProfileScreenOld> {
                     ? Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const CircularProgressIndicator(color: AppTheme.primaryAccent),
+                          const CircularProgressIndicator(
+                            color: AppTheme.primaryAccent,
+                          ),
                           const SizedBox(height: 12),
                           Text(
                             'Uploading ${_pickedAudioFileName ?? "track"}...',
-                            style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
+                            style: GoogleFonts.inter(
+                              color: Colors.white,
+                              fontSize: 14,
+                            ),
                           ),
                         ],
                       )
                     : _audioSnippetUrl != null
-                        ? Row(
-                            children: [
-                              const Icon(Icons.audiotrack_rounded, color: AppTheme.primaryAccent, size: 36),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      _pickedAudioFileName ?? 'track.mp3',
-                                      style: GoogleFonts.inter(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 14,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      'Track loaded',
-                                      style: GoogleFonts.inter(
-                                        color: AppTheme.success,
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                  ],
+                    ? Row(
+                        children: [
+                          const Icon(
+                            Icons.audiotrack_rounded,
+                            color: AppTheme.primaryAccent,
+                            size: 36,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  _pickedAudioFileName ?? 'track.mp3',
+                                  style: GoogleFonts.inter(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
-                              ),
-                              IconButton(
-                                icon: const Icon(Icons.edit_rounded, color: AppTheme.primaryAccent),
-                                onPressed: _pickAndUploadAudio,
-                                tooltip: 'Change track',
-                              ),
-                              IconButton(
-                                icon: const Icon(Icons.delete_forever_rounded, color: AppTheme.danger),
-                                onPressed: () {
-                                  setState(() {
-                                    _audioSnippetUrl = null;
-                                    _pickedAudioFileName = null;
-                                  });
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('Track removed from profile (save to apply changes)'),
-                                      backgroundColor: AppTheme.warning,
-                                    ),
-                                  );
-                                },
-                                tooltip: 'Remove track',
-                              ),
-                            ],
-                          )
-                        : InkWell(
-                            onTap: _pickAndUploadAudio,
-                            borderRadius: BorderRadius.circular(12),
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 16.0),
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Icon(
-                                    Icons.cloud_upload_outlined,
-                                    color: AppTheme.textSecondary,
-                                    size: 40,
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Track loaded',
+                                  style: GoogleFonts.inter(
+                                    color: AppTheme.success,
+                                    fontSize: 12,
                                   ),
-                                  const SizedBox(height: 12),
-                                  Text(
-                                    'Upload MP3 Track',
-                                    style: GoogleFonts.inter(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 14,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    'Only MP3 files supported',
-                                    style: GoogleFonts.inter(
-                                      color: AppTheme.textMuted,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ],
-                              ),
+                                ),
+                              ],
                             ),
                           ),
+                          IconButton(
+                            icon: const Icon(
+                              Icons.edit_rounded,
+                              color: AppTheme.primaryAccent,
+                            ),
+                            onPressed: _pickAndUploadAudio,
+                            tooltip: 'Change track',
+                          ),
+                          IconButton(
+                            icon: const Icon(
+                              Icons.delete_forever_rounded,
+                              color: AppTheme.danger,
+                            ),
+                            onPressed: () {
+                              setState(() {
+                                _audioSnippetUrl = null;
+                                _pickedAudioFileName = null;
+                              });
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Track removed from profile (save to apply changes)',
+                                  ),
+                                  backgroundColor: AppTheme.warning,
+                                ),
+                              );
+                            },
+                            tooltip: 'Remove track',
+                          ),
+                        ],
+                      )
+                    : InkWell(
+                        onTap: _pickAndUploadAudio,
+                        borderRadius: BorderRadius.circular(12),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 16.0),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.cloud_upload_outlined,
+                                color: AppTheme.textSecondary,
+                                size: 40,
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                'Upload MP3 Track',
+                                style: GoogleFonts.inter(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Only MP3 files supported',
+                                style: GoogleFonts.inter(
+                                  color: AppTheme.textMuted,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
               ),
               const SizedBox(height: 30),
 
               // Save Button
               _isSaving
-                  ? const Center(child: CircularProgressIndicator(color: AppTheme.primaryAccent))
+                  ? const Center(
+                      child: CircularProgressIndicator(
+                        color: AppTheme.primaryAccent,
+                      ),
+                    )
                   : AnimatedTapDetector(
                       onTap: _saveProfile,
                       child: Container(
@@ -1260,7 +1447,7 @@ class _EditProfileScreenOldState extends State<EditProfileScreenOld> {
                               color: AppTheme.primaryAccent.withOpacity(0.3),
                               blurRadius: 10,
                               offset: const Offset(0, 4),
-                            )
+                            ),
                           ],
                         ),
                         child: Center(

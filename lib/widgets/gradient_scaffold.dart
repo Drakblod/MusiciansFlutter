@@ -22,9 +22,7 @@ class GradientScaffold extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(
-        gradient: AppTheme.backgroundGradient,
-      ),
+      decoration: const BoxDecoration(gradient: AppTheme.backgroundGradient),
       child: Scaffold(
         backgroundColor: Colors.transparent,
         appBar: appBar,

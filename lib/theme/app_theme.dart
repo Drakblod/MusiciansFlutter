@@ -9,11 +9,11 @@ class AppTheme {
   static const Color secondaryAccent = Color(0xFF9E8BFF);
   static const Color cardBackground = Color(0xFF16132D);
   static const Color inputBackground = Color(0xFF1E1A3A);
-  
+
   static const Color textPrimary = Colors.white;
   static const Color textSecondary = Color(0xFF8E8C9A);
   static const Color textMuted = Color(0xFF5E5C6A);
-  
+
   static const Color success = Color(0xFF2ECC71);
   static const Color danger = Color(0xFFE74C3C);
   static const Color warning = Color(0xFFF1C40F);
@@ -35,7 +35,8 @@ class AppTheme {
   static ThemeData get darkTheme {
     return ThemeData(
       brightness: Brightness.dark,
-      scaffoldBackgroundColor: Colors.transparent, // Controlled by Gradient in Scaffold wrapper
+      scaffoldBackgroundColor:
+          Colors.transparent, // Controlled by Gradient in Scaffold wrapper
       primaryColor: primaryAccent,
       cardColor: cardBackground,
       hintColor: textSecondary,
@@ -74,7 +75,10 @@ class AppTheme {
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: inputBackground,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 16,
+        ),
         hintStyle: GoogleFonts.inter(color: textSecondary, fontSize: 14),
         labelStyle: GoogleFonts.inter(color: textPrimary, fontSize: 14),
         border: OutlineInputBorder(

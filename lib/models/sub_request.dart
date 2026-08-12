@@ -76,7 +76,9 @@ class SubRequest {
     if (targetUserIdsRaw is List) {
       parsedTargetUserIds = targetUserIdsRaw.map((e) => e.toString()).toList();
     } else if (targetUserIdsRaw is Map) {
-      parsedTargetUserIds = targetUserIdsRaw.values.map((e) => e.toString()).toList();
+      parsedTargetUserIds = targetUserIdsRaw.values
+          .map((e) => e.toString())
+          .toList();
     }
 
     return SubRequest(
@@ -95,7 +97,9 @@ class SubRequest {
       bandName: json['BandName']?.toString(),
       rehearsalDayOfWeek: json['RehearsalDayOfWeek']?.toString(),
       isSelected: json['IsSelected'] == true,
-      responseCount: json['ResponseCount'] is int ? json['ResponseCount'] as int : 0,
+      responseCount: json['ResponseCount'] is int
+          ? json['ResponseCount'] as int
+          : 0,
       formattedTimeRange: json['FormattedTimeRange']?.toString(),
       dateLabel: json['DateLabel']?.toString(),
       level: json['Level']?.toString(),

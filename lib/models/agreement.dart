@@ -8,6 +8,7 @@ class Agreement {
   final String? location;
   final String? additionalTerms;
   final String? bandName;
+  final String? subRequestId;
 
   Agreement({
     this.choirLeaderId,
@@ -19,19 +20,27 @@ class Agreement {
     this.location,
     this.additionalTerms,
     this.bandName,
+    this.subRequestId,
   });
 
   factory Agreement.fromJson(Map<dynamic, dynamic> json) {
     return Agreement(
-      choirLeaderId: json['ChoirLeaderId']?.toString(),
-      vocalistId: json['VocalistId']?.toString(),
-      voicePart: json['VoicePart']?.toString(),
-      date: json['Date']?.toString(),
-      startTime: json['StartTime']?.toString(),
-      endTime: json['EndTime']?.toString(),
-      location: json['Location']?.toString(),
-      additionalTerms: json['AdditionalTerms']?.toString(),
-      bandName: json['BandName']?.toString(),
+      choirLeaderId:
+          json['ChoirLeaderId']?.toString() ??
+          json['choirLeaderId']?.toString(),
+      vocalistId:
+          json['VocalistId']?.toString() ?? json['vocalistId']?.toString(),
+      voicePart: json['VoicePart']?.toString() ?? json['voicePart']?.toString(),
+      date: json['Date']?.toString() ?? json['date']?.toString(),
+      startTime: json['StartTime']?.toString() ?? json['startTime']?.toString(),
+      endTime: json['EndTime']?.toString() ?? json['endTime']?.toString(),
+      location: json['Location']?.toString() ?? json['location']?.toString(),
+      additionalTerms:
+          json['AdditionalTerms']?.toString() ??
+          json['additionalTerms']?.toString(),
+      bandName: json['BandName']?.toString() ?? json['bandName']?.toString(),
+      subRequestId:
+          json['SubRequestId']?.toString() ?? json['subRequestId']?.toString(),
     );
   }
 
@@ -46,6 +55,7 @@ class Agreement {
       'Location': location,
       'AdditionalTerms': additionalTerms,
       'BandName': bandName,
+      if (subRequestId != null) 'SubRequestId': subRequestId,
     };
   }
 }

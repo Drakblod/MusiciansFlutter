@@ -32,7 +32,7 @@ class _MarketplacePageState extends State<MarketplacePage> {
     'Studio & Recording',
     'Rehearsal Spaces',
     'Music Services',
-    'Other'
+    'Other',
   ];
 
   final Map<String, String?> _typeMap = {
@@ -88,14 +88,16 @@ class _MarketplacePageState extends State<MarketplacePage> {
 
     setState(() {
       _filteredListings = _allListings.where((listing) {
-        final matchesSearch = (listing.title?.toLowerCase().contains(query) ?? false) ||
+        final matchesSearch =
+            (listing.title?.toLowerCase().contains(query) ?? false) ||
             (listing.description?.toLowerCase().contains(query) ?? false) ||
             (listing.city?.toLowerCase().contains(query) ?? false);
 
-        final matchesCategory = _selectedCategory == 'All' ||
-            listing.category == _selectedCategory;
+        final matchesCategory =
+            _selectedCategory == 'All' || listing.category == _selectedCategory;
 
-        final matchesType = targetType == null || listing.listingType == targetType;
+        final matchesType =
+            targetType == null || listing.listingType == targetType;
 
         return matchesSearch && matchesCategory && matchesType;
       }).toList();
@@ -108,8 +110,11 @@ class _MarketplacePageState extends State<MarketplacePage> {
     }
     try {
       final appState = Provider.of<AppState>(context, listen: false);
-      final profile = await appState.firebaseService.getUserProfileAsync(userId);
-      final name = profile?.displayName ?? profile?.nickname ?? 'Unknown Seller';
+      final profile = await appState.firebaseService.getUserProfileAsync(
+        userId,
+      );
+      final name =
+          profile?.displayName ?? profile?.nickname ?? 'Unknown Seller';
       _sellerNamesCache[userId] = name;
       return name;
     } catch (e) {
@@ -150,10 +155,7 @@ class _MarketplacePageState extends State<MarketplacePage> {
   @override
   Widget build(BuildContext context) {
     return GradientScaffold(
-      appBar: const CustomTopBar(
-        title: 'Marketplace',
-        showBack: true,
-      ),
+      appBar: const CustomTopBar(title: 'Marketplace', showBack: true),
       body: SafeArea(
         child: RefreshIndicator(
           color: AppTheme.primaryAccent,
@@ -181,15 +183,24 @@ class _MarketplacePageState extends State<MarketplacePage> {
                         Navigator.pushNamed(context, '/my-listings');
                       },
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
                         decoration: BoxDecoration(
                           color: AppTheme.primaryAccent.withOpacity(0.1),
                           borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.3)),
+                          border: Border.all(
+                            color: AppTheme.primaryAccent.withOpacity(0.3),
+                          ),
                         ),
                         child: Row(
                           children: [
-                            const Icon(Icons.inventory_2_outlined, size: 16, color: AppTheme.primaryAccent),
+                            const Icon(
+                              Icons.inventory_2_outlined,
+                              size: 16,
+                              color: AppTheme.primaryAccent,
+                            ),
                             const SizedBox(width: 6),
                             Text(
                               'My Listings',
@@ -209,15 +220,24 @@ class _MarketplacePageState extends State<MarketplacePage> {
 
               // Search Bar
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
                 child: TextField(
                   controller: _searchController,
                   decoration: InputDecoration(
                     hintText: 'Search instrument, equipment, studio, mixing...',
-                    prefixIcon: const Icon(Icons.search, color: AppTheme.textSecondary),
+                    prefixIcon: const Icon(
+                      Icons.search,
+                      color: AppTheme.textSecondary,
+                    ),
                     suffixIcon: _searchController.text.isNotEmpty
                         ? IconButton(
-                            icon: const Icon(Icons.clear, color: AppTheme.textSecondary),
+                            icon: const Icon(
+                              Icons.clear,
+                              color: AppTheme.textSecondary,
+                            ),
                             onPressed: () {
                               _searchController.clear();
                               _applyFilters();
@@ -231,7 +251,10 @@ class _MarketplacePageState extends State<MarketplacePage> {
               // Listing Type Filter Row
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
                 child: Row(
                   children: _typeMap.keys.map((typeLabel) {
                     final isSelected = _selectedTypeLabel == typeLabel;
@@ -251,14 +274,20 @@ class _MarketplacePageState extends State<MarketplacePage> {
                         selectedColor: AppTheme.primaryAccent,
                         backgroundColor: AppTheme.cardBackground,
                         labelStyle: GoogleFonts.inter(
-                          color: isSelected ? Colors.white : AppTheme.textSecondary,
-                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                          color: isSelected
+                              ? Colors.white
+                              : AppTheme.textSecondary,
+                          fontWeight: isSelected
+                              ? FontWeight.bold
+                              : FontWeight.normal,
                           fontSize: 13,
                         ),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(20),
                           side: BorderSide(
-                            color: isSelected ? AppTheme.primaryAccent : const Color(0xFF2E2A4E),
+                            color: isSelected
+                                ? AppTheme.primaryAccent
+                                : const Color(0xFF2E2A4E),
                           ),
                         ),
                       ),
@@ -270,7 +299,10 @@ class _MarketplacePageState extends State<MarketplacePage> {
               // Categories Horizontal List
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 4,
+                ),
                 child: Row(
                   children: _categories.map((category) {
                     final isSelected = _selectedCategory == category;
@@ -290,14 +322,20 @@ class _MarketplacePageState extends State<MarketplacePage> {
                         selectedColor: AppTheme.primaryAccent.withOpacity(0.25),
                         backgroundColor: Colors.transparent,
                         labelStyle: GoogleFonts.inter(
-                          color: isSelected ? Colors.white : AppTheme.textSecondary,
-                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                          color: isSelected
+                              ? Colors.white
+                              : AppTheme.textSecondary,
+                          fontWeight: isSelected
+                              ? FontWeight.bold
+                              : FontWeight.normal,
                           fontSize: 13,
                         ),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(20),
                           side: BorderSide(
-                            color: isSelected ? AppTheme.primaryAccent : const Color(0xFF2E2A4E),
+                            color: isSelected
+                                ? AppTheme.primaryAccent
+                                : const Color(0xFF2E2A4E),
                             width: 1,
                           ),
                         ),
@@ -313,24 +351,30 @@ class _MarketplacePageState extends State<MarketplacePage> {
               Expanded(
                 child: _isLoading
                     ? const Center(
-                        child: CircularProgressIndicator(color: AppTheme.primaryAccent),
+                        child: CircularProgressIndicator(
+                          color: AppTheme.primaryAccent,
+                        ),
                       )
                     : _filteredListings.isEmpty
-                        ? _buildEmptyState()
-                        : GridView.builder(
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    ? _buildEmptyState()
+                    : GridView.builder(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
+                        gridDelegate:
+                            const SliverGridDelegateWithFixedCrossAxisCount(
                               crossAxisCount: 2,
                               childAspectRatio: 0.72,
                               crossAxisSpacing: 12,
                               mainAxisSpacing: 12,
                             ),
-                            itemCount: _filteredListings.length,
-                            itemBuilder: (context, index) {
-                              final listing = _filteredListings[index];
-                              return _buildListingCard(listing);
-                            },
-                          ),
+                        itemCount: _filteredListings.length,
+                        itemBuilder: (context, index) {
+                          final listing = _filteredListings[index];
+                          return _buildListingCard(listing);
+                        },
+                      ),
               ),
             ],
           ),
@@ -404,10 +448,15 @@ class _MarketplacePageState extends State<MarketplacePage> {
                 ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppTheme.primaryAccent,
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 12,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
-              )
+              ),
             ],
           ),
         ),
@@ -417,7 +466,9 @@ class _MarketplacePageState extends State<MarketplacePage> {
 
   Widget _buildListingCard(Listing listing) {
     final hasImages = listing.imageUrls.isNotEmpty;
-    final priceStr = listing.price == 0 ? 'Free' : '${listing.price.toInt()} kr';
+    final priceStr = listing.price == 0
+        ? 'Free'
+        : '${listing.price.toInt()} kr';
 
     return AnimatedTapDetector(
       onTap: () {
@@ -431,10 +482,7 @@ class _MarketplacePageState extends State<MarketplacePage> {
         decoration: BoxDecoration(
           color: AppTheme.cardBackground,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: const Color(0xFF231F45),
-            width: 1,
-          ),
+          border: Border.all(color: const Color(0xFF231F45), width: 1),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.2),
@@ -456,7 +504,8 @@ class _MarketplacePageState extends State<MarketplacePage> {
                         ? Image.network(
                             listing.imageUrls.first,
                             fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) => _buildPlaceholderImage(),
+                            errorBuilder: (context, error, stackTrace) =>
+                                _buildPlaceholderImage(),
                           )
                         : _buildPlaceholderImage(),
                   ),
@@ -465,12 +514,17 @@ class _MarketplacePageState extends State<MarketplacePage> {
                     top: 8,
                     left: 8,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.black87,
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
-                          color: _getTypeColor(listing.listingType).withOpacity(0.5),
+                          color: _getTypeColor(
+                            listing.listingType,
+                          ).withOpacity(0.5),
                         ),
                       ),
                       child: Text(
@@ -518,7 +572,11 @@ class _MarketplacePageState extends State<MarketplacePage> {
                       if (listing.city != null && listing.city!.isNotEmpty)
                         Row(
                           children: [
-                            const Icon(Icons.location_on, size: 12, color: AppTheme.textSecondary),
+                            const Icon(
+                              Icons.location_on,
+                              size: 12,
+                              color: AppTheme.textSecondary,
+                            ),
                             const SizedBox(width: 2),
                             Text(
                               listing.city!,
@@ -539,7 +597,11 @@ class _MarketplacePageState extends State<MarketplacePage> {
                   // Seller Card Info
                   Row(
                     children: [
-                      const Icon(Icons.person_outline_rounded, size: 12, color: AppTheme.textSecondary),
+                      const Icon(
+                        Icons.person_outline_rounded,
+                        size: 12,
+                        color: AppTheme.textSecondary,
+                      ),
                       const SizedBox(width: 4),
                       Expanded(
                         child: FutureBuilder<String>(

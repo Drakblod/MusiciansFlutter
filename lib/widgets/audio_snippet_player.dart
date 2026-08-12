@@ -7,10 +7,7 @@ import '../theme/app_theme.dart';
 class AudioSnippetPlayer extends StatefulWidget {
   final String audioUrl;
 
-  const AudioSnippetPlayer({
-    super.key,
-    required this.audioUrl,
-  });
+  const AudioSnippetPlayer({super.key, required this.audioUrl});
 
   @override
   State<AudioSnippetPlayer> createState() => _AudioSnippetPlayerState();
@@ -39,7 +36,7 @@ class _AudioSnippetPlayerState extends State<AudioSnippetPlayer> {
     try {
       final player = AudioPlayer();
       _audioPlayer = player;
-      
+
       // Set release mode to keep resource
       await player.setReleaseMode(ReleaseMode.stop);
 
@@ -85,7 +82,9 @@ class _AudioSnippetPlayerState extends State<AudioSnippetPlayer> {
         });
       }
     } catch (e, stack) {
-      debugPrint("[AudioSnippetPlayer] Error initializing AudioPlayer: $e\n$stack");
+      debugPrint(
+        "[AudioSnippetPlayer] Error initializing AudioPlayer: $e\n$stack",
+      );
       if (mounted) {
         setState(() {
           _isLoading = false;
@@ -145,7 +144,11 @@ class _AudioSnippetPlayerState extends State<AudioSnippetPlayer> {
         ),
         child: Row(
           children: [
-            const Icon(Icons.error_outline_rounded, color: AppTheme.danger, size: 24),
+            const Icon(
+              Icons.error_outline_rounded,
+              color: AppTheme.danger,
+              size: 24,
+            ),
             const SizedBox(width: 12),
             Text(
               _errorMessage!,
@@ -206,7 +209,9 @@ class _AudioSnippetPlayerState extends State<AudioSnippetPlayer> {
                   height: 14,
                   child: CircularProgressIndicator(
                     strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primaryAccent),
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      AppTheme.primaryAccent,
+                    ),
                   ),
                 ),
             ],
@@ -219,7 +224,9 @@ class _AudioSnippetPlayerState extends State<AudioSnippetPlayer> {
                 padding: EdgeInsets.zero,
                 iconSize: 36,
                 icon: Icon(
-                  isPlaying ? Icons.pause_circle_filled : Icons.play_circle_filled,
+                  isPlaying
+                      ? Icons.pause_circle_filled
+                      : Icons.play_circle_filled,
                   color: Colors.white,
                 ),
                 onPressed: _isLoading ? null : _togglePlayback,
@@ -235,9 +242,13 @@ class _AudioSnippetPlayerState extends State<AudioSnippetPlayer> {
                         activeTrackColor: AppTheme.primaryAccent,
                         inactiveTrackColor: const Color(0xFF2E2A4E),
                         thumbColor: Colors.white,
-                        thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                        thumbShape: const RoundSliderThumbShape(
+                          enabledThumbRadius: 6,
+                        ),
                         overlayColor: AppTheme.primaryAccent.withOpacity(0.2),
-                        overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
+                        overlayShape: const RoundSliderOverlayShape(
+                          overlayRadius: 14,
+                        ),
                       ),
                       child: Slider(
                         min: 0.0,
@@ -245,15 +256,17 @@ class _AudioSnippetPlayerState extends State<AudioSnippetPlayer> {
                             ? _duration.inMilliseconds.toDouble()
                             : 1.0,
                         value: _position.inMilliseconds.toDouble().clamp(
-                              0.0,
-                              _duration.inMilliseconds.toDouble() > 0
-                                  ? _duration.inMilliseconds.toDouble()
-                                  : 1.0,
-                            ),
+                          0.0,
+                          _duration.inMilliseconds.toDouble() > 0
+                              ? _duration.inMilliseconds.toDouble()
+                              : 1.0,
+                        ),
                         onChanged: _isLoading || _audioPlayer == null
                             ? null
                             : (value) async {
-                                final duration = Duration(milliseconds: value.toInt());
+                                final duration = Duration(
+                                  milliseconds: value.toInt(),
+                                );
                                 await _audioPlayer!.seek(duration);
                               },
                       ),

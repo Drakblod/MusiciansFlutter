@@ -35,20 +35,46 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
   CollabSession? _existingSession;
   bool _initialized = false;
 
-  final List<String> _categories = ["Songwriting", "Recording", "Production", "Jam", "Other"];
+  final List<String> _categories = [
+    "Songwriting",
+    "Recording",
+    "Production",
+    "Jam",
+    "Other",
+  ];
   final List<String> _types = ["In person", "Remote", "Hybrid"];
 
   final List<String> _genresList = [
-    "Pop", "Rock", "Metal", "Hip-Hop", "Jazz", "Blues",
-    "Electronic", "Country", "Classical", "Soul", "Reggae", "Alternative"
+    "Pop",
+    "Rock",
+    "Metal",
+    "Hip-Hop",
+    "Jazz",
+    "Blues",
+    "Electronic",
+    "Country",
+    "Classical",
+    "Soul",
+    "Reggae",
+    "Alternative",
   ];
 
   final List<String> _rolesList = [
-    "songwriter", "producer", "engineer", "vocalist", "musician"
+    "songwriter",
+    "producer",
+    "engineer",
+    "vocalist",
+    "musician",
   ];
 
   final List<String> _instrumentsList = [
-    "Electric Guitar", "Electric Bass", "Drums", "Keyboard/Synth", "Piano", "Acoustic Guitar", "Vocalist"
+    "Electric Guitar",
+    "Electric Bass",
+    "Drums",
+    "Keyboard/Synth",
+    "Piano",
+    "Acoustic Guitar",
+    "Vocalist",
   ];
 
   @override
@@ -150,7 +176,10 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
     if (!_formKey.currentState!.validate()) return;
     if (_selectedRoles.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select at least one role you are looking for'), backgroundColor: AppTheme.danger),
+        const SnackBar(
+          content: Text('Please select at least one role you are looking for'),
+          backgroundColor: AppTheme.danger,
+        ),
       );
       return;
     }
@@ -166,7 +195,10 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
 
     if (_existingSession != null && _existingSession!.creatorId != userId) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Unauthorized: You do not own this session'), backgroundColor: AppTheme.danger),
+        const SnackBar(
+          content: Text('Unauthorized: You do not own this session'),
+          backgroundColor: AppTheme.danger,
+        ),
       );
       setState(() => _isSaving = false);
       return;
@@ -193,10 +225,14 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
         sessionCategory: _sessionCategory,
         isDateFlexible: _isDateFlexible,
         startDateTime: startIso,
-        location: _sessionType == 'Remote' ? null : _locationController.text.trim(),
+        location: _sessionType == 'Remote'
+            ? null
+            : _locationController.text.trim(),
         genres: _selectedGenres,
         lookingForRoles: _selectedRoles,
-        lookingForInstruments: _selectedRoles.contains('musician') ? _selectedInstruments : [],
+        lookingForInstruments: _selectedRoles.contains('musician')
+            ? _selectedInstruments
+            : [],
         creatorId: _existingSession?.creatorId ?? userId,
         createdAt: _existingSession?.createdAt ?? 0,
         updatedAt: DateTime.now().millisecondsSinceEpoch,
@@ -206,14 +242,20 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
       await appState.firebaseService.saveCollabSessionAsync(session);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Session saved successfully!'), backgroundColor: AppTheme.success),
+          const SnackBar(
+            content: Text('Session saved successfully!'),
+            backgroundColor: AppTheme.success,
+          ),
         );
         Navigator.pop(context, true);
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to save session: $e'), backgroundColor: AppTheme.danger),
+          SnackBar(
+            content: Text('Failed to save session: $e'),
+            backgroundColor: AppTheme.danger,
+          ),
         );
       }
     } finally {
@@ -226,9 +268,7 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
     final isEditMode = _existingSession != null;
 
     return GradientScaffold(
-      appBar: const CustomTopBar(
-        showBack: true,
-      ),
+      appBar: const CustomTopBar(showBack: true),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(20.0),
@@ -252,7 +292,11 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
                 // Title
                 Text(
                   'Session Title *',
-                  style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                  style: GoogleFonts.outfit(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 TextFormField(
@@ -273,7 +317,11 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
                 // Description
                 Text(
                   'Session Description *',
-                  style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                  style: GoogleFonts.outfit(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 TextFormField(
@@ -281,7 +329,8 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
                   maxLines: 4,
                   style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
                   decoration: const InputDecoration(
-                    hintText: 'Explain the goal of the session, what you plan to create, and any requirements...',
+                    hintText:
+                        'Explain the goal of the session, what you plan to create, and any requirements...',
                   ),
                   validator: (value) {
                     if (value == null || value.trim().isEmpty) {
@@ -295,7 +344,11 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
                 // Session Category Selector
                 Text(
                   'Session Category *',
-                  style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                  style: GoogleFonts.outfit(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 Container(
@@ -309,9 +362,15 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
                     child: DropdownButton<String>(
                       value: _sessionCategory,
                       dropdownColor: AppTheme.cardBackground,
-                      icon: const Icon(Icons.arrow_drop_down, color: Colors.white),
+                      icon: const Icon(
+                        Icons.arrow_drop_down,
+                        color: Colors.white,
+                      ),
                       isExpanded: true,
-                      style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
+                      style: GoogleFonts.inter(
+                        color: Colors.white,
+                        fontSize: 14,
+                      ),
                       onChanged: (String? val) {
                         if (val != null) {
                           setState(() => _sessionCategory = val);
@@ -331,7 +390,11 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
                 // Session Type Selector
                 Text(
                   'Session Type *',
-                  style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                  style: GoogleFonts.outfit(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 Row(
@@ -350,11 +413,19 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
                           backgroundColor: AppTheme.cardBackground,
                           labelStyle: GoogleFonts.inter(
                             fontSize: 11,
-                            fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
+                            fontWeight: isSel
+                                ? FontWeight.bold
+                                : FontWeight.normal,
                             color: Colors.white,
                           ),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                          side: BorderSide(color: isSel ? AppTheme.primaryAccent : const Color(0xFF2E2A4E)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          side: BorderSide(
+                            color: isSel
+                                ? AppTheme.primaryAccent
+                                : const Color(0xFF2E2A4E),
+                          ),
                         ),
                       ),
                     );
@@ -366,7 +437,11 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
                 if (_sessionType != 'Remote') ...[
                   Text(
                     'Location *',
-                    style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                    style: GoogleFonts.outfit(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   TextFormField(
@@ -376,7 +451,8 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
                       hintText: 'e.g. Sound Studio 3, Stockholm',
                     ),
                     validator: (value) {
-                      if (_sessionType != 'Remote' && (value == null || value.trim().isEmpty)) {
+                      if (_sessionType != 'Remote' &&
+                          (value == null || value.trim().isEmpty)) {
                         return 'Please enter location';
                       }
                       return null;
@@ -394,12 +470,19 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
                       children: [
                         Text(
                           'Flexible Date',
-                          style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                          style: GoogleFonts.outfit(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
                         ),
                         const SizedBox(height: 4),
                         Text(
                           'Decide date/time later',
-                          style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            color: AppTheme.textSecondary,
+                          ),
                         ),
                       ],
                     ),
@@ -421,20 +504,37 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
                         child: AnimatedTapDetector(
                           onTap: _pickDate,
                           child: Container(
-                            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+                            padding: const EdgeInsets.symmetric(
+                              vertical: 14,
+                              horizontal: 16,
+                            ),
                             decoration: BoxDecoration(
                               color: AppTheme.inputBackground,
                               borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: const Color(0xFF2E2A4E)),
+                              border: Border.all(
+                                color: const Color(0xFF2E2A4E),
+                              ),
                             ),
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 Text(
-                                  _selectedDate == null ? 'Select Date' : _selectedDate!.toString().substring(0, 10),
-                                  style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
+                                  _selectedDate == null
+                                      ? 'Select Date'
+                                      : _selectedDate!.toString().substring(
+                                          0,
+                                          10,
+                                        ),
+                                  style: GoogleFonts.inter(
+                                    color: Colors.white,
+                                    fontSize: 14,
+                                  ),
                                 ),
-                                const Icon(Icons.calendar_today, color: Colors.white70, size: 18),
+                                const Icon(
+                                  Icons.calendar_today,
+                                  color: Colors.white70,
+                                  size: 18,
+                                ),
                               ],
                             ),
                           ),
@@ -445,20 +545,34 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
                         child: AnimatedTapDetector(
                           onTap: _pickTime,
                           child: Container(
-                            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+                            padding: const EdgeInsets.symmetric(
+                              vertical: 14,
+                              horizontal: 16,
+                            ),
                             decoration: BoxDecoration(
                               color: AppTheme.inputBackground,
                               borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: const Color(0xFF2E2A4E)),
+                              border: Border.all(
+                                color: const Color(0xFF2E2A4E),
+                              ),
                             ),
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 Text(
-                                  _selectedTime == null ? 'Select Time' : _selectedTime!.format(context),
-                                  style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
+                                  _selectedTime == null
+                                      ? 'Select Time'
+                                      : _selectedTime!.format(context),
+                                  style: GoogleFonts.inter(
+                                    color: Colors.white,
+                                    fontSize: 14,
+                                  ),
                                 ),
-                                const Icon(Icons.access_time_rounded, color: Colors.white70, size: 18),
+                                const Icon(
+                                  Icons.access_time_rounded,
+                                  color: Colors.white70,
+                                  size: 18,
+                                ),
                               ],
                             ),
                           ),
@@ -472,7 +586,11 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
                 // Genres Selector
                 Text(
                   'Genres / Styles',
-                  style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                  style: GoogleFonts.outfit(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
                 ),
                 const SizedBox(height: 10),
                 Wrap(
@@ -488,11 +606,19 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
                       backgroundColor: AppTheme.cardBackground,
                       labelStyle: GoogleFonts.inter(
                         fontSize: 12,
-                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                        fontWeight: isSelected
+                            ? FontWeight.bold
+                            : FontWeight.normal,
                         color: Colors.white,
                       ),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      side: BorderSide(color: isSelected ? AppTheme.primaryAccent : const Color(0xFF2E2A4E)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      side: BorderSide(
+                        color: isSelected
+                            ? AppTheme.primaryAccent
+                            : const Color(0xFF2E2A4E),
+                      ),
                     );
                   }).toList(),
                 ),
@@ -501,7 +627,11 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
                 // Looking For Roles Selector
                 Text(
                   'Looking For Roles *',
-                  style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                  style: GoogleFonts.outfit(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
                 ),
                 const SizedBox(height: 10),
                 Wrap(
@@ -517,11 +647,19 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
                       backgroundColor: AppTheme.cardBackground,
                       labelStyle: GoogleFonts.inter(
                         fontSize: 12,
-                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                        fontWeight: isSelected
+                            ? FontWeight.bold
+                            : FontWeight.normal,
                         color: Colors.white,
                       ),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      side: BorderSide(color: isSelected ? AppTheme.primaryAccent : const Color(0xFF2E2A4E)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      side: BorderSide(
+                        color: isSelected
+                            ? AppTheme.primaryAccent
+                            : const Color(0xFF2E2A4E),
+                      ),
                     );
                   }).toList(),
                 ),
@@ -531,7 +669,11 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
                 if (_selectedRoles.contains('musician')) ...[
                   Text(
                     'Instruments Needed',
-                    style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                    style: GoogleFonts.outfit(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
                   ),
                   const SizedBox(height: 10),
                   Wrap(
@@ -547,11 +689,19 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
                         backgroundColor: AppTheme.cardBackground,
                         labelStyle: GoogleFonts.inter(
                           fontSize: 12,
-                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                          fontWeight: isSelected
+                              ? FontWeight.bold
+                              : FontWeight.normal,
                           color: Colors.white,
                         ),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        side: BorderSide(color: isSelected ? AppTheme.primaryAccent : const Color(0xFF2E2A4E)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        side: BorderSide(
+                          color: isSelected
+                              ? AppTheme.primaryAccent
+                              : const Color(0xFF2E2A4E),
+                        ),
                       );
                     }).toList(),
                   ),
@@ -561,7 +711,11 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
 
                 // Save Button
                 _isSaving
-                    ? const Center(child: CircularProgressIndicator(color: AppTheme.primaryAccent))
+                    ? const Center(
+                        child: CircularProgressIndicator(
+                          color: AppTheme.primaryAccent,
+                        ),
+                      )
                     : AnimatedTapDetector(
                         onTap: _saveSession,
                         child: Container(

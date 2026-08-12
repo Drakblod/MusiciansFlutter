@@ -15,13 +15,16 @@ void main() {
       expect(distUmea, equals(0.0));
     });
 
-    test('Distance between Stockholm and Umeå should be approximately 500-550 km', () {
-      final distance = calculateHaversineDistanceKm(stockholm, umea);
+    test(
+      'Distance between Stockholm and Umeå should be approximately 500-550 km',
+      () {
+        final distance = calculateHaversineDistanceKm(stockholm, umea);
 
-      expect(distance, greaterThan(500.0));
-      expect(distance, lessThan(600.0));
-      expect(distance.isFinite, isTrue);
-      expect(distance, greaterThanOrEqualTo(0.0));
-    });
+        expect(distance, greaterThan(500.0));
+        expect(distance, lessThan(600.0));
+        expect(distance.isFinite, isTrue);
+        expect(distance, greaterThanOrEqualTo(0.0));
+      },
+    );
   });
 }

@@ -32,7 +32,8 @@ class _EventGroup {
   bool get isGroup => subEvents.length > 1;
 
   DateTime get overallStart {
-    DateTime earliest = DateTime.tryParse(mainEvent.startDateTime)?.toLocal() ?? DateTime.now();
+    DateTime earliest =
+        DateTime.tryParse(mainEvent.startDateTime)?.toLocal() ?? DateTime.now();
     for (var e in subEvents) {
       final t = DateTime.tryParse(e.startDateTime)?.toLocal();
       if (t != null && t.isBefore(earliest)) earliest = t;
@@ -41,7 +42,8 @@ class _EventGroup {
   }
 
   DateTime get overallEnd {
-    DateTime latest = DateTime.tryParse(mainEvent.endDateTime)?.toLocal() ?? DateTime.now();
+    DateTime latest =
+        DateTime.tryParse(mainEvent.endDateTime)?.toLocal() ?? DateTime.now();
     for (var e in subEvents) {
       final t = DateTime.tryParse(e.endDateTime)?.toLocal();
       if (t != null && t.isAfter(latest)) latest = t;
@@ -83,14 +85,18 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
   void _checkAndShowRsvpReminder() {
     if (_hasPromptedRsvpReminder || !mounted) return;
     final appState = Provider.of<AppState>(context, listen: false);
-    final userId = appState.currentUserProfile?.userId ?? appState.firebaseService.currentUser?.uid;
+    final userId =
+        appState.currentUserProfile?.userId ??
+        appState.firebaseService.currentUser?.uid;
     if (userId == null) return;
 
     final now = DateTime.now();
     for (final event in _bandEvents) {
       final start = DateTime.tryParse(event.startDateTime)?.toLocal();
       final end = DateTime.tryParse(event.endDateTime)?.toLocal() ?? start;
-      final isUpcoming = (end != null && end.isAfter(now)) || (start != null && start.isAfter(now));
+      final isUpcoming =
+          (end != null && end.isAfter(now)) ||
+          (start != null && start.isAfter(now));
 
       if (event.requireResponse && !event.isLocked && isUpcoming) {
         final userResp = event.responses[userId];
@@ -111,6 +117,7 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
       }
     }
   }
+
   String _gigsTabFilter = 'All';
   String? _loadedBandId;
 
@@ -158,7 +165,9 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
       final appState = Provider.of<AppState>(context, listen: false);
       final userId = appState.currentUserId;
       if (userId != null) {
-        final userBands = await appState.firebaseService.getUserBandsAsync(userId);
+        final userBands = await appState.firebaseService.getUserBandsAsync(
+          userId,
+        );
         if (userBands.isNotEmpty) {
           appState.selectBand(userBands.keys.first, userBands.values.first);
           return;
@@ -181,7 +190,9 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
     try {
       final appState = Provider.of<AppState>(context, listen: false);
       final bandInfo = await appState.firebaseService.getBandInfoAsync(bandId);
-      final members = await appState.firebaseService.getBandMembersAsync(bandId);
+      final members = await appState.firebaseService.getBandMembersAsync(
+        bandId,
+      );
       final files = await appState.firebaseService.getBandFilesAsync(bandId);
 
       if (mounted) {
@@ -196,45 +207,47 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
         _chatSubscription = appState.firebaseService
             .subscribeToBandMessages(bandId)
             .listen((messages) {
-          if (mounted) {
-            setState(() {
-              _chatMessages = messages;
-              _isLoading = false;
+              if (mounted) {
+                setState(() {
+                  _chatMessages = messages;
+                  _isLoading = false;
+                });
+                WidgetsBinding.instance.addPostFrameCallback(
+                  (_) => _scrollToBottom(),
+                );
+              }
             });
-            WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
-          }
-        });
 
         _bandEventsSubscription = appState.firebaseService
             .subscribeToBandEvents(bandId)
             .listen((events) {
-          if (mounted) {
-            setState(() {
-              _bandEvents = events;
+              if (mounted) {
+                setState(() {
+                  _bandEvents = events;
+                });
+                _checkAndShowRsvpReminder();
+              }
             });
-            _checkAndShowRsvpReminder();
-          }
-        });
 
         _eventRoomsSubscription = appState.firebaseService
             .subscribeToBandEventRooms(bandId)
             .listen((rooms) {
-          if (mounted) {
-            setState(() {
-              _eventRooms = rooms;
+              if (mounted) {
+                setState(() {
+                  _eventRooms = rooms;
+                });
+              }
             });
-          }
-        });
 
         _gigsNewsSubscription = appState.firebaseService
             .subscribeToGigsNews(bandId)
             .listen((gigsNews) {
-          if (mounted) {
-            setState(() {
-              _gigsNews = gigsNews;
+              if (mounted) {
+                setState(() {
+                  _gigsNews = gigsNews;
+                });
+              }
             });
-          }
-        });
       }
     } catch (e) {
       debugPrint("Error loading band details: $e");
@@ -244,12 +257,17 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
     }
   }
 
-  Future<void> _loadMemberProfiles(AppState appState, List<BandMember> members) async {
+  Future<void> _loadMemberProfiles(
+    AppState appState,
+    List<BandMember> members,
+  ) async {
     final Map<String, UserProfile> profilesMap = {};
     for (final m in members) {
       if (m.userId != null) {
         try {
-          final profile = await appState.firebaseService.getUserProfileAsync(m.userId!);
+          final profile = await appState.firebaseService.getUserProfileAsync(
+            m.userId!,
+          );
           if (profile != null) {
             profilesMap[m.userId!] = profile;
           }
@@ -330,45 +348,70 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                   ),
                 ),
                 const SizedBox(height: 16),
-                
+
                 // Edit Band Info option
                 ListTile(
-                  leading: const Icon(Icons.edit_outlined, color: AppTheme.primaryAccent),
+                  leading: const Icon(
+                    Icons.edit_outlined,
+                    color: AppTheme.primaryAccent,
+                  ),
                   title: Text(
                     'Edit Band',
-                    style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w600),
+                    style: GoogleFonts.inter(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   subtitle: Text(
                     'Change band name, rehearsal times, details',
-                    style: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 12),
+                    style: GoogleFonts.inter(
+                      color: AppTheme.textSecondary,
+                      fontSize: 12,
+                    ),
                   ),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                   onTap: () async {
                     Navigator.pop(context); // Close bottom sheet
                     if (_activeBand != null) {
                       final updated = await Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => EditBandInfoScreen(band: _activeBand!),
+                          builder: (context) =>
+                              EditBandInfoScreen(band: _activeBand!),
                         ),
                       );
                       if (updated == true) {
-                        _initBand(bandId); // reload updated details in band room
+                        _initBand(
+                          bandId,
+                        ); // reload updated details in band room
                       }
                     }
                   },
                 ),
                 ListTile(
-                  leading: const Icon(Icons.person_remove_outlined, color: AppTheme.danger),
+                  leading: const Icon(
+                    Icons.person_remove_outlined,
+                    color: AppTheme.danger,
+                  ),
                   title: Text(
                     'Remove Band Member',
-                    style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w600),
+                    style: GoogleFonts.inter(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   subtitle: Text(
                     'Remove members from the band roster',
-                    style: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 12),
+                    style: GoogleFonts.inter(
+                      color: AppTheme.textSecondary,
+                      fontSize: 12,
+                    ),
                   ),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                   onTap: () {
                     Navigator.pop(context); // Close settings sheet
                     _tabController.animateTo(4); // Switch to Members tab
@@ -378,16 +421,27 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
 
                 // Manage Sub Requests option
                 ListTile(
-                  leading: const Icon(Icons.people_outline, color: AppTheme.primaryAccent),
+                  leading: const Icon(
+                    Icons.people_outline,
+                    color: AppTheme.primaryAccent,
+                  ),
                   title: Text(
                     'Manage Sub Requests',
-                    style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w600),
+                    style: GoogleFonts.inter(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   subtitle: Text(
                     'View and post substitute requests',
-                    style: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 12),
+                    style: GoogleFonts.inter(
+                      color: AppTheme.textSecondary,
+                      fontSize: 12,
+                    ),
                   ),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                   onTap: () {
                     Navigator.pop(context); // Close bottom sheet
                     Navigator.pushNamed(
@@ -415,7 +469,8 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
     if (bandId == null) return;
 
     final userProfile = appState.currentUserProfile;
-    final senderName = userProfile?.displayName ?? userProfile?.nickname ?? 'Unknown';
+    final senderName =
+        userProfile?.displayName ?? userProfile?.nickname ?? 'Unknown';
 
     final replyText = _replyToMessage?.text;
     final replySenderName = _replyToMessage?.senderName;
@@ -458,7 +513,7 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
             debugPrint("Could not read file bytes directly from path: $e");
           }
         }
-        
+
         // Show loader dialog
         if (!mounted) return;
         showDialog(
@@ -475,11 +530,17 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const CircularProgressIndicator(color: AppTheme.primaryAccent),
+                  const CircularProgressIndicator(
+                    color: AppTheme.primaryAccent,
+                  ),
                   const SizedBox(height: 16),
                   Text(
                     'Uploading ${file.name}...',
-                    style: GoogleFonts.inter(color: Colors.white, fontSize: 14, decoration: TextDecoration.none),
+                    style: GoogleFonts.inter(
+                      color: Colors.white,
+                      fontSize: 14,
+                      decoration: TextDecoration.none,
+                    ),
                   ),
                 ],
               ),
@@ -488,7 +549,7 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
         );
 
         final appState = Provider.of<AppState>(context, listen: false);
-        
+
         // Upload to storage
         final url = await appState.firebaseService.uploadBandFileAsync(
           bandId,
@@ -499,7 +560,7 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
 
         // Save metadata to RTDB
         await appState.firebaseService.addBandFileAsync(bandId, file.name, url);
-        
+
         // Refresh files list
         final files = await appState.firebaseService.getBandFilesAsync(bandId);
 
@@ -519,7 +580,9 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
     } catch (e) {
       if (mounted) {
         // Attempt to dismiss dialog if showing
-        try { Navigator.pop(context); } catch (_) {}
+        try {
+          Navigator.pop(context);
+        } catch (_) {}
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Failed to upload file: $e'),
@@ -609,7 +672,10 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                           _initBand(bandId);
                         },
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 14,
+                          ),
                           decoration: BoxDecoration(
                             color: isSelected
                                 ? AppTheme.primaryAccent.withOpacity(0.12)
@@ -675,16 +741,15 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
     final appState = Provider.of<AppState>(context);
 
     return GradientScaffold(
-      appBar: const CustomTopBar(
-        title: 'Band Room',
-        showBack: true,
-      ),
+      appBar: const CustomTopBar(title: 'Band Room', showBack: true),
       body: SafeArea(
         child: _isLoading
-            ? const Center(child: CircularProgressIndicator(color: AppTheme.primaryAccent))
+            ? const Center(
+                child: CircularProgressIndicator(color: AppTheme.primaryAccent),
+              )
             : _activeBand == null
-                ? _buildNoActiveBandView()
-                : _buildBandRoomContent(appState),
+            ? _buildNoActiveBandView()
+            : _buildBandRoomContent(appState),
       ),
     );
   }
@@ -696,7 +761,11 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.groups_outlined, size: 64, color: AppTheme.textSecondary),
+            const Icon(
+              Icons.groups_outlined,
+              size: 64,
+              color: AppTheme.textSecondary,
+            ),
             const SizedBox(height: 16),
             Text(
               'No Active Band',
@@ -721,7 +790,10 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                 Navigator.pushNamed(context, '/create-band');
               },
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
                 decoration: BoxDecoration(
                   gradient: AppTheme.primaryGradient,
                   borderRadius: BorderRadius.circular(12),
@@ -764,30 +836,45 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                         context: context,
                         barrierDismissible: false,
                         builder: (context) => const Center(
-                          child: CircularProgressIndicator(color: AppTheme.primaryAccent),
+                          child: CircularProgressIndicator(
+                            color: AppTheme.primaryAccent,
+                          ),
                         ),
                       );
 
                       try {
-                        final bands = await appState.firebaseService.getUserBandsAsync(userId);
+                        final bands = await appState.firebaseService
+                            .getUserBandsAsync(userId);
                         if (context.mounted) {
                           Navigator.pop(context); // Dismiss loader
                         }
 
                         if (bands.length > 1) {
                           if (context.mounted) {
-                            _showBandSelectorBottomSheet(context, appState, bands);
+                            _showBandSelectorBottomSheet(
+                              context,
+                              appState,
+                              bands,
+                            );
                           }
                         } else if (bands.isEmpty) {
                           if (context.mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('You are not a member of any band rooms.')),
+                              const SnackBar(
+                                content: Text(
+                                  'You are not a member of any band rooms.',
+                                ),
+                              ),
                             );
                           }
                         } else {
                           if (context.mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('You only belong to one band room.')),
+                              const SnackBar(
+                                content: Text(
+                                  'You only belong to one band room.',
+                                ),
+                              ),
                             );
                           }
                         }
@@ -820,13 +907,19 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                   const SizedBox(height: 4),
                   Text(
                     '${_members.length} members online',
-                    style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      color: AppTheme.textSecondary,
+                    ),
                   ),
                 ],
               ),
               AnimatedTapDetector(
                 onTap: () {
-                  final appState = Provider.of<AppState>(context, listen: false);
+                  final appState = Provider.of<AppState>(
+                    context,
+                    listen: false,
+                  );
                   final bandId = appState.activeBandId;
                   if (bandId != null) {
                     final currentUserId = appState.currentUserId;
@@ -846,7 +939,11 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                     }
                   }
                 },
-                child: const Icon(Icons.settings_outlined, color: Colors.white, size: 24),
+                child: const Icon(
+                  Icons.settings_outlined,
+                  color: Colors.white,
+                  size: 24,
+                ),
               ),
             ],
           ),
@@ -858,7 +955,10 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
           indicatorColor: AppTheme.primaryAccent,
           labelColor: Colors.white,
           unselectedLabelColor: AppTheme.textSecondary,
-          labelStyle: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 13),
+          labelStyle: GoogleFonts.inter(
+            fontWeight: FontWeight.bold,
+            fontSize: 13,
+          ),
           tabs: const [
             Tab(text: 'Chat'),
             Tab(text: 'Files'),
@@ -923,7 +1023,10 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
               if (_replyToMessage != null)
                 Container(
                   margin: const EdgeInsets.only(bottom: 8),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xFF1A153A),
                     borderRadius: BorderRadius.circular(8),
@@ -982,7 +1085,10 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                     decoration: BoxDecoration(
                       color: AppTheme.cardBackground,
                       shape: BoxShape.circle,
-                      border: Border.all(color: const Color(0xFF231F45), width: 1),
+                      border: Border.all(
+                        color: const Color(0xFF231F45),
+                        width: 1,
+                      ),
                     ),
                     child: const Icon(Icons.add, color: Colors.white, size: 20),
                   ),
@@ -991,11 +1097,20 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                   Expanded(
                     child: TextField(
                       controller: _messageController,
-                      style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
+                      style: GoogleFonts.inter(
+                        color: Colors.white,
+                        fontSize: 14,
+                      ),
                       decoration: InputDecoration(
                         hintText: 'Type a message...',
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                        hintStyle: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 14),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 10,
+                        ),
+                        hintStyle: GoogleFonts.inter(
+                          color: AppTheme.textSecondary,
+                          fontSize: 14,
+                        ),
                         fillColor: const Color(0xFF141029),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(24),
@@ -1016,7 +1131,11 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                         color: AppTheme.primaryAccent,
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(Icons.send_rounded, color: Colors.white, size: 18),
+                      child: const Icon(
+                        Icons.send_rounded,
+                        color: Colors.white,
+                        size: 18,
+                      ),
                     ),
                   ),
                 ],
@@ -1029,7 +1148,9 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
   }
 
   String _getSenderName(Message msg) {
-    if (msg.senderName != null && msg.senderName!.isNotEmpty && msg.senderName != 'Unknown') {
+    if (msg.senderName != null &&
+        msg.senderName!.isNotEmpty &&
+        msg.senderName != 'Unknown') {
       return msg.senderName!;
     }
     final senderId = msg.senderId;
@@ -1053,7 +1174,9 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
       padding: const EdgeInsets.only(bottom: 16),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+        mainAxisAlignment: isMe
+            ? MainAxisAlignment.end
+            : MainAxisAlignment.start,
         children: [
           if (!isMe) ...[
             GestureDetector(
@@ -1066,7 +1189,9 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                 radius: 16,
                 backgroundColor: AppTheme.primaryAccent.withOpacity(0.3),
                 child: Text(
-                  senderName.isNotEmpty ? senderName.substring(0, 1).toUpperCase() : 'M',
+                  senderName.isNotEmpty
+                      ? senderName.substring(0, 1).toUpperCase()
+                      : 'M',
                   style: GoogleFonts.inter(fontSize: 11, color: Colors.white),
                 ),
               ),
@@ -1075,7 +1200,11 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
           ],
           if (isMe) ...[
             IconButton(
-              icon: const Icon(Icons.reply, size: 16, color: AppTheme.textMuted),
+              icon: const Icon(
+                Icons.reply,
+                size: 16,
+                color: AppTheme.textMuted,
+              ),
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(),
               onPressed: () {
@@ -1088,7 +1217,9 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
           ],
           Flexible(
             child: Column(
-              crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+              crossAxisAlignment: isMe
+                  ? CrossAxisAlignment.end
+                  : CrossAxisAlignment.start,
               children: [
                 if (!isMe)
                   GestureDetector(
@@ -1110,7 +1241,9 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                               fontWeight: FontWeight.bold,
                             ),
                           ),
-                          if (_getMemberInstrument(msg.senderId).isNotEmpty) ...[
+                          if (_getMemberInstrument(
+                            msg.senderId,
+                          ).isNotEmpty) ...[
                             const SizedBox(height: 2),
                             Text(
                               _getMemberInstrument(msg.senderId),
@@ -1132,9 +1265,14 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                     });
                   },
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
                     decoration: BoxDecoration(
-                      color: isMe ? AppTheme.primaryAccent : const Color(0xFF1E1A3A),
+                      color: isMe
+                          ? AppTheme.primaryAccent
+                          : const Color(0xFF1E1A3A),
                       borderRadius: BorderRadius.only(
                         topLeft: const Radius.circular(16),
                         topRight: const Radius.circular(16),
@@ -1149,13 +1287,18 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                         if (msg.replyToText != null) ...[
                           Container(
                             margin: const EdgeInsets.only(bottom: 6),
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 6,
+                            ),
                             decoration: BoxDecoration(
                               color: Colors.black.withOpacity(0.18),
                               borderRadius: BorderRadius.circular(6),
                               border: Border(
                                 left: BorderSide(
-                                  color: isMe ? Colors.white70 : AppTheme.primaryAccent,
+                                  color: isMe
+                                      ? Colors.white70
+                                      : AppTheme.primaryAccent,
                                   width: 3,
                                 ),
                               ),
@@ -1166,7 +1309,9 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                                 Text(
                                   msg.replyToSenderName ?? 'Member',
                                   style: GoogleFonts.inter(
-                                    color: isMe ? Colors.white : AppTheme.primaryAccent,
+                                    color: isMe
+                                        ? Colors.white
+                                        : AppTheme.primaryAccent,
                                     fontSize: 11,
                                     fontWeight: FontWeight.bold,
                                   ),
@@ -1205,9 +1350,14 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                     children: [
                       Text(
                         msg.timestamp != null
-                            ? DateFormat('HH:mm').format(msg.timestamp!.toLocal())
+                            ? DateFormat(
+                                'HH:mm',
+                              ).format(msg.timestamp!.toLocal())
                             : '12:00',
-                        style: GoogleFonts.inter(fontSize: 10, color: AppTheme.textMuted),
+                        style: GoogleFonts.inter(
+                          fontSize: 10,
+                          color: AppTheme.textMuted,
+                        ),
                       ),
                     ],
                   ),
@@ -1218,7 +1368,11 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
           if (!isMe) ...[
             const SizedBox(width: 8),
             IconButton(
-              icon: const Icon(Icons.reply, size: 16, color: AppTheme.textMuted),
+              icon: const Icon(
+                Icons.reply,
+                size: 16,
+                color: AppTheme.textMuted,
+              ),
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(),
               onPressed: () {
@@ -1236,7 +1390,10 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
   Future<void> _launchUrl(String urlString) async {
     final uri = Uri.parse(urlString.trim());
     try {
-      final success = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      final success = await launchUrl(
+        uri,
+        mode: LaunchMode.externalApplication,
+      );
       if (!success) {
         // Fallback to default launching mode
         await launchUrl(uri);
@@ -1307,10 +1464,38 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
               : ListView(
                   padding: const EdgeInsets.all(16),
                   children: [
-                    _buildFileCategorySection('SHEET MUSIC', Icons.description_outlined, AppTheme.primaryAccent, sheetMusic, bandId, appState),
-                    _buildFileCategorySection('VIDEOS', Icons.videocam_outlined, Colors.purpleAccent, videos, bandId, appState),
-                    _buildFileCategorySection('MP3s', Icons.audiotrack_outlined, Colors.orangeAccent, mp3s, bandId, appState),
-                    _buildFileCategorySection('OTHER (Pdf, Jpeg, Png...)', Icons.insert_drive_file_outlined, Colors.blueAccent, other, bandId, appState),
+                    _buildFileCategorySection(
+                      'SHEET MUSIC',
+                      Icons.description_outlined,
+                      AppTheme.primaryAccent,
+                      sheetMusic,
+                      bandId,
+                      appState,
+                    ),
+                    _buildFileCategorySection(
+                      'VIDEOS',
+                      Icons.videocam_outlined,
+                      Colors.purpleAccent,
+                      videos,
+                      bandId,
+                      appState,
+                    ),
+                    _buildFileCategorySection(
+                      'MP3s',
+                      Icons.audiotrack_outlined,
+                      Colors.orangeAccent,
+                      mp3s,
+                      bandId,
+                      appState,
+                    ),
+                    _buildFileCategorySection(
+                      'OTHER (Pdf, Jpeg, Png...)',
+                      Icons.insert_drive_file_outlined,
+                      Colors.blueAccent,
+                      other,
+                      bandId,
+                      appState,
+                    ),
                   ],
                 ),
         ),
@@ -1332,7 +1517,10 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                     SizedBox(width: 8),
                     Text(
                       "Upload a File",
-                      style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold),
+                      style: GoogleFonts.inter(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ],
                 ),
@@ -1397,24 +1585,37 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
               },
               child: Container(
                 margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFF130E26).withOpacity(0.4),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: const Color(0xFF2E2A4E).withOpacity(0.5), width: 1),
+                  border: Border.all(
+                    color: const Color(0xFF2E2A4E).withOpacity(0.5),
+                    width: 1,
+                  ),
                 ),
                 child: Row(
                   children: [
                     Expanded(
                       child: Text(
                         fileName,
-                        style: GoogleFonts.inter(fontSize: 13, color: Colors.white70),
+                        style: GoogleFonts.inter(
+                          fontSize: 13,
+                          color: Colors.white70,
+                        ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 18),
+                      icon: const Icon(
+                        Icons.delete_outline,
+                        color: Colors.redAccent,
+                        size: 18,
+                      ),
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(),
                       onPressed: () async {
@@ -1422,23 +1623,43 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                           context: context,
                           builder: (context) => AlertDialog(
                             backgroundColor: AppTheme.cardBackground,
-                            title: Text('Delete File', style: GoogleFonts.inter(color: Colors.white)),
-                            content: Text('Are you sure you want to delete "$fileName"?', style: GoogleFonts.inter(color: Colors.white70)),
+                            title: Text(
+                              'Delete File',
+                              style: GoogleFonts.inter(color: Colors.white),
+                            ),
+                            content: Text(
+                              'Are you sure you want to delete "$fileName"?',
+                              style: GoogleFonts.inter(color: Colors.white70),
+                            ),
                             actions: [
                               TextButton(
-                                child: Text('Cancel', style: GoogleFonts.inter(color: AppTheme.textSecondary)),
+                                child: Text(
+                                  'Cancel',
+                                  style: GoogleFonts.inter(
+                                    color: AppTheme.textSecondary,
+                                  ),
+                                ),
                                 onPressed: () => Navigator.pop(context, false),
                               ),
                               TextButton(
-                                child: Text('Delete', style: GoogleFonts.inter(color: Colors.redAccent)),
+                                child: Text(
+                                  'Delete',
+                                  style: GoogleFonts.inter(
+                                    color: Colors.redAccent,
+                                  ),
+                                ),
                                 onPressed: () => Navigator.pop(context, true),
                               ),
                             ],
                           ),
                         );
                         if (confirm == true) {
-                          await appState.firebaseService.removeBandFileAsync(bandId, fileId);
-                          final files = await appState.firebaseService.getBandFilesAsync(bandId);
+                          await appState.firebaseService.removeBandFileAsync(
+                            bandId,
+                            fileId,
+                          );
+                          final files = await appState.firebaseService
+                              .getBandFilesAsync(bandId);
                           if (mounted) {
                             setState(() {
                               _files = files;
@@ -1457,7 +1678,10 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
     );
   }
 
-  Future<void> _navigateTo1on1Chat(String otherUserId, String otherUserName) async {
+  Future<void> _navigateTo1on1Chat(
+    String otherUserId,
+    String otherUserName,
+  ) async {
     final appState = Provider.of<AppState>(context, listen: false);
     final selfId = appState.currentUserId;
     if (selfId == null || otherUserId == selfId) return;
@@ -1471,7 +1695,8 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
     );
 
     try {
-      final convId = await appState.firebaseService.getOrCreateDirectConversationAsync(selfId, otherUserId);
+      final convId = await appState.firebaseService
+          .getOrCreateDirectConversationAsync(selfId, otherUserId);
       if (mounted) {
         Navigator.pop(context); // Dismiss loader
         Navigator.pushNamed(
@@ -1488,7 +1713,10 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
       if (mounted) {
         Navigator.pop(context); // Dismiss loader
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to open chat: $e'), backgroundColor: AppTheme.danger),
+          SnackBar(
+            content: Text('Failed to open chat: $e'),
+            backgroundColor: AppTheme.danger,
+          ),
         );
       }
     }
@@ -1505,7 +1733,9 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
 
     try {
       final appState = Provider.of<AppState>(context, listen: false);
-      final profile = await appState.firebaseService.getUserProfileAsync(userId);
+      final profile = await appState.firebaseService.getUserProfileAsync(
+        userId,
+      );
       if (mounted) {
         Navigator.pop(context); // Dismiss loader
         if (profile != null) {
@@ -1541,8 +1771,10 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
       (m) => m.userId == selfId,
       orElse: () => BandMember(role: 'Member'),
     );
-    final roleStr = (currentMember.role ?? _activeBand?.userRole ?? '').toLowerCase();
-    final isLeaderOrAdmin = roleStr.contains('leader') || roleStr.contains('admin');
+    final roleStr = (currentMember.role ?? _activeBand?.userRole ?? '')
+        .toLowerCase();
+    final isLeaderOrAdmin =
+        roleStr.contains('leader') || roleStr.contains('admin');
 
     return Column(
       children: [
@@ -1561,11 +1793,17 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.person_add_alt_1_outlined, color: Colors.white),
+                      Icon(
+                        Icons.person_add_alt_1_outlined,
+                        color: Colors.white,
+                      ),
                       SizedBox(width: 8),
                       Text(
                         "Add Band Member",
-                        style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold),
+                        style: GoogleFonts.inter(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ],
                   ),
@@ -1580,15 +1818,28 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
               children: [
                 Text(
                   'BAND MEMBERS',
-                  style: GoogleFonts.outfit(fontSize: 13, color: AppTheme.textSecondary, fontWeight: FontWeight.bold, letterSpacing: 1.2),
+                  style: GoogleFonts.outfit(
+                    fontSize: 13,
+                    color: AppTheme.textSecondary,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1.2,
+                  ),
                 ),
                 Row(
                   children: [
-                    const Icon(Icons.shield_outlined, size: 14, color: AppTheme.primaryAccent),
+                    const Icon(
+                      Icons.shield_outlined,
+                      size: 14,
+                      color: AppTheme.primaryAccent,
+                    ),
                     const SizedBox(width: 4),
                     Text(
                       'Set Admin Roles',
-                      style: GoogleFonts.inter(fontSize: 12, color: AppTheme.primaryAccent, fontWeight: FontWeight.bold),
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        color: AppTheme.primaryAccent,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ],
                 ),
@@ -1616,19 +1867,29 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                 },
                 child: Container(
                   margin: const EdgeInsets.only(bottom: 12),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
                   decoration: BoxDecoration(
                     color: AppTheme.cardBackground,
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFF231F45), width: 1),
+                    border: Border.all(
+                      color: const Color(0xFF231F45),
+                      width: 1,
+                    ),
                   ),
                   child: Row(
                     children: [
                       CircleAvatar(
                         radius: 20,
-                        backgroundColor: AppTheme.primaryAccent.withOpacity(0.3),
+                        backgroundColor: AppTheme.primaryAccent.withOpacity(
+                          0.3,
+                        ),
                         child: Text(
-                          (member.nickname ?? 'M').substring(0, 1).toUpperCase(),
+                          (member.nickname ?? 'M')
+                              .substring(0, 1)
+                              .toUpperCase(),
                           style: GoogleFonts.inter(color: Colors.white),
                         ),
                       ),
@@ -1639,18 +1900,31 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                           children: [
                             Text(
                               member.nickname ?? 'Unknown Member',
-                              style: GoogleFonts.outfit(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold),
+                              style: GoogleFonts.outfit(
+                                fontSize: 16,
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                             const SizedBox(height: 2),
                             Text(
                               member.role ?? 'Member',
-                              style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
+                              style: GoogleFonts.inter(
+                                fontSize: 12,
+                                color: AppTheme.textSecondary,
+                              ),
                             ),
-                            if (_getMemberInstrument(member.userId).isNotEmpty) ...[
+                            if (_getMemberInstrument(
+                              member.userId,
+                            ).isNotEmpty) ...[
                               const SizedBox(height: 2),
                               Text(
                                 _getMemberInstrument(member.userId),
-                                style: GoogleFonts.inter(fontSize: 11, color: AppTheme.primaryAccent, fontWeight: FontWeight.w500),
+                                style: GoogleFonts.inter(
+                                  fontSize: 11,
+                                  color: AppTheme.primaryAccent,
+                                  fontWeight: FontWeight.w500,
+                                ),
                               ),
                             ],
                           ],
@@ -1659,29 +1933,40 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                       if (isLeaderRole || isAdminRole || isMODRole)
                         Container(
                           margin: const EdgeInsets.only(right: 8),
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
                           decoration: BoxDecoration(
                             color: isMODRole
                                 ? Colors.purple.withOpacity(0.2)
                                 : isAdminRole
-                                    ? Colors.amber.withOpacity(0.2)
-                                    : AppTheme.primaryAccent.withOpacity(0.2),
+                                ? Colors.amber.withOpacity(0.2)
+                                : AppTheme.primaryAccent.withOpacity(0.2),
                             borderRadius: BorderRadius.circular(8),
                             border: isMODRole
-                                ? Border.all(color: Colors.purple.withOpacity(0.4))
+                                ? Border.all(
+                                    color: Colors.purple.withOpacity(0.4),
+                                  )
                                 : isAdminRole
-                                    ? Border.all(color: Colors.amber.withOpacity(0.4))
-                                    : null,
+                                ? Border.all(
+                                    color: Colors.amber.withOpacity(0.4),
+                                  )
+                                : null,
                           ),
                           child: Text(
-                            isLeaderRole ? 'Leader' : isAdminRole ? 'Admin' : 'MOD',
+                            isLeaderRole
+                                ? 'Leader'
+                                : isAdminRole
+                                ? 'Admin'
+                                : 'MOD',
                             style: GoogleFonts.inter(
                               fontSize: 10,
                               color: isMODRole
                                   ? Colors.purpleAccent
                                   : isAdminRole
-                                      ? Colors.amber
-                                      : AppTheme.primaryAccent,
+                                  ? Colors.amber
+                                  : AppTheme.primaryAccent,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
@@ -1689,7 +1974,10 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                       if (member.userId != null && member.userId != selfId) ...[
                         GestureDetector(
                           onTap: () {
-                            _navigateTo1on1Chat(member.userId!, member.nickname ?? 'Member');
+                            _navigateTo1on1Chat(
+                              member.userId!,
+                              member.nickname ?? 'Member',
+                            );
                           },
                           child: Container(
                             padding: const EdgeInsets.all(8),
@@ -1707,7 +1995,11 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                         if (isLeaderOrAdmin) ...[
                           const SizedBox(width: 4),
                           PopupMenuButton<String>(
-                            icon: const Icon(Icons.shield_outlined, color: AppTheme.primaryAccent, size: 20),
+                            icon: const Icon(
+                              Icons.shield_outlined,
+                              color: AppTheme.primaryAccent,
+                              size: 20,
+                            ),
                             tooltip: 'Set Admin Roles',
                             color: const Color(0xFF16132D),
                             onSelected: (newRole) async {
@@ -1715,17 +2007,33 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                                 if (newRole == 'Leader') {
                                   // Enforce 1 Leader limit: Demote previous leader to Admin
                                   for (var m in _members) {
-                                    if (m.userId != null && (m.role ?? '').toLowerCase().contains('leader') && m.userId != member.userId) {
-                                      await appState.firebaseService.updateBandMemberRoleAsync(bandId, m.userId!, 'Admin');
+                                    if (m.userId != null &&
+                                        (m.role ?? '').toLowerCase().contains(
+                                          'leader',
+                                        ) &&
+                                        m.userId != member.userId) {
+                                      await appState.firebaseService
+                                          .updateBandMemberRoleAsync(
+                                            bandId,
+                                            m.userId!,
+                                            'Admin',
+                                          );
                                     }
                                   }
                                 }
-                                await appState.firebaseService.updateBandMemberRoleAsync(bandId, member.userId!, newRole);
+                                await appState.firebaseService
+                                    .updateBandMemberRoleAsync(
+                                      bandId,
+                                      member.userId!,
+                                      newRole,
+                                    );
                                 await _initBand(bandId);
                                 if (mounted) {
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
-                                      content: Text('${member.nickname ?? "Member"}\'s role updated to $newRole'),
+                                      content: Text(
+                                        '${member.nickname ?? "Member"}\'s role updated to $newRole',
+                                      ),
                                       backgroundColor: AppTheme.success,
                                     ),
                                   );
@@ -1737,9 +2045,18 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                                 value: 'Member',
                                 child: Row(
                                   children: [
-                                    Icon(Icons.person_outline, color: Colors.white, size: 16),
+                                    Icon(
+                                      Icons.person_outline,
+                                      color: Colors.white,
+                                      size: 16,
+                                    ),
                                     SizedBox(width: 8),
-                                    Text('Set as Member', style: GoogleFonts.inter(color: Colors.white)),
+                                    Text(
+                                      'Set as Member',
+                                      style: GoogleFonts.inter(
+                                        color: Colors.white,
+                                      ),
+                                    ),
                                   ],
                                 ),
                               ),
@@ -1747,9 +2064,18 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                                 value: 'MOD',
                                 child: Row(
                                   children: [
-                                    Icon(Icons.security_rounded, color: Colors.purpleAccent, size: 16),
+                                    Icon(
+                                      Icons.security_rounded,
+                                      color: Colors.purpleAccent,
+                                      size: 16,
+                                    ),
                                     SizedBox(width: 8),
-                                    Text('Set as MOD', style: GoogleFonts.inter(color: Colors.purpleAccent)),
+                                    Text(
+                                      'Set as MOD',
+                                      style: GoogleFonts.inter(
+                                        color: Colors.purpleAccent,
+                                      ),
+                                    ),
                                   ],
                                 ),
                               ),
@@ -1757,9 +2083,18 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                                 value: 'Admin',
                                 child: Row(
                                   children: [
-                                    Icon(Icons.admin_panel_settings_outlined, color: Colors.amber, size: 16),
+                                    Icon(
+                                      Icons.admin_panel_settings_outlined,
+                                      color: Colors.amber,
+                                      size: 16,
+                                    ),
                                     SizedBox(width: 8),
-                                    Text('Set as Admin', style: GoogleFonts.inter(color: Colors.amber)),
+                                    Text(
+                                      'Set as Admin',
+                                      style: GoogleFonts.inter(
+                                        color: Colors.amber,
+                                      ),
+                                    ),
                                   ],
                                 ),
                               ),
@@ -1767,9 +2102,18 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                                 value: 'Leader',
                                 child: Row(
                                   children: [
-                                    Icon(Icons.star_outline_rounded, color: AppTheme.primaryAccent, size: 16),
+                                    Icon(
+                                      Icons.star_outline_rounded,
+                                      color: AppTheme.primaryAccent,
+                                      size: 16,
+                                    ),
                                     SizedBox(width: 8),
-                                    Text('Transfer Leadership', style: GoogleFonts.inter(color: AppTheme.primaryAccent)),
+                                    Text(
+                                      'Transfer Leadership',
+                                      style: GoogleFonts.inter(
+                                        color: AppTheme.primaryAccent,
+                                      ),
+                                    ),
                                   ],
                                 ),
                               ),
@@ -1813,7 +2157,8 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
       (m) => m.userId == selfId,
       orElse: () => BandMember(role: 'Member'),
     );
-    final isLeaderOrAdmin = currentMember.role == 'Leader' || currentMember.role == 'Admin';
+    final isLeaderOrAdmin =
+        currentMember.role == 'Leader' || currentMember.role == 'Admin';
 
     // 1. Prepare feed items
     final feedItems = <Map<String, dynamic>>[];
@@ -1842,7 +2187,8 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
         final isUpcoming = endLocal.isAfter(now);
         final timestamp = event.createdAt > 0
             ? event.createdAt
-            : (DateTime.tryParse(event.startDateTime)?.millisecondsSinceEpoch ?? 0);
+            : (DateTime.tryParse(event.startDateTime)?.millisecondsSinceEpoch ??
+                  0);
 
         feedItems.add({
           'id': event.id ?? '',
@@ -1858,7 +2204,9 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
     }
 
     // Sort by timestamp descending
-    feedItems.sort((a, b) => (b['timestamp'] as int).compareTo(a['timestamp'] as int));
+    feedItems.sort(
+      (a, b) => (b['timestamp'] as int).compareTo(a['timestamp'] as int),
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1886,7 +2234,9 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
             physics: const BouncingScrollPhysics(),
             children: [
               // Post Button for Leaders/Admins (under News filter, or top of feed when appropriate)
-              if (isLeaderOrAdmin && bandId != null && (_gigsTabFilter == 'All' || _gigsTabFilter == 'News')) ...[
+              if (isLeaderOrAdmin &&
+                  bandId != null &&
+                  (_gigsTabFilter == 'All' || _gigsTabFilter == 'News')) ...[
                 AnimatedTapDetector(
                   onTap: () => _showPostGigsNewsDialog(bandId),
                   child: Container(
@@ -1907,7 +2257,11 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Icon(Icons.add_circle_outline_rounded, color: Colors.white, size: 20),
+                          const Icon(
+                            Icons.add_circle_outline_rounded,
+                            color: Colors.white,
+                            size: 20,
+                          ),
                           const SizedBox(width: 8),
                           Text(
                             "Create Gig or News Update",
@@ -1966,7 +2320,9 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
           color: isSelected ? AppTheme.primaryAccent : AppTheme.cardBackground,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: isSelected ? AppTheme.primaryAccent : const Color(0xFF2E2A4E),
+            color: isSelected
+                ? AppTheme.primaryAccent
+                : const Color(0xFF2E2A4E),
             width: 1,
           ),
         ),
@@ -2037,20 +2393,30 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                 child: Container(
                   width: 85,
                   margin: const EdgeInsets.only(right: 12),
-                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 8,
+                    horizontal: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: AppTheme.cardBackground,
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
+                    border: Border.all(
+                      color: const Color(0xFF2E2A4E),
+                      width: 1,
+                    ),
                   ),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       CircleAvatar(
                         radius: 18,
-                        backgroundColor: AppTheme.primaryAccent.withOpacity(0.2),
+                        backgroundColor: AppTheme.primaryAccent.withOpacity(
+                          0.2,
+                        ),
                         child: Text(
-                          (member.nickname ?? 'M').substring(0, 1).toUpperCase(),
+                          (member.nickname ?? 'M')
+                              .substring(0, 1)
+                              .toUpperCase(),
                           style: GoogleFonts.outfit(
                             fontSize: 13,
                             fontWeight: FontWeight.bold,
@@ -2176,32 +2542,52 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                   Row(
                     children: [
                       IconButton(
-                        icon: const Icon(Icons.arrow_forward_ios_rounded, color: AppTheme.textSecondary, size: 16),
+                        icon: const Icon(
+                          Icons.arrow_forward_ios_rounded,
+                          color: AppTheme.textSecondary,
+                          size: 16,
+                        ),
                         onPressed: () {
                           if (member.userId != null) {
                             _viewMemberProfile(member.userId!);
                           }
                         },
                       ),
-                      Builder(builder: (context) {
-                        final appState = Provider.of<AppState>(context, listen: false);
-                        final currentUserId = appState.currentUserId;
-                        final currentUserMember = _members.firstWhere(
-                          (m) => m.userId == currentUserId,
-                          orElse: () => BandMember(role: 'Member'),
-                        );
-                        final roleStr = (currentUserMember.role ?? _activeBand?.userRole ?? '').toLowerCase();
-                        final isLeaderOrAdmin = roleStr.contains('leader') || roleStr.contains('admin');
-
-                        if (isLeaderOrAdmin && member.userId != currentUserId) {
-                          return IconButton(
-                            icon: const Icon(Icons.person_remove_outlined, color: AppTheme.danger, size: 20),
-                            tooltip: 'Remove Member',
-                            onPressed: () => _confirmRemoveMember(member),
+                      Builder(
+                        builder: (context) {
+                          final appState = Provider.of<AppState>(
+                            context,
+                            listen: false,
                           );
-                        }
-                        return const SizedBox.shrink();
-                      }),
+                          final currentUserId = appState.currentUserId;
+                          final currentUserMember = _members.firstWhere(
+                            (m) => m.userId == currentUserId,
+                            orElse: () => BandMember(role: 'Member'),
+                          );
+                          final roleStr =
+                              (currentUserMember.role ??
+                                      _activeBand?.userRole ??
+                                      '')
+                                  .toLowerCase();
+                          final isLeaderOrAdmin =
+                              roleStr.contains('leader') ||
+                              roleStr.contains('admin');
+
+                          if (isLeaderOrAdmin &&
+                              member.userId != currentUserId) {
+                            return IconButton(
+                              icon: const Icon(
+                                Icons.person_remove_outlined,
+                                color: AppTheme.danger,
+                                size: 20,
+                              ),
+                              tooltip: 'Remove Member',
+                              onPressed: () => _confirmRemoveMember(member),
+                            );
+                          }
+                          return const SizedBox.shrink();
+                        },
+                      ),
                     ],
                   ),
                 ],
@@ -2226,7 +2612,10 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(
           "Remove Member",
-          style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold),
+          style: GoogleFonts.outfit(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
         ),
         content: Text(
           "Are you sure you want to remove $name from the band?",
@@ -2235,15 +2624,26 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: Text("Cancel", style: GoogleFonts.inter(color: AppTheme.textSecondary)),
+            child: Text(
+              "Cancel",
+              style: GoogleFonts.inter(color: AppTheme.textSecondary),
+            ),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: AppTheme.danger,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
             ),
             onPressed: () => Navigator.pop(context, true),
-            child: Text("Remove", style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold)),
+            child: Text(
+              "Remove",
+              style: GoogleFonts.inter(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ),
         ],
       ),
@@ -2252,7 +2652,10 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
     if (confirmed == true && mounted) {
       final appState = Provider.of<AppState>(context, listen: false);
       try {
-        await appState.firebaseService.removeBandMemberAsync(_loadedBandId!, memberUserId);
+        await appState.firebaseService.removeBandMemberAsync(
+          _loadedBandId!,
+          memberUserId,
+        );
         if (mounted) {
           setState(() {
             _members.removeWhere((m) => m.userId == memberUserId);
@@ -2278,10 +2681,16 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
     }
   }
 
-  Widget _buildNewsFeedCard(Map<String, dynamic> item, bool isLeaderOrAdmin, String? bandId) {
+  Widget _buildNewsFeedCard(
+    Map<String, dynamic> item,
+    bool isLeaderOrAdmin,
+    String? bandId,
+  ) {
     final isGig = item['feedType'] == 'Gig';
     final dateStr = item['timestamp'] > 0
-        ? DateTime.fromMillisecondsSinceEpoch(item['timestamp'] as int).toLocal().toString().substring(0, 16)
+        ? DateTime.fromMillisecondsSinceEpoch(
+            item['timestamp'] as int,
+          ).toLocal().toString().substring(0, 16)
         : '';
 
     return Container(
@@ -2291,7 +2700,9 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
         color: AppTheme.cardBackground,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isGig ? AppTheme.warning.withOpacity(0.3) : const Color(0xFF2E2A4E),
+          color: isGig
+              ? AppTheme.warning.withOpacity(0.3)
+              : const Color(0xFF2E2A4E),
           width: 1.0,
         ),
       ),
@@ -2303,7 +2714,8 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: (isGig ? AppTheme.warning : AppTheme.primaryAccent).withOpacity(0.15),
+                  color: (isGig ? AppTheme.warning : AppTheme.primaryAccent)
+                      .withOpacity(0.15),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
@@ -2326,9 +2738,15 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                   ),
                 ),
               ),
-              if (isLeaderOrAdmin && bandId != null && item['id'].toString().isNotEmpty)
+              if (isLeaderOrAdmin &&
+                  bandId != null &&
+                  item['id'].toString().isNotEmpty)
                 IconButton(
-                  icon: const Icon(Icons.delete_outline_rounded, color: AppTheme.danger, size: 20),
+                  icon: const Icon(
+                    Icons.delete_outline_rounded,
+                    color: AppTheme.danger,
+                    size: 20,
+                  ),
                   onPressed: () => _deleteGigsNewsPost(bandId, item['id']!),
                 ),
             ],
@@ -2371,11 +2789,14 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
   Widget _buildEventFeedCard(Map<String, dynamic> item, String? bandId) {
     final event = item['originalData'] as BandEvent;
     final isUpcoming = item['feedType'] == 'UpcomingEvent';
-    final startLocal = DateTime.tryParse(event.startDateTime)?.toLocal() ?? DateTime.now();
+    final startLocal =
+        DateTime.tryParse(event.startDateTime)?.toLocal() ?? DateTime.now();
     final formattedTime = DateFormat('EEEE, MMM d - HH:mm').format(startLocal);
 
     final totalResponses = event.responses.length;
-    final yesResponses = event.responses.values.where((r) => r.status == 'Yes').length;
+    final yesResponses = event.responses.values
+        .where((r) => r.status == 'Yes')
+        .length;
 
     IconData eventIcon;
     switch (event.eventType.toLowerCase()) {
@@ -2403,7 +2824,9 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
         color: AppTheme.cardBackground,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isUpcoming ? AppTheme.success.withOpacity(0.3) : const Color(0xFF2E2A4E),
+          color: isUpcoming
+              ? AppTheme.success.withOpacity(0.3)
+              : const Color(0xFF2E2A4E),
           width: 1.0,
         ),
       ),
@@ -2415,7 +2838,9 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: (isUpcoming ? AppTheme.success : AppTheme.textSecondary).withOpacity(0.12),
+                  color:
+                      (isUpcoming ? AppTheme.success : AppTheme.textSecondary)
+                          .withOpacity(0.12),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
@@ -2432,9 +2857,16 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                     Row(
                       children: [
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
                           decoration: BoxDecoration(
-                            color: (isUpcoming ? AppTheme.success : AppTheme.textSecondary).withOpacity(0.15),
+                            color:
+                                (isUpcoming
+                                        ? AppTheme.success
+                                        : AppTheme.textSecondary)
+                                    .withOpacity(0.15),
                             borderRadius: BorderRadius.circular(4),
                           ),
                           child: Text(
@@ -2442,7 +2874,9 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                             style: GoogleFonts.inter(
                               fontSize: 9,
                               fontWeight: FontWeight.bold,
-                              color: isUpcoming ? AppTheme.success : AppTheme.textSecondary,
+                              color: isUpcoming
+                                  ? AppTheme.success
+                                  : AppTheme.textSecondary,
                             ),
                           ),
                         ),
@@ -2486,12 +2920,19 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.access_time_rounded, color: AppTheme.textSecondary, size: 14),
+                    const Icon(
+                      Icons.access_time_rounded,
+                      color: AppTheme.textSecondary,
+                      size: 14,
+                    ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         formattedTime,
-                        style: GoogleFonts.inter(fontSize: 12.5, color: Colors.white70),
+                        style: GoogleFonts.inter(
+                          fontSize: 12.5,
+                          color: Colors.white70,
+                        ),
                       ),
                     ),
                   ],
@@ -2500,14 +2941,21 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                   const SizedBox(height: 8),
                   Row(
                     children: [
-                      const Icon(Icons.location_on_outlined, color: AppTheme.textSecondary, size: 14),
+                      const Icon(
+                        Icons.location_on_outlined,
+                        color: AppTheme.textSecondary,
+                        size: 14,
+                      ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           event.location,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.inter(fontSize: 12.5, color: Colors.white70),
+                          style: GoogleFonts.inter(
+                            fontSize: 12.5,
+                            color: Colors.white70,
+                          ),
                         ),
                       ),
                     ],
@@ -2531,8 +2979,14 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
               GestureDetector(
                 onTap: () {
                   if (bandId != null && event.id != null) {
-                    final appState = Provider.of<AppState>(context, listen: false);
-                    final userId = appState.currentUserProfile?.userId ?? appState.firebaseService.currentUser?.uid ?? '';
+                    final appState = Provider.of<AppState>(
+                      context,
+                      listen: false,
+                    );
+                    final userId =
+                        appState.currentUserProfile?.userId ??
+                        appState.firebaseService.currentUser?.uid ??
+                        '';
                     if (isUpcoming && event.requireResponse) {
                       RsvpReminderDialog.show(
                         context: context,
@@ -2558,12 +3012,19 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                   }
                 },
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
-                    color: isUpcoming ? AppTheme.primaryAccent.withOpacity(0.15) : const Color(0xFF2E2A4E),
+                    color: isUpcoming
+                        ? AppTheme.primaryAccent.withOpacity(0.15)
+                        : const Color(0xFF2E2A4E),
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
-                      color: isUpcoming ? AppTheme.primaryAccent : const Color(0xFF2E2A4E),
+                      color: isUpcoming
+                          ? AppTheme.primaryAccent
+                          : const Color(0xFF2E2A4E),
                     ),
                   ),
                   child: Row(
@@ -2573,13 +3034,17 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                         style: GoogleFonts.inter(
                           fontSize: 11.5,
                           fontWeight: FontWeight.bold,
-                          color: isUpcoming ? AppTheme.primaryAccent : Colors.white70,
+                          color: isUpcoming
+                              ? AppTheme.primaryAccent
+                              : Colors.white70,
                         ),
                       ),
                       const SizedBox(width: 4),
                       Icon(
                         Icons.chevron_right_rounded,
-                        color: isUpcoming ? AppTheme.primaryAccent : Colors.white70,
+                        color: isUpcoming
+                            ? AppTheme.primaryAccent
+                            : Colors.white70,
                         size: 14,
                       ),
                     ],
@@ -2604,11 +3069,17 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: Text('Cancel', style: GoogleFonts.inter(color: Colors.white)),
+            child: Text(
+              'Cancel',
+              style: GoogleFonts.inter(color: Colors.white),
+            ),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: Text('Delete', style: GoogleFonts.inter(color: AppTheme.danger)),
+            child: Text(
+              'Delete',
+              style: GoogleFonts.inter(color: AppTheme.danger),
+            ),
           ),
         ],
       ),
@@ -2654,7 +3125,10 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                 decoration: BoxDecoration(
                   color: const Color(0xFF0F0C20).withOpacity(0.95),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: const Color(0xFF2E2A4E), width: 1.5),
+                  border: Border.all(
+                    color: const Color(0xFF2E2A4E),
+                    width: 1.5,
+                  ),
                 ),
                 padding: const EdgeInsets.all(20),
                 width: MediaQuery.of(context).size.width * 0.9,
@@ -2675,7 +3149,11 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                       const SizedBox(height: 20),
                       Text(
                         'Post Type',
-                        style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
+                        style: GoogleFonts.outfit(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
                       ),
                       const SizedBox(height: 8),
                       Row(
@@ -2684,19 +3162,29 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                             child: InkWell(
                               onTap: () => setDialogState(() => type = 'News'),
                               child: Container(
-                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 12,
+                                ),
                                 decoration: BoxDecoration(
-                                  color: type == 'News' ? AppTheme.primaryAccent.withOpacity(0.15) : AppTheme.inputBackground,
+                                  color: type == 'News'
+                                      ? AppTheme.primaryAccent.withOpacity(0.15)
+                                      : AppTheme.inputBackground,
                                   borderRadius: BorderRadius.circular(10),
                                   border: Border.all(
-                                    color: type == 'News' ? AppTheme.primaryAccent : Color(0xFF2E2A4E),
+                                    color: type == 'News'
+                                        ? AppTheme.primaryAccent
+                                        : Color(0xFF2E2A4E),
                                     width: 1.5,
                                   ),
                                 ),
                                 child: Center(
                                   child: Text(
                                     'News Update',
-                                    style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                                    style: GoogleFonts.inter(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13,
+                                    ),
                                   ),
                                 ),
                               ),
@@ -2707,19 +3195,29 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                             child: InkWell(
                               onTap: () => setDialogState(() => type = 'Gig'),
                               child: Container(
-                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 12,
+                                ),
                                 decoration: BoxDecoration(
-                                  color: type == 'Gig' ? AppTheme.warning.withOpacity(0.15) : AppTheme.inputBackground,
+                                  color: type == 'Gig'
+                                      ? AppTheme.warning.withOpacity(0.15)
+                                      : AppTheme.inputBackground,
                                   borderRadius: BorderRadius.circular(10),
                                   border: Border.all(
-                                    color: type == 'Gig' ? AppTheme.warning : Color(0xFF2E2A4E),
+                                    color: type == 'Gig'
+                                        ? AppTheme.warning
+                                        : Color(0xFF2E2A4E),
                                     width: 1.5,
                                   ),
                                 ),
                                 child: Center(
                                   child: Text(
                                     'Gig / Booking',
-                                    style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                                    style: GoogleFonts.inter(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13,
+                                    ),
                                   ),
                                 ),
                               ),
@@ -2730,7 +3228,11 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                       const SizedBox(height: 16),
                       Text(
                         'Title',
-                        style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
+                        style: GoogleFonts.outfit(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
                       ),
                       const SizedBox(height: 8),
                       TextFormField(
@@ -2743,7 +3245,11 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                       const SizedBox(height: 16),
                       Text(
                         'Content',
-                        style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
+                        style: GoogleFonts.outfit(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
                       ),
                       const SizedBox(height: 8),
                       TextFormField(
@@ -2751,7 +3257,8 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                         style: GoogleFonts.inter(color: Colors.white),
                         maxLines: 4,
                         decoration: const InputDecoration(
-                          hintText: 'Provide all the details for the members...',
+                          hintText:
+                              'Provide all the details for the members...',
                         ),
                       ),
                       const SizedBox(height: 24),
@@ -2760,12 +3267,19 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                         children: [
                           TextButton(
                             onPressed: () => Navigator.pop(context),
-                            child: Text('Cancel', style: GoogleFonts.inter(color: AppTheme.textSecondary)),
+                            child: Text(
+                              'Cancel',
+                              style: GoogleFonts.inter(
+                                color: AppTheme.textSecondary,
+                              ),
+                            ),
                           ),
                           const SizedBox(width: 12),
                           ElevatedButton(
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: type == 'Gig' ? AppTheme.warning : AppTheme.primaryAccent,
+                              backgroundColor: type == 'Gig'
+                                  ? AppTheme.warning
+                                  : AppTheme.primaryAccent,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(10),
                               ),
@@ -2783,19 +3297,22 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                                 return;
                               }
 
-                              final appState = Provider.of<AppState>(context, listen: false);
-                              final authorName = appState.currentUserProfile?.displayName ?? 'Leader';
+                              final appState = Provider.of<AppState>(
+                                context,
+                                listen: false,
+                              );
+                              final authorName =
+                                  appState.currentUserProfile?.displayName ??
+                                  'Leader';
 
                               try {
-                                await appState.firebaseService.postGigsNewsAsync(
-                                  bandId,
-                                  {
-                                    'title': title,
-                                    'content': content,
-                                    'type': type,
-                                    'authorName': authorName,
-                                  },
-                                );
+                                await appState.firebaseService
+                                    .postGigsNewsAsync(bandId, {
+                                      'title': title,
+                                      'content': content,
+                                      'type': type,
+                                      'authorName': authorName,
+                                    });
                                 if (context.mounted) {
                                   Navigator.pop(context);
                                   ScaffoldMessenger.of(context).showSnackBar(
@@ -2816,7 +3333,13 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                                 }
                               }
                             },
-                            child: Text('Post', style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold)),
+                            child: Text(
+                              'Post',
+                              style: GoogleFonts.inter(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                           ),
                         ],
                       ),
@@ -2913,18 +3436,23 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
   }
 
   Widget _buildEventCard(BandEvent event, String bandId) {
-    final startLocal = DateTime.tryParse(event.startDateTime)?.toLocal() ?? DateTime.now();
-    final endLocal = DateTime.tryParse(event.endDateTime)?.toLocal() ?? startLocal;
+    final startLocal =
+        DateTime.tryParse(event.startDateTime)?.toLocal() ?? DateTime.now();
+    final endLocal =
+        DateTime.tryParse(event.endDateTime)?.toLocal() ?? startLocal;
 
-    final isSameDay = startLocal.year == endLocal.year &&
+    final isSameDay =
+        startLocal.year == endLocal.year &&
         startLocal.month == endLocal.month &&
         startLocal.day == endLocal.day;
 
     final String timeOrDateRangeStr;
     if (isSameDay) {
-      timeOrDateRangeStr = '${DateFormat('EEE, MMM d').format(startLocal)} • ${DateFormat('HH:mm').format(startLocal)} - ${DateFormat('HH:mm').format(endLocal)}';
+      timeOrDateRangeStr =
+          '${DateFormat('EEE, MMM d').format(startLocal)} • ${DateFormat('HH:mm').format(startLocal)} - ${DateFormat('HH:mm').format(endLocal)}';
     } else {
-      timeOrDateRangeStr = '${DateFormat('EEE, MMM d').format(startLocal)} – ${DateFormat('EEE, MMM d').format(endLocal)}';
+      timeOrDateRangeStr =
+          '${DateFormat('EEE, MMM d').format(startLocal)} – ${DateFormat('EEE, MMM d').format(endLocal)}';
     }
 
     return GestureDetector(
@@ -2957,7 +3485,10 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                   Row(
                     children: [
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 3,
+                        ),
                         decoration: BoxDecoration(
                           color: AppTheme.primaryAccent.withOpacity(0.18),
                           borderRadius: BorderRadius.circular(6),
@@ -2985,23 +3516,37 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                   const SizedBox(height: 6),
                   Row(
                     children: [
-                      const Icon(Icons.access_time_outlined, size: 13, color: AppTheme.textSecondary),
+                      const Icon(
+                        Icons.access_time_outlined,
+                        size: 13,
+                        color: AppTheme.textSecondary,
+                      ),
                       const SizedBox(width: 6),
                       Text(
                         timeOrDateRangeStr,
-                        style: GoogleFonts.inter(fontSize: 12, color: Colors.white70),
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          color: Colors.white70,
+                        ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 4),
                   Row(
                     children: [
-                      const Icon(Icons.location_on_outlined, size: 13, color: AppTheme.textSecondary),
+                      const Icon(
+                        Icons.location_on_outlined,
+                        size: 13,
+                        color: AppTheme.textSecondary,
+                      ),
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(
                           event.location,
-                          style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            color: AppTheme.textSecondary,
+                          ),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
@@ -3021,7 +3566,11 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                 ],
               ),
             ),
-            const Icon(Icons.arrow_forward_ios_rounded, color: AppTheme.textSecondary, size: 14),
+            const Icon(
+              Icons.arrow_forward_ios_rounded,
+              color: AppTheme.textSecondary,
+              size: 14,
+            ),
           ],
         ),
       ),
@@ -3035,7 +3584,8 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
 
     final startLocal = group.overallStart;
     final endLocal = group.overallEnd;
-    final dateRangeStr = '${DateFormat('EEE, MMM d').format(startLocal)} – ${DateFormat('EEE, MMM d').format(endLocal)}';
+    final dateRangeStr =
+        '${DateFormat('EEE, MMM d').format(startLocal)} – ${DateFormat('EEE, MMM d').format(endLocal)}';
 
     return GestureDetector(
       onTap: () {
@@ -3056,7 +3606,10 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
         decoration: BoxDecoration(
           color: AppTheme.cardBackground,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.5), width: 1.5),
+          border: Border.all(
+            color: AppTheme.primaryAccent.withOpacity(0.5),
+            width: 1.5,
+          ),
         ),
         child: Row(
           children: [
@@ -3067,11 +3620,16 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                   Row(
                     children: [
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 3,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.purple.withOpacity(0.2),
                           borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: Colors.purpleAccent.withOpacity(0.4)),
+                          border: Border.all(
+                            color: Colors.purpleAccent.withOpacity(0.4),
+                          ),
                         ),
                         child: Text(
                           'Multi-Part / Tour',
@@ -3084,7 +3642,10 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                       ),
                       const SizedBox(width: 6),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 3,
+                        ),
                         decoration: BoxDecoration(
                           color: AppTheme.primaryAccent.withOpacity(0.18),
                           borderRadius: BorderRadius.circular(6),
@@ -3112,11 +3673,19 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                   const SizedBox(height: 6),
                   Row(
                     children: [
-                      const Icon(Icons.calendar_today_outlined, size: 13, color: AppTheme.textSecondary),
+                      const Icon(
+                        Icons.calendar_today_outlined,
+                        size: 13,
+                        color: AppTheme.textSecondary,
+                      ),
                       const SizedBox(width: 6),
                       Text(
                         dateRangeStr,
-                        style: GoogleFonts.inter(fontSize: 12, color: Colors.white70, fontWeight: FontWeight.w600),
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          color: Colors.white70,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ],
                   ),
@@ -3130,18 +3699,29 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: group.subEvents.map((sub) {
-                        final subStart = DateTime.tryParse(sub.startDateTime)?.toLocal() ?? DateTime.now();
-                        final subTimeStr = DateFormat('EEE, MMM d • HH:mm').format(subStart);
+                        final subStart =
+                            DateTime.tryParse(sub.startDateTime)?.toLocal() ??
+                            DateTime.now();
+                        final subTimeStr = DateFormat(
+                          'EEE, MMM d • HH:mm',
+                        ).format(subStart);
                         return Padding(
                           padding: const EdgeInsets.only(bottom: 4),
                           child: Row(
                             children: [
-                              const Icon(Icons.check_circle_outline, size: 12, color: AppTheme.primaryAccent),
+                              const Icon(
+                                Icons.check_circle_outline,
+                                size: 12,
+                                color: AppTheme.primaryAccent,
+                              ),
                               const SizedBox(width: 6),
                               Expanded(
                                 child: Text(
                                   '${sub.title} ($subTimeStr)',
-                                  style: GoogleFonts.inter(fontSize: 11, color: Colors.white70),
+                                  style: GoogleFonts.inter(
+                                    fontSize: 11,
+                                    color: Colors.white70,
+                                  ),
                                   overflow: TextOverflow.ellipsis,
                                 ),
                               ),
@@ -3165,7 +3745,11 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                 ],
               ),
             ),
-            const Icon(Icons.arrow_forward_ios_rounded, color: AppTheme.textSecondary, size: 14),
+            const Icon(
+              Icons.arrow_forward_ios_rounded,
+              color: AppTheme.textSecondary,
+              size: 14,
+            ),
           ],
         ),
       ),
@@ -3177,7 +3761,15 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
     final Map<String, List<BandEvent>> titleMap = {};
 
     String normalizeTitle(String rawTitle) {
-      final t = rawTitle.replaceAll(RegExp(r'\s*[\-\(]?\s*(Part|Date|Day)\s*\d+[\)]?', caseSensitive: false), '').trim();
+      final t = rawTitle
+          .replaceAll(
+            RegExp(
+              r'\s*[\-\(]?\s*(Part|Date|Day)\s*\d+[\)]?',
+              caseSensitive: false,
+            ),
+            '',
+          )
+          .trim();
       return t.toLowerCase();
     }
 
@@ -3228,7 +3820,11 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
       final candidateList = titleMap[norm];
 
       if (candidateList != null && candidateList.length > 1) {
-        final unProcessedGroup = candidateList.where((item) => item.id == null || !processedEventIds.contains(item.id)).toList();
+        final unProcessedGroup = candidateList
+            .where(
+              (item) => item.id == null || !processedEventIds.contains(item.id),
+            )
+            .toList();
         if (unProcessedGroup.length > 1) {
           for (var item in unProcessedGroup) {
             if (item.id != null) processedEventIds.add(item.id!);
@@ -3241,7 +3837,12 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
             final bTime = DateTime.tryParse(b.startDateTime) ?? DateTime.now();
             return aTime.compareTo(bTime);
           });
-          result.add(_EventGroup(mainEvent: unProcessedGroup.first, subEvents: unProcessedGroup));
+          result.add(
+            _EventGroup(
+              mainEvent: unProcessedGroup.first,
+              subEvents: unProcessedGroup,
+            ),
+          );
           continue;
         }
       }
@@ -3257,7 +3858,12 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
     final appState = Provider.of<AppState>(context, listen: false);
     final bandId = appState.activeBandId;
     if (bandId == null) {
-      return Center(child: Text("No active band", style: GoogleFonts.inter(color: AppTheme.textSecondary)));
+      return Center(
+        child: Text(
+          "No active band",
+          style: GoogleFonts.inter(color: AppTheme.textSecondary),
+        ),
+      );
     }
 
     final selfId = appState.currentUserId;
@@ -3266,7 +3872,10 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
       orElse: () => BandMember(role: 'Member'),
     );
     final cRole = (currentMember.role ?? '').toLowerCase();
-    final isLeaderAdminOrMod = cRole.contains('leader') || cRole.contains('admin') || cRole.contains('mod');
+    final isLeaderAdminOrMod =
+        cRole.contains('leader') ||
+        cRole.contains('admin') ||
+        cRole.contains('mod');
 
     // Separate upcoming and past events
     final now = DateTime.now();
@@ -3274,7 +3883,8 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
     final pastEvents = <BandEvent>[];
 
     for (var event in _bandEvents) {
-      final endLocal = DateTime.tryParse(event.endDateTime)?.toLocal() ?? DateTime.now();
+      final endLocal =
+          DateTime.tryParse(event.endDateTime)?.toLocal() ?? DateTime.now();
       if (endLocal.isAfter(now)) {
         upcomingEvents.add(event);
       } else {
@@ -3286,8 +3896,12 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
     final upcomingGroups = _groupEventsList(upcomingEvents);
     final pastGroups = _groupEventsList(pastEvents);
 
-    final needRsvpGroups = upcomingGroups.where((g) => g.mainEvent.requireResponse && !g.mainEvent.isLocked).toList();
-    final finalizedUpcomingGroups = upcomingGroups.where((g) => !g.mainEvent.requireResponse || g.mainEvent.isLocked).toList();
+    final needRsvpGroups = upcomingGroups
+        .where((g) => g.mainEvent.requireResponse && !g.mainEvent.isLocked)
+        .toList();
+    final finalizedUpcomingGroups = upcomingGroups
+        .where((g) => !g.mainEvent.requireResponse || g.mainEvent.isLocked)
+        .toList();
 
     return Column(
       children: [
@@ -3318,7 +3932,10 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                       SizedBox(width: 8),
                       Text(
                         "Create New Event",
-                        style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold),
+                        style: GoogleFonts.inter(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ],
                   ),
@@ -3346,7 +3963,10 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                           children: [
                             Row(
                               children: [
-                                Text("📩", style: GoogleFonts.inter(fontSize: 18)),
+                                Text(
+                                  "📩",
+                                  style: GoogleFonts.inter(fontSize: 18),
+                                ),
                                 const SizedBox(width: 8),
                                 Text(
                                   "New Events",
@@ -3380,7 +4000,10 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                           children: [
                             Row(
                               children: [
-                                Text("⏳", style: GoogleFonts.inter(fontSize: 18)),
+                                Text(
+                                  "⏳",
+                                  style: GoogleFonts.inter(fontSize: 18),
+                                ),
                                 const SizedBox(width: 8),
                                 Text(
                                   "Upcoming Events",
@@ -3403,13 +4026,17 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                           ],
                         ),
                       ),
-                      ...finalizedUpcomingGroups.map((g) => _buildGroupCard(g, bandId)),
+                      ...finalizedUpcomingGroups.map(
+                        (g) => _buildGroupCard(g, bandId),
+                      ),
                     ],
 
                     if (pastGroups.isNotEmpty) ...[
                       const SizedBox(height: 16),
                       Theme(
-                        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                        data: Theme.of(
+                          context,
+                        ).copyWith(dividerColor: Colors.transparent),
                         child: ExpansionTile(
                           tilePadding: EdgeInsets.zero,
                           title: Column(
@@ -3417,7 +4044,10 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                             children: [
                               Row(
                                 children: [
-                                  Text("🏛️", style: GoogleFonts.inter(fontSize: 16)),
+                                  Text(
+                                    "🏛️",
+                                    style: GoogleFonts.inter(fontSize: 16),
+                                  ),
                                   const SizedBox(width: 8),
                                   Text(
                                     "Past Events (${pastGroups.length})",
@@ -3441,7 +4071,9 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                           ),
                           iconColor: AppTheme.textSecondary,
                           collapsedIconColor: AppTheme.textSecondary,
-                          children: pastGroups.map((g) => _buildGroupCard(g, bandId)).toList(),
+                          children: pastGroups
+                              .map((g) => _buildGroupCard(g, bandId))
+                              .toList(),
                         ),
                       ),
                     ],
@@ -3468,7 +4100,8 @@ class _AddMemberDialogContent extends StatefulWidget {
   });
 
   @override
-  State<_AddMemberDialogContent> createState() => _AddMemberDialogContentState();
+  State<_AddMemberDialogContent> createState() =>
+      _AddMemberDialogContentState();
 }
 
 class _AddMemberDialogContentState extends State<_AddMemberDialogContent> {
@@ -3513,7 +4146,10 @@ class _AddMemberDialogContentState extends State<_AddMemberDialogContent> {
           decoration: InputDecoration(
             hintText: "Search by name...",
             prefixIcon: const Icon(Icons.search, color: AppTheme.textSecondary),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 12,
+            ),
             fillColor: const Color(0xFF141029),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
@@ -3529,109 +4165,135 @@ class _AddMemberDialogContentState extends State<_AddMemberDialogContent> {
         const SizedBox(height: 16),
         Expanded(
           child: _isAdding
-              ? const Center(child: CircularProgressIndicator(color: AppTheme.primaryAccent))
+              ? const Center(
+                  child: CircularProgressIndicator(
+                    color: AppTheme.primaryAccent,
+                  ),
+                )
               : filteredUsers.isEmpty
-                  ? Center(
-                      child: Text(
-                        _searchQuery.isEmpty ? "No other users found." : "No matching users found.",
-                        style: GoogleFonts.inter(color: AppTheme.textSecondary),
-                      ),
-                    )
-                  : ListView.builder(
-                      itemCount: filteredUsers.length,
-                      itemBuilder: (context, index) {
-                        final user = filteredUsers[index];
-                        final name = user.displayName ?? user.nickname ?? 'Unknown';
+              ? Center(
+                  child: Text(
+                    _searchQuery.isEmpty
+                        ? "No other users found."
+                        : "No matching users found.",
+                    style: GoogleFonts.inter(color: AppTheme.textSecondary),
+                  ),
+                )
+              : ListView.builder(
+                  itemCount: filteredUsers.length,
+                  itemBuilder: (context, index) {
+                    final user = filteredUsers[index];
+                    final name = user.displayName ?? user.nickname ?? 'Unknown';
 
-                        void _addMember() async {
-                          if (_isAdding) return;
-                          setState(() => _isAdding = true);
-                          try {
-                            await appState.firebaseService.addBandMemberAsync(
-                              widget.bandId,
-                              user.userId!,
-                              'Member',
-                              user.nickname ?? name,
-                            );
-                            widget.onMemberAdded();
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text("$name added to the band!"),
-                                  backgroundColor: AppTheme.success,
-                                ),
-                              );
-                              Navigator.pop(context); // Close dialog
-                            }
-                          } catch (e) {
-                            debugPrint("Error adding band member: $e");
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text("Failed to add $name: $e"),
-                                  backgroundColor: AppTheme.danger,
-                                ),
-                              );
-                            }
-                          } finally {
-                            if (mounted) {
-                              setState(() => _isAdding = false);
-                            }
-                          }
-                        }
-
-                        return GestureDetector(
-                          behavior: HitTestBehavior.opaque,
-                          onTap: _addMember,
-                          child: Container(
-                            margin: const EdgeInsets.only(bottom: 8),
-                            decoration: BoxDecoration(
-                              color: AppTheme.cardBackground,
-                              borderRadius: BorderRadius.circular(12),
+                    void _addMember() async {
+                      if (_isAdding) return;
+                      setState(() => _isAdding = true);
+                      try {
+                        await appState.firebaseService.addBandMemberAsync(
+                          widget.bandId,
+                          user.userId!,
+                          'Member',
+                          user.nickname ?? name,
+                        );
+                        widget.onMemberAdded();
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text("$name added to the band!"),
+                              backgroundColor: AppTheme.success,
                             ),
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(12),
-                              onTap: _addMember,
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                child: Row(
-                                  children: [
-                                    CircleAvatar(
-                                      radius: 16,
-                                      backgroundColor: AppTheme.primaryAccent.withOpacity(0.2),
-                                      child: Text(
-                                        name.substring(0, 1).toUpperCase(),
-                                        style: GoogleFonts.inter(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
-                                      ),
+                          );
+                          Navigator.pop(context); // Close dialog
+                        }
+                      } catch (e) {
+                        debugPrint("Error adding band member: $e");
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text("Failed to add $name: $e"),
+                              backgroundColor: AppTheme.danger,
+                            ),
+                          );
+                        }
+                      } finally {
+                        if (mounted) {
+                          setState(() => _isAdding = false);
+                        }
+                      }
+                    }
+
+                    return GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: _addMember,
+                      child: Container(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        decoration: BoxDecoration(
+                          color: AppTheme.cardBackground,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(12),
+                          onTap: _addMember,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
+                            child: Row(
+                              children: [
+                                CircleAvatar(
+                                  radius: 16,
+                                  backgroundColor: AppTheme.primaryAccent
+                                      .withOpacity(0.2),
+                                  child: Text(
+                                    name.substring(0, 1).toUpperCase(),
+                                    style: GoogleFonts.inter(
+                                      color: Colors.white,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
                                     ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            name,
-                                            style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
-                                          ),
-                                          if (user.instruments.isNotEmpty)
-                                            Text(
-                                              user.instruments.join(', '),
-                                              style: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 11),
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                        ],
-                                      ),
-                                    ),
-                                    const Icon(Icons.add_circle, color: AppTheme.primaryAccent, size: 24),
-                                  ],
+                                  ),
                                 ),
-                              ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        name,
+                                        style: GoogleFonts.inter(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                      if (user.instruments.isNotEmpty)
+                                        Text(
+                                          user.instruments.join(', '),
+                                          style: GoogleFonts.inter(
+                                            color: AppTheme.textSecondary,
+                                            fontSize: 11,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                                const Icon(
+                                  Icons.add_circle,
+                                  color: AppTheme.primaryAccent,
+                                  size: 24,
+                                ),
+                              ],
                             ),
                           ),
-                        );
-                      },
-                    ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
         ),
       ],
     );

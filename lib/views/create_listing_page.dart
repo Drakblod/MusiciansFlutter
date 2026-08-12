@@ -36,7 +36,7 @@ class _CreateListingPageState extends State<CreateListingPage> {
     'Studio & Recording',
     'Rehearsal Spaces',
     'Music Services',
-    'Other'
+    'Other',
   ];
 
   final Map<String, String> _types = {
@@ -112,16 +112,28 @@ class _CreateListingPageState extends State<CreateListingPage> {
                 ),
                 const SizedBox(height: 16),
                 ListTile(
-                  leading: const Icon(Icons.camera_alt_outlined, color: AppTheme.primaryAccent),
-                  title: Text('Take Photo', style: GoogleFonts.inter(color: Colors.white)),
+                  leading: const Icon(
+                    Icons.camera_alt_outlined,
+                    color: AppTheme.primaryAccent,
+                  ),
+                  title: Text(
+                    'Take Photo',
+                    style: GoogleFonts.inter(color: Colors.white),
+                  ),
                   onTap: () {
                     Navigator.pop(context);
                     _pickImage(ImageSource.camera);
                   },
                 ),
                 ListTile(
-                  leading: const Icon(Icons.photo_library_outlined, color: AppTheme.primaryAccent),
-                  title: Text('Choose from Gallery', style: GoogleFonts.inter(color: Colors.white)),
+                  leading: const Icon(
+                    Icons.photo_library_outlined,
+                    color: AppTheme.primaryAccent,
+                  ),
+                  title: Text(
+                    'Choose from Gallery',
+                    style: GoogleFonts.inter(color: Colors.white),
+                  ),
                   onTap: () {
                     Navigator.pop(context);
                     _pickImage(ImageSource.gallery);
@@ -158,7 +170,10 @@ class _CreateListingPageState extends State<CreateListingPage> {
       List<String> imageUrls = [];
       if (_selectedImages.isNotEmpty) {
         // Upload images first
-        imageUrls = await appState.firebaseService.uploadListingImagesAsync(listingId, _selectedImages);
+        imageUrls = await appState.firebaseService.uploadListingImagesAsync(
+          listingId,
+          _selectedImages,
+        );
       }
 
       final listing = Listing(
@@ -207,10 +222,7 @@ class _CreateListingPageState extends State<CreateListingPage> {
   @override
   Widget build(BuildContext context) {
     return GradientScaffold(
-      appBar: const CustomTopBar(
-        title: 'Post Listing',
-        showBack: true,
-      ),
+      appBar: const CustomTopBar(title: 'Post Listing', showBack: true),
       body: SafeArea(
         child: _isSubmitting
             ? Center(
@@ -221,7 +233,10 @@ class _CreateListingPageState extends State<CreateListingPage> {
                     SizedBox(height: 16),
                     Text(
                       'Creating listing and uploading images...',
-                      style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
+                      style: GoogleFonts.inter(
+                        color: Colors.white,
+                        fontSize: 14,
+                      ),
                     ),
                   ],
                 ),
@@ -307,10 +322,16 @@ class _CreateListingPageState extends State<CreateListingPage> {
                                   dropdownColor: AppTheme.cardBackground,
                                   style: GoogleFonts.inter(color: Colors.white),
                                   decoration: const InputDecoration(
-                                    contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                    contentPadding: EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                      vertical: 12,
+                                    ),
                                   ),
                                   items: _categories.map((cat) {
-                                    return DropdownMenuItem(value: cat, child: Text(cat));
+                                    return DropdownMenuItem(
+                                      value: cat,
+                                      child: Text(cat),
+                                    );
                                   }).toList(),
                                   onChanged: (value) {
                                     if (value != null) {
@@ -342,10 +363,16 @@ class _CreateListingPageState extends State<CreateListingPage> {
                                   dropdownColor: AppTheme.cardBackground,
                                   style: GoogleFonts.inter(color: Colors.white),
                                   decoration: const InputDecoration(
-                                    contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                    contentPadding: EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                      vertical: 12,
+                                    ),
                                   ),
                                   items: _types.entries.map((entry) {
-                                    return DropdownMenuItem(value: entry.key, child: Text(entry.value));
+                                    return DropdownMenuItem(
+                                      value: entry.key,
+                                      child: Text(entry.value),
+                                    );
                                   }).toList(),
                                   onChanged: (value) {
                                     if (value != null) {
@@ -379,7 +406,10 @@ class _CreateListingPageState extends State<CreateListingPage> {
                                 const SizedBox(height: 8),
                                 TextFormField(
                                   controller: _priceController,
-                                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                  keyboardType:
+                                      const TextInputType.numberWithOptions(
+                                        decimal: true,
+                                      ),
                                   style: GoogleFonts.inter(color: Colors.white),
                                   decoration: const InputDecoration(
                                     hintText: 'e.g., 4500',
@@ -449,7 +479,8 @@ class _CreateListingPageState extends State<CreateListingPage> {
                         maxLines: 5,
                         style: GoogleFonts.inter(color: Colors.white),
                         decoration: const InputDecoration(
-                          hintText: 'Provide all necessary details (condition, accessories, features, availability)...',
+                          hintText:
+                              'Provide all necessary details (condition, accessories, features, availability)...',
                         ),
                         validator: (value) {
                           if (value == null || value.trim().isEmpty) {
@@ -516,7 +547,10 @@ class _CreateListingPageState extends State<CreateListingPage> {
                   decoration: BoxDecoration(
                     color: AppTheme.cardBackground,
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFF2E2A4E), width: 1.5),
+                    border: Border.all(
+                      color: const Color(0xFF2E2A4E),
+                      width: 1.5,
+                    ),
                   ),
                   child: const Center(
                     child: Icon(
@@ -545,14 +579,8 @@ class _CreateListingPageState extends State<CreateListingPage> {
                   ),
                   clipBehavior: Clip.antiAlias,
                   child: kIsWeb
-                      ? Image.network(
-                          imageFile.path,
-                          fit: BoxFit.cover,
-                        )
-                      : Image.file(
-                          File(imageFile.path),
-                          fit: BoxFit.cover,
-                        ),
+                      ? Image.network(imageFile.path, fit: BoxFit.cover)
+                      : Image.file(File(imageFile.path), fit: BoxFit.cover),
                 ),
                 Positioned(
                   top: 4,

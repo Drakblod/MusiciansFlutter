@@ -47,30 +47,60 @@ class UserProfile {
     this.mainInstrument,
   });
 
-  factory UserProfile.fromJson(Map<dynamic, dynamic> json) {
+  factory UserProfile.fromJson(
+    Map<dynamic, dynamic> json, [
+    String? keyUserId,
+  ]) {
+    final Map<dynamic, dynamic> infoMap = (json['info'] is Map)
+        ? (json['info'] as Map)
+        : json;
+
     return UserProfile(
-      userType: json['UserType']?.toString(),
-      userId: json['UserId']?.toString(),
-      displayName: json['DisplayName']?.toString(),
-      nickname: json['Nickname']?.toString(),
-      email: json['Email']?.toString() ?? json['contact']?.toString(),
-      instruments: _toList(json['Instruments']),
-      styles: _toList(json['Styles']),
-      genres: _toList(json['Genres']),
-      level: json['Level']?.toString(),
-      location: json['Location']?.toString(),
-      about: json['About']?.toString(),
-      contact: json['Contact']?.toString(),
-      history: json['History']?.toString(),
-      projects: json['Projects']?.toString(),
-      profilePictureUrl: json['ProfilePictureUrl']?.toString(),
-      spotifyUrl: json['SpotifyUrl']?.toString(),
-      youtubeUrl: json['YoutubeUrl']?.toString(),
-      audioSnippetUrl: json['AudioSnippetUrl']?.toString(),
-      collabRoles: _toList(json['CollabRoles']),
-      collabRemote: json['CollabRemote'] == true,
-      collabBio: json['CollabBio']?.toString(),
-      mainInstrument: json['MainInstrument']?.toString(),
+      userId:
+          keyUserId ??
+          json['UserId']?.toString() ??
+          infoMap['UserId']?.toString(),
+      userType:
+          infoMap['UserType']?.toString() ??
+          json['UserType']?.toString() ??
+          infoMap['userType']?.toString() ??
+          json['userType']?.toString(),
+      nickname:
+          infoMap['Nickname']?.toString() ??
+          json['Nickname']?.toString() ??
+          infoMap['nickname']?.toString() ??
+          json['nickname']?.toString(),
+      displayName:
+          infoMap['DisplayName']?.toString() ??
+          json['DisplayName']?.toString() ??
+          infoMap['displayName']?.toString() ??
+          json['displayName']?.toString(),
+      email:
+          infoMap['Email']?.toString() ??
+          json['Email']?.toString() ??
+          infoMap['Contact']?.toString() ??
+          infoMap['contact']?.toString(),
+      instruments: _toList(infoMap['Instruments'] ?? json['Instruments']),
+      styles: _toList(infoMap['Styles'] ?? json['Styles']),
+      genres: _toList(infoMap['Genres'] ?? json['Genres']),
+      level: (infoMap['Level'] ?? json['Level'])?.toString(),
+      location: (infoMap['Location'] ?? json['Location'])?.toString(),
+      about: (infoMap['About'] ?? json['About'])?.toString(),
+      contact: (infoMap['Contact'] ?? json['Contact'])?.toString(),
+      history: (infoMap['History'] ?? json['History'])?.toString(),
+      projects: (infoMap['Projects'] ?? json['Projects'])?.toString(),
+      profilePictureUrl:
+          (infoMap['ProfilePictureUrl'] ?? json['ProfilePictureUrl'])
+              ?.toString(),
+      spotifyUrl: (infoMap['SpotifyUrl'] ?? json['SpotifyUrl'])?.toString(),
+      youtubeUrl: (infoMap['YoutubeUrl'] ?? json['YoutubeUrl'])?.toString(),
+      audioSnippetUrl: (infoMap['AudioSnippetUrl'] ?? json['AudioSnippetUrl'])
+          ?.toString(),
+      collabRoles: _toList(infoMap['CollabRoles'] ?? json['CollabRoles']),
+      collabRemote: (infoMap['CollabRemote'] ?? json['CollabRemote']) == true,
+      collabBio: (infoMap['CollabBio'] ?? json['CollabBio'])?.toString(),
+      mainInstrument: (infoMap['MainInstrument'] ?? json['MainInstrument'])
+          ?.toString(),
     );
   }
 
@@ -103,14 +133,22 @@ class UserProfile {
 
   String get instrumentsStr => instruments.join(', ');
   String get stylesStr => styles.join(', ');
-  bool get canMixMaster => styles.contains('Mixing') || styles.contains('Mastering');
+  bool get canMixMaster =>
+      styles.contains('Mixing') || styles.contains('Mastering');
 
   /// Returns top 3 main skills parsed from mainInstrument or fallback to first instrument
   List<String> get mainSkills {
     List<String> result = [];
     if (mainInstrument != null && mainInstrument!.isNotEmpty) {
-      final parsed = mainInstrument!.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
-      final valid = parsed.where((item) => instruments.contains(item)).take(3).toList();
+      final parsed = mainInstrument!
+          .split(',')
+          .map((e) => e.trim())
+          .where((e) => e.isNotEmpty)
+          .toList();
+      final valid = parsed
+          .where((item) => instruments.contains(item))
+          .take(3)
+          .toList();
       if (valid.isNotEmpty) result = valid;
     }
     if (result.isEmpty && instruments.isNotEmpty) {
@@ -120,14 +158,27 @@ class UserProfile {
       result = [userType!];
     }
     return result
-        .where((s) => s != 'Browse Musicians' && s != 'Browse Profiles' && s != 'browse_musicians')
+        .where(
+          (s) =>
+              s != 'Browse Musicians' &&
+              s != 'Browse Profiles' &&
+              s != 'browse_musicians',
+        )
         .toList();
   }
 
   /// Returns remaining selected instruments/skills excluding mainSkills
   List<String> get secondarySkills {
     final mains = mainSkills.toSet();
-    return instruments.where((item) => !mains.contains(item) && item != 'Browse Musicians' && item != 'Browse Profiles' && item != 'browse_musicians').toList();
+    return instruments
+        .where(
+          (item) =>
+              !mains.contains(item) &&
+              item != 'Browse Musicians' &&
+              item != 'Browse Profiles' &&
+              item != 'browse_musicians',
+        )
+        .toList();
   }
 
   /// Single formatted string of main skills for headers and subtitles

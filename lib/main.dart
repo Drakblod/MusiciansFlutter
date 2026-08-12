@@ -66,7 +66,8 @@ void main() async {
         options: const FirebaseOptions(
           apiKey: "AIzaSyDsIItykulJQ-Nw0lg_DCZvCUxyD_Z1HYo",
           authDomain: "musiciansapp-35f70.firebaseapp.com",
-          databaseURL: "https://musiciansapp-35f70-default-rtdb.europe-west1.firebasedatabase.app",
+          databaseURL:
+              "https://musiciansapp-35f70-default-rtdb.europe-west1.firebasedatabase.app",
           projectId: "musiciansapp-35f70",
           storageBucket: "musiciansapp-35f70.firebasestorage.app",
           messagingSenderId: "674065132924",
@@ -85,7 +86,8 @@ void main() async {
 }
 
 class MyApp extends StatelessWidget {
-  static final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+  static final GlobalKey<NavigatorState> navigatorKey =
+      GlobalKey<NavigatorState>();
 
   const MyApp({super.key});
 
@@ -109,7 +111,8 @@ class MyApp extends StatelessWidget {
           '/find-sub': (context) => const FindSubScreen(),
           '/create-band': (context) => const CreateBandScreen(),
           '/browse-musicians': (context) => const BrowseMusiciansScreen(),
-          '/favorites': (context) => const BrowseMusiciansScreen(favoritesOnly: true),
+          '/favorites': (context) =>
+              const BrowseMusiciansScreen(favoritesOnly: true),
           '/find-gigs': (context) => const FindGigsScreen(),
           '/band-room': (context) => const BandRoomChatScreen(),
           '/profile': (context) => const ProfileTabScreen(),
@@ -128,9 +131,7 @@ class MyApp extends StatelessWidget {
           if (settings.name == '/listing-details') {
             final listing = settings.arguments as Listing;
             return MaterialPageRoute(
-              builder: (context) => ListingDetailsPage(
-                listing: listing,
-              ),
+              builder: (context) => ListingDetailsPage(listing: listing),
               settings: settings,
             );
           }
@@ -138,9 +139,7 @@ class MyApp extends StatelessWidget {
           if (settings.name == '/find-collabs') {
             final role = settings.arguments as String? ?? 'songwriter';
             return MaterialPageRoute(
-              builder: (context) => FindCollabsScreen(
-                role: role,
-              ),
+              builder: (context) => FindCollabsScreen(role: role),
               settings: settings,
             );
           }
@@ -148,9 +147,7 @@ class MyApp extends StatelessWidget {
           if (settings.name == '/studio-details') {
             final studio = settings.arguments as CollabStudio;
             return MaterialPageRoute(
-              builder: (context) => StudioDetailsScreen(
-                studio: studio,
-              ),
+              builder: (context) => StudioDetailsScreen(studio: studio),
               settings: settings,
             );
           }
@@ -158,9 +155,7 @@ class MyApp extends StatelessWidget {
           if (settings.name == '/session-details') {
             final session = settings.arguments as CollabSession;
             return MaterialPageRoute(
-              builder: (context) => SessionDetailsScreen(
-                session: session,
-              ),
+              builder: (context) => SessionDetailsScreen(session: session),
               settings: settings,
             );
           }
@@ -181,9 +176,7 @@ class MyApp extends StatelessWidget {
           if (settings.name == '/calendar') {
             final bandId = settings.arguments as String?;
             return MaterialPageRoute(
-              builder: (context) => CalendarScreen(
-                bandId: bandId,
-              ),
+              builder: (context) => CalendarScreen(bandId: bandId),
               settings: settings,
             );
           }
@@ -191,9 +184,7 @@ class MyApp extends StatelessWidget {
           if (settings.name == '/profile-detail') {
             final musician = settings.arguments as UserProfile;
             return MaterialPageRoute(
-              builder: (context) => MusicianProfileScreen(
-                musician: musician,
-              ),
+              builder: (context) => MusicianProfileScreen(musician: musician),
               settings: settings,
             );
           }
@@ -201,9 +192,8 @@ class MyApp extends StatelessWidget {
           if (settings.name == '/sub-request-responses') {
             final args = settings.arguments as Map<String, dynamic>? ?? {};
             return MaterialPageRoute(
-              builder: (context) => SubRequestResponsesScreen(
-                bandId: args['bandId'] ?? '',
-              ),
+              builder: (context) =>
+                  SubRequestResponsesScreen(bandId: args['bandId'] ?? ''),
               settings: settings,
             );
           }
@@ -221,9 +211,8 @@ class MyApp extends StatelessWidget {
           if (settings.name == '/gig-details') {
             final subRequest = settings.arguments as SubRequest;
             return MaterialPageRoute(
-              builder: (context) => SubRequestDetailsScreen(
-                subRequest: subRequest,
-              ),
+              builder: (context) =>
+                  SubRequestDetailsScreen(subRequest: subRequest),
               settings: settings,
             );
           }
@@ -265,9 +254,7 @@ class AuthGate extends StatelessWidget {
             gradient: AppTheme.backgroundGradient,
           ),
           child: const Center(
-            child: CircularProgressIndicator(
-              color: AppTheme.primaryAccent,
-            ),
+            child: CircularProgressIndicator(color: AppTheme.primaryAccent),
           ),
         ),
       );
@@ -311,14 +298,15 @@ class ErrorApp extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: Colors.black45,
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.redAccent.withOpacity(0.3)),
+                      border: Border.all(
+                        color: Colors.redAccent.withOpacity(0.3),
+                      ),
                     ),
                     child: Text(
                       error,
                       style: GoogleFonts.inter(
                         color: Colors.white70,
                         fontSize: 14,
-                        
                       ),
                     ),
                   ),

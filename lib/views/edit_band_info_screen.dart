@@ -28,10 +28,10 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
 
   late String _level;
   late String _rehearsalDay;
-  
+
   late TimeOfDay _startTime;
   late TimeOfDay _endTime;
-  
+
   late List<String> _selectedStyles;
   bool _isMapDisclaimerAccepted = false;
   bool _isSaving = false;
@@ -41,7 +41,7 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
     'B = SEMI PRO',
     'C = INTERMEDIATE',
     'D = AMATEUR',
-    'E = BEGINNER'
+    'E = BEGINNER',
   ];
   final List<String> _daysOfWeek = [
     'Monday',
@@ -50,7 +50,7 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
     'Thursday',
     'Friday',
     'Saturday',
-    'Sunday'
+    'Sunday',
   ];
 
   static final Map<String, List<String>> _genreCategoryMap = {
@@ -146,9 +146,15 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
     super.initState();
     _nameController = TextEditingController(text: widget.band.name);
     _locationController = TextEditingController(text: widget.band.location);
-    _rehearsalLocationController = TextEditingController(text: widget.band.rehearsalLocation);
-    _mapViewLocationController = TextEditingController(text: widget.band.address ?? '');
-    _aboutController = TextEditingController(text: widget.band.about ?? widget.band.description);
+    _rehearsalLocationController = TextEditingController(
+      text: widget.band.rehearsalLocation,
+    );
+    _mapViewLocationController = TextEditingController(
+      text: widget.band.address ?? '',
+    );
+    _aboutController = TextEditingController(
+      text: widget.band.about ?? widget.band.description,
+    );
 
     _level = _levels.contains(widget.band.level)
         ? widget.band.level!
@@ -157,8 +163,14 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
         ? widget.band.rehearsalDayOfWeek!
         : 'Monday';
 
-    _startTime = _parseTime(widget.band.rehearsalStartTime, const TimeOfDay(hour: 18, minute: 0));
-    _endTime = _parseTime(widget.band.rehearsalEndTime, const TimeOfDay(hour: 21, minute: 0));
+    _startTime = _parseTime(
+      widget.band.rehearsalStartTime,
+      const TimeOfDay(hour: 18, minute: 0),
+    );
+    _endTime = _parseTime(
+      widget.band.rehearsalEndTime,
+      const TimeOfDay(hour: 21, minute: 0),
+    );
 
     _selectedStyles = List<String>.from(widget.band.genres);
   }
@@ -300,9 +312,7 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
   @override
   Widget build(BuildContext context) {
     return GradientScaffold(
-      appBar: const CustomTopBar(
-        showBack: true,
-      ),
+      appBar: const CustomTopBar(showBack: true),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20.0),
         physics: const BouncingScrollPhysics(),
@@ -324,15 +334,17 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
               // Band Name
               Text(
                 'Band Name',
-                style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                style: GoogleFonts.outfit(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
               ),
               const SizedBox(height: 8),
               TextFormField(
                 controller: _nameController,
                 style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
-                decoration: const InputDecoration(
-                  hintText: 'Enter band name',
-                ),
+                decoration: const InputDecoration(hintText: 'Enter band name'),
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) {
                     return 'Please enter a band name';
@@ -348,7 +360,10 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
                 decoration: BoxDecoration(
                   color: AppTheme.cardBackground,
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFF2E2A4E), width: 1.2),
+                  border: Border.all(
+                    color: const Color(0xFF2E2A4E),
+                    width: 1.2,
+                  ),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -358,7 +373,11 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
                       children: [
                         Row(
                           children: [
-                            const Icon(Icons.music_note_rounded, color: AppTheme.primaryAccent, size: 18),
+                            const Icon(
+                              Icons.music_note_rounded,
+                              color: AppTheme.primaryAccent,
+                              size: 18,
+                            ),
                             const SizedBox(width: 8),
                             Text(
                               'GENRES & BAND TYPES',
@@ -374,8 +393,14 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
                         AnimatedTapDetector(
                           onTap: _openGenrePicker,
                           child: Text(
-                            _selectedStyles.isEmpty ? '+ Add' : 'Edit (${_selectedStyles.length})',
-                            style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.primaryAccent),
+                            _selectedStyles.isEmpty
+                                ? '+ Add'
+                                : 'Edit (${_selectedStyles.length})',
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: AppTheme.primaryAccent,
+                            ),
                           ),
                         ),
                       ],
@@ -386,7 +411,11 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
                         onTap: _openGenrePicker,
                         child: Text(
                           'No genres selected yet. Tap to add...',
-                          style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textMuted, fontStyle: FontStyle.italic),
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            color: AppTheme.textMuted,
+                            fontStyle: FontStyle.italic,
+                          ),
                         ),
                       )
                     else
@@ -397,13 +426,30 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
                           return InputChip(
                             label: Text(genre),
                             selected: false,
-                            onDeleted: () => setState(() => _selectedStyles.remove(genre)),
-                            deleteIcon: const Icon(Icons.close_rounded, size: 14, color: Colors.white70),
+                            onDeleted: () =>
+                                setState(() => _selectedStyles.remove(genre)),
+                            deleteIcon: const Icon(
+                              Icons.close_rounded,
+                              size: 14,
+                              color: Colors.white70,
+                            ),
                             backgroundColor: const Color(0xFF1B1735),
-                            labelStyle: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.white),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                            side: const BorderSide(color: AppTheme.primaryAccent, width: 1),
-                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+                            labelStyle: GoogleFonts.inter(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            side: const BorderSide(
+                              color: AppTheme.primaryAccent,
+                              width: 1,
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 4,
+                              vertical: 0,
+                            ),
                             visualDensity: VisualDensity.compact,
                           );
                         }).toList(),
@@ -416,11 +462,18 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
               // Band Level
               Text(
                 'Level',
-                style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                style: GoogleFonts.outfit(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
               ),
               const SizedBox(height: 8),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: AppTheme.inputBackground,
                   borderRadius: BorderRadius.circular(12),
@@ -431,7 +484,10 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
                     value: _level,
                     dropdownColor: AppTheme.cardBackground,
                     style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
-                    icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppTheme.textSecondary),
+                    icon: const Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      color: AppTheme.textSecondary,
+                    ),
                     decoration: const InputDecoration(
                       border: InputBorder.none,
                       contentPadding: EdgeInsets.zero,
@@ -457,7 +513,11 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
               // Location (City, Country)
               Text(
                 'Location (City, Country)',
-                style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                style: GoogleFonts.outfit(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
               ),
               const SizedBox(height: 8),
               TextFormField(
@@ -478,7 +538,11 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
               // Rehearsal Location (if any)
               Text(
                 'Rehearsal Location (if any)',
-                style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                style: GoogleFonts.outfit(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
               ),
               const SizedBox(height: 8),
               TextFormField(
@@ -493,12 +557,20 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
               // Map view location (if other than Rehearsal Location)
               Text(
                 'Map view location (if other than Rehearsal Location)',
-                style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                style: GoogleFonts.outfit(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
               ),
               const SizedBox(height: 4),
               Text(
                 '(= the band’s "official" location: rehearsal space, bandleader’s address, etc)',
-                style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary, fontStyle: FontStyle.italic),
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  color: AppTheme.textSecondary,
+                  fontStyle: FontStyle.italic,
+                ),
               ),
               const SizedBox(height: 8),
               TextFormField(
@@ -516,7 +588,10 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
                 decoration: BoxDecoration(
                   color: AppTheme.cardBackground,
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: const Color(0xFF2E2A4E), width: 1.2),
+                  border: Border.all(
+                    color: const Color(0xFF2E2A4E),
+                    width: 1.2,
+                  ),
                 ),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -525,7 +600,9 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
                       value: _isMapDisclaimerAccepted,
                       activeColor: AppTheme.primaryAccent,
                       checkColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(4),
+                      ),
                       side: const BorderSide(color: Colors.white54),
                       onChanged: (val) {
                         setState(() {
@@ -538,7 +615,8 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
                       child: GestureDetector(
                         onTap: () {
                           setState(() {
-                            _isMapDisclaimerAccepted = !_isMapDisclaimerAccepted;
+                            _isMapDisclaimerAccepted =
+                                !_isMapDisclaimerAccepted;
                           });
                         },
                         child: Column(
@@ -546,12 +624,20 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
                           children: [
                             Text(
                               'Location Sharing & Media Disclaimer',
-                              style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
+                              style: GoogleFonts.outfit(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
                             ),
                             const SizedBox(height: 4),
                             Text(
                               'By checking this box, you grant permission to display your band’s location on the Map View and confirm that all necessary rights/permissions for uploaded media have been obtained.',
-                              style: GoogleFonts.inter(fontSize: 11, color: Colors.white70, height: 1.4),
+                              style: GoogleFonts.inter(
+                                fontSize: 11,
+                                color: Colors.white70,
+                                height: 1.4,
+                              ),
                             ),
                           ],
                         ),
@@ -565,11 +651,18 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
               // Rehearsal Day
               Text(
                 'Rehearsal Day',
-                style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                style: GoogleFonts.outfit(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
               ),
               const SizedBox(height: 8),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: AppTheme.inputBackground,
                   borderRadius: BorderRadius.circular(12),
@@ -580,7 +673,10 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
                     value: _rehearsalDay,
                     dropdownColor: AppTheme.cardBackground,
                     style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
-                    icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppTheme.textSecondary),
+                    icon: const Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      color: AppTheme.textSecondary,
+                    ),
                     decoration: const InputDecoration(
                       border: InputBorder.none,
                       contentPadding: EdgeInsets.zero,
@@ -612,7 +708,10 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
                       children: [
                         Text(
                           'Start Time',
-                          style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            color: AppTheme.textSecondary,
+                          ),
                         ),
                         const SizedBox(height: 8),
                         AnimatedTapDetector(
@@ -622,12 +721,18 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
                             decoration: BoxDecoration(
                               color: AppTheme.inputBackground,
                               borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
+                              border: Border.all(
+                                color: const Color(0xFF2E2A4E),
+                                width: 1,
+                              ),
                             ),
                             child: Center(
                               child: Text(
                                 _formatTime(_startTime),
-                                style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
+                                style: GoogleFonts.inter(
+                                  color: Colors.white,
+                                  fontSize: 14,
+                                ),
                               ),
                             ),
                           ),
@@ -642,7 +747,10 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
                       children: [
                         Text(
                           'End Time',
-                          style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            color: AppTheme.textSecondary,
+                          ),
                         ),
                         const SizedBox(height: 8),
                         AnimatedTapDetector(
@@ -652,12 +760,18 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
                             decoration: BoxDecoration(
                               color: AppTheme.inputBackground,
                               borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
+                              border: Border.all(
+                                color: const Color(0xFF2E2A4E),
+                                width: 1,
+                              ),
                             ),
                             child: Center(
                               child: Text(
                                 _formatTime(_endTime),
-                                style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
+                                style: GoogleFonts.inter(
+                                  color: Colors.white,
+                                  fontSize: 14,
+                                ),
                               ),
                             ),
                           ),
@@ -672,7 +786,11 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
               // About/Description
               Text(
                 'About the Band',
-                style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                style: GoogleFonts.outfit(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
               ),
               const SizedBox(height: 8),
               TextFormField(
@@ -680,14 +798,19 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
                 maxLines: 4,
                 style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
                 decoration: const InputDecoration(
-                  hintText: 'Provide details about rehearsals, gigs, level, style, etc.',
+                  hintText:
+                      'Provide details about rehearsals, gigs, level, style, etc.',
                 ),
               ),
               const SizedBox(height: 30),
 
               // Save Button
               _isSaving
-                  ? const Center(child: CircularProgressIndicator(color: AppTheme.primaryAccent))
+                  ? const Center(
+                      child: CircularProgressIndicator(
+                        color: AppTheme.primaryAccent,
+                      ),
+                    )
                   : AnimatedTapDetector(
                       onTap: _updateBand,
                       child: Container(

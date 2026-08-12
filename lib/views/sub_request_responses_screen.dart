@@ -12,13 +12,11 @@ import '../widgets/animated_tap_detector.dart';
 class SubRequestResponsesScreen extends StatefulWidget {
   final String bandId;
 
-  const SubRequestResponsesScreen({
-    super.key,
-    required this.bandId,
-  });
+  const SubRequestResponsesScreen({super.key, required this.bandId});
 
   @override
-  State<SubRequestResponsesScreen> createState() => _SubRequestResponsesScreenState();
+  State<SubRequestResponsesScreen> createState() =>
+      _SubRequestResponsesScreenState();
 }
 
 class _SubRequestResponsesScreenState extends State<SubRequestResponsesScreen>
@@ -50,8 +48,10 @@ class _SubRequestResponsesScreenState extends State<SubRequestResponsesScreen>
       if (userId == null) return;
 
       // 1. Fetch user's sub requests
-      final list = await appState.firebaseService.getUserSubRequestsAsync(userId);
-      
+      final list = await appState.firebaseService.getUserSubRequestsAsync(
+        userId,
+      );
+
       // 2. Filter requests matching the selected band
       final bandRequests = list.where((req) {
         if (req.bandName == null) return false;
@@ -61,13 +61,16 @@ class _SubRequestResponsesScreenState extends State<SubRequestResponsesScreen>
 
       // 3. Concurrently fetch responses count for each request
       final Map<String, int> counts = {};
-      await Future.wait(bandRequests.map((req) async {
-        final reqId = req.subRequestId ?? req.id;
-        if (reqId != null) {
-          final count = await appState.firebaseService.getSubRequestResponseCountAsync(reqId);
-          counts[reqId] = count;
-        }
-      }));
+      await Future.wait(
+        bandRequests.map((req) async {
+          final reqId = req.subRequestId ?? req.id;
+          if (reqId != null) {
+            final count = await appState.firebaseService
+                .getSubRequestResponseCountAsync(reqId);
+            counts[reqId] = count;
+          }
+        }),
+      );
 
       // 4. Categorize requests
       final List<SubRequest> subs = [];
@@ -114,7 +117,10 @@ class _SubRequestResponsesScreenState extends State<SubRequestResponsesScreen>
         ),
         title: Text(
           'Confirm Delete',
-          style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold),
+          style: GoogleFonts.outfit(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
         ),
         content: Text(
           'Are you sure you want to delete this request?',
@@ -129,7 +135,9 @@ class _SubRequestResponsesScreenState extends State<SubRequestResponsesScreen>
             onPressed: () => Navigator.pop(context, true),
             style: ElevatedButton.styleFrom(
               backgroundColor: AppTheme.danger,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
             ),
             child: Text('Yes', style: GoogleFonts.inter(color: Colors.white)),
           ),
@@ -144,9 +152,12 @@ class _SubRequestResponsesScreenState extends State<SubRequestResponsesScreen>
       final appState = Provider.of<AppState>(context, listen: false);
       final userId = appState.currentUserId;
       final requestId = request.subRequestId ?? request.id;
-      
+
       if (userId != null && requestId != null) {
-        final success = await appState.firebaseService.deleteSubRequestAsync(userId, requestId);
+        final success = await appState.firebaseService.deleteSubRequestAsync(
+          userId,
+          requestId,
+        );
         if (success) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -182,10 +193,7 @@ class _SubRequestResponsesScreenState extends State<SubRequestResponsesScreen>
   @override
   Widget build(BuildContext context) {
     return GradientScaffold(
-      appBar: const CustomTopBar(
-        title: 'Active Requests',
-        showBack: true,
-      ),
+      appBar: const CustomTopBar(title: 'Active Requests', showBack: true),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -205,7 +213,10 @@ class _SubRequestResponsesScreenState extends State<SubRequestResponsesScreen>
                       ),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.refresh_rounded, color: Colors.white),
+                      icon: const Icon(
+                        Icons.refresh_rounded,
+                        color: Colors.white,
+                      ),
                       onPressed: _loadRequests,
                     ),
                   ],
@@ -216,7 +227,10 @@ class _SubRequestResponsesScreenState extends State<SubRequestResponsesScreen>
                 indicatorColor: AppTheme.primaryAccent,
                 labelColor: Colors.white,
                 unselectedLabelColor: AppTheme.textSecondary,
-                labelStyle: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 14),
+                labelStyle: GoogleFonts.inter(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                ),
                 tabs: const [
                   Tab(text: 'Substitutes'),
                   Tab(text: 'Members'),
@@ -225,7 +239,11 @@ class _SubRequestResponsesScreenState extends State<SubRequestResponsesScreen>
               const SizedBox(height: 16),
               Expanded(
                 child: _isLoading
-                    ? const Center(child: CircularProgressIndicator(color: AppTheme.primaryAccent))
+                    ? const Center(
+                        child: CircularProgressIndicator(
+                          color: AppTheme.primaryAccent,
+                        ),
+                      )
                     : TabBarView(
                         controller: _tabController,
                         children: [
@@ -256,7 +274,9 @@ class _SubRequestResponsesScreenState extends State<SubRequestResponsesScreen>
       onRefresh: _loadRequests,
       child: ListView.builder(
         itemCount: list.length,
-        physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+        physics: const AlwaysScrollableScrollPhysics(
+          parent: BouncingScrollPhysics(),
+        ),
         itemBuilder: (context, index) {
           final req = list[index];
           final reqId = req.subRequestId ?? req.id ?? '';
@@ -276,7 +296,10 @@ class _SubRequestResponsesScreenState extends State<SubRequestResponsesScreen>
               children: [
                 // Date badge
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 8,
+                  ),
                   decoration: BoxDecoration(
                     color: AppTheme.primaryAccent.withOpacity(0.12),
                     borderRadius: BorderRadius.circular(10),
@@ -352,10 +375,14 @@ class _SubRequestResponsesScreenState extends State<SubRequestResponsesScreen>
                                   context,
                                   '/sub-request-response-details',
                                   arguments: {'subRequest': req},
-                                ).then((_) => _loadRequests()); // reload when returning
+                                ).then(
+                                  (_) => _loadRequests(),
+                                ); // reload when returning
                               },
                               child: Container(
-                                padding: const EdgeInsets.symmetric(vertical: 10),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 10,
+                                ),
                                 decoration: BoxDecoration(
                                   gradient: AppTheme.primaryGradient,
                                   borderRadius: BorderRadius.circular(10),
@@ -377,11 +404,16 @@ class _SubRequestResponsesScreenState extends State<SubRequestResponsesScreen>
                           AnimatedTapDetector(
                             onTap: () => _deleteRequest(req),
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 10,
+                              ),
                               decoration: BoxDecoration(
                                 color: AppTheme.danger.withOpacity(0.1),
                                 borderRadius: BorderRadius.circular(10),
-                                border: Border.all(color: AppTheme.danger.withOpacity(0.3)),
+                                border: Border.all(
+                                  color: AppTheme.danger.withOpacity(0.3),
+                                ),
                               ),
                               child: Center(
                                 child: Text(

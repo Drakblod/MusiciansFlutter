@@ -152,9 +152,6 @@ class BandMember {
   }
 
   Map<String, dynamic> toJson() {
-    return {
-      'Nickname': nickname,
-      'Role': role,
-    };
+    return {'Nickname': nickname, 'Role': role};
   }
 }

@@ -12,10 +12,7 @@ import '../widgets/animated_tap_detector.dart';
 class CalendarScreen extends StatefulWidget {
   final String? bandId;
 
-  const CalendarScreen({
-    super.key,
-    this.bandId,
-  });
+  const CalendarScreen({super.key, this.bandId});
 
   @override
   State<CalendarScreen> createState() => _CalendarScreenState();
@@ -39,7 +36,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
       _resolvedBandId = widget.bandId ?? appState.activeBandId;
 
       if (_resolvedBandId != null) {
-        final list = await appState.firebaseService.getBandEventsAsync(_resolvedBandId!);
+        final list = await appState.firebaseService.getBandEventsAsync(
+          _resolvedBandId!,
+        );
         if (mounted) {
           setState(() {
             _events = list;
@@ -84,10 +83,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
     final hasBand = _resolvedBandId != null || appState.activeBandId != null;
 
     return GradientScaffold(
-      appBar: const CustomTopBar(
-        title: 'Band Calendar',
-        showBack: true,
-      ),
+      appBar: const CustomTopBar(title: 'Band Calendar', showBack: true),
       body: !hasBand
           ? Center(
               child: Padding(
@@ -95,16 +91,27 @@ class _CalendarScreenState extends State<CalendarScreen> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(Icons.calendar_month_outlined, size: 64, color: AppTheme.textSecondary),
+                    const Icon(
+                      Icons.calendar_month_outlined,
+                      size: 64,
+                      color: AppTheme.textSecondary,
+                    ),
                     const SizedBox(height: 16),
                     Text(
                       'No Active Band Room',
-                      style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
+                      style: GoogleFonts.outfit(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
                     ),
                     const SizedBox(height: 8),
                     Text(
                       'Please enter a Band Room first to access the calendar features.',
-                      style: GoogleFonts.inter(fontSize: 14, color: AppTheme.textSecondary),
+                      style: GoogleFonts.inter(
+                        fontSize: 14,
+                        color: AppTheme.textSecondary,
+                      ),
                       textAlign: TextAlign.center,
                     ),
                   ],
@@ -112,194 +119,228 @@ class _CalendarScreenState extends State<CalendarScreen> {
               ),
             )
           : _isLoading
-              ? const Center(child: CircularProgressIndicator(color: AppTheme.primaryAccent))
-              : Column(
-                  children: [
-                    // Header / Controls Row
-                    Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            'Band Schedule',
-                            style: GoogleFonts.outfit(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
+          ? const Center(
+              child: CircularProgressIndicator(color: AppTheme.primaryAccent),
+            )
+          : Column(
+              children: [
+                // Header / Controls Row
+                Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Band Schedule',
+                        style: GoogleFonts.outfit(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                      AnimatedTapDetector(
+                        onTap: _showAddEventBottomSheet,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 8,
                           ),
-                          AnimatedTapDetector(
-                            onTap: _showAddEventBottomSheet,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                          decoration: BoxDecoration(
+                            gradient: AppTheme.primaryGradient,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.add,
+                                color: Colors.white,
+                                size: 16,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Add Event',
+                                style: GoogleFonts.inter(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Events List
+                Expanded(
+                  child: _events.isEmpty
+                      ? Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.event_busy_outlined,
+                                size: 48,
+                                color: AppTheme.textSecondary.withOpacity(0.5),
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                'No events scheduled yet.',
+                                style: GoogleFonts.inter(
+                                  color: AppTheme.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      : ListView.builder(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          physics: const BouncingScrollPhysics(),
+                          itemCount: _events.length,
+                          itemBuilder: (context, index) {
+                            final event = _events[index];
+                            final date = event.date ?? DateTime.now();
+
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 12),
+                              padding: const EdgeInsets.all(16),
                               decoration: BoxDecoration(
-                                gradient: AppTheme.primaryGradient,
-                                borderRadius: BorderRadius.circular(10),
+                                color: AppTheme.cardBackground,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: const Color(0xFF231F45),
+                                  width: 1,
+                                ),
                               ),
                               child: Row(
                                 children: [
-                                  const Icon(Icons.add, color: Colors.white, size: 16),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    'Add Event',
-                                    style: GoogleFonts.inter(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.white,
+                                  // Date Badge
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 8,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: AppTheme.primaryAccent.withOpacity(
+                                        0.15,
+                                      ),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Column(
+                                      children: [
+                                        Text(
+                                          DateFormat(
+                                            'MMM',
+                                          ).format(date).toUpperCase(),
+                                          style: GoogleFonts.inter(
+                                            fontSize: 10,
+                                            color: AppTheme.primaryAccent,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                        Text(
+                                          DateFormat('dd').format(date),
+                                          style: GoogleFonts.outfit(
+                                            fontSize: 20,
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 16),
+
+                                  // Details
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          event.title ?? 'Band Session',
+                                          style: GoogleFonts.outfit(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Row(
+                                          children: [
+                                            const Icon(
+                                              Icons.location_on_outlined,
+                                              color: AppTheme.textSecondary,
+                                              size: 14,
+                                            ),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              event.location ?? 'TBD',
+                                              style: GoogleFonts.inter(
+                                                fontSize: 12,
+                                                color: AppTheme.textSecondary,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Row(
+                                          children: [
+                                            const Icon(
+                                              Icons.access_time_outlined,
+                                              color: AppTheme.textMuted,
+                                              size: 14,
+                                            ),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              '${event.startTime ?? "18:00"} - ${event.endTime ?? "21:00"}',
+                                              style: GoogleFonts.inter(
+                                                fontSize: 11,
+                                                color: AppTheme.textMuted,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+
+                                  // Event Type Chip Tag
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 4,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF1E1A3A),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text(
+                                      event.type == CalendarEventType.rehearsal
+                                          ? 'REHEARSAL'
+                                          : event.type ==
+                                                CalendarEventType.concert
+                                          ? 'GIG'
+                                          : event.type == CalendarEventType.tour
+                                          ? 'TOUR'
+                                          : 'OTHER',
+                                      style: GoogleFonts.inter(
+                                        fontSize: 10,
+                                        color: AppTheme.secondaryAccent,
+                                        fontWeight: FontWeight.bold,
+                                      ),
                                     ),
                                   ),
                                 ],
                               ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    // Events List
-                    Expanded(
-                      child: _events.isEmpty
-                          ? Center(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                    Icons.event_busy_outlined,
-                                    size: 48,
-                                    color: AppTheme.textSecondary.withOpacity(0.5),
-                                  ),
-                                  const SizedBox(height: 12),
-                                  Text(
-                                    'No events scheduled yet.',
-                                    style: GoogleFonts.inter(color: AppTheme.textSecondary),
-                                  ),
-                                ],
-                              ),
-                            )
-                          : ListView.builder(
-                              padding: const EdgeInsets.symmetric(horizontal: 16),
-                              physics: const BouncingScrollPhysics(),
-                              itemCount: _events.length,
-                              itemBuilder: (context, index) {
-                                final event = _events[index];
-                                final date = event.date ?? DateTime.now();
-
-                                return Container(
-                                  margin: const EdgeInsets.only(bottom: 12),
-                                  padding: const EdgeInsets.all(16),
-                                  decoration: BoxDecoration(
-                                    color: AppTheme.cardBackground,
-                                    borderRadius: BorderRadius.circular(16),
-                                    border: Border.all(color: const Color(0xFF231F45), width: 1),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      // Date Badge
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                        decoration: BoxDecoration(
-                                          color: AppTheme.primaryAccent.withOpacity(0.15),
-                                          borderRadius: BorderRadius.circular(10),
-                                        ),
-                                        child: Column(
-                                          children: [
-                                            Text(
-                                              DateFormat('MMM').format(date).toUpperCase(),
-                                              style: GoogleFonts.inter(
-                                                fontSize: 10,
-                                                color: AppTheme.primaryAccent,
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            ),
-                                            Text(
-                                              DateFormat('dd').format(date),
-                                              style: GoogleFonts.outfit(
-                                                fontSize: 20,
-                                                color: Colors.white,
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      const SizedBox(width: 16),
-
-                                      // Details
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              event.title ?? 'Band Session',
-                                              style: GoogleFonts.outfit(
-                                                fontSize: 16,
-                                                fontWeight: FontWeight.bold,
-                                                color: Colors.white,
-                                              ),
-                                            ),
-                                            const SizedBox(height: 4),
-                                            Row(
-                                              children: [
-                                                const Icon(Icons.location_on_outlined, color: AppTheme.textSecondary, size: 14),
-                                                const SizedBox(width: 4),
-                                                Text(
-                                                  event.location ?? 'TBD',
-                                                  style: GoogleFonts.inter(
-                                                    fontSize: 12,
-                                                    color: AppTheme.textSecondary,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                            const SizedBox(height: 2),
-                                            Row(
-                                              children: [
-                                                const Icon(Icons.access_time_outlined, color: AppTheme.textMuted, size: 14),
-                                                const SizedBox(width: 4),
-                                                Text(
-                                                  '${event.startTime ?? "18:00"} - ${event.endTime ?? "21:00"}',
-                                                  style: GoogleFonts.inter(
-                                                    fontSize: 11,
-                                                    color: AppTheme.textMuted,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-
-                                      // Event Type Chip Tag
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFF1E1A3A),
-                                          borderRadius: BorderRadius.circular(8),
-                                        ),
-                                        child: Text(
-                                          event.type == CalendarEventType.rehearsal
-                                              ? 'REHEARSAL'
-                                              : event.type == CalendarEventType.concert
-                                                  ? 'GIG'
-                                                  : event.type == CalendarEventType.tour
-                                                      ? 'TOUR'
-                                                      : 'OTHER',
-                                          style: GoogleFonts.inter(
-                                            fontSize: 10,
-                                            color: AppTheme.secondaryAccent,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              },
-                            ),
-                    ),
-                  ],
+                            );
+                          },
+                        ),
                 ),
+              ],
+            ),
     );
   }
 }
@@ -308,10 +349,7 @@ class _AddEventForm extends StatefulWidget {
   final String bandId;
   final VoidCallback onEventAdded;
 
-  const _AddEventForm({
-    required this.bandId,
-    required this.onEventAdded,
-  });
+  const _AddEventForm({required this.bandId, required this.onEventAdded});
 
   @override
   State<_AddEventForm> createState() => _AddEventFormState();
@@ -420,8 +458,10 @@ class _AddEventFormState extends State<_AddEventForm> {
         creatorName: userProfile?.displayName ?? 'Alex',
         isFinalized: true,
         date: _selectedDate,
-        startTime: '${_startTime.hour.toString().padLeft(2, '0')}:${_startTime.minute.toString().padLeft(2, '0')}',
-        endTime: '${_endTime.hour.toString().padLeft(2, '0')}:${_endTime.minute.toString().padLeft(2, '0')}',
+        startTime:
+            '${_startTime.hour.toString().padLeft(2, '0')}:${_startTime.minute.toString().padLeft(2, '0')}',
+        endTime:
+            '${_endTime.hour.toString().padLeft(2, '0')}:${_endTime.minute.toString().padLeft(2, '0')}',
       );
 
       await appState.firebaseService.addBandEventAsync(event);
@@ -463,7 +503,11 @@ class _AddEventFormState extends State<_AddEventForm> {
             children: [
               Text(
                 'Schedule Band Event',
-                style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
+                style: GoogleFonts.outfit(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
               ),
               const SizedBox(height: 16),
 
@@ -503,7 +547,10 @@ class _AddEventFormState extends State<_AddEventForm> {
 
               // Event Type Dropdown
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: AppTheme.inputBackground,
                   borderRadius: BorderRadius.circular(12),
@@ -522,7 +569,10 @@ class _AddEventFormState extends State<_AddEventForm> {
                     ),
                     dropdownColor: AppTheme.cardBackground,
                     style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
-                    icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppTheme.textSecondary),
+                    icon: const Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      color: AppTheme.textSecondary,
+                    ),
                     items: _types.map((String value) {
                       return DropdownMenuItem<String>(
                         value: value,
@@ -545,20 +595,33 @@ class _AddEventFormState extends State<_AddEventForm> {
               AnimatedTapDetector(
                 onTap: _pickDate,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 14,
+                  ),
                   decoration: BoxDecoration(
                     color: AppTheme.inputBackground,
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
+                    border: Border.all(
+                      color: const Color(0xFF2E2A4E),
+                      width: 1,
+                    ),
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
                         DateFormat('dd MMMM yyyy').format(_selectedDate),
-                        style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
+                        style: GoogleFonts.inter(
+                          color: Colors.white,
+                          fontSize: 14,
+                        ),
                       ),
-                      const Icon(Icons.calendar_month_outlined, color: AppTheme.textSecondary, size: 20),
+                      const Icon(
+                        Icons.calendar_month_outlined,
+                        color: AppTheme.textSecondary,
+                        size: 20,
+                      ),
                     ],
                   ),
                 ),
@@ -574,7 +637,10 @@ class _AddEventFormState extends State<_AddEventForm> {
                       children: [
                         Text(
                           'Start Time',
-                          style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            color: AppTheme.textSecondary,
+                          ),
                         ),
                         const SizedBox(height: 8),
                         AnimatedTapDetector(
@@ -584,12 +650,18 @@ class _AddEventFormState extends State<_AddEventForm> {
                             decoration: BoxDecoration(
                               color: AppTheme.inputBackground,
                               borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
+                              border: Border.all(
+                                color: const Color(0xFF2E2A4E),
+                                width: 1,
+                              ),
                             ),
                             child: Center(
                               child: Text(
                                 formatTime(_startTime),
-                                style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
+                                style: GoogleFonts.inter(
+                                  color: Colors.white,
+                                  fontSize: 14,
+                                ),
                               ),
                             ),
                           ),
@@ -604,7 +676,10 @@ class _AddEventFormState extends State<_AddEventForm> {
                       children: [
                         Text(
                           'End Time',
-                          style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            color: AppTheme.textSecondary,
+                          ),
                         ),
                         const SizedBox(height: 8),
                         AnimatedTapDetector(
@@ -614,12 +689,18 @@ class _AddEventFormState extends State<_AddEventForm> {
                             decoration: BoxDecoration(
                               color: AppTheme.inputBackground,
                               borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
+                              border: Border.all(
+                                color: const Color(0xFF2E2A4E),
+                                width: 1,
+                              ),
                             ),
                             child: Center(
                               child: Text(
                                 formatTime(_endTime),
-                                style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
+                                style: GoogleFonts.inter(
+                                  color: Colors.white,
+                                  fontSize: 14,
+                                ),
                               ),
                             ),
                           ),
@@ -633,7 +714,11 @@ class _AddEventFormState extends State<_AddEventForm> {
 
               // Save Button
               _isSaving
-                  ? const Center(child: CircularProgressIndicator(color: AppTheme.primaryAccent))
+                  ? const Center(
+                      child: CircularProgressIndicator(
+                        color: AppTheme.primaryAccent,
+                      ),
+                    )
                   : AnimatedTapDetector(
                       onTap: _saveEvent,
                       child: Container(

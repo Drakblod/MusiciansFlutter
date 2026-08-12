@@ -53,8 +53,12 @@ class Listing {
       city: (json['city'] ?? json['City'])?.toString(),
       imageUrls: urls,
       status: (json['status'] ?? json['Status'])?.toString() ?? 'active',
-      createdAt: json['createdAt'] is int ? json['createdAt'] as int : (json['CreatedAt'] is int ? json['CreatedAt'] as int : 0),
-      updatedAt: json['updatedAt'] is int ? json['updatedAt'] as int : (json['UpdatedAt'] is int ? json['UpdatedAt'] as int : 0),
+      createdAt: json['createdAt'] is int
+          ? json['createdAt'] as int
+          : (json['CreatedAt'] is int ? json['CreatedAt'] as int : 0),
+      updatedAt: json['updatedAt'] is int
+          ? json['updatedAt'] as int
+          : (json['UpdatedAt'] is int ? json['UpdatedAt'] as int : 0),
     );
   }
 

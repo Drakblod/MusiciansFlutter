@@ -58,25 +58,15 @@ class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
                     child: _buildProfileOrBack(context, appState, canPop),
                   ),
                   // Column 1: Favorites Icon
-                  Expanded(
-                    child: _buildFavorites(context, appState),
-                  ),
+                  Expanded(child: _buildFavorites(context, appState)),
                   if (FeatureToggles.showMapInTopBar)
-                    Expanded(
-                      child: _buildMapIcon(context, appState),
-                    ),
+                    Expanded(child: _buildMapIcon(context, appState)),
                   // Column 2: Home Logo
-                  Expanded(
-                    child: _buildHomeLogo(context, appState),
-                  ),
+                  Expanded(child: _buildHomeLogo(context, appState)),
                   // Column 3: Inbox / Direct Messages
-                  Expanded(
-                    child: _buildInbox(context, appState),
-                  ),
+                  Expanded(child: _buildInbox(context, appState)),
                   // Column 4: Settings Menu
-                  Expanded(
-                    child: _buildSettings(context, appState),
-                  ),
+                  Expanded(child: _buildSettings(context, appState)),
                 ],
               ),
             ),
@@ -92,16 +82,16 @@ class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
         Navigator.pushNamed(context, '/gig-map');
       },
       child: const Center(
-        child: Icon(
-          Icons.map_outlined,
-          color: Colors.white,
-          size: 22,
-        ),
+        child: Icon(Icons.map_outlined, color: Colors.white, size: 22),
       ),
     );
   }
 
-  Widget _buildProfileOrBack(BuildContext context, AppState appState, bool canPop) {
+  Widget _buildProfileOrBack(
+    BuildContext context,
+    AppState appState,
+    bool canPop,
+  ) {
     final userProfile = appState.currentUserProfile;
 
     if (showBack || canPop) {
@@ -124,14 +114,17 @@ class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
           child: CircleAvatar(
             radius: 16,
             backgroundColor: AppTheme.primaryAccent.withOpacity(0.2),
-            backgroundImage: userProfile?.profilePictureUrl != null &&
+            backgroundImage:
+                userProfile?.profilePictureUrl != null &&
                     userProfile!.profilePictureUrl!.isNotEmpty
                 ? NetworkImage(userProfile.profilePictureUrl!)
                 : null,
-            child: userProfile?.profilePictureUrl == null ||
+            child:
+                userProfile?.profilePictureUrl == null ||
                     userProfile!.profilePictureUrl!.isEmpty
                 ? Text(
-                    (userProfile?.displayName != null && userProfile!.displayName!.isNotEmpty)
+                    (userProfile?.displayName != null &&
+                            userProfile!.displayName!.isNotEmpty)
                         ? userProfile.displayName!.substring(0, 1).toUpperCase()
                         : 'U',
                     style: GoogleFonts.inter(
@@ -153,11 +146,7 @@ class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
         Navigator.pushNamed(context, '/favorites');
       },
       child: const Center(
-        child: Icon(
-          Icons.star_border_rounded,
-          color: Colors.white,
-          size: 24,
-        ),
+        child: Icon(Icons.star_border_rounded, color: Colors.white, size: 24),
       ),
     );
   }
@@ -225,11 +214,7 @@ class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
     return AnimatedTapDetector(
       onTap: () => _showSettingsMenu(context, appState),
       child: const Center(
-        child: Icon(
-          Icons.settings_outlined,
-          color: Colors.white,
-          size: 24,
-        ),
+        child: Icon(Icons.settings_outlined, color: Colors.white, size: 24),
       ),
     );
   }
@@ -339,12 +324,18 @@ class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
           builder: (context, setState) {
             return Dialog(
               backgroundColor: Colors.transparent,
-              insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+              insetPadding: const EdgeInsets.symmetric(
+                horizontal: 24,
+                vertical: 24,
+              ),
               child: Container(
                 decoration: BoxDecoration(
                   color: const Color(0xFF0F0C20).withOpacity(0.98),
                   borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: const Color(0xFF2E2A4E), width: 1.5),
+                  border: Border.all(
+                    color: const Color(0xFF2E2A4E),
+                    width: 1.5,
+                  ),
                   boxShadow: [
                     BoxShadow(
                       color: Colors.black.withOpacity(0.6),
@@ -399,8 +390,12 @@ class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
                                   name,
                                   style: GoogleFonts.inter(
                                     fontSize: 14,
-                                    fontWeight: isChecked ? FontWeight.bold : FontWeight.normal,
-                                    color: isChecked ? Colors.white : Colors.white70,
+                                    fontWeight: isChecked
+                                        ? FontWeight.bold
+                                        : FontWeight.normal,
+                                    color: isChecked
+                                        ? Colors.white
+                                        : Colors.white70,
                                   ),
                                 ),
                                 value: isChecked,
@@ -410,9 +405,13 @@ class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
                                       if (tempSelected.length < 3) {
                                         tempSelected.add(id);
                                       } else {
-                                        ScaffoldMessenger.of(context).showSnackBar(
+                                        ScaffoldMessenger.of(
+                                          context,
+                                        ).showSnackBar(
                                           const SnackBar(
-                                            content: Text('You can select exactly 3 bubbles.'),
+                                            content: Text(
+                                              'You can select exactly 3 bubbles.',
+                                            ),
                                             duration: Duration(seconds: 1),
                                             backgroundColor: AppTheme.warning,
                                           ),
@@ -436,7 +435,10 @@ class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
                           child: TextButton(
                             child: Text(
                               'Cancel',
-                              style: GoogleFonts.inter(color: AppTheme.textSecondary, fontWeight: FontWeight.w600),
+                              style: GoogleFonts.inter(
+                                color: AppTheme.textSecondary,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                             onPressed: () => Navigator.pop(context),
                           ),
@@ -450,16 +452,23 @@ class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               padding: const EdgeInsets.symmetric(vertical: 12),
-                              disabledBackgroundColor: AppTheme.primaryAccent.withOpacity(0.3),
+                              disabledBackgroundColor: AppTheme.primaryAccent
+                                  .withOpacity(0.3),
                             ),
                             onPressed: tempSelected.length == 3
                                 ? () async {
-                                    await appState.updateSelectedBubbles(tempSelected);
+                                    await appState.updateSelectedBubbles(
+                                      tempSelected,
+                                    );
                                     if (context.mounted) {
                                       Navigator.pop(context);
-                                      ScaffoldMessenger.of(context).showSnackBar(
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
                                         const SnackBar(
-                                          content: Text('Home bubbles updated successfully!'),
+                                          content: Text(
+                                            'Home bubbles updated successfully!',
+                                          ),
                                           backgroundColor: AppTheme.success,
                                         ),
                                       );
@@ -469,7 +478,9 @@ class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
                             child: Text(
                               'Save (${tempSelected.length}/3)',
                               style: GoogleFonts.inter(
-                                color: tempSelected.length == 3 ? Colors.white : Colors.white54,
+                                color: tempSelected.length == 3
+                                    ? Colors.white
+                                    : Colors.white54,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
@@ -517,7 +528,11 @@ class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
               ),
             ),
             const Spacer(),
-            const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white24, size: 14),
+            const Icon(
+              Icons.arrow_forward_ios_rounded,
+              color: Colors.white24,
+              size: 14,
+            ),
           ],
         ),
       ),
@@ -540,7 +555,11 @@ class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.logout_rounded, color: Colors.redAccent, size: 48),
+                const Icon(
+                  Icons.logout_rounded,
+                  color: Colors.redAccent,
+                  size: 48,
+                ),
                 const SizedBox(height: 16),
                 Text(
                   'Logout',
@@ -574,7 +593,10 @@ class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
                         onPressed: () => Navigator.pop(context),
                         child: Text(
                           'No',
-                          style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w600),
+                          style: GoogleFonts.inter(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
                     ),
@@ -592,12 +614,19 @@ class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
                           Navigator.pop(context); // Close confirmation dialog
                           await appState.logout();
                           if (context.mounted) {
-                            Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+                            Navigator.pushNamedAndRemoveUntil(
+                              context,
+                              '/login',
+                              (route) => false,
+                            );
                           }
                         },
                         child: Text(
                           'Yes',
-                          style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w600),
+                          style: GoogleFonts.inter(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
                     ),

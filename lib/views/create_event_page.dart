@@ -85,10 +85,16 @@ class _CreateEventPageState extends State<CreateEventPage> {
       _eventType = first.eventType;
       _requireResponse = first.requireResponse;
 
-      final startLocal = DateTime.tryParse(first.startDateTime)?.toLocal() ?? DateTime.now();
-      final endLocal = DateTime.tryParse(first.endDateTime)?.toLocal() ?? startLocal;
+      final startLocal =
+          DateTime.tryParse(first.startDateTime)?.toLocal() ?? DateTime.now();
+      final endLocal =
+          DateTime.tryParse(first.endDateTime)?.toLocal() ?? startLocal;
 
-      _selectedDate = DateTime(startLocal.year, startLocal.month, startLocal.day);
+      _selectedDate = DateTime(
+        startLocal.year,
+        startLocal.month,
+        startLocal.day,
+      );
       _startTime = TimeOfDay(hour: startLocal.hour, minute: startLocal.minute);
       _endTime = TimeOfDay(hour: endLocal.hour, minute: endLocal.minute);
 
@@ -96,17 +102,24 @@ class _CreateEventPageState extends State<CreateEventPage> {
         _isMultipleEvents = true;
         for (int i = 1; i < group.length; i++) {
           final sub = group[i];
-          final subStart = DateTime.tryParse(sub.startDateTime)?.toLocal() ?? DateTime.now();
-          final subEnd = DateTime.tryParse(sub.endDateTime)?.toLocal() ?? subStart;
-          _additionalEvents.add(_EventDraft(
-            title: sub.title,
-            eventType: sub.eventType,
-            date: DateTime(subStart.year, subStart.month, subStart.day),
-            startTime: TimeOfDay(hour: subStart.hour, minute: subStart.minute),
-            endTime: TimeOfDay(hour: subEnd.hour, minute: subEnd.minute),
-            location: sub.location,
-            description: sub.description,
-          ));
+          final subStart =
+              DateTime.tryParse(sub.startDateTime)?.toLocal() ?? DateTime.now();
+          final subEnd =
+              DateTime.tryParse(sub.endDateTime)?.toLocal() ?? subStart;
+          _additionalEvents.add(
+            _EventDraft(
+              title: sub.title,
+              eventType: sub.eventType,
+              date: DateTime(subStart.year, subStart.month, subStart.day),
+              startTime: TimeOfDay(
+                hour: subStart.hour,
+                minute: subStart.minute,
+              ),
+              endTime: TimeOfDay(hour: subEnd.hour, minute: subEnd.minute),
+              location: sub.location,
+              description: sub.description,
+            ),
+          );
         }
       }
     }
@@ -131,13 +144,20 @@ class _CreateEventPageState extends State<CreateEventPage> {
       return;
     }
     try {
-      final role = await appState.firebaseService.getUserBandRoleAsync(widget.bandId, userId);
+      final role = await appState.firebaseService.getUserBandRoleAsync(
+        widget.bandId,
+        userId,
+      );
       final r = (role ?? '').toLowerCase();
       if (mounted) {
-        if (!r.contains('leader') && !r.contains('admin') && !r.contains('mod')) {
+        if (!r.contains('leader') &&
+            !r.contains('admin') &&
+            !r.contains('mod')) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Access Denied: Only band Leaders, Admins, and MODs can create events.'),
+              content: Text(
+                'Access Denied: Only band Leaders, Admins, and MODs can create events.',
+              ),
               backgroundColor: AppTheme.danger,
             ),
           );
@@ -264,7 +284,11 @@ class _CreateEventPageState extends State<CreateEventPage> {
     }
 
     final draftTitleController = TextEditingController(
-      text: isEditing ? draftToEdit!.title : (_titleController.text.trim().isNotEmpty ? _titleController.text.trim() : 'New Event'),
+      text: isEditing
+          ? draftToEdit!.title
+          : (_titleController.text.trim().isNotEmpty
+                ? _titleController.text.trim()
+                : 'New Event'),
     );
     final draftLocationController = TextEditingController(
       text: isEditing ? draftToEdit!.location : _locationController.text.trim(),
@@ -311,7 +335,10 @@ class _CreateEventPageState extends State<CreateEventPage> {
                           ),
                         ),
                         IconButton(
-                          icon: const Icon(Icons.close, color: AppTheme.textSecondary),
+                          icon: const Icon(
+                            Icons.close,
+                            color: AppTheme.textSecondary,
+                          ),
                           onPressed: () => Navigator.pop(ctx),
                         ),
                       ],
@@ -323,8 +350,17 @@ class _CreateEventPageState extends State<CreateEventPage> {
                       value: draftType,
                       dropdownColor: const Color(0xFF16132D),
                       style: GoogleFonts.inter(color: Colors.white),
-                      decoration: const InputDecoration(labelText: 'Event Type'),
-                      items: _eventTypes.map((type) => DropdownMenuItem(value: type, child: Text(type))).toList(),
+                      decoration: const InputDecoration(
+                        labelText: 'Event Type',
+                      ),
+                      items: _eventTypes
+                          .map(
+                            (type) => DropdownMenuItem(
+                              value: type,
+                              child: Text(type),
+                            ),
+                          )
+                          .toList(),
                       onChanged: (val) {
                         if (val != null) setModalState(() => draftType = val);
                       },
@@ -335,7 +371,9 @@ class _CreateEventPageState extends State<CreateEventPage> {
                     TextFormField(
                       controller: draftTitleController,
                       style: GoogleFonts.inter(color: Colors.white),
-                      decoration: const InputDecoration(labelText: 'Event Title'),
+                      decoration: const InputDecoration(
+                        labelText: 'Event Title',
+                      ),
                     ),
                     const SizedBox(height: 12),
 
@@ -345,7 +383,10 @@ class _CreateEventPageState extends State<CreateEventPage> {
                       style: GoogleFonts.inter(color: Colors.white),
                       decoration: const InputDecoration(
                         labelText: 'Location (City, Country)',
-                        prefixIcon: Icon(Icons.location_on_outlined, color: AppTheme.textSecondary),
+                        prefixIcon: Icon(
+                          Icons.location_on_outlined,
+                          color: AppTheme.textSecondary,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -368,15 +409,22 @@ class _CreateEventPageState extends State<CreateEventPage> {
                         final picked = await showDatePicker(
                           context: ctx,
                           initialDate: draftDate,
-                          firstDate: DateTime.now().subtract(const Duration(days: 365)),
-                          lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
+                          firstDate: DateTime.now().subtract(
+                            const Duration(days: 365),
+                          ),
+                          lastDate: DateTime.now().add(
+                            const Duration(days: 365 * 2),
+                          ),
                         );
                         if (picked != null) {
                           setModalState(() => draftDate = picked);
                         }
                       },
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 12,
+                        ),
                         decoration: BoxDecoration(
                           color: const Color(0xFF141029),
                           borderRadius: BorderRadius.circular(10),
@@ -384,15 +432,28 @@ class _CreateEventPageState extends State<CreateEventPage> {
                         ),
                         child: Row(
                           children: [
-                            const Icon(Icons.calendar_today_outlined, color: AppTheme.primaryAccent, size: 18),
+                            const Icon(
+                              Icons.calendar_today_outlined,
+                              color: AppTheme.primaryAccent,
+                              size: 18,
+                            ),
                             const SizedBox(width: 10),
                             Expanded(
                               child: Text(
-                                DateFormat('EEEE, MMM d, yyyy').format(draftDate),
-                                style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
+                                DateFormat(
+                                  'EEEE, MMM d, yyyy',
+                                ).format(draftDate),
+                                style: GoogleFonts.inter(
+                                  color: Colors.white,
+                                  fontSize: 14,
+                                ),
                               ),
                             ),
-                            const Icon(Icons.edit, color: AppTheme.textSecondary, size: 16),
+                            const Icon(
+                              Icons.edit,
+                              color: AppTheme.textSecondary,
+                              size: 16,
+                            ),
                           ],
                         ),
                       ),
@@ -405,21 +466,39 @@ class _CreateEventPageState extends State<CreateEventPage> {
                         Expanded(
                           child: InkWell(
                             onTap: () async {
-                              final picked = await showTimePicker(context: ctx, initialTime: draftStart);
-                              if (picked != null) setModalState(() => draftStart = picked);
+                              final picked = await showTimePicker(
+                                context: ctx,
+                                initialTime: draftStart,
+                              );
+                              if (picked != null)
+                                setModalState(() => draftStart = picked);
                             },
                             child: Container(
                               padding: const EdgeInsets.all(10),
                               decoration: BoxDecoration(
                                 color: const Color(0xFF141029),
                                 borderRadius: BorderRadius.circular(10),
-                                border: Border.all(color: const Color(0xFF2E2A4E)),
+                                border: Border.all(
+                                  color: const Color(0xFF2E2A4E),
+                                ),
                               ),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text('Start Time', style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary)),
-                                  Text(draftStart.format(ctx), style: GoogleFonts.inter(color: Colors.white, fontSize: 14)),
+                                  Text(
+                                    'Start Time',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 11,
+                                      color: AppTheme.textSecondary,
+                                    ),
+                                  ),
+                                  Text(
+                                    draftStart.format(ctx),
+                                    style: GoogleFonts.inter(
+                                      color: Colors.white,
+                                      fontSize: 14,
+                                    ),
+                                  ),
                                 ],
                               ),
                             ),
@@ -429,21 +508,39 @@ class _CreateEventPageState extends State<CreateEventPage> {
                         Expanded(
                           child: InkWell(
                             onTap: () async {
-                              final picked = await showTimePicker(context: ctx, initialTime: draftEnd);
-                              if (picked != null) setModalState(() => draftEnd = picked);
+                              final picked = await showTimePicker(
+                                context: ctx,
+                                initialTime: draftEnd,
+                              );
+                              if (picked != null)
+                                setModalState(() => draftEnd = picked);
                             },
                             child: Container(
                               padding: const EdgeInsets.all(10),
                               decoration: BoxDecoration(
                                 color: const Color(0xFF141029),
                                 borderRadius: BorderRadius.circular(10),
-                                border: Border.all(color: const Color(0xFF2E2A4E)),
+                                border: Border.all(
+                                  color: const Color(0xFF2E2A4E),
+                                ),
                               ),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text('End Time', style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary)),
-                                  Text(draftEnd.format(ctx), style: GoogleFonts.inter(color: Colors.white, fontSize: 14)),
+                                  Text(
+                                    'End Time',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 11,
+                                      color: AppTheme.textSecondary,
+                                    ),
+                                  ),
+                                  Text(
+                                    draftEnd.format(ctx),
+                                    style: GoogleFonts.inter(
+                                      color: Colors.white,
+                                      fontSize: 14,
+                                    ),
+                                  ),
                                 ],
                               ),
                             ),
@@ -458,11 +555,16 @@ class _CreateEventPageState extends State<CreateEventPage> {
                       width: double.infinity,
                       height: 48,
                       child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryAccent),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppTheme.primaryAccent,
+                        ),
                         onPressed: () {
-                          final title = draftTitleController.text.trim().isEmpty ? 'Event' : draftTitleController.text.trim();
+                          final title = draftTitleController.text.trim().isEmpty
+                              ? 'Event'
+                              : draftTitleController.text.trim();
                           final location = draftLocationController.text.trim();
-                          final description = draftDescriptionController.text.trim();
+                          final description = draftDescriptionController.text
+                              .trim();
                           final newDraft = _EventDraft(
                             title: title,
                             eventType: draftType,
@@ -485,7 +587,10 @@ class _CreateEventPageState extends State<CreateEventPage> {
                         },
                         child: Text(
                           isEditing ? "Save Changes" : "Add Event",
-                          style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold),
+                          style: GoogleFonts.inter(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
                     ),
@@ -555,11 +660,17 @@ class _CreateEventPageState extends State<CreateEventPage> {
           end = end.add(const Duration(days: 1));
         }
 
-        final deadline = start.subtract(Duration(hours: _reminderIntervalHours > 0 ? _reminderIntervalHours : 24));
+        final deadline = start.subtract(
+          Duration(
+            hours: _reminderIntervalHours > 0 ? _reminderIntervalHours : 24,
+          ),
+        );
 
         final newEvent = BandEvent(
           title: draft.title,
-          description: draft.description.isNotEmpty ? draft.description : _descriptionController.text.trim(),
+          description: draft.description.isNotEmpty
+              ? draft.description
+              : _descriptionController.text.trim(),
           eventType: draft.eventType,
           location: draft.location,
           startDateTime: start.toIso8601String(),
@@ -576,11 +687,16 @@ class _CreateEventPageState extends State<CreateEventPage> {
           subEventSequence: groupId != null ? i + 1 : null,
         );
 
-        final eventId = await appState.firebaseService.saveBandEventAsync(widget.bandId, newEvent);
+        final eventId = await appState.firebaseService.saveBandEventAsync(
+          widget.bandId,
+          newEvent,
+        );
 
         if (_createEventRoom) {
           final creatorId = appState.currentUserId ?? '';
-          final dateStr = allEventsToSave.length > 1 ? ' (${DateFormat('MMM d').format(start)})' : '';
+          final dateStr = allEventsToSave.length > 1
+              ? ' (${DateFormat('MMM d').format(start)})'
+              : '';
           await appState.firebaseService.createTemporaryEventRoomAsync(
             bandId: widget.bandId,
             eventId: eventId,
@@ -596,10 +712,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
             ? "$count events published successfully!"
             : "Event published successfully!";
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(msg),
-            backgroundColor: AppTheme.success,
-          ),
+          SnackBar(content: Text(msg), backgroundColor: AppTheme.success),
         );
         Navigator.pop(context, true);
       }
@@ -623,16 +736,17 @@ class _CreateEventPageState extends State<CreateEventPage> {
   @override
   Widget build(BuildContext context) {
     return GradientScaffold(
-      appBar: const CustomTopBar(
-        title: 'Create New Event',
-        showBack: true,
-      ),
+      appBar: const CustomTopBar(title: 'Create New Event', showBack: true),
       body: SafeArea(
         child: _isLoadingRole
-            ? const Center(child: CircularProgressIndicator(color: AppTheme.primaryAccent))
+            ? const Center(
+                child: CircularProgressIndicator(color: AppTheme.primaryAccent),
+              )
             : _isSaving
-                ? const Center(child: CircularProgressIndicator(color: AppTheme.primaryAccent))
-                : Form(
+            ? const Center(
+                child: CircularProgressIndicator(color: AppTheme.primaryAccent),
+              )
+            : Form(
                 key: _formKey,
                 child: ListView(
                   padding: const EdgeInsets.all(20),
@@ -697,7 +811,8 @@ class _CreateEventPageState extends State<CreateEventPage> {
                           hintText: 'e.g. Workshop, Radio Show, Masterclass',
                         ),
                         validator: (value) {
-                          if (_eventType == 'Other' && (value == null || value.trim().isEmpty)) {
+                          if (_eventType == 'Other' &&
+                              (value == null || value.trim().isEmpty)) {
                             return 'Please specify the event type';
                           }
                           return null;
@@ -725,7 +840,10 @@ class _CreateEventPageState extends State<CreateEventPage> {
                       decoration: const InputDecoration(
                         labelText: 'Location (City, Country)',
                         hintText: 'e.g. Globen, Stockholm',
-                        prefixIcon: Icon(Icons.location_on_outlined, color: AppTheme.textSecondary),
+                        prefixIcon: Icon(
+                          Icons.location_on_outlined,
+                          color: AppTheme.textSecondary,
+                        ),
                       ),
                       validator: (value) {
                         if (value == null || value.trim().isEmpty) {
@@ -743,7 +861,10 @@ class _CreateEventPageState extends State<CreateEventPage> {
                         decoration: BoxDecoration(
                           color: AppTheme.cardBackground,
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
+                          border: Border.all(
+                            color: const Color(0xFF2E2A4E),
+                            width: 1,
+                          ),
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -764,25 +885,43 @@ class _CreateEventPageState extends State<CreateEventPage> {
                               onTap: _selectDate,
                               child: Row(
                                 children: [
-                                  const Icon(Icons.calendar_today_outlined, color: AppTheme.textSecondary, size: 20),
+                                  const Icon(
+                                    Icons.calendar_today_outlined,
+                                    color: AppTheme.textSecondary,
+                                    size: 20,
+                                  ),
                                   const SizedBox(width: 12),
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         Text(
                                           'Date',
-                                          style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary),
+                                          style: GoogleFonts.inter(
+                                            fontSize: 11,
+                                            color: AppTheme.textSecondary,
+                                          ),
                                         ),
                                         const SizedBox(height: 2),
                                         Text(
-                                          DateFormat('EEEE, MMM d, yyyy').format(_selectedDate),
-                                          style: GoogleFonts.inter(fontSize: 15, color: Colors.white, fontWeight: FontWeight.w500),
+                                          DateFormat(
+                                            'EEEE, MMM d, yyyy',
+                                          ).format(_selectedDate),
+                                          style: GoogleFonts.inter(
+                                            fontSize: 15,
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w500,
+                                          ),
                                         ),
                                       ],
                                     ),
                                   ),
-                                  const Icon(Icons.arrow_forward_ios_rounded, color: AppTheme.textSecondary, size: 14),
+                                  const Icon(
+                                    Icons.arrow_forward_ios_rounded,
+                                    color: AppTheme.textSecondary,
+                                    size: 14,
+                                  ),
                                 ],
                               ),
                             ),
@@ -793,25 +932,41 @@ class _CreateEventPageState extends State<CreateEventPage> {
                               onTap: _selectStartTime,
                               child: Row(
                                 children: [
-                                  const Icon(Icons.access_time, color: AppTheme.textSecondary, size: 20),
+                                  const Icon(
+                                    Icons.access_time,
+                                    color: AppTheme.textSecondary,
+                                    size: 20,
+                                  ),
                                   const SizedBox(width: 12),
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         Text(
                                           'Start Time',
-                                          style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary),
+                                          style: GoogleFonts.inter(
+                                            fontSize: 11,
+                                            color: AppTheme.textSecondary,
+                                          ),
                                         ),
                                         const SizedBox(height: 2),
                                         Text(
                                           _startTime.format(context),
-                                          style: GoogleFonts.inter(fontSize: 15, color: Colors.white, fontWeight: FontWeight.w500),
+                                          style: GoogleFonts.inter(
+                                            fontSize: 15,
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w500,
+                                          ),
                                         ),
                                       ],
                                     ),
                                   ),
-                                  const Icon(Icons.arrow_forward_ios_rounded, color: AppTheme.textSecondary, size: 14),
+                                  const Icon(
+                                    Icons.arrow_forward_ios_rounded,
+                                    color: AppTheme.textSecondary,
+                                    size: 14,
+                                  ),
                                 ],
                               ),
                             ),
@@ -822,25 +977,41 @@ class _CreateEventPageState extends State<CreateEventPage> {
                               onTap: _selectEndTime,
                               child: Row(
                                 children: [
-                                  const Icon(Icons.access_time, color: AppTheme.textSecondary, size: 20),
+                                  const Icon(
+                                    Icons.access_time,
+                                    color: AppTheme.textSecondary,
+                                    size: 20,
+                                  ),
                                   const SizedBox(width: 12),
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         Text(
                                           'End Time',
-                                          style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary),
+                                          style: GoogleFonts.inter(
+                                            fontSize: 11,
+                                            color: AppTheme.textSecondary,
+                                          ),
                                         ),
                                         const SizedBox(height: 2),
                                         Text(
                                           _endTime.format(context),
-                                          style: GoogleFonts.inter(fontSize: 15, color: Colors.white, fontWeight: FontWeight.w500),
+                                          style: GoogleFonts.inter(
+                                            fontSize: 15,
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w500,
+                                          ),
                                         ),
                                       ],
                                     ),
                                   ),
-                                  const Icon(Icons.arrow_forward_ios_rounded, color: AppTheme.textSecondary, size: 14),
+                                  const Icon(
+                                    Icons.arrow_forward_ios_rounded,
+                                    color: AppTheme.textSecondary,
+                                    size: 14,
+                                  ),
                                 ],
                               ),
                             ),
@@ -857,7 +1028,9 @@ class _CreateEventPageState extends State<CreateEventPage> {
                         color: AppTheme.cardBackground,
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                          color: _isMultipleEvents ? AppTheme.primaryAccent.withOpacity(0.5) : const Color(0xFF2E2A4E),
+                          color: _isMultipleEvents
+                              ? AppTheme.primaryAccent.withOpacity(0.5)
+                              : const Color(0xFF2E2A4E),
                           width: 1,
                         ),
                       ),
@@ -873,7 +1046,11 @@ class _CreateEventPageState extends State<CreateEventPage> {
                                   children: [
                                     Row(
                                       children: [
-                                        const Icon(Icons.style_rounded, color: AppTheme.primaryAccent, size: 20),
+                                        const Icon(
+                                          Icons.style_rounded,
+                                          color: AppTheme.primaryAccent,
+                                          size: 20,
+                                        ),
                                         const SizedBox(width: 8),
                                         Text(
                                           'Create Multiple Events',
@@ -888,7 +1065,11 @@ class _CreateEventPageState extends State<CreateEventPage> {
                                     const SizedBox(height: 4),
                                     Text(
                                       'Example: 1 rehearsal and 2 concerts, 2 shows, 3 days of Recording Session, etc',
-                                      style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary, height: 1.3),
+                                      style: GoogleFonts.inter(
+                                        fontSize: 11,
+                                        color: AppTheme.textSecondary,
+                                        height: 1.3,
+                                      ),
                                     ),
                                   ],
                                 ),
@@ -922,7 +1103,10 @@ class _CreateEventPageState extends State<CreateEventPage> {
                                 ),
                                 Text(
                                   '${1 + _additionalEvents.length} events',
-                                  style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary),
+                                  style: GoogleFonts.inter(
+                                    fontSize: 11,
+                                    color: AppTheme.textSecondary,
+                                  ),
                                 ),
                               ],
                             ),
@@ -935,47 +1119,82 @@ class _CreateEventPageState extends State<CreateEventPage> {
                               decoration: BoxDecoration(
                                 color: const Color(0xFF141029),
                                 borderRadius: BorderRadius.circular(10),
-                                border: Border.all(color: const Color(0xFF2E2A4E)),
+                                border: Border.all(
+                                  color: const Color(0xFF2E2A4E),
+                                ),
                               ),
                               child: Row(
                                 children: [
                                   Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 4,
+                                    ),
                                     decoration: BoxDecoration(
-                                      color: AppTheme.primaryAccent.withOpacity(0.2),
+                                      color: AppTheme.primaryAccent.withOpacity(
+                                        0.2,
+                                      ),
                                       borderRadius: BorderRadius.circular(6),
                                     ),
                                     child: Text(
-                                      _eventType == 'Other' && _otherEventTypeController.text.trim().isNotEmpty
-                                          ? _otherEventTypeController.text.trim()
+                                      _eventType == 'Other' &&
+                                              _otherEventTypeController.text
+                                                  .trim()
+                                                  .isNotEmpty
+                                          ? _otherEventTypeController.text
+                                                .trim()
                                           : _eventType,
-                                      style: GoogleFonts.inter(fontSize: 11, color: Colors.white, fontWeight: FontWeight.bold),
+                                      style: GoogleFonts.inter(
+                                        fontSize: 11,
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                      ),
                                     ),
                                   ),
                                   const SizedBox(width: 10),
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         Text(
-                                          _titleController.text.trim().isEmpty ? 'Event 1' : _titleController.text.trim(),
-                                          style: GoogleFonts.inter(fontSize: 13, color: Colors.white, fontWeight: FontWeight.bold),
+                                          _titleController.text.trim().isEmpty
+                                              ? 'Event 1'
+                                              : _titleController.text.trim(),
+                                          style: GoogleFonts.inter(
+                                            fontSize: 13,
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.bold,
+                                          ),
                                         ),
                                         const SizedBox(height: 2),
                                         Text(
                                           '${DateFormat('EEEE, MMM d').format(_selectedDate)} (${_startTime.format(context)} - ${_endTime.format(context)})',
-                                          style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary),
+                                          style: GoogleFonts.inter(
+                                            fontSize: 11,
+                                            color: AppTheme.textSecondary,
+                                          ),
                                         ),
-                                        if (_locationController.text.trim().isNotEmpty)
+                                        if (_locationController.text
+                                            .trim()
+                                            .isNotEmpty)
                                           Text(
                                             '@ ${_locationController.text.trim()}',
-                                            style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary),
+                                            style: GoogleFonts.inter(
+                                              fontSize: 11,
+                                              color: AppTheme.textSecondary,
+                                            ),
                                           ),
-                                        if (_descriptionController.text.trim().isNotEmpty) ...[
+                                        if (_descriptionController.text
+                                            .trim()
+                                            .isNotEmpty) ...[
                                           const SizedBox(height: 2),
                                           Text(
                                             _descriptionController.text.trim(),
-                                            style: GoogleFonts.inter(fontSize: 11, color: Colors.white70),
+                                            style: GoogleFonts.inter(
+                                              fontSize: 11,
+                                              color: Colors.white70,
+                                            ),
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
                                           ),
@@ -985,7 +1204,11 @@ class _CreateEventPageState extends State<CreateEventPage> {
                                   ),
                                   const Tooltip(
                                     message: 'Event 1',
-                                    child: Icon(Icons.info_outline, size: 16, color: AppTheme.textSecondary),
+                                    child: Icon(
+                                      Icons.info_outline,
+                                      size: 16,
+                                      color: AppTheme.textSecondary,
+                                    ),
                                   ),
                                 ],
                               ),
@@ -996,52 +1219,82 @@ class _CreateEventPageState extends State<CreateEventPage> {
                               final draft = _additionalEvents[index];
                               return GestureDetector(
                                 behavior: HitTestBehavior.opaque,
-                                onTap: () => _showEditEventDraftDialog(editIndex: index),
+                                onTap: () =>
+                                    _showEditEventDraftDialog(editIndex: index),
                                 child: Container(
                                   margin: const EdgeInsets.only(bottom: 8),
                                   padding: const EdgeInsets.all(12),
                                   decoration: BoxDecoration(
                                     color: const Color(0xFF141029),
                                     borderRadius: BorderRadius.circular(10),
-                                    border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.3)),
+                                    border: Border.all(
+                                      color: AppTheme.primaryAccent.withOpacity(
+                                        0.3,
+                                      ),
+                                    ),
                                   ),
                                   child: Row(
                                     children: [
                                       Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 8,
+                                          vertical: 4,
+                                        ),
                                         decoration: BoxDecoration(
                                           color: Colors.amber.withOpacity(0.2),
-                                          borderRadius: BorderRadius.circular(6),
+                                          borderRadius: BorderRadius.circular(
+                                            6,
+                                          ),
                                         ),
                                         child: Text(
                                           draft.eventType,
-                                          style: GoogleFonts.inter(fontSize: 11, color: Colors.amber, fontWeight: FontWeight.bold),
+                                          style: GoogleFonts.inter(
+                                            fontSize: 11,
+                                            color: Colors.amber,
+                                            fontWeight: FontWeight.bold,
+                                          ),
                                         ),
                                       ),
                                       const SizedBox(width: 10),
                                       Expanded(
                                         child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
                                           children: [
                                             Text(
                                               draft.title,
-                                              style: GoogleFonts.inter(fontSize: 13, color: Colors.white, fontWeight: FontWeight.bold),
+                                              style: GoogleFonts.inter(
+                                                fontSize: 13,
+                                                color: Colors.white,
+                                                fontWeight: FontWeight.bold,
+                                              ),
                                             ),
                                             const SizedBox(height: 2),
                                             Text(
                                               '${DateFormat('EEEE, MMM d').format(draft.date)} (${draft.startTime.format(context)} - ${draft.endTime.format(context)})',
-                                              style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary),
+                                              style: GoogleFonts.inter(
+                                                fontSize: 11,
+                                                color: AppTheme.textSecondary,
+                                              ),
                                             ),
                                             if (draft.location.isNotEmpty)
                                               Text(
                                                 '@ ${draft.location}',
-                                                style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary),
+                                                style: GoogleFonts.inter(
+                                                  fontSize: 11,
+                                                  color: AppTheme.textSecondary,
+                                                ),
                                               ),
-                                            if (draft.description.isNotEmpty) ...[
+                                            if (draft
+                                                .description
+                                                .isNotEmpty) ...[
                                               const SizedBox(height: 2),
                                               Text(
                                                 draft.description,
-                                                style: GoogleFonts.inter(fontSize: 11, color: Colors.white70),
+                                                style: GoogleFonts.inter(
+                                                  fontSize: 11,
+                                                  color: Colors.white70,
+                                                ),
                                                 maxLines: 1,
                                                 overflow: TextOverflow.ellipsis,
                                               ),
@@ -1050,11 +1303,22 @@ class _CreateEventPageState extends State<CreateEventPage> {
                                         ),
                                       ),
                                       IconButton(
-                                        icon: const Icon(Icons.edit_outlined, color: AppTheme.primaryAccent, size: 18),
-                                        onPressed: () => _showEditEventDraftDialog(editIndex: index),
+                                        icon: const Icon(
+                                          Icons.edit_outlined,
+                                          color: AppTheme.primaryAccent,
+                                          size: 18,
+                                        ),
+                                        onPressed: () =>
+                                            _showEditEventDraftDialog(
+                                              editIndex: index,
+                                            ),
                                       ),
                                       IconButton(
-                                        icon: const Icon(Icons.delete_outline, color: AppTheme.danger, size: 18),
+                                        icon: const Icon(
+                                          Icons.delete_outline,
+                                          color: AppTheme.danger,
+                                          size: 18,
+                                        ),
                                         onPressed: () {
                                           setState(() {
                                             _additionalEvents.removeAt(index);
@@ -1072,14 +1336,26 @@ class _CreateEventPageState extends State<CreateEventPage> {
                             // "+ Add Event(s)" Button
                             OutlinedButton.icon(
                               style: OutlinedButton.styleFrom(
-                                side: const BorderSide(color: AppTheme.primaryAccent),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                side: const BorderSide(
+                                  color: AppTheme.primaryAccent,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
                                 minimumSize: const Size(double.infinity, 44),
                               ),
-                              icon: const Icon(Icons.add_circle_outline, color: AppTheme.primaryAccent, size: 18),
+                              icon: const Icon(
+                                Icons.add_circle_outline,
+                                color: AppTheme.primaryAccent,
+                                size: 18,
+                              ),
                               label: Text(
                                 "+ Add Event(s)",
-                                style: GoogleFonts.inter(color: AppTheme.primaryAccent, fontWeight: FontWeight.bold, fontSize: 13),
+                                style: GoogleFonts.inter(
+                                  color: AppTheme.primaryAccent,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                ),
                               ),
                               onPressed: () => _showEditEventDraftDialog(),
                             ),
@@ -1095,7 +1371,10 @@ class _CreateEventPageState extends State<CreateEventPage> {
                       decoration: BoxDecoration(
                         color: AppTheme.cardBackground,
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
+                        border: Border.all(
+                          color: const Color(0xFF2E2A4E),
+                          width: 1,
+                        ),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1114,7 +1393,9 @@ class _CreateEventPageState extends State<CreateEventPage> {
                             decoration: BoxDecoration(
                               color: AppTheme.primaryAccent.withOpacity(0.12),
                               borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.3)),
+                              border: Border.all(
+                                color: AppTheme.primaryAccent.withOpacity(0.3),
+                              ),
                             ),
                             child: Text(
                               'The response time for answering a Reminder will be 50% shorter than the initial response time. An initial response time of 48 hours will become 24 hours after the first Reminder, etc.',
@@ -1136,19 +1417,48 @@ class _CreateEventPageState extends State<CreateEventPage> {
                           ),
                           const SizedBox(height: 6),
                           DropdownButtonFormField<int>(
-                            value: _isCustomReminderHours ? -1 : _reminderIntervalHours,
+                            value: _isCustomReminderHours
+                                ? -1
+                                : _reminderIntervalHours,
                             dropdownColor: const Color(0xFF16132D),
-                            style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
+                            style: GoogleFonts.inter(
+                              color: Colors.white,
+                              fontSize: 14,
+                            ),
                             decoration: const InputDecoration(
-                              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              contentPadding: EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
                               border: OutlineInputBorder(),
                             ),
                             items: const [
-                              DropdownMenuItem(value: -1, child: Text('Set hours here')),
-                              DropdownMenuItem(value: 48, child: Text('48 hours (From event is published)')),
-                              DropdownMenuItem(value: 24, child: Text('24 hours (From event is published)')),
-                              DropdownMenuItem(value: 12, child: Text('12 hours (From event is published)')),
-                              DropdownMenuItem(value: 0, child: Text('No automatic Reminders')),
+                              DropdownMenuItem(
+                                value: -1,
+                                child: Text('Set hours here'),
+                              ),
+                              DropdownMenuItem(
+                                value: 48,
+                                child: Text(
+                                  '48 hours (From event is published)',
+                                ),
+                              ),
+                              DropdownMenuItem(
+                                value: 24,
+                                child: Text(
+                                  '24 hours (From event is published)',
+                                ),
+                              ),
+                              DropdownMenuItem(
+                                value: 12,
+                                child: Text(
+                                  '12 hours (From event is published)',
+                                ),
+                              ),
+                              DropdownMenuItem(
+                                value: 0,
+                                child: Text('No automatic Reminders'),
+                              ),
                             ],
                             onChanged: (val) {
                               if (val != null) {
@@ -1172,9 +1482,14 @@ class _CreateEventPageState extends State<CreateEventPage> {
                               decoration: InputDecoration(
                                 labelText: 'Set hours here',
                                 hintText: 'e.g. 48, 24, 12',
-                                prefixIcon: Icon(Icons.timer_outlined, color: AppTheme.textSecondary),
+                                prefixIcon: Icon(
+                                  Icons.timer_outlined,
+                                  color: AppTheme.textSecondary,
+                                ),
                                 suffixText: 'hours',
-                                suffixStyle: GoogleFonts.inter(color: AppTheme.textSecondary),
+                                suffixStyle: GoogleFonts.inter(
+                                  color: AppTheme.textSecondary,
+                                ),
                               ),
                               validator: (value) {
                                 if (_isCustomReminderHours) {
@@ -1200,7 +1515,10 @@ class _CreateEventPageState extends State<CreateEventPage> {
                             const SizedBox(height: 6),
                             Text(
                               'Initial response window will be ${_reminderIntervalHours} hours from when event is published.',
-                              style: GoogleFonts.inter(fontSize: 11, color: AppTheme.primaryAccent),
+                              style: GoogleFonts.inter(
+                                fontSize: 11,
+                                color: AppTheme.primaryAccent,
+                              ),
                             ),
                           ],
                         ],
@@ -1210,12 +1528,17 @@ class _CreateEventPageState extends State<CreateEventPage> {
 
                     // Temporary Event Chat Switch (Tasks 2831 & 2843-2847)
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
                       decoration: BoxDecoration(
                         color: AppTheme.cardBackground,
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                          color: _createEventRoom ? AppTheme.primaryAccent.withOpacity(0.5) : const Color(0xFF2E2A4E),
+                          color: _createEventRoom
+                              ? AppTheme.primaryAccent.withOpacity(0.5)
+                              : const Color(0xFF2E2A4E),
                           width: 1,
                         ),
                       ),
@@ -1228,7 +1551,11 @@ class _CreateEventPageState extends State<CreateEventPage> {
                               children: [
                                 Row(
                                   children: [
-                                    const Icon(Icons.forum_outlined, color: AppTheme.primaryAccent, size: 18),
+                                    const Icon(
+                                      Icons.forum_outlined,
+                                      color: AppTheme.primaryAccent,
+                                      size: 18,
+                                    ),
                                     const SizedBox(width: 8),
                                     Text(
                                       'Create Event Chat',

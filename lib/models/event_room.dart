@@ -7,7 +7,8 @@ class EventRoom {
   final String createdBy;
   final bool isTemporary;
   final bool isClosed;
-  final Map<String, String> members; // userId -> role/status (e.g. 'leader', 'attending', 'substitute')
+  final Map<String, String>
+  members; // userId -> role/status (e.g. 'leader', 'attending', 'substitute')
 
   EventRoom({
     required this.roomId,
@@ -37,7 +38,8 @@ class EventRoom {
       name: json['name']?.toString() ?? 'Event Room',
       createdAt: json['createdAt'] is int
           ? json['createdAt'] as int
-          : int.tryParse(json['createdAt']?.toString() ?? '') ?? DateTime.now().millisecondsSinceEpoch,
+          : int.tryParse(json['createdAt']?.toString() ?? '') ??
+                DateTime.now().millisecondsSinceEpoch,
       createdBy: json['createdBy']?.toString() ?? '',
       isTemporary: json['isTemporary'] != false,
       isClosed: json['isClosed'] == true,

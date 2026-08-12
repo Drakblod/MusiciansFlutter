@@ -25,9 +25,10 @@ class _AnimatedTapDetectorState extends State<AnimatedTapDetector>
       vsync: this,
       duration: const Duration(milliseconds: 100),
     );
-    _scaleAnimation = Tween<double>(begin: 1.0, end: 0.9).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeOut),
-    );
+    _scaleAnimation = Tween<double>(
+      begin: 1.0,
+      end: 0.9,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
     super.initState();
   }
 
@@ -57,10 +58,7 @@ class _AnimatedTapDetectorState extends State<AnimatedTapDetector>
       onTapUp: _onTapUp,
       onTapCancel: _onTapCancel,
       behavior: HitTestBehavior.opaque,
-      child: ScaleTransition(
-        scale: _scaleAnimation,
-        child: widget.child,
-      ),
+      child: ScaleTransition(scale: _scaleAnimation, child: widget.child),
     );
   }
 }

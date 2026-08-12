@@ -29,8 +29,18 @@ class _EditStudioScreenState extends State<EditStudioScreen> {
   bool _initialized = false;
 
   final List<String> _genresList = [
-    "Pop", "Rock", "Metal", "Hip-Hop", "Jazz", "Blues",
-    "Electronic", "Country", "Classical", "Soul", "Reggae", "Alternative"
+    "Pop",
+    "Rock",
+    "Metal",
+    "Hip-Hop",
+    "Jazz",
+    "Blues",
+    "Electronic",
+    "Country",
+    "Classical",
+    "Soul",
+    "Reggae",
+    "Alternative",
   ];
 
   @override
@@ -86,7 +96,10 @@ class _EditStudioScreenState extends State<EditStudioScreen> {
     // Ownership check for edits
     if (_existingStudio != null && _existingStudio!.creatorId != userId) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Unauthorized: You do not own this studio listing'), backgroundColor: AppTheme.danger),
+        const SnackBar(
+          content: Text('Unauthorized: You do not own this studio listing'),
+          backgroundColor: AppTheme.danger,
+        ),
       );
       setState(() => _isSaving = false);
       return;
@@ -99,8 +112,12 @@ class _EditStudioScreenState extends State<EditStudioScreen> {
         description: _descriptionController.text.trim(),
         location: _locationController.text.trim(),
         genres: _selectedGenres,
-        facilities: _facilitiesController.text.trim().isEmpty ? null : _facilitiesController.text.trim(),
-        contactInfo: _contactInfoController.text.trim().isEmpty ? null : _contactInfoController.text.trim(),
+        facilities: _facilitiesController.text.trim().isEmpty
+            ? null
+            : _facilitiesController.text.trim(),
+        contactInfo: _contactInfoController.text.trim().isEmpty
+            ? null
+            : _contactInfoController.text.trim(),
         creatorId: _existingStudio?.creatorId ?? userId,
         createdAt: _existingStudio?.createdAt ?? 0,
         updatedAt: DateTime.now().millisecondsSinceEpoch,
@@ -109,14 +126,20 @@ class _EditStudioScreenState extends State<EditStudioScreen> {
       await appState.firebaseService.saveCollabStudioAsync(studio);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Studio listing saved successfully!'), backgroundColor: AppTheme.success),
+          const SnackBar(
+            content: Text('Studio listing saved successfully!'),
+            backgroundColor: AppTheme.success,
+          ),
         );
         Navigator.pop(context, true);
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to save studio: $e'), backgroundColor: AppTheme.danger),
+          SnackBar(
+            content: Text('Failed to save studio: $e'),
+            backgroundColor: AppTheme.danger,
+          ),
         );
       }
     } finally {
@@ -129,9 +152,7 @@ class _EditStudioScreenState extends State<EditStudioScreen> {
     final isEditMode = _existingStudio != null;
 
     return GradientScaffold(
-      appBar: const CustomTopBar(
-        showBack: true,
-      ),
+      appBar: const CustomTopBar(showBack: true),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(20.0),
@@ -155,7 +176,11 @@ class _EditStudioScreenState extends State<EditStudioScreen> {
                 // Studio Name
                 Text(
                   'Studio Name *',
-                  style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                  style: GoogleFonts.outfit(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 TextFormField(
@@ -176,7 +201,11 @@ class _EditStudioScreenState extends State<EditStudioScreen> {
                 // Location
                 Text(
                   'Location *',
-                  style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                  style: GoogleFonts.outfit(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 TextFormField(
@@ -197,7 +226,11 @@ class _EditStudioScreenState extends State<EditStudioScreen> {
                 // Description
                 Text(
                   'Studio Description *',
-                  style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                  style: GoogleFonts.outfit(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 TextFormField(
@@ -205,7 +238,8 @@ class _EditStudioScreenState extends State<EditStudioScreen> {
                   maxLines: 4,
                   style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
                   decoration: const InputDecoration(
-                    hintText: 'Describe your studio facility, acoustics, vibe, and specialties...',
+                    hintText:
+                        'Describe your studio facility, acoustics, vibe, and specialties...',
                   ),
                   validator: (value) {
                     if (value == null || value.trim().isEmpty) {
@@ -219,7 +253,11 @@ class _EditStudioScreenState extends State<EditStudioScreen> {
                 // Genres Specialties selector
                 Text(
                   'Specialty Genres',
-                  style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                  style: GoogleFonts.outfit(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
                 ),
                 const SizedBox(height: 10),
                 Wrap(
@@ -235,11 +273,19 @@ class _EditStudioScreenState extends State<EditStudioScreen> {
                       backgroundColor: AppTheme.cardBackground,
                       labelStyle: GoogleFonts.inter(
                         fontSize: 12,
-                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                        fontWeight: isSelected
+                            ? FontWeight.bold
+                            : FontWeight.normal,
                         color: Colors.white,
                       ),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      side: BorderSide(color: isSelected ? AppTheme.primaryAccent : const Color(0xFF2E2A4E)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      side: BorderSide(
+                        color: isSelected
+                            ? AppTheme.primaryAccent
+                            : const Color(0xFF2E2A4E),
+                      ),
                     );
                   }).toList(),
                 ),
@@ -248,7 +294,11 @@ class _EditStudioScreenState extends State<EditStudioScreen> {
                 // Facilities & Gear Description
                 Text(
                   'Facilities & Gear list',
-                  style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                  style: GoogleFonts.outfit(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 TextFormField(
@@ -256,7 +306,8 @@ class _EditStudioScreenState extends State<EditStudioScreen> {
                   maxLines: 4,
                   style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
                   decoration: const InputDecoration(
-                    hintText: 'List your console, DAW, monitors, mics, instruments, preamps...',
+                    hintText:
+                        'List your console, DAW, monitors, mics, instruments, preamps...',
                   ),
                 ),
                 const SizedBox(height: 20),
@@ -264,7 +315,11 @@ class _EditStudioScreenState extends State<EditStudioScreen> {
                 // Booking / Contact Info
                 Text(
                   'Contact / Booking Instructions',
-                  style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                  style: GoogleFonts.outfit(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 TextFormField(
@@ -272,14 +327,19 @@ class _EditStudioScreenState extends State<EditStudioScreen> {
                   maxLines: 2,
                   style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
                   decoration: const InputDecoration(
-                    hintText: 'e.g. Email at studio@example.com or visit www.studio.com',
+                    hintText:
+                        'e.g. Email at studio@example.com or visit www.studio.com',
                   ),
                 ),
                 const SizedBox(height: 32),
 
                 // Save Button
                 _isSaving
-                    ? const Center(child: CircularProgressIndicator(color: AppTheme.primaryAccent))
+                    ? const Center(
+                        child: CircularProgressIndicator(
+                          color: AppTheme.primaryAccent,
+                        ),
+                      )
                     : AnimatedTapDetector(
                         onTap: _saveStudio,
                         child: Container(

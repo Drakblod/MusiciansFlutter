@@ -23,9 +23,20 @@ class Message {
     this.replyToSenderName,
   });
 
-  factory Message.fromJson(Map<dynamic, dynamic> json, String keyId, {String? currentUserId}) {
-    final senderIdStr = json['SenderId']?.toString();
-    final timestampStr = json['Timestamp']?.toString();
+  factory Message.fromJson(
+    Map<dynamic, dynamic> json,
+    String keyId, {
+    String? currentUserId,
+  }) {
+    final senderIdStr =
+        json['SenderId']?.toString() ?? json['senderId']?.toString();
+    final receiverIdStr =
+        json['ReceiverId']?.toString() ?? json['receiverId']?.toString();
+    final textStr = json['Text']?.toString() ?? json['text']?.toString();
+    final timestampStr =
+        json['Timestamp']?.toString() ?? json['timestamp']?.toString();
+    final isReadBool = (json['IsRead'] == true) || (json['isRead'] == true);
+
     DateTime? parsedTimestamp;
     if (timestampStr != null) {
       parsedTimestamp = DateTime.tryParse(timestampStr);
@@ -34,14 +45,19 @@ class Message {
     return Message(
       id: keyId,
       senderId: senderIdStr,
-      receiverId: json['ReceiverId']?.toString(),
-      text: json['Text']?.toString(),
+      receiverId: receiverIdStr,
+      text: textStr,
       timestamp: parsedTimestamp,
-      isRead: json['IsRead'] == true,
-      senderName: json['SenderName']?.toString(),
-      isCurrentUserSender: currentUserId != null && senderIdStr == currentUserId,
-      replyToText: json['ReplyToText']?.toString(),
-      replyToSenderName: json['ReplyToSenderName']?.toString(),
+      isRead: isReadBool,
+      senderName:
+          json['SenderName']?.toString() ?? json['senderName']?.toString(),
+      isCurrentUserSender:
+          currentUserId != null && senderIdStr == currentUserId,
+      replyToText:
+          json['ReplyToText']?.toString() ?? json['replyToText']?.toString(),
+      replyToSenderName:
+          json['ReplyToSenderName']?.toString() ??
+          json['replyToSenderName']?.toString(),
     );
   }
 

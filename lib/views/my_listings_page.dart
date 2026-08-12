@@ -7,7 +7,6 @@ import '../models/listing.dart';
 import '../widgets/custom_top_bar.dart';
 import '../widgets/gradient_scaffold.dart';
 
-
 class MyListingsPage extends StatefulWidget {
   const MyListingsPage({super.key});
 
@@ -32,7 +31,9 @@ class _MyListingsPageState extends State<MyListingsPage> {
       final appState = Provider.of<AppState>(context, listen: false);
       final userId = appState.currentUserId;
       if (userId != null) {
-        final listings = await appState.firebaseService.getUserListingsAsync(userId);
+        final listings = await appState.firebaseService.getUserListingsAsync(
+          userId,
+        );
         if (mounted) {
           setState(() {
             _myListings = listings;
@@ -51,7 +52,10 @@ class _MyListingsPageState extends State<MyListingsPage> {
   Future<void> _updateStatus(String listingId, String status) async {
     try {
       final appState = Provider.of<AppState>(context, listen: false);
-      await appState.firebaseService.updateListingStatusAsync(listingId, status);
+      await appState.firebaseService.updateListingStatusAsync(
+        listingId,
+        status,
+      );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -88,7 +92,11 @@ class _MyListingsPageState extends State<MyListingsPage> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.delete_outline_rounded, color: AppTheme.danger, size: 48),
+                const Icon(
+                  Icons.delete_outline_rounded,
+                  color: AppTheme.danger,
+                  size: 48,
+                ),
                 const SizedBox(height: 16),
                 Text(
                   'Delete Listing',
@@ -114,13 +122,18 @@ class _MyListingsPageState extends State<MyListingsPage> {
                       child: OutlinedButton(
                         style: OutlinedButton.styleFrom(
                           side: const BorderSide(color: Color(0xFF2E2A4E)),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
                           padding: const EdgeInsets.symmetric(vertical: 12),
                         ),
                         onPressed: () => Navigator.pop(context),
                         child: Text(
                           'Cancel',
-                          style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w600),
+                          style: GoogleFonts.inter(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
                     ),
@@ -129,16 +142,24 @@ class _MyListingsPageState extends State<MyListingsPage> {
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppTheme.danger,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
                           padding: const EdgeInsets.symmetric(vertical: 12),
                         ),
                         onPressed: () async {
                           Navigator.pop(context); // Close dialog
-                          await _updateStatus(listingId, 'deleted'); // Soft delete
+                          await _updateStatus(
+                            listingId,
+                            'deleted',
+                          ); // Soft delete
                         },
                         child: Text(
                           'Delete',
-                          style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w600),
+                          style: GoogleFonts.inter(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
                     ),
@@ -183,10 +204,7 @@ class _MyListingsPageState extends State<MyListingsPage> {
   @override
   Widget build(BuildContext context) {
     return GradientScaffold(
-      appBar: const CustomTopBar(
-        title: 'My Listings',
-        showBack: true,
-      ),
+      appBar: const CustomTopBar(title: 'My Listings', showBack: true),
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -206,18 +224,20 @@ class _MyListingsPageState extends State<MyListingsPage> {
             Expanded(
               child: _isLoading
                   ? const Center(
-                      child: CircularProgressIndicator(color: AppTheme.primaryAccent),
+                      child: CircularProgressIndicator(
+                        color: AppTheme.primaryAccent,
+                      ),
                     )
                   : _myListings.isEmpty
-                      ? _buildEmptyState()
-                      : ListView.builder(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          itemCount: _myListings.length,
-                          itemBuilder: (context, index) {
-                            final listing = _myListings[index];
-                            return _buildListingItem(listing);
-                          },
-                        ),
+                  ? _buildEmptyState()
+                  : ListView.builder(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      itemCount: _myListings.length,
+                      itemBuilder: (context, index) {
+                        final listing = _myListings[index];
+                        return _buildListingItem(listing);
+                      },
+                    ),
             ),
           ],
         ),
@@ -269,13 +289,21 @@ class _MyListingsPageState extends State<MyListingsPage> {
                 Navigator.pushReplacementNamed(context, '/create-listing');
               },
               icon: const Icon(Icons.add, color: Colors.white),
-              label: Text('Post a Listing', style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+              label: Text(
+                'Post a Listing',
+                style: GoogleFonts.inter(fontWeight: FontWeight.bold),
+              ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppTheme.primaryAccent,
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
-            )
+            ),
           ],
         ),
       ),
@@ -284,7 +312,9 @@ class _MyListingsPageState extends State<MyListingsPage> {
 
   Widget _buildListingItem(Listing listing) {
     final hasImages = listing.imageUrls.isNotEmpty;
-    final priceStr = listing.price == 0 ? 'Free' : '${listing.price.toInt()} kr';
+    final priceStr = listing.price == 0
+        ? 'Free'
+        : '${listing.price.toInt()} kr';
     final statusColor = _getStatusColor(listing.status);
 
     return Container(
@@ -292,10 +322,7 @@ class _MyListingsPageState extends State<MyListingsPage> {
       decoration: BoxDecoration(
         color: AppTheme.cardBackground,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: const Color(0xFF231F45),
-          width: 1,
-        ),
+        border: Border.all(color: const Color(0xFF231F45), width: 1),
       ),
       child: Column(
         children: [
@@ -317,10 +344,11 @@ class _MyListingsPageState extends State<MyListingsPage> {
                       ? Image.network(
                           listing.imageUrls.first,
                           fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) => const Icon(
-                            Icons.music_note_rounded,
-                            color: AppTheme.primaryAccent,
-                          ),
+                          errorBuilder: (context, error, stackTrace) =>
+                              const Icon(
+                                Icons.music_note_rounded,
+                                color: AppTheme.primaryAccent,
+                              ),
                         )
                       : const Icon(
                           Icons.music_note_rounded,
@@ -337,11 +365,16 @@ class _MyListingsPageState extends State<MyListingsPage> {
                       Row(
                         children: [
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
                             decoration: BoxDecoration(
                               color: statusColor.withOpacity(0.12),
                               borderRadius: BorderRadius.circular(6),
-                              border: Border.all(color: statusColor.withOpacity(0.5)),
+                              border: Border.all(
+                                color: statusColor.withOpacity(0.5),
+                              ),
                             ),
                             child: Text(
                               listing.status.toUpperCase(),
@@ -399,7 +432,11 @@ class _MyListingsPageState extends State<MyListingsPage> {
               children: [
                 // Delete button (Soft Delete)
                 IconButton(
-                  icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 20),
+                  icon: const Icon(
+                    Icons.delete_outline_rounded,
+                    color: Colors.redAccent,
+                    size: 20,
+                  ),
                   onPressed: () => _confirmDelete(listing.id!),
                   tooltip: 'Delete Listing',
                 ),
@@ -412,12 +449,21 @@ class _MyListingsPageState extends State<MyListingsPage> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppTheme.success.withOpacity(0.12),
                       side: const BorderSide(color: AppTheme.success, width: 1),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
                     ),
                     child: Text(
                       'Mark Sold',
-                      style: GoogleFonts.inter(color: AppTheme.success, fontSize: 12, fontWeight: FontWeight.bold),
+                      style: GoogleFonts.inter(
+                        color: AppTheme.success,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -425,13 +471,25 @@ class _MyListingsPageState extends State<MyListingsPage> {
                     onPressed: () => _updateStatus(listing.id!, 'inactive'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.orangeAccent.withOpacity(0.12),
-                      side: const BorderSide(color: Colors.orangeAccent, width: 1),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      side: const BorderSide(
+                        color: Colors.orangeAccent,
+                        width: 1,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
                     ),
                     child: Text(
                       'Deactivate',
-                      style: GoogleFonts.inter(color: Colors.orangeAccent, fontSize: 12, fontWeight: FontWeight.bold),
+                      style: GoogleFonts.inter(
+                        color: Colors.orangeAccent,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                 ] else if (listing.status == 'sold') ...[
@@ -439,13 +497,25 @@ class _MyListingsPageState extends State<MyListingsPage> {
                     onPressed: () => _updateStatus(listing.id!, 'active'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppTheme.primaryAccent.withOpacity(0.12),
-                      side: const BorderSide(color: AppTheme.primaryAccent, width: 1),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      side: const BorderSide(
+                        color: AppTheme.primaryAccent,
+                        width: 1,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
                     ),
                     child: Text(
                       'Relist / Reactivate',
-                      style: GoogleFonts.inter(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                      style: GoogleFonts.inter(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                 ] else if (listing.status == 'inactive') ...[
@@ -453,13 +523,25 @@ class _MyListingsPageState extends State<MyListingsPage> {
                     onPressed: () => _updateStatus(listing.id!, 'active'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppTheme.primaryAccent.withOpacity(0.12),
-                      side: const BorderSide(color: AppTheme.primaryAccent, width: 1),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      side: const BorderSide(
+                        color: AppTheme.primaryAccent,
+                        width: 1,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
                     ),
                     child: Text(
                       'Activate',
-                      style: GoogleFonts.inter(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                      style: GoogleFonts.inter(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                 ],

@@ -162,8 +162,10 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (!FeatureFlags.enableMockLiveRehearsals || _audioController == null) return;
-    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+    if (!FeatureFlags.enableMockLiveRehearsals || _audioController == null)
+      return;
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive) {
       _audioController!.pauseAudio();
     } else if (state == AppLifecycleState.resumed) {
       _audioController!.resumeAudio();
@@ -184,9 +186,11 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
     try {
       final appState = Provider.of<AppState>(context, listen: false);
       final rawGigs = await appState.firebaseService.getAllSubRequestsAsync();
-      
+
       // Filter out gigs that have coordinates
-      final dbGigsWithCoords = rawGigs.where((g) => g.latitude != null && g.longitude != null).toList();
+      final dbGigsWithCoords = rawGigs
+          .where((g) => g.latitude != null && g.longitude != null)
+          .toList();
 
       if (dbGigsWithCoords.isEmpty) {
         // Fallback mock markers inside Sweden
@@ -201,7 +205,8 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
             date: DateTime.now().add(const Duration(days: 3)).toIso8601String(),
             startTime: '19:00:00',
             endTime: '22:00:00',
-            description: 'Looking for a solid rock guitarist to fill in for a rehearsal and possibly a weekend gig.',
+            description:
+                'Looking for a solid rock guitarist to fill in for a rehearsal and possibly a weekend gig.',
             isPaid: true,
             latitude: 59.3293,
             longitude: 18.0686,
@@ -217,7 +222,8 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
             date: DateTime.now().add(const Duration(days: 5)).toIso8601String(),
             startTime: '20:00:00',
             endTime: '23:00:00',
-            description: 'Need a guest vocalist for standard jazz tunes at a local club show.',
+            description:
+                'Need a guest vocalist for standard jazz tunes at a local club show.',
             isPaid: true,
             latitude: 57.7089,
             longitude: 11.9746,
@@ -233,7 +239,8 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
             date: DateTime.now().add(const Duration(days: 2)).toIso8601String(),
             startTime: '18:00:00',
             endTime: '21:00:00',
-            description: 'Substitute required for our weekly orchestra rehearsal. Sheet music provided.',
+            description:
+                'Substitute required for our weekly orchestra rehearsal. Sheet music provided.',
             isPaid: false,
             latitude: 59.8586,
             longitude: 17.6389,
@@ -249,7 +256,8 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
             date: DateTime.now().add(const Duration(days: 6)).toIso8601String(),
             startTime: '17:30:00',
             endTime: '20:30:00',
-            description: 'Our regular drummer has a family emergency. Energetic pop drumming style required.',
+            description:
+                'Our regular drummer has a family emergency. Energetic pop drumming style required.',
             isPaid: true,
             latitude: 55.6050,
             longitude: 13.0038,
@@ -271,15 +279,44 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
   BitmapDescriptor _getMarkerColor(String? instrument) {
     if (instrument == null) return BitmapDescriptor.defaultMarker;
     final inst = instrument.toLowerCase();
-    if (inst.contains('vocal') || inst.contains('singer') || inst.contains('choir') || inst.contains('voice') || inst.contains('soprano') && !inst.contains('recorder') && !inst.contains('sax')) {
+    if (inst.contains('vocal') ||
+        inst.contains('singer') ||
+        inst.contains('choir') ||
+        inst.contains('voice') ||
+        inst.contains('soprano') &&
+            !inst.contains('recorder') &&
+            !inst.contains('sax')) {
       return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueOrange);
-    } else if (inst.contains('drum') || inst.contains('percussion') || inst.contains('steel pan')) {
+    } else if (inst.contains('drum') ||
+        inst.contains('percussion') ||
+        inst.contains('steel pan')) {
       return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue);
-    } else if (inst.contains('guitar') || inst.contains('bass') || inst.contains('harp') || inst.contains('violin') || inst.contains('cello') || inst.contains('viola') || inst.contains('contrabass')) {
+    } else if (inst.contains('guitar') ||
+        inst.contains('bass') ||
+        inst.contains('harp') ||
+        inst.contains('violin') ||
+        inst.contains('cello') ||
+        inst.contains('viola') ||
+        inst.contains('contrabass')) {
       return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed);
-    } else if (inst.contains('piano') || inst.contains('keyboard') || inst.contains('organ') || inst.contains('harpsichord') || inst.contains('synth')) {
+    } else if (inst.contains('piano') ||
+        inst.contains('keyboard') ||
+        inst.contains('organ') ||
+        inst.contains('harpsichord') ||
+        inst.contains('synth')) {
       return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueYellow);
-    } else if (inst.contains('trumpet') || inst.contains('trombone') || inst.contains('horn') || inst.contains('tuba') || inst.contains('sax') || inst.contains('flute') || inst.contains('clarinet') || inst.contains('oboe') || inst.contains('bassoon') || inst.contains('recorder') || inst.contains('piccolo') || inst.contains('euphonium')) {
+    } else if (inst.contains('trumpet') ||
+        inst.contains('trombone') ||
+        inst.contains('horn') ||
+        inst.contains('tuba') ||
+        inst.contains('sax') ||
+        inst.contains('flute') ||
+        inst.contains('clarinet') ||
+        inst.contains('oboe') ||
+        inst.contains('bassoon') ||
+        inst.contains('recorder') ||
+        inst.contains('piccolo') ||
+        inst.contains('euphonium')) {
       return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueCyan);
     }
     return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueViolet);
@@ -296,7 +333,9 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
         final vpLower = gig.voicePart!.toLowerCase();
         return userInstruments.any((inst) {
           final instLower = inst.toLowerCase();
-          return instLower == vpLower || vpLower.contains(instLower) || instLower.contains(vpLower);
+          return instLower == vpLower ||
+              vpLower.contains(instLower) ||
+              instLower.contains(vpLower);
         });
       }).toList();
     } else if (_selectedFilter == 'Paid Gigs') {
@@ -308,7 +347,8 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
         if (gig.date == null) return false;
         final d = DateTime.tryParse(gig.date!);
         if (d == null) return false;
-        return d.isAfter(now.subtract(const Duration(days: 1))) && d.isBefore(oneWeekLater);
+        return d.isAfter(now.subtract(const Duration(days: 1))) &&
+            d.isBefore(oneWeekLater);
       }).toList();
     }
     return _allGigs;
@@ -317,7 +357,9 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
   Set<Marker> _buildMarkers(List<SubRequest> filteredGigs) {
     final gigMarkers = filteredGigs.map((gig) {
       return Marker(
-        markerId: MarkerId(gig.id ?? gig.subRequestId ?? UniqueKey().toString()),
+        markerId: MarkerId(
+          gig.id ?? gig.subRequestId ?? UniqueKey().toString(),
+        ),
         position: LatLng(gig.latitude!, gig.longitude!),
         icon: _getMarkerColor(gig.voicePart),
         onTap: () {
@@ -337,7 +379,9 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
       return Marker(
         markerId: MarkerId(rehearsal.id),
         position: rehearsal.position,
-        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueMagenta),
+        icon: BitmapDescriptor.defaultMarkerWithHue(
+          BitmapDescriptor.hueMagenta,
+        ),
         infoWindow: InfoWindow(
           title: rehearsal.bandName,
           snippet: 'LIVE rehearsal · ${rehearsal.city}',
@@ -373,7 +417,11 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
         backgroundColor: AppTheme.backgroundStart,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 18),
+          icon: const Icon(
+            Icons.arrow_back_ios_new_rounded,
+            color: Colors.white,
+            size: 18,
+          ),
           onPressed: () => Navigator.pop(context),
         ),
         actions: [
@@ -384,14 +432,16 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
         ],
       ),
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: AppTheme.backgroundGradient,
-        ),
+        decoration: const BoxDecoration(gradient: AppTheme.backgroundGradient),
         child: Stack(
           children: [
             // Map
             _isLoading
-                ? const Center(child: CircularProgressIndicator(color: AppTheme.primaryAccent))
+                ? const Center(
+                    child: CircularProgressIndicator(
+                      color: AppTheme.primaryAccent,
+                    ),
+                  )
                 : GoogleMap(
                     initialCameraPosition: const CameraPosition(
                       target: LatLng(59.3293, 18.0686),
@@ -401,7 +451,10 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                       _mapController = controller;
                       _mapController?.setMapStyle(_darkMapStyle);
                       if (FeatureFlags.enableMockLiveRehearsals) {
-                        _audioController?.updateCameraTarget(const LatLng(59.3293, 18.0686), immediate: true);
+                        _audioController?.updateCameraTarget(
+                          const LatLng(59.3293, 18.0686),
+                          immediate: true,
+                        );
                       }
                     },
                     onCameraMove: (position) {
@@ -410,7 +463,8 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                       }
                     },
                     onCameraIdle: () {
-                      if (FeatureFlags.enableMockLiveRehearsals && _mapController != null) {
+                      if (FeatureFlags.enableMockLiveRehearsals &&
+                          _mapController != null) {
                         _mapController?.getVisibleRegion();
                       }
                     },
@@ -503,7 +557,8 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
             if (_selectedGig != null) _buildBottomCard(_selectedGig!, appState),
 
             // Bottom drawer details card for Mock Live Rehearsals
-            if (_selectedRehearsal != null) _buildRehearsalBottomCard(_selectedRehearsal!),
+            if (_selectedRehearsal != null)
+              _buildRehearsalBottomCard(_selectedRehearsal!),
           ],
         ),
       ),
@@ -530,13 +585,26 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                 child: ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppTheme.warning,
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
                   ),
-                  icon: const Icon(Icons.volume_up_rounded, color: Colors.black, size: 16),
+                  icon: const Icon(
+                    Icons.volume_up_rounded,
+                    color: Colors.black,
+                    size: 16,
+                  ),
                   label: Text(
                     'Enable rehearsal audio',
-                    style: GoogleFonts.inter(color: Colors.black, fontSize: 12, fontWeight: FontWeight.bold),
+                    style: GoogleFonts.inter(
+                      color: Colors.black,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   onPressed: () {
                     _audioController?.enableWebAudio();
@@ -549,18 +617,25 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
             valueListenable: _audioController!.isMutedNotifier,
             builder: (context, isMuted, _) {
               return Tooltip(
-                message: isMuted ? 'Unmute Live Rehearsals' : 'Mute Live Rehearsals',
+                message: isMuted
+                    ? 'Unmute Live Rehearsals'
+                    : 'Mute Live Rehearsals',
                 child: GestureDetector(
                   onTap: () {
                     _audioController?.toggleMute();
                   },
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
                     decoration: BoxDecoration(
                       color: AppTheme.cardBackground.withOpacity(0.9),
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(
-                        color: isMuted ? AppTheme.danger : AppTheme.primaryAccent,
+                        color: isMuted
+                            ? AppTheme.danger
+                            : AppTheme.primaryAccent,
                         width: 1.2,
                       ),
                       boxShadow: [
@@ -568,15 +643,19 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                           color: Colors.black.withOpacity(0.3),
                           blurRadius: 8,
                           offset: const Offset(0, 2),
-                        )
+                        ),
                       ],
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(
-                          isMuted ? Icons.volume_off_rounded : Icons.volume_up_rounded,
-                          color: isMuted ? AppTheme.danger : AppTheme.primaryAccent,
+                          isMuted
+                              ? Icons.volume_off_rounded
+                              : Icons.volume_up_rounded,
+                          color: isMuted
+                              ? AppTheme.danger
+                              : AppTheme.primaryAccent,
                           size: 16,
                         ),
                         const SizedBox(width: 6),
@@ -602,7 +681,9 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
 
   Widget _buildRehearsalBottomCard(MockLiveRehearsal rehearsal) {
     final dist = _audioController?.distancesKm[rehearsal.id];
-    final distStr = dist != null && dist.isFinite ? '${dist.toStringAsFixed(0)} km away' : '';
+    final distStr = dist != null && dist.isFinite
+        ? '${dist.toStringAsFixed(0)} km away'
+        : '';
 
     return Positioned(
       bottom: 20,
@@ -613,13 +694,16 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
         decoration: BoxDecoration(
           color: AppTheme.cardBackground.withOpacity(0.95),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.purpleAccent.withOpacity(0.5), width: 1.5),
+          border: Border.all(
+            color: Colors.purpleAccent.withOpacity(0.5),
+            width: 1.5,
+          ),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.4),
               blurRadius: 15,
               offset: const Offset(0, 5),
-            )
+            ),
           ],
         ),
         child: Column(
@@ -630,16 +714,25 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.purpleAccent.withOpacity(0.2),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.purpleAccent.withOpacity(0.4)),
+                    border: Border.all(
+                      color: Colors.purpleAccent.withOpacity(0.4),
+                    ),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.sensors_rounded, color: Colors.purpleAccent, size: 14),
+                      const Icon(
+                        Icons.sensors_rounded,
+                        color: Colors.purpleAccent,
+                        size: 14,
+                      ),
                       const SizedBox(width: 6),
                       Text(
                         'LIVE REHEARSAL',
@@ -654,7 +747,11 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                   ),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.close_rounded, color: AppTheme.textSecondary, size: 20),
+                  icon: const Icon(
+                    Icons.close_rounded,
+                    color: AppTheme.textSecondary,
+                    size: 20,
+                  ),
                   onPressed: () {
                     setState(() {
                       _selectedRehearsal = null;
@@ -675,18 +772,32 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
             const SizedBox(height: 4),
             Row(
               children: [
-                const Icon(Icons.location_on_outlined, color: AppTheme.textSecondary, size: 14),
+                const Icon(
+                  Icons.location_on_outlined,
+                  color: AppTheme.textSecondary,
+                  size: 14,
+                ),
                 const SizedBox(width: 4),
                 Text(
                   '${rehearsal.city}${distStr.isNotEmpty ? " · $distStr" : ""}',
-                  style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    color: AppTheme.textSecondary,
+                  ),
                 ),
                 const SizedBox(width: 12),
-                const Icon(Icons.music_note_rounded, color: AppTheme.primaryAccent, size: 14),
+                const Icon(
+                  Icons.music_note_rounded,
+                  color: AppTheme.primaryAccent,
+                  size: 14,
+                ),
                 const SizedBox(width: 4),
                 Text(
                   rehearsal.genre,
-                  style: GoogleFonts.inter(fontSize: 12, color: AppTheme.primaryAccent),
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    color: AppTheme.primaryAccent,
+                  ),
                 ),
               ],
             ),
@@ -725,7 +836,9 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                 : AppTheme.cardBackground.withOpacity(0.85),
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
-              color: isSelected ? AppTheme.primaryAccent : const Color(0xFF2E2A4E),
+              color: isSelected
+                  ? AppTheme.primaryAccent
+                  : const Color(0xFF2E2A4E),
               width: 1.2,
             ),
           ),
@@ -743,11 +856,14 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
   }
 
   Widget _buildBottomCard(SubRequest gig, AppState appState) {
-    final date = gig.date != null ? DateTime.tryParse(gig.date!) ?? DateTime.now() : DateTime.now();
+    final date = gig.date != null
+        ? DateTime.tryParse(gig.date!) ?? DateTime.now()
+        : DateTime.now();
     final formattedDate = DateFormat('MMM dd, yyyy').format(date);
     final currentUserId = appState.currentUserId;
-    final hasApplied = currentUserId != null && gig.responses.containsKey(currentUserId);
-    
+    final hasApplied =
+        currentUserId != null && gig.responses.containsKey(currentUserId);
+
     return Positioned(
       bottom: 20,
       left: 16,
@@ -757,13 +873,16 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
         decoration: BoxDecoration(
           color: AppTheme.cardBackground.withOpacity(0.95),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.4), width: 1.5),
+          border: Border.all(
+            color: AppTheme.primaryAccent.withOpacity(0.4),
+            width: 1.5,
+          ),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.4),
               blurRadius: 15,
               offset: const Offset(0, 5),
-            )
+            ),
           ],
         ),
         child: Column(
@@ -798,7 +917,11 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                       color: Colors.white.withOpacity(0.1),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.close, size: 16, color: Colors.white70),
+                    child: const Icon(
+                      Icons.close,
+                      size: 16,
+                      color: Colors.white70,
+                    ),
                   ),
                 ),
               ],
@@ -813,43 +936,64 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
               ),
             ),
             const SizedBox(height: 10),
-            
+
             // Info Row (Date/Time, Location)
             Row(
               children: [
-                const Icon(Icons.calendar_today_rounded, size: 14, color: AppTheme.textSecondary),
+                const Icon(
+                  Icons.calendar_today_rounded,
+                  size: 14,
+                  color: AppTheme.textSecondary,
+                ),
                 const SizedBox(width: 6),
                 Text(
                   '$formattedDate | ${gig.startTime ?? "18:00"} - ${gig.endTime ?? "21:00"}',
-                  style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    color: AppTheme.textSecondary,
+                  ),
                 ),
               ],
             ),
             const SizedBox(height: 6),
             Row(
               children: [
-                const Icon(Icons.location_on_rounded, size: 14, color: AppTheme.textSecondary),
+                const Icon(
+                  Icons.location_on_rounded,
+                  size: 14,
+                  color: AppTheme.textSecondary,
+                ),
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
                     gig.location ?? 'Stockholm, Sweden',
-                    style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      color: AppTheme.textSecondary,
+                    ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
                 // Paid indicator
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 2,
+                  ),
                   decoration: BoxDecoration(
-                    color: gig.isPaid ? AppTheme.primaryAccent.withOpacity(0.2) : Colors.white10,
+                    color: gig.isPaid
+                        ? AppTheme.primaryAccent.withOpacity(0.2)
+                        : Colors.white10,
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
                     gig.isPaid ? 'Paid' : 'Unpaid',
                     style: GoogleFonts.inter(
                       fontSize: 10,
-                      color: gig.isPaid ? AppTheme.primaryAccent : AppTheme.textSecondary,
+                      color: gig.isPaid
+                          ? AppTheme.primaryAccent
+                          : AppTheme.textSecondary,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -857,14 +1001,18 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
               ],
             ),
             const SizedBox(height: 12),
-            
+
             // Buttons Row
             Row(
               children: [
                 Expanded(
                   child: OutlinedButton(
                     onPressed: () {
-                      Navigator.pushNamed(context, '/gig-details', arguments: gig);
+                      Navigator.pushNamed(
+                        context,
+                        '/gig-details',
+                        arguments: gig,
+                      );
                     },
                     style: OutlinedButton.styleFrom(
                       side: const BorderSide(color: AppTheme.primaryAccent),
@@ -915,17 +1063,22 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                               try {
                                 if ((gig.id ?? '').startsWith('mock_')) {
                                   // Simulated apply for fallback mock gig
-                                  await Future.delayed(const Duration(milliseconds: 300));
-                                } else {
-                                  await appState.firebaseService.addResponseToSubRequestAsync(
-                                    gig.subRequestId ?? gig.id!,
-                                    currentUserId,
+                                  await Future.delayed(
+                                    const Duration(milliseconds: 300),
                                   );
+                                } else {
+                                  await appState.firebaseService
+                                      .addResponseToSubRequestAsync(
+                                        gig.subRequestId ?? gig.id!,
+                                        currentUserId,
+                                      );
                                 }
                                 if (mounted) {
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     const SnackBar(
-                                      content: Text('Successfully applied for gig!'),
+                                      content: Text(
+                                        'Successfully applied for gig!',
+                                      ),
                                       backgroundColor: AppTheme.success,
                                     ),
                                   );
@@ -964,7 +1117,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                         ),
                 ),
               ],
-            )
+            ),
           ],
         ),
       ),

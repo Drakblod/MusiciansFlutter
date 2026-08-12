@@ -18,7 +18,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _nicknameController = TextEditingController();
-  
+
   String _selectedUserType = 'Electric Guitar';
   String _selectedLevel = 'C = INTERMEDIATE';
   bool _obscurePassword = true;
@@ -28,7 +28,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     'B = SEMI PRO',
     'C = INTERMEDIATE',
     'D = AMATEUR',
-    'E = BEGINNER'
+    'E = BEGINNER',
   ];
 
   final List<String> _userTypes = [
@@ -98,7 +98,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     "Alto Trombone",
     "Viola da Gamba",
     "Steel Guitar",
-    "Steel Pan"
+    "Steel Pan",
   ];
 
   @override
@@ -204,7 +204,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   decoration: const InputDecoration(
                     labelText: 'Profile Name',
                     hintText: 'Enter your name or stage name',
-                    prefixIcon: Icon(Icons.person_outline_rounded, color: AppTheme.textSecondary),
+                    prefixIcon: Icon(
+                      Icons.person_outline_rounded,
+                      color: AppTheme.textSecondary,
+                    ),
                   ),
                   validator: (value) {
                     if (value == null || value.trim().isEmpty) {
@@ -226,13 +229,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   decoration: const InputDecoration(
                     labelText: 'Email Address',
                     hintText: 'Enter your email',
-                    prefixIcon: Icon(Icons.email_outlined, color: AppTheme.textSecondary),
+                    prefixIcon: Icon(
+                      Icons.email_outlined,
+                      color: AppTheme.textSecondary,
+                    ),
                   ),
                   validator: (value) {
                     if (value == null || value.trim().isEmpty) {
                       return 'Please enter your email';
                     }
-                    if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value.trim())) {
+                    if (!RegExp(
+                      r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
+                    ).hasMatch(value.trim())) {
                       return 'Please enter a valid email address';
                     }
                     return null;
@@ -248,10 +256,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   decoration: InputDecoration(
                     labelText: 'Password',
                     hintText: 'Choose a strong password',
-                    prefixIcon: const Icon(Icons.lock_outline_rounded, color: AppTheme.textSecondary),
+                    prefixIcon: const Icon(
+                      Icons.lock_outline_rounded,
+                      color: AppTheme.textSecondary,
+                    ),
                     suffixIcon: IconButton(
                       icon: Icon(
-                        _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                        _obscurePassword
+                            ? Icons.visibility_off_outlined
+                            : Icons.visibility_outlined,
                         color: AppTheme.textSecondary,
                       ),
                       onPressed: () {
@@ -275,11 +288,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                 // 4. Primary Skill/Talent Selection (Exactly 1 choice)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: AppTheme.inputBackground,
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
+                    border: Border.all(
+                      color: const Color(0xFF2E2A4E),
+                      width: 1,
+                    ),
                   ),
                   child: DropdownButtonHideUnderline(
                     child: DropdownButtonFormField<String>(
@@ -291,11 +310,20 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         enabledBorder: InputBorder.none,
                         focusedBorder: InputBorder.none,
                         contentPadding: EdgeInsets.zero,
-                        prefixIcon: Icon(Icons.music_note_outlined, color: AppTheme.textSecondary),
+                        prefixIcon: Icon(
+                          Icons.music_note_outlined,
+                          color: AppTheme.textSecondary,
+                        ),
                       ),
                       dropdownColor: AppTheme.cardBackground,
-                      style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
-                      icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppTheme.textSecondary),
+                      style: GoogleFonts.inter(
+                        color: Colors.white,
+                        fontSize: 14,
+                      ),
+                      icon: const Icon(
+                        Icons.keyboard_arrow_down_rounded,
+                        color: AppTheme.textSecondary,
+                      ),
                       items: _userTypes.map((String value) {
                         return DropdownMenuItem<String>(
                           value: value,
@@ -316,11 +344,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                 // 5. Level Selection
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: AppTheme.inputBackground,
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
+                    border: Border.all(
+                      color: const Color(0xFF2E2A4E),
+                      width: 1,
+                    ),
                   ),
                   child: DropdownButtonHideUnderline(
                     child: DropdownButtonFormField<String>(
@@ -332,11 +366,20 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         enabledBorder: InputBorder.none,
                         focusedBorder: InputBorder.none,
                         contentPadding: EdgeInsets.zero,
-                        prefixIcon: Icon(Icons.star_outline_rounded, color: AppTheme.textSecondary),
+                        prefixIcon: Icon(
+                          Icons.star_outline_rounded,
+                          color: AppTheme.textSecondary,
+                        ),
                       ),
                       dropdownColor: AppTheme.cardBackground,
-                      style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
-                      icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppTheme.textSecondary),
+                      style: GoogleFonts.inter(
+                        color: Colors.white,
+                        fontSize: 14,
+                      ),
+                      icon: const Icon(
+                        Icons.keyboard_arrow_down_rounded,
+                        color: AppTheme.textSecondary,
+                      ),
                       items: _levels.map((String value) {
                         return DropdownMenuItem<String>(
                           value: value,
@@ -358,7 +401,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 // Submit button
                 appState.isLoading
                     ? const Center(
-                        child: CircularProgressIndicator(color: AppTheme.primaryAccent),
+                        child: CircularProgressIndicator(
+                          color: AppTheme.primaryAccent,
+                        ),
                       )
                     : AnimatedTapDetector(
                         onTap: _handleRegister,
@@ -372,7 +417,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                 color: AppTheme.primaryAccent.withOpacity(0.3),
                                 blurRadius: 10,
                                 offset: const Offset(0, 4),
-                              )
+                              ),
                             ],
                           ),
                           child: Center(
@@ -395,7 +440,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   children: [
                     Text(
                       "Already have an account? ",
-                      style: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 14),
+                      style: GoogleFonts.inter(
+                        color: AppTheme.textSecondary,
+                        fontSize: 14,
+                      ),
                     ),
                     GestureDetector(
                       onTap: () {

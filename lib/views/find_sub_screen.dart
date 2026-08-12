@@ -44,11 +44,12 @@ class _FindSubScreenState extends State<FindSubScreen> {
   void _updateFilteredFavorites() {
     final selectedInstrumentLower = _selectedInstrument.toLowerCase();
     _filteredFavorites = _favorites.where((m) {
-      final matchesInstrument = (m.userType?.toLowerCase() == selectedInstrumentLower) ||
+      final matchesInstrument =
+          (m.userType?.toLowerCase() == selectedInstrumentLower) ||
           m.instruments.any((i) => i.toLowerCase() == selectedInstrumentLower);
       return matchesInstrument;
     }).toList();
-    
+
     _selectedFavorites.clear();
     for (final f in _filteredFavorites) {
       if (f.userId != null) {
@@ -64,7 +65,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
     try {
       final appState = Provider.of<AppState>(context, listen: false);
       final favIds = await appState.firebaseService.getFavoriteUserIdsAsync();
-      
+
       final List<UserProfile> loaded = [];
       for (final id in favIds) {
         final profile = await appState.firebaseService.getUserProfileAsync(id);
@@ -72,7 +73,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
           loaded.add(profile);
         }
       }
-      
+
       setState(() {
         _favorites = loaded;
         _updateFilteredFavorites();
@@ -108,19 +109,24 @@ class _FindSubScreenState extends State<FindSubScreen> {
     final bandId = appState.activeBandId;
     if (bandId != null) {
       try {
-        final Band? band = await appState.firebaseService.getBandInfoAsync(bandId);
+        final Band? band = await appState.firebaseService.getBandInfoAsync(
+          bandId,
+        );
         if (band != null && mounted) {
           setState(() {
-            if (band.rehearsalLocation != null && band.rehearsalLocation!.isNotEmpty) {
+            if (band.rehearsalLocation != null &&
+                band.rehearsalLocation!.isNotEmpty) {
               _locationController.text = band.rehearsalLocation!;
             } else if (band.location != null && band.location!.isNotEmpty) {
               _locationController.text = band.location!;
             }
 
-            if (band.rehearsalStartTime != null && band.rehearsalStartTime!.isNotEmpty) {
+            if (band.rehearsalStartTime != null &&
+                band.rehearsalStartTime!.isNotEmpty) {
               _startTime = _parseTime(band.rehearsalStartTime, _startTime);
             }
-            if (band.rehearsalEndTime != null && band.rehearsalEndTime!.isNotEmpty) {
+            if (band.rehearsalEndTime != null &&
+                band.rehearsalEndTime!.isNotEmpty) {
               _endTime = _parseTime(band.rehearsalEndTime, _endTime);
             }
           });
@@ -152,17 +158,24 @@ class _FindSubScreenState extends State<FindSubScreen> {
     if (widget.eventId == null || widget.bandId == null) return;
     try {
       final appState = Provider.of<AppState>(context, listen: false);
-      final event = await appState.firebaseService.getBandEventOnceAsync(widget.bandId!, widget.eventId!);
+      final event = await appState.firebaseService.getBandEventOnceAsync(
+        widget.bandId!,
+        widget.eventId!,
+      );
       if (event != null && mounted) {
         setState(() {
           _locationController.text = event.location;
-          final start = DateTime.tryParse(event.startDateTime) ?? DateTime.now();
+          final start =
+              DateTime.tryParse(event.startDateTime) ?? DateTime.now();
           _selectedDate = start;
           _startTime = TimeOfDay.fromDateTime(start);
-          final end = DateTime.tryParse(event.endDateTime) ?? start.add(const Duration(hours: 2));
+          final end =
+              DateTime.tryParse(event.endDateTime) ??
+              start.add(const Duration(hours: 2));
           _endTime = TimeOfDay.fromDateTime(end);
-          _messageController.text = "Need substitute for event: ${event.title}\nDescription: ${event.description}";
-          
+          _messageController.text =
+              "Need substitute for event: ${event.title}\nDescription: ${event.description}";
+
           final lowerTitle = event.title.toLowerCase();
           for (final inst in _instruments) {
             if (lowerTitle.contains(inst.toLowerCase())) {
@@ -170,7 +183,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
               break;
             }
           }
-          
+
           _updateFilteredFavorites();
         });
       }
@@ -260,44 +273,97 @@ class _FindSubScreenState extends State<FindSubScreen> {
     "Alto Trombone",
     "Viola da Gamba",
     "Steel Guitar",
-    "Steel Pan"
+    "Steel Pan",
   ];
 
   static final Map<String, List<String>> _allSkillsCategoryMap = {
     '🎷 Woodwinds': [
-      'Flute', 'Piccolo Flute', 'Alto Flute', 'Bass Flute',
-      'Oboe', 'English Horn', 'Clarinet', 'Eb Clarinet', 'Alto Clarinet', 'Bass Clarinet',
-      'Bassoon', 'Contra Bassoon', 'Soprano Sax', 'Alto Sax', 'Tenor Sax', 'Bari Sax',
-      'Recorder', 'Soprano Recorder', 'Alto Recorder', 'Tenor Recorder', 'Bass Recorder'
+      'Flute',
+      'Piccolo Flute',
+      'Alto Flute',
+      'Bass Flute',
+      'Oboe',
+      'English Horn',
+      'Clarinet',
+      'Eb Clarinet',
+      'Alto Clarinet',
+      'Bass Clarinet',
+      'Bassoon',
+      'Contra Bassoon',
+      'Soprano Sax',
+      'Alto Sax',
+      'Tenor Sax',
+      'Bari Sax',
+      'Recorder',
+      'Soprano Recorder',
+      'Alto Recorder',
+      'Tenor Recorder',
+      'Bass Recorder',
     ],
     '🎺 Brass': [
-      'Trumpet', 'Cornet', 'Piccolo Trumpet', 'Trombone', 'Alto Trombone',
-      'French Horn', 'Euphonium', 'Tuba'
+      'Trumpet',
+      'Cornet',
+      'Piccolo Trumpet',
+      'Trombone',
+      'Alto Trombone',
+      'French Horn',
+      'Euphonium',
+      'Tuba',
     ],
     '🎻 Strings': [
-      'Acoustic Guitar', 'Electric Guitar', 'Electric Bass', 'Violin', 'Viola', 'Cello',
-      'Contrabass', 'Harp', 'Viola da Gamba', 'Steel Guitar', 'Steel Pan'
+      'Acoustic Guitar',
+      'Electric Guitar',
+      'Electric Bass',
+      'Violin',
+      'Viola',
+      'Cello',
+      'Contrabass',
+      'Harp',
+      'Viola da Gamba',
+      'Steel Guitar',
+      'Steel Pan',
     ],
     '🎹 Keyboards': [
-      'Piano', 'Keyboard/Synth', 'Harpsichord', 'Organ (Hammond)'
+      'Piano',
+      'Keyboard/Synth',
+      'Harpsichord',
+      'Organ (Hammond)',
     ],
     '🥁 Percussion': [
-      'Drums', 'Latin Percussion (congas, timbales, etc)', 'Classical Percussion (timpani, cymbals, etc)'
+      'Drums',
+      'Latin Percussion (congas, timbales, etc)',
+      'Classical Percussion (timpani, cymbals, etc)',
     ],
     '🗣️ Voices': [
-      'Soprano', 'Alto', 'Tenor', 'Baritone', 'Bass',
-      'Mezzo Soprano', 'Contralto', 'Counter Tenor',
-      'Male Lead Vocals', 'Female Lead vocals', 'Male Backing vocals', 'Female Backing vocals'
+      'Soprano',
+      'Alto',
+      'Tenor',
+      'Baritone',
+      'Bass',
+      'Mezzo Soprano',
+      'Contralto',
+      'Counter Tenor',
+      'Male Lead Vocals',
+      'Female Lead vocals',
+      'Male Backing vocals',
+      'Female Backing vocals',
     ],
     '🎧 Songwriters & Producers': [
-      'Songwriter', 'Producer', 'Composer', 'Lyricist', 'Beatmaker', 'DJ'
+      'Songwriter',
+      'Producer',
+      'Composer',
+      'Lyricist',
+      'Beatmaker',
+      'DJ',
     ],
     '🎛️ Studios & Engineers': [
-      'Studio', 'Home Studio', 'Recording Engineer', 'Mix engineer', 'Live Engineer'
+      'Studio',
+      'Home Studio',
+      'Recording Engineer',
+      'Mix engineer',
+      'Live Engineer',
     ],
-    '💼 PR & Management': [
-      'Manager', 'Promotor', 'Agency', 'Other'
-    ],
+    '💼 PR & Management': ['Manager', 'Promotor', 'Agency', 'Other'],
   };
 
   Future<void> _openInstrumentPicker() async {
@@ -391,7 +457,9 @@ class _FindSubScreenState extends State<FindSubScreen> {
         if (_favorites.isEmpty) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('You have no favorited musicians. Go to the Browse tab to add favorites.'),
+              content: Text(
+                'You have no favorited musicians. Go to the Browse tab to add favorites.',
+              ),
               backgroundColor: AppTheme.danger,
             ),
           );
@@ -401,7 +469,9 @@ class _FindSubScreenState extends State<FindSubScreen> {
         if (_filteredFavorites.isEmpty) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('None of your favorites play $_selectedInstrument. Add matching favorites or use Send to All.'),
+              content: Text(
+                'None of your favorites play $_selectedInstrument. Add matching favorites or use Send to All.',
+              ),
               backgroundColor: AppTheme.danger,
             ),
           );
@@ -415,7 +485,9 @@ class _FindSubScreenState extends State<FindSubScreen> {
         if (checkedUserIds.isEmpty) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Please check at least one favorite musician to send the request to.'),
+              content: Text(
+                'Please check at least one favorite musician to send the request to.',
+              ),
               backgroundColor: AppTheme.danger,
             ),
           );
@@ -428,15 +500,17 @@ class _FindSubScreenState extends State<FindSubScreen> {
       final resolvedLoc = _locationController.text.trim().isNotEmpty
           ? _locationController.text.trim()
           : (profile?.location ?? 'Stockholm, Sweden');
-      
+
       final coords = _resolveCoordinates(resolvedLoc);
 
       // Create model
       final request = SubRequest(
         voicePart: _selectedInstrument,
         location: resolvedLoc,
-        startTime: '${_startTime.hour.toString().padLeft(2, '0')}:${_startTime.minute.toString().padLeft(2, '0')}:00',
-        endTime: '${_endTime.hour.toString().padLeft(2, '0')}:${_endTime.minute.toString().padLeft(2, '0')}:00',
+        startTime:
+            '${_startTime.hour.toString().padLeft(2, '0')}:${_startTime.minute.toString().padLeft(2, '0')}:00',
+        endTime:
+            '${_endTime.hour.toString().padLeft(2, '0')}:${_endTime.minute.toString().padLeft(2, '0')}:00',
         description: _messageController.text,
         date: _selectedDate.toIso8601String(),
         role: _selectedRole,
@@ -450,9 +524,13 @@ class _FindSubScreenState extends State<FindSubScreen> {
         bandId: widget.bandId,
       );
 
-      final subRequestId = await appState.firebaseService.saveSubRequestAsync(request);
+      final subRequestId = await appState.firebaseService.saveSubRequestAsync(
+        request,
+      );
 
-      if (widget.eventId != null && widget.bandId != null && subRequestId != null) {
+      if (widget.eventId != null &&
+          widget.bandId != null &&
+          subRequestId != null) {
         final targets = request.targetUserIds;
         if (targets != null && targets.isNotEmpty) {
           await appState.firebaseService.addExternalInviteesToEventAsync(
@@ -563,10 +641,15 @@ class _FindSubScreenState extends State<FindSubScreen> {
                         onTap: () {
                           appState.selectBand(bandId, bandName);
                           Navigator.pop(context); // Close bottom sheet
-                          setState(() {}); // Refresh current screen state to show selected band
+                          setState(
+                            () {},
+                          ); // Refresh current screen state to show selected band
                         },
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 14,
+                          ),
                           decoration: BoxDecoration(
                             color: isSelected
                                 ? AppTheme.primaryAccent.withOpacity(0.12)
@@ -634,10 +717,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
         '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
 
     return GradientScaffold(
-      appBar: const CustomTopBar(
-        title: 'Find Musician',
-        showBack: true,
-      ),
+      appBar: const CustomTopBar(title: 'Find Musician', showBack: true),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20.0),
         child: Column(
@@ -662,12 +742,15 @@ class _FindSubScreenState extends State<FindSubScreen> {
                   context: context,
                   barrierDismissible: false,
                   builder: (context) => const Center(
-                    child: CircularProgressIndicator(color: AppTheme.primaryAccent),
+                    child: CircularProgressIndicator(
+                      color: AppTheme.primaryAccent,
+                    ),
                   ),
                 );
 
                 try {
-                  final bands = await appState.firebaseService.getUserBandsAsync(userId);
+                  final bands = await appState.firebaseService
+                      .getUserBandsAsync(userId);
                   if (context.mounted) {
                     Navigator.pop(context); // Dismiss loader
                   }
@@ -680,7 +763,9 @@ class _FindSubScreenState extends State<FindSubScreen> {
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
-                          content: Text('You are not a member of any bands yet.'),
+                          content: Text(
+                            'You are not a member of any bands yet.',
+                          ),
                           backgroundColor: AppTheme.danger,
                         ),
                       );
@@ -693,16 +778,25 @@ class _FindSubScreenState extends State<FindSubScreen> {
                 }
               },
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
                 decoration: BoxDecoration(
                   color: AppTheme.primaryAccent.withOpacity(0.12),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.3)),
+                  border: Border.all(
+                    color: AppTheme.primaryAccent.withOpacity(0.3),
+                  ),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.groups_rounded, color: AppTheme.primaryAccent, size: 20),
+                    const Icon(
+                      Icons.groups_rounded,
+                      color: AppTheme.primaryAccent,
+                      size: 20,
+                    ),
                     const SizedBox(width: 10),
                     Text(
                       appState.activeBandName ?? "Freelance Gig",
@@ -713,7 +807,11 @@ class _FindSubScreenState extends State<FindSubScreen> {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    const Icon(Icons.edit_rounded, color: AppTheme.primaryAccent, size: 14),
+                    const Icon(
+                      Icons.edit_rounded,
+                      color: AppTheme.primaryAccent,
+                      size: 14,
+                    ),
                   ],
                 ),
               ),
@@ -770,12 +868,16 @@ class _FindSubScreenState extends State<FindSubScreen> {
                     child: Container(
                       height: 48,
                       decoration: BoxDecoration(
-                        color: (_selectedRole == 'New Member' || _selectedRole == 'New member')
+                        color:
+                            (_selectedRole == 'New Member' ||
+                                _selectedRole == 'New member')
                             ? AppTheme.primaryAccent.withOpacity(0.12)
                             : AppTheme.cardBackground,
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(
-                          color: (_selectedRole == 'New Member' || _selectedRole == 'New member')
+                          color:
+                              (_selectedRole == 'New Member' ||
+                                  _selectedRole == 'New member')
                               ? AppTheme.primaryAccent
                               : const Color(0xFF2E2A4E),
                           width: 1.5,
@@ -787,7 +889,9 @@ class _FindSubScreenState extends State<FindSubScreen> {
                           style: GoogleFonts.inter(
                             fontSize: 12,
                             fontWeight: FontWeight.bold,
-                            color: (_selectedRole == 'New Member' || _selectedRole == 'New member')
+                            color:
+                                (_selectedRole == 'New Member' ||
+                                    _selectedRole == 'New member')
                                 ? Colors.white
                                 : AppTheme.textSecondary,
                           ),
@@ -854,7 +958,11 @@ class _FindSubScreenState extends State<FindSubScreen> {
                     children: [
                       Row(
                         children: [
-                          const Icon(Icons.music_note_rounded, color: AppTheme.primaryAccent, size: 18),
+                          const Icon(
+                            Icons.music_note_rounded,
+                            color: AppTheme.primaryAccent,
+                            size: 18,
+                          ),
                           const SizedBox(width: 8),
                           Text(
                             'INSTRUMENT / SKILLS',
@@ -871,7 +979,11 @@ class _FindSubScreenState extends State<FindSubScreen> {
                         onTap: _openInstrumentPicker,
                         child: Text(
                           _selectedInstrument.isEmpty ? '+ Select' : 'Change',
-                          style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.primaryAccent),
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: AppTheme.primaryAccent,
+                          ),
                         ),
                       ),
                     ],
@@ -882,7 +994,11 @@ class _FindSubScreenState extends State<FindSubScreen> {
                       onTap: _openInstrumentPicker,
                       child: Text(
                         'No instrument selected. Tap to select...',
-                        style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textMuted, fontStyle: FontStyle.italic),
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          color: AppTheme.textMuted,
+                          fontStyle: FontStyle.italic,
+                        ),
                       ),
                     )
                   else
@@ -893,10 +1009,22 @@ class _FindSubScreenState extends State<FindSubScreen> {
                           selected: false,
                           onPressed: _openInstrumentPicker,
                           backgroundColor: const Color(0xFF1B1735),
-                          labelStyle: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.white),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                          side: const BorderSide(color: AppTheme.primaryAccent, width: 1),
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          labelStyle: GoogleFonts.inter(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          side: const BorderSide(
+                            color: AppTheme.primaryAccent,
+                            width: 1,
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
                           visualDensity: VisualDensity.compact,
                         ),
                       ],
@@ -930,7 +1058,11 @@ class _FindSubScreenState extends State<FindSubScreen> {
                 children: [
                   Row(
                     children: [
-                      const Icon(Icons.calendar_today_rounded, color: AppTheme.primaryAccent, size: 18),
+                      const Icon(
+                        Icons.calendar_today_rounded,
+                        color: AppTheme.primaryAccent,
+                        size: 18,
+                      ),
                       const SizedBox(width: 8),
                       Text(
                         'Gig/Rehearsal Details',
@@ -947,7 +1079,10 @@ class _FindSubScreenState extends State<FindSubScreen> {
                   // Event Description Text Input
                   Text(
                     'Gig / Event Details',
-                    style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      color: AppTheme.textSecondary,
+                    ),
                   ),
                   SizedBox(height: 8),
                   TextField(
@@ -957,7 +1092,9 @@ class _FindSubScreenState extends State<FindSubScreen> {
                     style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
                     decoration: InputDecoration(
                       hintText: 'Describe what the gig/rehearsal is about...',
-                      counterStyle: GoogleFonts.inter(color: AppTheme.textSecondary),
+                      counterStyle: GoogleFonts.inter(
+                        color: AppTheme.textSecondary,
+                      ),
                       contentPadding: EdgeInsets.all(12),
                     ),
                   ),
@@ -966,7 +1103,10 @@ class _FindSubScreenState extends State<FindSubScreen> {
                   // Location (City, Country)
                   Text(
                     'Location (City, Country)',
-                    style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      color: AppTheme.textSecondary,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   TextField(
@@ -974,7 +1114,10 @@ class _FindSubScreenState extends State<FindSubScreen> {
                     style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
                     decoration: const InputDecoration(
                       hintText: 'Stockholm, Sweden',
-                      prefixIcon: Icon(Icons.location_on_rounded, color: AppTheme.textSecondary),
+                      prefixIcon: Icon(
+                        Icons.location_on_rounded,
+                        color: AppTheme.textSecondary,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -982,7 +1125,10 @@ class _FindSubScreenState extends State<FindSubScreen> {
                   // Date
                   Text(
                     'Date',
-                    style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      color: AppTheme.textSecondary,
+                    ),
                   ),
                   const SizedBox(height: 8),
 
@@ -990,20 +1136,32 @@ class _FindSubScreenState extends State<FindSubScreen> {
                   AnimatedTapDetector(
                     onTap: _pickDate,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 14,
+                      ),
                       decoration: BoxDecoration(
                         color: AppTheme.inputBackground,
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
+                        border: Border.all(
+                          color: const Color(0xFF2E2A4E),
+                          width: 1,
+                        ),
                       ),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text(
                             DateFormat('dd MMMM yyyy').format(_selectedDate),
-                            style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
+                            style: GoogleFonts.inter(
+                              color: Colors.white,
+                              fontSize: 14,
+                            ),
                           ),
-                          const Icon(Icons.keyboard_arrow_down_rounded, color: AppTheme.textSecondary),
+                          const Icon(
+                            Icons.keyboard_arrow_down_rounded,
+                            color: AppTheme.textSecondary,
+                          ),
                         ],
                       ),
                     ),
@@ -1019,22 +1177,33 @@ class _FindSubScreenState extends State<FindSubScreen> {
                           children: [
                             Text(
                               'Start Time',
-                              style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
+                              style: GoogleFonts.inter(
+                                fontSize: 12,
+                                color: AppTheme.textSecondary,
+                              ),
                             ),
                             const SizedBox(height: 8),
                             AnimatedTapDetector(
                               onTap: () => _pickTime(true),
                               child: Container(
-                                padding: const EdgeInsets.symmetric(vertical: 14),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 14,
+                                ),
                                 decoration: BoxDecoration(
                                   color: AppTheme.inputBackground,
                                   borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
+                                  border: Border.all(
+                                    color: const Color(0xFF2E2A4E),
+                                    width: 1,
+                                  ),
                                 ),
                                 child: Center(
                                   child: Text(
                                     formatTime(_startTime),
-                                    style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
+                                    style: GoogleFonts.inter(
+                                      color: Colors.white,
+                                      fontSize: 14,
+                                    ),
                                   ),
                                 ),
                               ),
@@ -1049,22 +1218,33 @@ class _FindSubScreenState extends State<FindSubScreen> {
                           children: [
                             Text(
                               'End Time',
-                              style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
+                              style: GoogleFonts.inter(
+                                fontSize: 12,
+                                color: AppTheme.textSecondary,
+                              ),
                             ),
                             const SizedBox(height: 8),
                             AnimatedTapDetector(
                               onTap: () => _pickTime(false),
                               child: Container(
-                                padding: const EdgeInsets.symmetric(vertical: 14),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 14,
+                                ),
                                 decoration: BoxDecoration(
                                   color: AppTheme.inputBackground,
                                   borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
+                                  border: Border.all(
+                                    color: const Color(0xFF2E2A4E),
+                                    width: 1,
+                                  ),
                                 ),
                                 child: Center(
                                   child: Text(
                                     formatTime(_endTime),
-                                    style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
+                                    style: GoogleFonts.inter(
+                                      color: Colors.white,
+                                      fontSize: 14,
+                                    ),
                                   ),
                                 ),
                               ),
@@ -1139,7 +1319,9 @@ class _FindSubScreenState extends State<FindSubScreen> {
                         child: Text(
                           'FAVORITES LIST',
                           style: GoogleFonts.inter(
-                            color: _showFavoritesList ? Colors.white : AppTheme.textSecondary,
+                            color: _showFavoritesList
+                                ? Colors.white
+                                : AppTheme.textSecondary,
                             fontWeight: FontWeight.bold,
                             fontSize: 14,
                             letterSpacing: 0.5,
@@ -1152,7 +1334,11 @@ class _FindSubScreenState extends State<FindSubScreen> {
                 const SizedBox(width: 16),
                 Expanded(
                   child: _isSubmitting
-                      ? const Center(child: CircularProgressIndicator(color: AppTheme.primaryAccent))
+                      ? const Center(
+                          child: CircularProgressIndicator(
+                            color: AppTheme.primaryAccent,
+                          ),
+                        )
                       : AnimatedTapDetector(
                           onTap: () => _submitRequest(sendToAll: true),
                           child: Container(
@@ -1162,10 +1348,12 @@ class _FindSubScreenState extends State<FindSubScreen> {
                               borderRadius: BorderRadius.circular(12),
                               boxShadow: [
                                 BoxShadow(
-                                  color: AppTheme.primaryAccent.withOpacity(0.3),
+                                  color: AppTheme.primaryAccent.withOpacity(
+                                    0.3,
+                                  ),
                                   blurRadius: 8,
                                   offset: const Offset(0, 3),
-                                )
+                                ),
                               ],
                             ),
                             child: Center(
@@ -1191,7 +1379,9 @@ class _FindSubScreenState extends State<FindSubScreen> {
                 const Center(
                   child: Padding(
                     padding: EdgeInsets.symmetric(vertical: 20),
-                    child: CircularProgressIndicator(color: AppTheme.primaryAccent),
+                    child: CircularProgressIndicator(
+                      color: AppTheme.primaryAccent,
+                    ),
                   ),
                 )
               else if (_favorites.isEmpty)
@@ -1204,12 +1394,18 @@ class _FindSubScreenState extends State<FindSubScreen> {
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.warning_amber_rounded, color: AppTheme.danger),
+                      const Icon(
+                        Icons.warning_amber_rounded,
+                        color: AppTheme.danger,
+                      ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
                           'You have no favorited musicians. Go to the Browse tab to add favorites.',
-                          style: GoogleFonts.inter(color: Colors.white, fontSize: 13),
+                          style: GoogleFonts.inter(
+                            color: Colors.white,
+                            fontSize: 13,
+                          ),
                         ),
                       ),
                     ],
@@ -1221,16 +1417,24 @@ class _FindSubScreenState extends State<FindSubScreen> {
                   decoration: BoxDecoration(
                     color: AppTheme.warning.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppTheme.warning.withOpacity(0.3)),
+                    border: Border.all(
+                      color: AppTheme.warning.withOpacity(0.3),
+                    ),
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.info_outline_rounded, color: AppTheme.warning),
+                      const Icon(
+                        Icons.info_outline_rounded,
+                        color: AppTheme.warning,
+                      ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
                           'None of your favorites play $_selectedInstrument. Add matching favorites or use Send to All.',
-                          style: GoogleFonts.inter(color: Colors.white, fontSize: 13),
+                          style: GoogleFonts.inter(
+                            color: Colors.white,
+                            fontSize: 13,
+                          ),
                         ),
                       ),
                     ],
@@ -1258,12 +1462,17 @@ class _FindSubScreenState extends State<FindSubScreen> {
 
                     return Container(
                       margin: const EdgeInsets.only(bottom: 8),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
                       decoration: BoxDecoration(
                         color: AppTheme.cardBackground,
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                          color: isChecked ? AppTheme.primaryAccent.withOpacity(0.5) : const Color(0xFF231F45),
+                          color: isChecked
+                              ? AppTheme.primaryAccent.withOpacity(0.5)
+                              : const Color(0xFF231F45),
                           width: 1,
                         ),
                       ),
@@ -1282,16 +1491,26 @@ class _FindSubScreenState extends State<FindSubScreen> {
                           const SizedBox(width: 4),
                           CircleAvatar(
                             radius: 20,
-                            backgroundColor: AppTheme.primaryAccent.withOpacity(0.2),
-                            backgroundImage: musician.profilePictureUrl != null &&
+                            backgroundColor: AppTheme.primaryAccent.withOpacity(
+                              0.2,
+                            ),
+                            backgroundImage:
+                                musician.profilePictureUrl != null &&
                                     musician.profilePictureUrl!.isNotEmpty
                                 ? NetworkImage(musician.profilePictureUrl!)
                                 : null,
-                            child: musician.profilePictureUrl == null ||
+                            child:
+                                musician.profilePictureUrl == null ||
                                     musician.profilePictureUrl!.isEmpty
                                 ? Text(
-                                    (musician.displayName ?? 'U').substring(0, 1).toUpperCase(),
-                                    style: GoogleFonts.inter(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                                    (musician.displayName ?? 'U')
+                                        .substring(0, 1)
+                                        .toUpperCase(),
+                                    style: GoogleFonts.inter(
+                                      color: Colors.white,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.bold,
+                                    ),
                                   )
                                 : null,
                           ),
@@ -1326,7 +1545,11 @@ class _FindSubScreenState extends State<FindSubScreen> {
                 ),
                 const SizedBox(height: 20),
                 _isSubmitting
-                    ? const Center(child: CircularProgressIndicator(color: AppTheme.primaryAccent))
+                    ? const Center(
+                        child: CircularProgressIndicator(
+                          color: AppTheme.primaryAccent,
+                        ),
+                      )
                     : AnimatedTapDetector(
                         onTap: () => _submitRequest(sendToAll: false),
                         child: Container(
@@ -1340,7 +1563,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
                                 color: AppTheme.primaryAccent.withOpacity(0.3),
                                 blurRadius: 8,
                                 offset: const Offset(0, 3),
-                              )
+                              ),
                             ],
                           ),
                           child: Center(
@@ -1364,4 +1587,3 @@ class _FindSubScreenState extends State<FindSubScreen> {
     );
   }
 }
-

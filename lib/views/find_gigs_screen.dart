@@ -44,33 +44,34 @@ class _FindGigsScreenState extends State<FindGigsScreen>
       final appState = Provider.of<AppState>(context, listen: false);
       final list = await appState.firebaseService.getAllSubRequestsAsync();
       final currentUserId = appState.currentUserId;
-      
+
       final userProfile = appState.currentUserProfile;
       final userInstruments = userProfile?.instruments ?? [];
 
       final filteredUpcoming = list.where((gig) {
         // 1. Filter out corrupt / un-named / empty gigs
         if (gig.bandName == null || gig.bandName!.trim().isEmpty) return false;
-        if (gig.voicePart == null || gig.voicePart!.trim().isEmpty) return false;
+        if (gig.voicePart == null || gig.voicePart!.trim().isEmpty)
+          return false;
         if (gig.date == null || gig.date!.trim().isEmpty) return false;
 
         // 2. Filter out past gigs
         final gigDate = DateTime.tryParse(gig.date!);
         if (gigDate == null) return false;
-        
+
         final now = DateTime.now();
         final today = DateTime(now.year, now.month, now.day);
         if (gigDate.isBefore(today)) return false;
 
         // 3. Filter by user instruments (with fallback to show all if profile instruments are empty)
         if (userInstruments.isEmpty) return true;
-        
+
         final voicePartLower = gig.voicePart!.toLowerCase();
         final matches = userInstruments.any((inst) {
           final instLower = inst.toLowerCase();
-          return instLower == voicePartLower || 
-                 voicePartLower.contains(instLower) || 
-                 instLower.contains(voicePartLower);
+          return instLower == voicePartLower ||
+              voicePartLower.contains(instLower) ||
+              instLower.contains(voicePartLower);
         });
         return matches;
       }).toList();
@@ -78,7 +79,7 @@ class _FindGigsScreenState extends State<FindGigsScreen>
       final filteredInvites = list.where((gig) {
         if (gig.bandName == null || gig.bandName!.trim().isEmpty) return false;
         if (gig.date == null || gig.date!.trim().isEmpty) return false;
-        
+
         final gigDate = DateTime.tryParse(gig.date!);
         if (gigDate == null) return false;
         final now = DateTime.now();
@@ -86,7 +87,9 @@ class _FindGigsScreenState extends State<FindGigsScreen>
         if (gigDate.isBefore(today)) return false;
 
         final targets = gig.targetUserIds;
-        return targets != null && currentUserId != null && targets.contains(currentUserId);
+        return targets != null &&
+            currentUserId != null &&
+            targets.contains(currentUserId);
       }).toList();
 
       // Sort chronologically (earliest gig date first)
@@ -141,7 +144,8 @@ class _FindGigsScreenState extends State<FindGigsScreen>
   void _showGigDetailsBottomSheet(SubRequest gig) {
     final appState = Provider.of<AppState>(context, listen: false);
     final currentUserId = appState.currentUserId;
-    final hasApplied = currentUserId != null && gig.responses.containsKey(currentUserId);
+    final hasApplied =
+        currentUserId != null && gig.responses.containsKey(currentUserId);
     final date = _getGigDate(gig);
 
     showModalBottomSheet(
@@ -193,7 +197,10 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                         ),
                       ),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
                         decoration: BoxDecoration(
                           color: gig.isPaid
                               ? AppTheme.primaryAccent.withOpacity(0.15)
@@ -204,7 +211,9 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                           gig.isPaid ? 'Paid' : 'Unpaid',
                           style: GoogleFonts.inter(
                             fontSize: 10,
-                            color: gig.isPaid ? AppTheme.primaryAccent : AppTheme.textSecondary,
+                            color: gig.isPaid
+                                ? AppTheme.primaryAccent
+                                : AppTheme.textSecondary,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
@@ -221,16 +230,23 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                     ),
                   ),
                   const SizedBox(height: 16),
-                  
+
                   // Location details
                   Row(
                     children: [
-                      const Icon(Icons.location_on_outlined, color: AppTheme.textSecondary, size: 20),
+                      const Icon(
+                        Icons.location_on_outlined,
+                        color: AppTheme.textSecondary,
+                        size: 20,
+                      ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           gig.location ?? 'Stockholm, Sweden',
-                          style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
+                          style: GoogleFonts.inter(
+                            color: Colors.white,
+                            fontSize: 14,
+                          ),
                         ),
                       ),
                     ],
@@ -240,12 +256,19 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                   // Time details
                   Row(
                     children: [
-                      const Icon(Icons.access_time_rounded, color: AppTheme.textSecondary, size: 20),
+                      const Icon(
+                        Icons.access_time_rounded,
+                        color: AppTheme.textSecondary,
+                        size: 20,
+                      ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           '${DateFormat('EEEE, MMMM d, yyyy').format(date)} | ${gig.startTime ?? "18:00"} - ${gig.endTime ?? "21:00"}',
-                          style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
+                          style: GoogleFonts.inter(
+                            color: Colors.white,
+                            fontSize: 14,
+                          ),
                         ),
                       ),
                     ],
@@ -263,7 +286,8 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    gig.description ?? 'No description provided for this request.',
+                    gig.description ??
+                        'No description provided for this request.',
                     style: GoogleFonts.inter(
                       fontSize: 14,
                       color: AppTheme.textSecondary,
@@ -297,16 +321,19 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                           onTap: () async {
                             if (currentUserId == null) return;
                             try {
-                              await appState.firebaseService.addResponseToSubRequestAsync(
-                                gig.subRequestId ?? gig.id!,
-                                currentUserId,
-                              );
+                              await appState.firebaseService
+                                  .addResponseToSubRequestAsync(
+                                    gig.subRequestId ?? gig.id!,
+                                    currentUserId,
+                                  );
                               // Refresh live list
                               await _loadSubRequests();
                               if (context.mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
-                                    content: Text('Successfully applied for gig!'),
+                                    content: Text(
+                                      'Successfully applied for gig!',
+                                    ),
                                     backgroundColor: AppTheme.success,
                                   ),
                                 );
@@ -354,99 +381,125 @@ class _FindGigsScreenState extends State<FindGigsScreen>
   @override
   Widget build(BuildContext context) {
     return GradientScaffold(
-      appBar: const CustomTopBar(
-        title: 'Find Gigs',
-        showBack: true,
-      ),
+      appBar: const CustomTopBar(title: 'Find Gigs', showBack: true),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Column(
             children: [
-          // Header / Title row
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Find Gigs',
-                  style: GoogleFonts.outfit(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                ),
-                Row(
+              // Header / Title row
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    if (!FeatureToggles.showMapInTopBar) ...[
-                      TextButton.icon(
-                        onPressed: () {
-                          Navigator.pushNamed(context, '/gig-map');
-                        },
-                        icon: const Icon(Icons.map_rounded, color: AppTheme.primaryAccent, size: 18),
-                        label: Text(
-                          'Map View',
-                          style: GoogleFonts.inter(
-                            color: AppTheme.primaryAccent,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13,
-                          ),
-                        ),
-                        style: TextButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                          backgroundColor: AppTheme.primaryAccent.withOpacity(0.12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            side: BorderSide(color: AppTheme.primaryAccent.withOpacity(0.3)),
-                          ),
-                        ),
+                    Text(
+                      'Find Gigs',
+                      style: GoogleFonts.outfit(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
                       ),
-                      const SizedBox(width: 12),
-                    ],
-                    const Icon(Icons.filter_list_rounded, color: Colors.white, size: 24),
+                    ),
+                    Row(
+                      children: [
+                        if (!FeatureToggles.showMapInTopBar) ...[
+                          TextButton.icon(
+                            onPressed: () {
+                              Navigator.pushNamed(context, '/gig-map');
+                            },
+                            icon: const Icon(
+                              Icons.map_rounded,
+                              color: AppTheme.primaryAccent,
+                              size: 18,
+                            ),
+                            label: Text(
+                              'Map View',
+                              style: GoogleFonts.inter(
+                                color: AppTheme.primaryAccent,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                              ),
+                            ),
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 6,
+                              ),
+                              backgroundColor: AppTheme.primaryAccent
+                                  .withOpacity(0.12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                                side: BorderSide(
+                                  color: AppTheme.primaryAccent.withOpacity(
+                                    0.3,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                        ],
+                        const Icon(
+                          Icons.filter_list_rounded,
+                          color: Colors.white,
+                          size: 24,
+                        ),
+                      ],
+                    ),
                   ],
                 ),
-              ],
-            ),
-          ),
+              ),
 
-          // Tabs
-          TabBar(
-            controller: _tabController,
-            indicatorColor: AppTheme.primaryAccent,
-            labelColor: Colors.white,
-            unselectedLabelColor: AppTheme.textSecondary,
-            labelStyle: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 14),
-            tabs: const [
-              Tab(text: 'Upcoming'),
-              Tab(text: 'Invites'),
-              Tab(text: 'Saved'),
+              // Tabs
+              TabBar(
+                controller: _tabController,
+                indicatorColor: AppTheme.primaryAccent,
+                labelColor: Colors.white,
+                unselectedLabelColor: AppTheme.textSecondary,
+                labelStyle: GoogleFonts.inter(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                ),
+                tabs: const [
+                  Tab(text: 'Upcoming'),
+                  Tab(text: 'Invites'),
+                  Tab(text: 'Saved'),
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              // Tab Content
+              Expanded(
+                child: _isLoading
+                    ? const Center(
+                        child: CircularProgressIndicator(
+                          color: AppTheme.primaryAccent,
+                        ),
+                      )
+                    : TabBarView(
+                        controller: _tabController,
+                        children: [
+                          _buildGigsList(_liveGigs),
+                          _buildGigsList(_inviteGigs),
+                          _buildGigsList(
+                            _liveGigs
+                                .where(
+                                  (g) => _savedGigIds.contains(
+                                    g.id ?? g.subRequestId,
+                                  ),
+                                )
+                                .toList(),
+                          ),
+                        ],
+                      ),
+              ),
             ],
           ),
-          const SizedBox(height: 16),
-
-          // Tab Content
-          Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator(color: AppTheme.primaryAccent))
-                : TabBarView(
-                    controller: _tabController,
-                    children: [
-                      _buildGigsList(_liveGigs),
-                      _buildGigsList(_inviteGigs),
-                      _buildGigsList(
-                        _liveGigs.where((g) => _savedGigIds.contains(g.id ?? g.subRequestId)).toList(),
-                      ),
-                    ],
-                  ),
-          ),
-          ],
         ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   Widget _buildGigsList(List<SubRequest> gigList) {
     final appState = Provider.of<AppState>(context, listen: false);
@@ -466,7 +519,9 @@ class _FindGigsScreenState extends State<FindGigsScreen>
       onRefresh: _loadSubRequests,
       child: ListView.builder(
         itemCount: gigList.length,
-        physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+        physics: const AlwaysScrollableScrollPhysics(
+          parent: BouncingScrollPhysics(),
+        ),
         itemBuilder: (context, index) {
           final gig = gigList[index];
           final id = gig.id ?? gig.subRequestId ?? index.toString();
@@ -488,7 +543,10 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                 children: [
                   // Date badge container
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 8,
+                    ),
                     decoration: BoxDecoration(
                       color: AppTheme.primaryAccent.withOpacity(0.12),
                       borderRadius: BorderRadius.circular(10),
@@ -527,7 +585,9 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                           children: [
                             Expanded(
                               child: Text(
-                                gig.role ?? gig.voicePart ?? 'Substitute Request',
+                                gig.role ??
+                                    gig.voicePart ??
+                                    'Substitute Request',
                                 style: GoogleFonts.outfit(
                                   fontSize: 18,
                                   fontWeight: FontWeight.bold,
@@ -539,8 +599,12 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                             GestureDetector(
                               onTap: () => _toggleSaveGig(id),
                               child: Icon(
-                                isSaved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
-                                color: isSaved ? AppTheme.primaryAccent : Colors.white,
+                                isSaved
+                                    ? Icons.bookmark_rounded
+                                    : Icons.bookmark_border_rounded,
+                                color: isSaved
+                                    ? AppTheme.primaryAccent
+                                    : Colors.white,
                                 size: 22,
                               ),
                             ),
@@ -564,7 +628,8 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                           ),
                         ),
                         const SizedBox(height: 6),
-                        if (gig.description != null && gig.description!.isNotEmpty)
+                        if (gig.description != null &&
+                            gig.description!.isNotEmpty)
                           Text(
                             gig.description!,
                             maxLines: 2,
@@ -581,7 +646,10 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                           children: [
                             // Paid / Unpaid tag
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 4,
+                              ),
                               decoration: BoxDecoration(
                                 color: gig.isPaid
                                     ? AppTheme.primaryAccent.withOpacity(0.15)
@@ -604,7 +672,10 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                             // Genre Tag / VoicePart tag
                             if (gig.style != null || gig.voicePart != null)
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 4,
+                                ),
                                 decoration: BoxDecoration(
                                   color: const Color(0xFF1E1A3A),
                                   borderRadius: BorderRadius.circular(8),
@@ -625,17 +696,27 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                                 gig.targetUserIds!.contains(currentUserId)) ...[
                               const SizedBox(width: 8),
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 4,
+                                ),
                                 decoration: BoxDecoration(
                                   gradient: const LinearGradient(
-                                    colors: [Color(0xFFFFD700), Color(0xFFFFA500)],
+                                    colors: [
+                                      Color(0xFFFFD700),
+                                      Color(0xFFFFA500),
+                                    ],
                                   ),
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    const Icon(Icons.star_rounded, color: Colors.white, size: 10),
+                                    const Icon(
+                                      Icons.star_rounded,
+                                      color: Colors.white,
+                                      size: 10,
+                                    ),
                                     const SizedBox(width: 4),
                                     Text(
                                       'Direct Invite',

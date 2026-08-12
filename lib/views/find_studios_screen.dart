@@ -65,10 +65,7 @@ class _FindStudiosScreenState extends State<FindStudiosScreen> {
   @override
   Widget build(BuildContext context) {
     return GradientScaffold(
-      appBar: const CustomTopBar(
-        title: 'Find Studios',
-        showBack: true,
-      ),
+      appBar: const CustomTopBar(title: 'Find Studios', showBack: true),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -96,13 +93,21 @@ class _FindStudiosScreenState extends State<FindStudiosScreen> {
                     icon: const Icon(Icons.add, size: 16),
                     label: Text(
                       'Add Studio',
-                      style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold),
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppTheme.primaryAccent,
                       foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
                     ),
                   ),
                 ],
@@ -114,7 +119,10 @@ class _FindStudiosScreenState extends State<FindStudiosScreen> {
                 controller: _searchController,
                 decoration: const InputDecoration(
                   hintText: 'Search by studio name or location...',
-                  prefixIcon: Icon(Icons.search_rounded, color: AppTheme.textSecondary),
+                  prefixIcon: Icon(
+                    Icons.search_rounded,
+                    color: AppTheme.textSecondary,
+                  ),
                 ),
               ),
               const SizedBox(height: 16),
@@ -122,37 +130,50 @@ class _FindStudiosScreenState extends State<FindStudiosScreen> {
               // Studios List
               Expanded(
                 child: _isLoading
-                    ? const Center(child: CircularProgressIndicator(color: AppTheme.primaryAccent))
+                    ? const Center(
+                        child: CircularProgressIndicator(
+                          color: AppTheme.primaryAccent,
+                        ),
+                      )
                     : _filteredStudios.isEmpty
-                        ? Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                const Icon(Icons.music_video_rounded, color: AppTheme.textMuted, size: 48),
-                                const SizedBox(height: 16),
-                                Text(
-                                  'No studios found matching filters.',
-                                  style: GoogleFonts.inter(color: AppTheme.textSecondary),
-                                ),
-                                const SizedBox(height: 12),
-                                TextButton(
-                                  onPressed: () async {
-                                    await Navigator.pushNamed(context, '/edit-studio');
-                                    _loadStudios();
-                                  },
-                                  child: const Text('Add the first Studio!'),
-                                ),
-                              ],
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(
+                              Icons.music_video_rounded,
+                              color: AppTheme.textMuted,
+                              size: 48,
                             ),
-                          )
-                        : ListView.builder(
-                            itemCount: _filteredStudios.length,
-                            physics: const BouncingScrollPhysics(),
-                            itemBuilder: (context, index) {
-                              final studio = _filteredStudios[index];
-                              return _buildStudioCard(studio);
-                            },
-                          ),
+                            const SizedBox(height: 16),
+                            Text(
+                              'No studios found matching filters.',
+                              style: GoogleFonts.inter(
+                                color: AppTheme.textSecondary,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            TextButton(
+                              onPressed: () async {
+                                await Navigator.pushNamed(
+                                  context,
+                                  '/edit-studio',
+                                );
+                                _loadStudios();
+                              },
+                              child: const Text('Add the first Studio!'),
+                            ),
+                          ],
+                        ),
+                      )
+                    : ListView.builder(
+                        itemCount: _filteredStudios.length,
+                        physics: const BouncingScrollPhysics(),
+                        itemBuilder: (context, index) {
+                          final studio = _filteredStudios[index];
+                          return _buildStudioCard(studio);
+                        },
+                      ),
               ),
             ],
           ),
@@ -174,7 +195,11 @@ class _FindStudiosScreenState extends State<FindStudiosScreen> {
         child: InkWell(
           borderRadius: BorderRadius.circular(16),
           onTap: () async {
-            await Navigator.pushNamed(context, '/studio-details', arguments: studio);
+            await Navigator.pushNamed(
+              context,
+              '/studio-details',
+              arguments: studio,
+            );
             _loadStudios();
           },
           child: Padding(
@@ -197,7 +222,11 @@ class _FindStudiosScreenState extends State<FindStudiosScreen> {
                         ),
                       ),
                     ),
-                    const Icon(Icons.arrow_forward_ios_rounded, color: AppTheme.textSecondary, size: 14),
+                    const Icon(
+                      Icons.arrow_forward_ios_rounded,
+                      color: AppTheme.textSecondary,
+                      size: 14,
+                    ),
                   ],
                 ),
                 const SizedBox(height: 4),
@@ -205,7 +234,11 @@ class _FindStudiosScreenState extends State<FindStudiosScreen> {
                 // Location
                 Row(
                   children: [
-                    const Icon(Icons.location_on_outlined, color: AppTheme.textSecondary, size: 14),
+                    const Icon(
+                      Icons.location_on_outlined,
+                      color: AppTheme.textSecondary,
+                      size: 14,
+                    ),
                     const SizedBox(width: 4),
                     Expanded(
                       child: Text(
@@ -242,7 +275,10 @@ class _FindStudiosScreenState extends State<FindStudiosScreen> {
                     runSpacing: 6,
                     children: studio.genres.take(3).map((genre) {
                       return Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 3,
+                        ),
                         decoration: BoxDecoration(
                           color: const Color(0xFF1E1A3A),
                           borderRadius: BorderRadius.circular(8),

@@ -141,7 +141,10 @@ class HomeScreen extends StatelessWidget {
                           Navigator.pushNamed(context, routeName);
                         },
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 14,
+                          ),
                           decoration: BoxDecoration(
                             color: isSelected
                                 ? AppTheme.primaryAccent.withOpacity(0.12)
@@ -221,7 +224,8 @@ class HomeScreen extends StatelessWidget {
         subtitle: 'Find and connect with talented musicians near you',
         onTap: () {
           appState.trackButtonClick('find_musicians');
-          final isProducer = profile?.instruments.contains('PRODUCER') == true ||
+          final isProducer =
+              profile?.instruments.contains('PRODUCER') == true ||
               profile?.userType == 'PRODUCER';
           if (isProducer) {
             Navigator.pushNamed(context, '/producer-search');
@@ -288,7 +292,9 @@ class HomeScreen extends StatelessWidget {
       if (clicksA != clicksB) {
         return clicksB.compareTo(clicksA); // Descending (most clicked first)
       }
-      return (defaultOrder[a.id] ?? 0).compareTo(defaultOrder[b.id] ?? 0); // Stable default order
+      return (defaultOrder[a.id] ?? 0).compareTo(
+        defaultOrder[b.id] ?? 0,
+      ); // Stable default order
     });
 
     return SafeArea(
@@ -325,18 +331,23 @@ class HomeScreen extends StatelessWidget {
             const SizedBox(height: 30),
 
             // Action Cards List (Dynamically sorted)
-            ...actionItems.expand((item) => [
-              _buildActionCard(
-                context,
-                icon: item.icon,
-                title: item.title,
-                subtitle: item.subtitle,
-                onTap: item.onTap,
-              ),
-              const SizedBox(height: 16),
-            ]).toList(),
-            const SizedBox(height: 24), // Extra spacing to reach total height 40 before Logout
-
+            ...actionItems
+                .expand(
+                  (item) => [
+                    _buildActionCard(
+                      context,
+                      icon: item.icon,
+                      title: item.title,
+                      subtitle: item.subtitle,
+                      onTap: item.onTap,
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                )
+                .toList(),
+            const SizedBox(
+              height: 24,
+            ), // Extra spacing to reach total height 40 before Logout
             // Logout Button
             Center(
               child: AnimatedTapDetector(
@@ -347,7 +358,10 @@ class HomeScreen extends StatelessWidget {
                   }
                 },
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 12,
+                    horizontal: 24,
+                  ),
                   child: Text(
                     'Logout',
                     style: GoogleFonts.inter(
@@ -394,10 +408,7 @@ class HomeScreen extends StatelessWidget {
         decoration: BoxDecoration(
           color: AppTheme.cardBackground,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: const Color(0xFF231F45),
-            width: 1,
-          ),
+          border: Border.all(color: const Color(0xFF231F45), width: 1),
         ),
         child: Row(
           children: [
@@ -407,11 +418,7 @@ class HomeScreen extends StatelessWidget {
                 color: AppTheme.primaryAccent.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Icon(
-                icon,
-                color: AppTheme.primaryAccent,
-                size: 26,
-              ),
+              child: Icon(icon, color: AppTheme.primaryAccent, size: 26),
             ),
             const SizedBox(width: 16),
             Expanded(
@@ -471,10 +478,12 @@ class ExperimentalHomeViewContent extends StatefulWidget {
   const ExperimentalHomeViewContent({super.key});
 
   @override
-  State<ExperimentalHomeViewContent> createState() => _ExperimentalHomeViewContentState();
+  State<ExperimentalHomeViewContent> createState() =>
+      _ExperimentalHomeViewContentState();
 }
 
-class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewContent> {
+class _ExperimentalHomeViewContentState
+    extends State<ExperimentalHomeViewContent> {
   Map<String, int> _localClicks = {};
   bool _isLoading = true;
 
@@ -624,7 +633,10 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
                           Navigator.pushNamed(context, routeName);
                         },
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 14,
+                          ),
                           decoration: BoxDecoration(
                             color: isSelected
                                 ? AppTheme.primaryAccent.withOpacity(0.12)
@@ -706,7 +718,11 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
     }
   }
 
-  Widget _buildCustomBubble(BuildContext context, HomeActionItem item, {required bool isCenter}) {
+  Widget _buildCustomBubble(
+    BuildContext context,
+    HomeActionItem item, {
+    required bool isCenter,
+  }) {
     final double size = 114;
     final double iconSize = 32;
     final double fontSize = 10;
@@ -727,7 +743,9 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
             radius: 0.85,
           ),
           border: Border.all(
-            color: const Color(0xFFE5A9FF).withOpacity(0.9), // Bright glowing edge border
+            color: const Color(
+              0xFFE5A9FF,
+            ).withOpacity(0.9), // Bright glowing edge border
             width: 1.5,
           ),
           boxShadow: [
@@ -743,7 +761,9 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             border: Border.all(
-              color: const Color(0xFFC066F6).withOpacity(0.25), // Subtle inner ring
+              color: const Color(
+                0xFFC066F6,
+              ).withOpacity(0.25), // Subtle inner ring
               width: 1,
             ),
           ),
@@ -752,11 +772,7 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(
-                  item.icon,
-                  color: Colors.white,
-                  size: iconSize,
-                ),
+                Icon(item.icon, color: Colors.white, size: iconSize),
                 const SizedBox(height: 6),
                 Text(
                   _getShortLabel(item.id, item.title),
@@ -790,10 +806,7 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
         decoration: BoxDecoration(
           color: AppTheme.cardBackground,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: const Color(0xFF231F45),
-            width: 1,
-          ),
+          border: Border.all(color: const Color(0xFF231F45), width: 1),
         ),
         child: Row(
           children: [
@@ -803,11 +816,7 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
                 color: AppTheme.primaryAccent.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Icon(
-                icon,
-                color: AppTheme.primaryAccent,
-                size: 26,
-              ),
+              child: Icon(icon, color: AppTheme.primaryAccent, size: 26),
             ),
             const SizedBox(width: 16),
             Expanded(
@@ -860,7 +869,8 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
         subtitle: 'Find and connect with talented musicians near you',
         onTap: () async {
           await HomeUsageTracker.incrementClick('find_musicians');
-          final isProducer = profile?.instruments.contains('PRODUCER') == true ||
+          final isProducer =
+              profile?.instruments.contains('PRODUCER') == true ||
               profile?.userType == 'PRODUCER';
           if (isProducer) {
             await Navigator.pushNamed(context, '/producer-search');
@@ -955,14 +965,16 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
     });
 
     final selectedIds = appState.selectedBubbles;
-    final List<String> bubbleIds = selectedIds.length == 3 ? selectedIds : [
-      'browse_musicians',
-      'find_gigs',
-      'find_musicians',
-    ];
+    final List<String> bubbleIds = selectedIds.length == 3
+        ? selectedIds
+        : ['browse_musicians', 'find_gigs', 'find_musicians'];
 
-    final topBubbleActions = bubbleIds.map((id) => allActions.firstWhere((item) => item.id == id)).toList();
-    final remainingCardActions = allActions.where((item) => !topBubbleActions.contains(item)).toList();
+    final topBubbleActions = bubbleIds
+        .map((id) => allActions.firstWhere((item) => item.id == id))
+        .toList();
+    final remainingCardActions = allActions
+        .where((item) => !topBubbleActions.contains(item))
+        .toList();
 
     return Stack(
       children: [
@@ -972,7 +984,8 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
           left: 0,
           right: 0,
           child: SizedBox(
-            height: 140, // Height is perfect to cover the CustomTopBar + safe status area
+            height:
+                140, // Height is perfect to cover the CustomTopBar + safe status area
             child: Image.asset(
               'assets/images/header_base.png',
               fit: BoxFit.cover,
@@ -1028,27 +1041,40 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
                   alignment: Alignment.center,
                   children: [
                     Positioned.fill(
-                      child: CustomPaint(
-                        painter: NeonArcPainter(),
-                      ),
+                      child: CustomPaint(painter: NeonArcPainter()),
                     ),
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 24),
                       child: SingleChildScrollView(
                         scrollDirection: Axis.horizontal,
-                        clipBehavior: Clip.none, // Prevent clipping of neon glow/shadows
+                        clipBehavior:
+                            Clip.none, // Prevent clipping of neon glow/shadows
                         physics: const BouncingScrollPhysics(),
                         child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 20), // Align content edges with page borders
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                          ), // Align content edges with page borders
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              _buildCustomBubble(context, topBubbleActions[0], isCenter: false),
+                              _buildCustomBubble(
+                                context,
+                                topBubbleActions[0],
+                                isCenter: false,
+                              ),
                               const SizedBox(width: 18),
-                              _buildCustomBubble(context, topBubbleActions[1], isCenter: true),
+                              _buildCustomBubble(
+                                context,
+                                topBubbleActions[1],
+                                isCenter: true,
+                              ),
                               const SizedBox(width: 18),
-                              _buildCustomBubble(context, topBubbleActions[2], isCenter: false),
+                              _buildCustomBubble(
+                                context,
+                                topBubbleActions[2],
+                                isCenter: false,
+                              ),
                             ],
                           ),
                         ),
@@ -1064,16 +1090,20 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       // Remaining Cards List
-                      ...remainingCardActions.expand((item) => [
-                        _buildActionCard(
-                          context,
-                          icon: item.icon,
-                          title: item.title,
-                          subtitle: item.subtitle,
-                          onTap: item.onTap,
-                        ),
-                        const SizedBox(height: 16),
-                      ]).toList(),
+                      ...remainingCardActions
+                          .expand(
+                            (item) => [
+                              _buildActionCard(
+                                context,
+                                icon: item.icon,
+                                title: item.title,
+                                subtitle: item.subtitle,
+                                onTap: item.onTap,
+                              ),
+                              const SizedBox(height: 16),
+                            ],
+                          )
+                          .toList(),
                       const SizedBox(height: 24),
 
                       // Logout Button
@@ -1086,7 +1116,10 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
                             }
                           },
                           child: Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
+                            padding: const EdgeInsets.symmetric(
+                              vertical: 12,
+                              horizontal: 24,
+                            ),
                             child: Text(
                               'Logout',
                               style: GoogleFonts.inter(
@@ -1110,7 +1143,9 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
                               if (context.mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
-                                    content: Text('Quick Access metrics reset successfully!'),
+                                    content: Text(
+                                      'Quick Access metrics reset successfully!',
+                                    ),
                                     duration: Duration(seconds: 2),
                                   ),
                                 );
@@ -1140,10 +1175,7 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
           top: 0,
           left: 0,
           right: 0,
-          child: CustomTopBar(
-            showBack: false,
-            transparent: true,
-          ),
+          child: CustomTopBar(showBack: false, transparent: true),
         ),
       ],
     );
@@ -1156,7 +1188,13 @@ class HomeUsageTracker {
   static Future<Map<String, int>> getClicks() async {
     final prefs = await SharedPreferences.getInstance();
     final Map<String, int> counts = {};
-    for (final id in ['find_musicians', 'browse_musicians', 'find_gigs', 'band_room', 'marketplace']) {
+    for (final id in [
+      'find_musicians',
+      'browse_musicians',
+      'find_gigs',
+      'band_room',
+      'marketplace',
+    ]) {
       counts[id] = prefs.getInt('$_prefix$id') ?? 0;
     }
     return counts;
@@ -1170,7 +1208,13 @@ class HomeUsageTracker {
 
   static Future<void> resetClicks() async {
     final prefs = await SharedPreferences.getInstance();
-    for (final id in ['find_musicians', 'browse_musicians', 'find_gigs', 'band_room', 'marketplace']) {
+    for (final id in [
+      'find_musicians',
+      'browse_musicians',
+      'find_gigs',
+      'band_room',
+      'marketplace',
+    ]) {
       await prefs.remove('$_prefix$id');
     }
   }
@@ -1183,7 +1227,10 @@ class NeonArcPainter extends CustomPainter {
       ..color = const Color(0xFFC066F6).withOpacity(0.4)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3); // Blur for neon glow
+      ..maskFilter = const MaskFilter.blur(
+        BlurStyle.normal,
+        3,
+      ); // Blur for neon glow
 
     final shadowPaint = Paint()
       ..color = const Color(0xFFC066F6).withOpacity(0.15)

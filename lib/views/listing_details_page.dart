@@ -34,10 +34,13 @@ class _ListingDetailsPageState extends State<ListingDetailsPage> {
   Future<void> _loadSellerProfile() async {
     try {
       final appState = Provider.of<AppState>(context, listen: false);
-      final profile = await appState.firebaseService.getUserProfileAsync(widget.listing.userId);
+      final profile = await appState.firebaseService.getUserProfileAsync(
+        widget.listing.userId,
+      );
       if (profile != null && mounted) {
         setState(() {
-          _sellerName = profile.displayName ?? profile.nickname ?? 'Unknown Seller';
+          _sellerName =
+              profile.displayName ?? profile.nickname ?? 'Unknown Seller';
           _sellerLocation = profile.location ?? '';
           _sellerPhotoUrl = profile.profilePictureUrl;
         });
@@ -93,16 +96,16 @@ class _ListingDetailsPageState extends State<ListingDetailsPage> {
 
     try {
       // 1. Get or create conversation between currentUser and seller
-      final conversationId = await appState.firebaseService.getOrCreateDirectConversationAsync(
-        currentUserId,
-        sellerId,
-      );
+      final conversationId = await appState.firebaseService
+          .getOrCreateDirectConversationAsync(currentUserId, sellerId);
 
       // 2. Prepare dynamic initial text
-      final initialText = 'Hi! I am interested in your marketplace listing: "${widget.listing.title}".';
-      
+      final initialText =
+          'Hi! I am interested in your marketplace listing: "${widget.listing.title}".';
+
       // 3. Send initial message automatically
-      final senderName = appState.currentUserProfile?.displayName ??
+      final senderName =
+          appState.currentUserProfile?.displayName ??
           appState.currentUserProfile?.nickname ??
           'Musician';
 
@@ -143,7 +146,13 @@ class _ListingDetailsPageState extends State<ListingDetailsPage> {
   }
 
   void _showReportDialog() {
-    final reasons = ['Spam', 'Fraud / Scam', 'Duplicate Listing', 'Offensive Content', 'Other'];
+    final reasons = [
+      'Spam',
+      'Fraud / Scam',
+      'Duplicate Listing',
+      'Offensive Content',
+      'Other',
+    ];
     String selectedReason = reasons.first;
 
     showDialog(
@@ -157,7 +166,10 @@ class _ListingDetailsPageState extends State<ListingDetailsPage> {
                 decoration: BoxDecoration(
                   color: const Color(0xFF0F0C20).withOpacity(0.95),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: const Color(0xFF2E2A4E), width: 1.5),
+                  border: Border.all(
+                    color: const Color(0xFF2E2A4E),
+                    width: 1.5,
+                  ),
                 ),
                 padding: const EdgeInsets.all(24),
                 child: Column(
@@ -186,7 +198,13 @@ class _ListingDetailsPageState extends State<ListingDetailsPage> {
                       return RadioListTile<String>(
                         value: reason,
                         groupValue: selectedReason,
-                        title: Text(reason, style: GoogleFonts.inter(color: Colors.white, fontSize: 14)),
+                        title: Text(
+                          reason,
+                          style: GoogleFonts.inter(
+                            color: Colors.white,
+                            fontSize: 14,
+                          ),
+                        ),
                         activeColor: AppTheme.primaryAccent,
                         onChanged: (val) {
                           if (val != null) {
@@ -203,13 +221,18 @@ class _ListingDetailsPageState extends State<ListingDetailsPage> {
                           child: OutlinedButton(
                             style: OutlinedButton.styleFrom(
                               side: const BorderSide(color: Color(0xFF2E2A4E)),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
                               padding: const EdgeInsets.symmetric(vertical: 12),
                             ),
                             onPressed: () => Navigator.pop(context),
                             child: Text(
                               'Cancel',
-                              style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w600),
+                              style: GoogleFonts.inter(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ),
                         ),
@@ -218,24 +241,33 @@ class _ListingDetailsPageState extends State<ListingDetailsPage> {
                           child: ElevatedButton(
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppTheme.danger,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
                               padding: const EdgeInsets.symmetric(vertical: 12),
                             ),
                             onPressed: () async {
-                              final appState = Provider.of<AppState>(context, listen: false);
+                              final appState = Provider.of<AppState>(
+                                context,
+                                listen: false,
+                              );
                               final currentUserId = appState.currentUserId;
-                              if (currentUserId != null && widget.listing.id != null) {
-                                await appState.firebaseService.reportListingAsync(
-                                  widget.listing.id!,
-                                  currentUserId,
-                                  selectedReason,
-                                );
+                              if (currentUserId != null &&
+                                  widget.listing.id != null) {
+                                await appState.firebaseService
+                                    .reportListingAsync(
+                                      widget.listing.id!,
+                                      currentUserId,
+                                      selectedReason,
+                                    );
                               }
                               if (context.mounted) {
                                 Navigator.pop(context); // Close dialog
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
-                                    content: Text('Listing reported. Thank you for keeping our platform safe.'),
+                                    content: Text(
+                                      'Listing reported. Thank you for keeping our platform safe.',
+                                    ),
                                     backgroundColor: AppTheme.success,
                                   ),
                                 );
@@ -243,7 +275,10 @@ class _ListingDetailsPageState extends State<ListingDetailsPage> {
                             },
                             child: Text(
                               'Report',
-                              style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w600),
+                              style: GoogleFonts.inter(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ),
                         ),
@@ -264,14 +299,15 @@ class _ListingDetailsPageState extends State<ListingDetailsPage> {
     final appState = Provider.of<AppState>(context);
     final isOwner = widget.listing.userId == appState.currentUserId;
     final hasImages = widget.listing.imageUrls.isNotEmpty;
-    final priceStr = widget.listing.price == 0 ? 'Free' : '${widget.listing.price.toInt()} kr';
-    final dateStr = DateFormat('yMMMd').format(DateTime.fromMillisecondsSinceEpoch(widget.listing.createdAt));
+    final priceStr = widget.listing.price == 0
+        ? 'Free'
+        : '${widget.listing.price.toInt()} kr';
+    final dateStr = DateFormat(
+      'yMMMd',
+    ).format(DateTime.fromMillisecondsSinceEpoch(widget.listing.createdAt));
 
     return GradientScaffold(
-      appBar: const CustomTopBar(
-        title: 'Listing Details',
-        showBack: true,
-      ),
+      appBar: const CustomTopBar(title: 'Listing Details', showBack: true),
       body: SafeArea(
         child: SingleChildScrollView(
           child: Column(
@@ -296,7 +332,8 @@ class _ListingDetailsPageState extends State<ListingDetailsPage> {
                                 return Image.network(
                                   widget.listing.imageUrls[index],
                                   fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) => _buildPlaceholderImage(),
+                                  errorBuilder: (context, error, stackTrace) =>
+                                      _buildPlaceholderImage(),
                                 );
                               },
                             )
@@ -352,9 +389,14 @@ class _ListingDetailsPageState extends State<ListingDetailsPage> {
                         top: 12,
                         right: 12,
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
                           decoration: BoxDecoration(
-                            color: widget.listing.status == 'sold' ? AppTheme.success : AppTheme.danger,
+                            color: widget.listing.status == 'sold'
+                                ? AppTheme.success
+                                : AppTheme.danger,
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
@@ -380,14 +422,25 @@ class _ListingDetailsPageState extends State<ListingDetailsPage> {
                     Row(
                       children: [
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
                           decoration: BoxDecoration(
-                            color: _getTypeColor(widget.listing.listingType).withOpacity(0.12),
+                            color: _getTypeColor(
+                              widget.listing.listingType,
+                            ).withOpacity(0.12),
                             borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: _getTypeColor(widget.listing.listingType).withOpacity(0.5)),
+                            border: Border.all(
+                              color: _getTypeColor(
+                                widget.listing.listingType,
+                              ).withOpacity(0.5),
+                            ),
                           ),
                           child: Text(
-                            _getTypeDisplay(widget.listing.listingType).toUpperCase(),
+                            _getTypeDisplay(
+                              widget.listing.listingType,
+                            ).toUpperCase(),
                             style: GoogleFonts.inter(
                               fontSize: 10,
                               fontWeight: FontWeight.bold,
@@ -397,7 +450,10 @@ class _ListingDetailsPageState extends State<ListingDetailsPage> {
                         ),
                         const SizedBox(width: 8),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
                           decoration: BoxDecoration(
                             color: Colors.white.withOpacity(0.05),
                             borderRadius: BorderRadius.circular(8),
@@ -474,7 +530,11 @@ class _ListingDetailsPageState extends State<ListingDetailsPage> {
                     // Location Info
                     Row(
                       children: [
-                        const Icon(Icons.location_on_outlined, color: AppTheme.primaryAccent, size: 22),
+                        const Icon(
+                          Icons.location_on_outlined,
+                          color: AppTheme.primaryAccent,
+                          size: 22,
+                        ),
                         const SizedBox(width: 8),
                         Text(
                           widget.listing.city ?? 'Unknown Location',
@@ -506,19 +566,32 @@ class _ListingDetailsPageState extends State<ListingDetailsPage> {
                       decoration: BoxDecoration(
                         color: AppTheme.cardBackground,
                         borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: const Color(0xFF231F45), width: 1.5),
+                        border: Border.all(
+                          color: const Color(0xFF231F45),
+                          width: 1.5,
+                        ),
                       ),
                       child: Row(
                         children: [
                           CircleAvatar(
                             radius: 24,
-                            backgroundColor: AppTheme.primaryAccent.withOpacity(0.2),
-                            backgroundImage: _sellerPhotoUrl != null && _sellerPhotoUrl!.isNotEmpty
+                            backgroundColor: AppTheme.primaryAccent.withOpacity(
+                              0.2,
+                            ),
+                            backgroundImage:
+                                _sellerPhotoUrl != null &&
+                                    _sellerPhotoUrl!.isNotEmpty
                                 ? NetworkImage(_sellerPhotoUrl!)
                                 : null,
-                            child: _sellerPhotoUrl == null || _sellerPhotoUrl!.isEmpty
+                            child:
+                                _sellerPhotoUrl == null ||
+                                    _sellerPhotoUrl!.isEmpty
                                 ? Text(
-                                    _sellerName.isNotEmpty ? _sellerName.substring(0, 1).toUpperCase() : 'S',
+                                    _sellerName.isNotEmpty
+                                        ? _sellerName
+                                              .substring(0, 1)
+                                              .toUpperCase()
+                                        : 'S',
                                     style: GoogleFonts.inter(
                                       color: Colors.white,
                                       fontSize: 18,
@@ -566,15 +639,23 @@ class _ListingDetailsPageState extends State<ListingDetailsPage> {
                           backgroundColor: Colors.white.withOpacity(0.05),
                           side: const BorderSide(color: Color(0xFF2E2A4E)),
                           minimumSize: const Size(double.infinity, 50),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
                         ),
                         onPressed: () {
                           Navigator.pushNamed(context, '/my-listings');
                         },
-                        icon: const Icon(Icons.inventory_2_outlined, color: Colors.white),
+                        icon: const Icon(
+                          Icons.inventory_2_outlined,
+                          color: Colors.white,
+                        ),
                         label: Text(
                           'Manage My Listings',
-                          style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: Colors.white),
+                          style: GoogleFonts.inter(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
                         ),
                       ),
                     ] else ...[
@@ -590,16 +671,23 @@ class _ListingDetailsPageState extends State<ListingDetailsPage> {
                               decoration: BoxDecoration(
                                 color: Colors.white.withOpacity(0.05),
                                 borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: const Color(0xFF2E2A4E)),
+                                border: Border.all(
+                                  color: const Color(0xFF2E2A4E),
+                                ),
                               ),
-                              child: const Icon(Icons.outlined_flag_rounded, color: Colors.redAccent),
+                              child: const Icon(
+                                Icons.outlined_flag_rounded,
+                                color: Colors.redAccent,
+                              ),
                             ),
                           ),
                           const SizedBox(width: 12),
                           // Contact Seller button
                           Expanded(
                             child: AnimatedTapDetector(
-                              onTap: _isActionLoading ? () {} : () => _contactSeller(),
+                              onTap: _isActionLoading
+                                  ? () {}
+                                  : () => _contactSeller(),
                               child: Container(
                                 height: 52,
                                 decoration: BoxDecoration(
@@ -607,7 +695,9 @@ class _ListingDetailsPageState extends State<ListingDetailsPage> {
                                   borderRadius: BorderRadius.circular(12),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: AppTheme.primaryAccent.withOpacity(0.3),
+                                      color: AppTheme.primaryAccent.withOpacity(
+                                        0.3,
+                                      ),
                                       blurRadius: 10,
                                       offset: const Offset(0, 5),
                                     ),
@@ -615,11 +705,17 @@ class _ListingDetailsPageState extends State<ListingDetailsPage> {
                                 ),
                                 child: Center(
                                   child: _isActionLoading
-                                      ? const CircularProgressIndicator(color: Colors.white)
+                                      ? const CircularProgressIndicator(
+                                          color: Colors.white,
+                                        )
                                       : Row(
-                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
                                           children: [
-                                            const Icon(Icons.chat_bubble_outline_rounded, color: Colors.white),
+                                            const Icon(
+                                              Icons.chat_bubble_outline_rounded,
+                                              color: Colors.white,
+                                            ),
                                             const SizedBox(width: 8),
                                             Text(
                                               'Contact Seller',

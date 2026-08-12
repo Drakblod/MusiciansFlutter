@@ -36,7 +36,10 @@ class ReceiptScreen extends StatelessWidget {
 
   String _formatTime(String time) {
     if (time.length > 5) {
-      return time.substring(0, 5); // strip seconds if present: hh:mm:ss -> hh:mm
+      return time.substring(
+        0,
+        5,
+      ); // strip seconds if present: hh:mm:ss -> hh:mm
     }
     return time;
   }
@@ -57,7 +60,10 @@ class ReceiptScreen extends StatelessWidget {
               // Centered Confirmation Card
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 36),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 36,
+                ),
                 decoration: BoxDecoration(
                   color: AppTheme.cardBackground,
                   borderRadius: BorderRadius.circular(24),
@@ -166,7 +172,10 @@ class ReceiptScreen extends StatelessWidget {
                         );
                       },
                       child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 24),
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 14,
+                          horizontal: 24,
+                        ),
                         decoration: BoxDecoration(
                           gradient: AppTheme.primaryGradient,
                           borderRadius: BorderRadius.circular(12),
@@ -181,7 +190,11 @@ class ReceiptScreen extends StatelessWidget {
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const Icon(Icons.forum_rounded, color: Colors.white, size: 20),
+                            const Icon(
+                              Icons.forum_rounded,
+                              color: Colors.white,
+                              size: 20,
+                            ),
                             const SizedBox(width: 8),
                             Text(
                               'Write Message',

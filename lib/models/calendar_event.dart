@@ -1,9 +1,4 @@
-enum CalendarEventType {
-  rehearsal,
-  concert,
-  tour,
-  other,
-}
+enum CalendarEventType { rehearsal, concert, tour, other }
 
 class CalendarEvent {
   final String? id;
@@ -45,9 +40,12 @@ class CalendarEvent {
     final typeStr = json['Type']?.toString().toLowerCase();
     CalendarEventType parsedType = CalendarEventType.other;
     if (typeStr != null) {
-      if (typeStr.contains('rehearsal') || typeStr == '0') parsedType = CalendarEventType.rehearsal;
-      else if (typeStr.contains('concert') || typeStr == '1') parsedType = CalendarEventType.concert;
-      else if (typeStr.contains('tour') || typeStr == '2') parsedType = CalendarEventType.tour;
+      if (typeStr.contains('rehearsal') || typeStr == '0')
+        parsedType = CalendarEventType.rehearsal;
+      else if (typeStr.contains('concert') || typeStr == '1')
+        parsedType = CalendarEventType.concert;
+      else if (typeStr.contains('tour') || typeStr == '2')
+        parsedType = CalendarEventType.tour;
     }
 
     // Proposed dates
@@ -70,7 +68,9 @@ class CalendarEvent {
         if (v is List) {
           parsedVotes[k.toString()] = v.map((e) => e.toString()).toList();
         } else if (v is Map) {
-          parsedVotes[k.toString()] = v.values.map((e) => e.toString()).toList();
+          parsedVotes[k.toString()] = v.values
+              .map((e) => e.toString())
+              .toList();
         }
       });
     }
@@ -96,7 +96,9 @@ class CalendarEvent {
       isFinalized: json['IsFinalized'] == true,
       proposedDates: parsedProposed,
       votes: parsedVotes,
-      date: json['Date'] != null ? DateTime.tryParse(json['Date'].toString()) : null,
+      date: json['Date'] != null
+          ? DateTime.tryParse(json['Date'].toString())
+          : null,
       startTime: json['StartTime']?.toString(),
       endTime: json['EndTime']?.toString(),
       confirmedAttendees: parsedAttendees,
@@ -113,7 +115,9 @@ class CalendarEvent {
       'CreatorId': creatorId,
       'CreatorName': creatorName,
       'IsFinalized': isFinalized,
-      'ProposedDates': proposedDates.map((d) => d.toUtc().toIso8601String()).toList(),
+      'ProposedDates': proposedDates
+          .map((d) => d.toUtc().toIso8601String())
+          .toList(),
       'Votes': votes,
       'Date': date?.toUtc().toIso8601String(),
       'StartTime': startTime,

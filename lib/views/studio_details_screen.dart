@@ -7,7 +7,6 @@ import '../models/collab_studio.dart';
 import '../widgets/custom_top_bar.dart';
 import '../widgets/gradient_scaffold.dart';
 
-
 class StudioDetailsScreen extends StatefulWidget {
   final CollabStudio studio;
 
@@ -25,17 +24,28 @@ class _StudioDetailsScreenState extends State<StudioDetailsScreen> {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: AppTheme.cardBackground,
-        title: Text('Delete Studio', style: GoogleFonts.outfit(color: Colors.white)),
-        content: Text('Are you sure you want to delete this studio listing permanently?',
-            style: GoogleFonts.inter(color: AppTheme.textSecondary)),
+        title: Text(
+          'Delete Studio',
+          style: GoogleFonts.outfit(color: Colors.white),
+        ),
+        content: Text(
+          'Are you sure you want to delete this studio listing permanently?',
+          style: GoogleFonts.inter(color: AppTheme.textSecondary),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: Text('Cancel', style: GoogleFonts.inter(color: Colors.white70)),
+            child: Text(
+              'Cancel',
+              style: GoogleFonts.inter(color: Colors.white70),
+            ),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: Text('Delete', style: GoogleFonts.inter(color: AppTheme.danger)),
+            child: Text(
+              'Delete',
+              style: GoogleFonts.inter(color: AppTheme.danger),
+            ),
           ),
         ],
       ),
@@ -45,17 +55,25 @@ class _StudioDetailsScreenState extends State<StudioDetailsScreen> {
       setState(() => _isDeleting = true);
       try {
         final appState = Provider.of<AppState>(context, listen: false);
-        await appState.firebaseService.deleteCollabStudioAsync(widget.studio.id ?? '');
+        await appState.firebaseService.deleteCollabStudioAsync(
+          widget.studio.id ?? '',
+        );
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Studio listing deleted successfully'), backgroundColor: AppTheme.success),
+            const SnackBar(
+              content: Text('Studio listing deleted successfully'),
+              backgroundColor: AppTheme.success,
+            ),
           );
           Navigator.pop(context);
         }
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to delete studio: $e'), backgroundColor: AppTheme.danger),
+            SnackBar(
+              content: Text('Failed to delete studio: $e'),
+              backgroundColor: AppTheme.danger,
+            ),
           );
         }
       } finally {
@@ -70,9 +88,7 @@ class _StudioDetailsScreenState extends State<StudioDetailsScreen> {
     final isOwner = widget.studio.creatorId == appState.currentUserId;
 
     return GradientScaffold(
-      appBar: const CustomTopBar(
-        showBack: true,
-      ),
+      appBar: const CustomTopBar(showBack: true),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 10),
@@ -82,7 +98,10 @@ class _StudioDetailsScreenState extends State<StudioDetailsScreen> {
             children: [
               // Header Category Label
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: AppTheme.primaryAccent.withOpacity(0.2),
                   borderRadius: BorderRadius.circular(8),
@@ -114,20 +133,36 @@ class _StudioDetailsScreenState extends State<StudioDetailsScreen> {
                   ),
                   if (isOwner) ...[
                     IconButton(
-                      icon: const Icon(Icons.edit_outlined, color: AppTheme.primaryAccent),
+                      icon: const Icon(
+                        Icons.edit_outlined,
+                        color: AppTheme.primaryAccent,
+                      ),
                       onPressed: () async {
-                        await Navigator.pushNamed(context, '/edit-studio', arguments: widget.studio);
-                        if (mounted) Navigator.pop(context); // reload listing detail parent list
+                        await Navigator.pushNamed(
+                          context,
+                          '/edit-studio',
+                          arguments: widget.studio,
+                        );
+                        if (mounted)
+                          Navigator.pop(
+                            context,
+                          ); // reload listing detail parent list
                       },
                     ),
                     _isDeleting
                         ? const SizedBox(
                             width: 24,
                             height: 24,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.danger),
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: AppTheme.danger,
+                            ),
                           )
                         : IconButton(
-                            icon: const Icon(Icons.delete_outline_rounded, color: AppTheme.danger),
+                            icon: const Icon(
+                              Icons.delete_outline_rounded,
+                              color: AppTheme.danger,
+                            ),
                             onPressed: _deleteStudio,
                           ),
                   ],
@@ -138,7 +173,11 @@ class _StudioDetailsScreenState extends State<StudioDetailsScreen> {
               // Location
               Row(
                 children: [
-                  const Icon(Icons.location_on_outlined, color: AppTheme.textSecondary, size: 16),
+                  const Icon(
+                    Icons.location_on_outlined,
+                    color: AppTheme.textSecondary,
+                    size: 16,
+                  ),
                   const SizedBox(width: 4),
                   Text(
                     widget.studio.location,
@@ -158,7 +197,10 @@ class _StudioDetailsScreenState extends State<StudioDetailsScreen> {
                   runSpacing: 8,
                   children: widget.studio.genres.map((genre) {
                     return Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
                       decoration: BoxDecoration(
                         color: const Color(0xFF1E1A3A),
                         borderRadius: BorderRadius.circular(12),
@@ -208,7 +250,8 @@ class _StudioDetailsScreenState extends State<StudioDetailsScreen> {
               const SizedBox(height: 24),
 
               // Facilities / Equipment list
-              if (widget.studio.facilities != null && widget.studio.facilities!.isNotEmpty) ...[
+              if (widget.studio.facilities != null &&
+                  widget.studio.facilities!.isNotEmpty) ...[
                 Text(
                   'Facilities & Equipment',
                   style: GoogleFonts.outfit(
@@ -224,7 +267,10 @@ class _StudioDetailsScreenState extends State<StudioDetailsScreen> {
                   decoration: BoxDecoration(
                     color: AppTheme.cardBackground,
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: const Color(0xFF231F45), width: 1),
+                    border: Border.all(
+                      color: const Color(0xFF231F45),
+                      width: 1,
+                    ),
                   ),
                   child: Text(
                     widget.studio.facilities!,
@@ -239,7 +285,8 @@ class _StudioDetailsScreenState extends State<StudioDetailsScreen> {
               ],
 
               // Contact Info / Booking Info
-              if (widget.studio.contactInfo != null && widget.studio.contactInfo!.isNotEmpty) ...[
+              if (widget.studio.contactInfo != null &&
+                  widget.studio.contactInfo!.isNotEmpty) ...[
                 Text(
                   'Booking & Contact',
                   style: GoogleFonts.outfit(
@@ -255,12 +302,19 @@ class _StudioDetailsScreenState extends State<StudioDetailsScreen> {
                   decoration: BoxDecoration(
                     color: AppTheme.cardBackground,
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: const Color(0xFF231F45), width: 1),
+                    border: Border.all(
+                      color: const Color(0xFF231F45),
+                      width: 1,
+                    ),
                   ),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(Icons.info_outline_rounded, color: AppTheme.primaryAccent, size: 20),
+                      const Icon(
+                        Icons.info_outline_rounded,
+                        color: AppTheme.primaryAccent,
+                        size: 20,
+                      ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(

@@ -18,9 +18,7 @@ class CustomBottomBar extends StatelessWidget {
       height: 70,
       decoration: const BoxDecoration(
         color: Color(0xFF0C091D),
-        border: Border(
-          top: BorderSide(color: Color(0xFF1E1A3C), width: 1.5),
-        ),
+        border: Border(top: BorderSide(color: Color(0xFF1E1A3C), width: 1.5)),
       ),
       child: SafeArea(
         top: false,
@@ -50,11 +48,7 @@ class CustomBottomBar extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              icon,
-              color: color,
-              size: 24,
-            ),
+            Icon(icon, color: color, size: 24),
             const SizedBox(height: 4),
             Text(
               label,

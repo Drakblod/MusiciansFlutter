@@ -17,7 +17,8 @@ double calculateHaversineDistanceKm(LatLng pos1, LatLng pos2) {
   final double lat1Rad = _degreesToRadians(pos1.latitude);
   final double lat2Rad = _degreesToRadians(pos2.latitude);
 
-  final double a = sin(dLat / 2) * sin(dLat / 2) +
+  final double a =
+      sin(dLat / 2) * sin(dLat / 2) +
       sin(dLon / 2) * sin(dLon / 2) * cos(lat1Rad) * cos(lat2Rad);
 
   final double c = 2 * atan2(sqrt(a), sqrt(1 - a));
@@ -37,9 +38,13 @@ double calculateRehearsalVolume(double distanceKm, {bool isNearest = true}) {
     return 0.0;
   }
 
-  final double normalized = (1.0 - (distanceKm / audibleRadiusKm)).clamp(0.0, 1.0);
+  final double normalized = (1.0 - (distanceKm / audibleRadiusKm)).clamp(
+    0.0,
+    1.0,
+  );
   final double eased = normalized * normalized;
-  double volume = minimumAudibleVolume + eased * (maximumVolume - minimumAudibleVolume);
+  double volume =
+      minimumAudibleVolume + eased * (maximumVolume - minimumAudibleVolume);
 
   volume = volume.clamp(0.0, maximumVolume);
 

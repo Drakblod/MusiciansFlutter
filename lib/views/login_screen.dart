@@ -41,14 +41,13 @@ class _LoginScreenState extends State<LoginScreen> {
     } catch (e) {
       if (mounted) {
         String errMsg = e.toString();
-        if (errMsg.contains('user-not-found') || errMsg.contains('wrong-password') || errMsg.contains('invalid-credential')) {
+        if (errMsg.contains('user-not-found') ||
+            errMsg.contains('wrong-password') ||
+            errMsg.contains('invalid-credential')) {
           errMsg = 'Invalid email or password. Please try again.';
         }
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(errMsg),
-            backgroundColor: AppTheme.danger,
-          ),
+          SnackBar(content: Text(errMsg), backgroundColor: AppTheme.danger),
         );
       }
     }
@@ -124,13 +123,18 @@ class _LoginScreenState extends State<LoginScreen> {
                   decoration: const InputDecoration(
                     labelText: 'Email Address',
                     hintText: 'Enter your email address',
-                    prefixIcon: Icon(Icons.email_outlined, color: AppTheme.textSecondary),
+                    prefixIcon: Icon(
+                      Icons.email_outlined,
+                      color: AppTheme.textSecondary,
+                    ),
                   ),
                   validator: (value) {
                     if (value == null || value.trim().isEmpty) {
                       return 'Please enter your email';
                     }
-                    if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value.trim())) {
+                    if (!RegExp(
+                      r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
+                    ).hasMatch(value.trim())) {
                       return 'Please enter a valid email address';
                     }
                     return null;
@@ -146,10 +150,15 @@ class _LoginScreenState extends State<LoginScreen> {
                   decoration: InputDecoration(
                     labelText: 'Password',
                     hintText: 'Enter your password',
-                    prefixIcon: const Icon(Icons.lock_outline_rounded, color: AppTheme.textSecondary),
+                    prefixIcon: const Icon(
+                      Icons.lock_outline_rounded,
+                      color: AppTheme.textSecondary,
+                    ),
                     suffixIcon: IconButton(
                       icon: Icon(
-                        _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                        _obscurePassword
+                            ? Icons.visibility_off_outlined
+                            : Icons.visibility_outlined,
                         color: AppTheme.textSecondary,
                       ),
                       onPressed: () {
@@ -174,7 +183,9 @@ class _LoginScreenState extends State<LoginScreen> {
                 // Submit button
                 appState.isLoading
                     ? const Center(
-                        child: CircularProgressIndicator(color: AppTheme.primaryAccent),
+                        child: CircularProgressIndicator(
+                          color: AppTheme.primaryAccent,
+                        ),
                       )
                     : AnimatedTapDetector(
                         onTap: _handleLogin,
@@ -188,7 +199,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 color: AppTheme.primaryAccent.withOpacity(0.3),
                                 blurRadius: 10,
                                 offset: const Offset(0, 4),
-                              )
+                              ),
                             ],
                           ),
                           child: Center(
@@ -211,7 +222,10 @@ class _LoginScreenState extends State<LoginScreen> {
                   children: [
                     Text(
                       "Don't have an account? ",
-                      style: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 14),
+                      style: GoogleFonts.inter(
+                        color: AppTheme.textSecondary,
+                        fontSize: 14,
+                      ),
                     ),
                     GestureDetector(
                       onTap: () {

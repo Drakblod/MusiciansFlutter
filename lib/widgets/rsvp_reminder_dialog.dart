@@ -44,13 +44,13 @@ class RsvpReminderDialog extends StatefulWidget {
         );
       },
       transitionBuilder: (context, anim1, anim2, child) {
-        final curvedAnim = CurvedAnimation(parent: anim1, curve: Curves.easeOutBack);
+        final curvedAnim = CurvedAnimation(
+          parent: anim1,
+          curve: Curves.easeOutBack,
+        );
         return ScaleTransition(
           scale: curvedAnim,
-          child: FadeTransition(
-            opacity: anim1,
-            child: child,
-          ),
+          child: FadeTransition(opacity: anim1, child: child),
         );
       },
     );
@@ -60,7 +60,8 @@ class RsvpReminderDialog extends StatefulWidget {
   State<RsvpReminderDialog> createState() => _RsvpReminderDialogState();
 }
 
-class _RsvpReminderDialogState extends State<RsvpReminderDialog> with SingleTickerProviderStateMixin {
+class _RsvpReminderDialogState extends State<RsvpReminderDialog>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _scaleAnimation;
   bool _isSubmitting = false;
@@ -206,10 +207,17 @@ class _RsvpReminderDialogState extends State<RsvpReminderDialog> with SingleTick
                 // 1. Top Header Banner matching mockup
                 Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 12,
+                    horizontal: 16,
+                  ),
                   decoration: const BoxDecoration(
                     gradient: LinearGradient(
-                      colors: [Color(0xFF8E24AA), Color(0xFFAB47BC), Color(0xFF6A1B9A)],
+                      colors: [
+                        Color(0xFF8E24AA),
+                        Color(0xFFAB47BC),
+                        Color(0xFF6A1B9A),
+                      ],
                       begin: Alignment.centerLeft,
                       end: Alignment.centerRight,
                     ),
@@ -277,7 +285,9 @@ class _RsvpReminderDialogState extends State<RsvpReminderDialog> with SingleTick
                             fontWeight: FontWeight.w600,
                           ),
                           children: [
-                            const TextSpan(text: 'REMINDER(24h) Time left for your answer: '),
+                            const TextSpan(
+                              text: 'REMINDER(24h) Time left for your answer: ',
+                            ),
                             TextSpan(
                               text: '($timeLeftHours)h',
                               style: GoogleFonts.inter(
@@ -317,7 +327,11 @@ class _RsvpReminderDialogState extends State<RsvpReminderDialog> with SingleTick
 
                       // Subtitle / Location / Info
                       Text(
-                        widget.event.description.isNotEmpty ? widget.event.description : (widget.event.location.isNotEmpty ? widget.event.location : 'info..'),
+                        widget.event.description.isNotEmpty
+                            ? widget.event.description
+                            : (widget.event.location.isNotEmpty
+                                  ? widget.event.location
+                                  : 'info..'),
                         textAlign: TextAlign.center,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
@@ -358,7 +372,9 @@ class _RsvpReminderDialogState extends State<RsvpReminderDialog> with SingleTick
                             count: uncertainCount,
                             bgColor: const Color(0xFF7F8C8D),
                             statusKey: 'Uncertain',
-                            isSelected: _selectedStatus?.toLowerCase() == 'uncertain' || _selectedStatus?.toLowerCase() == 'maybe',
+                            isSelected:
+                                _selectedStatus?.toLowerCase() == 'uncertain' ||
+                                _selectedStatus?.toLowerCase() == 'maybe',
                           ),
                         ],
                       ),

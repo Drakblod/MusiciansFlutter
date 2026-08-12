@@ -18,14 +18,15 @@ class ProducerSearchScreen extends StatefulWidget {
 
 class _ProducerSearchScreenState extends State<ProducerSearchScreen> {
   final _messageController = TextEditingController();
-  
+
   List<UserProfile> _allMusicians = [];
   List<UserProfile> _filteredMusicians = [];
   bool _isLoading = true;
 
   // Filter States
   String _selectedLevel = 'All Levels';
-  String _selectedInstrument = 'Vocalist'; // Default to Vocalist to find singers
+  String _selectedInstrument =
+      'Vocalist'; // Default to Vocalist to find singers
   String _selectedGenre = 'All Styles';
   bool _canMixMasterOnly = false;
 
@@ -38,7 +39,7 @@ class _ProducerSearchScreenState extends State<ProducerSearchScreen> {
     'B = SEMI PRO',
     'C = INTERMEDIATE',
     'D = AMATEUR',
-    'E = BEGINNER'
+    'E = BEGINNER',
   ];
 
   final List<String> _instruments = [
@@ -53,7 +54,7 @@ class _ProducerSearchScreenState extends State<ProducerSearchScreen> {
     'Trumpet',
     'Violin',
     'Cello',
-    'Other'
+    'Other',
   ];
 
   final List<String> _targetInstruments = [
@@ -67,7 +68,7 @@ class _ProducerSearchScreenState extends State<ProducerSearchScreen> {
     'Trumpet',
     'Violin',
     'Cello',
-    'Other'
+    'Other',
   ];
 
   final List<String> _genres = [
@@ -76,7 +77,7 @@ class _ProducerSearchScreenState extends State<ProducerSearchScreen> {
     'Rock',
     'Jazz',
     'Classical',
-    'Metal'
+    'Metal',
   ];
 
   @override
@@ -96,7 +97,7 @@ class _ProducerSearchScreenState extends State<ProducerSearchScreen> {
     try {
       final appState = Provider.of<AppState>(context, listen: false);
       final users = await appState.firebaseService.getAllUsersAsync();
-      
+
       setState(() {
         _allMusicians = users;
         _applyFilters();
@@ -122,7 +123,9 @@ class _ProducerSearchScreenState extends State<ProducerSearchScreen> {
         // 1. Filter by Level
         if (_selectedLevel != 'All Levels') {
           if (musician.level == null ||
-              !musician.level!.toLowerCase().contains(_selectedLevel.split(' = ').last.toLowerCase())) {
+              !musician.level!.toLowerCase().contains(
+                _selectedLevel.split(' = ').last.toLowerCase(),
+              )) {
             return false;
           }
         }
@@ -130,14 +133,18 @@ class _ProducerSearchScreenState extends State<ProducerSearchScreen> {
         // 2. Filter by Instrument
         if (_selectedInstrument != 'All Instruments') {
           final instLower = _selectedInstrument.toLowerCase();
-          final matchesInst = musician.instruments.any((i) => i.toLowerCase().contains(instLower));
+          final matchesInst = musician.instruments.any(
+            (i) => i.toLowerCase().contains(instLower),
+          );
           if (!matchesInst) return false;
         }
 
         // 3. Filter by Genre
         if (_selectedGenre != 'All Styles') {
           final genreLower = _selectedGenre.toLowerCase();
-          final matchesGenre = musician.styles.any((s) => s.toLowerCase().contains(genreLower));
+          final matchesGenre = musician.styles.any(
+            (s) => s.toLowerCase().contains(genreLower),
+          );
           if (!matchesGenre) return false;
         }
 
@@ -168,7 +175,8 @@ class _ProducerSearchScreenState extends State<ProducerSearchScreen> {
       final appState = Provider.of<AppState>(context, listen: false);
       final currentUserId = appState.currentUserId;
       final profile = appState.currentUserProfile;
-      final creatorName = profile?.displayName ?? profile?.nickname ?? "Producer";
+      final creatorName =
+          profile?.displayName ?? profile?.nickname ?? "Producer";
 
       if (currentUserId == null) {
         throw Exception("User not logged in");
@@ -202,7 +210,10 @@ class _ProducerSearchScreenState extends State<ProducerSearchScreen> {
             ),
             title: Text(
               'Success',
-              style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold),
+              style: GoogleFonts.outfit(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
             ),
             content: Text(
               'Your request for a $_targetInstrument has been sent successfully!',
@@ -213,9 +224,14 @@ class _ProducerSearchScreenState extends State<ProducerSearchScreen> {
                 onPressed: () => Navigator.pop(context),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppTheme.primaryAccent,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
-                child: Text('OK', style: GoogleFonts.inter(color: Colors.white)),
+                child: Text(
+                  'OK',
+                  style: GoogleFonts.inter(color: Colors.white),
+                ),
               ),
             ],
           ),
@@ -239,10 +255,7 @@ class _ProducerSearchScreenState extends State<ProducerSearchScreen> {
   @override
   Widget build(BuildContext context) {
     return GradientScaffold(
-      appBar: const CustomTopBar(
-        title: 'Producer Mode',
-        showBack: true,
-      ),
+      appBar: const CustomTopBar(title: 'Producer Mode', showBack: true),
       body: SafeArea(
         child: SingleChildScrollView(
           physics: const BouncingScrollPhysics(),
@@ -327,7 +340,9 @@ class _ProducerSearchScreenState extends State<ProducerSearchScreen> {
                         Switch(
                           value: _canMixMasterOnly,
                           activeColor: AppTheme.primaryAccent,
-                          activeTrackColor: AppTheme.primaryAccent.withOpacity(0.3),
+                          activeTrackColor: AppTheme.primaryAccent.withOpacity(
+                            0.3,
+                          ),
                           onChanged: (val) {
                             _canMixMasterOnly = val;
                             _applyFilters();
@@ -355,99 +370,107 @@ class _ProducerSearchScreenState extends State<ProducerSearchScreen> {
                   ? const Center(
                       child: Padding(
                         padding: EdgeInsets.all(24.0),
-                        child: CircularProgressIndicator(color: AppTheme.primaryAccent),
+                        child: CircularProgressIndicator(
+                          color: AppTheme.primaryAccent,
+                        ),
                       ),
                     )
                   : _filteredMusicians.isEmpty
-                      ? Center(
-                          child: Padding(
-                            padding: const EdgeInsets.all(24.0),
-                            child: Text(
-                              'No musicians match your filters.',
-                              style: GoogleFonts.inter(color: AppTheme.textSecondary),
-                            ),
-                          ),
-                        )
-                      : Container(
-                          constraints: const BoxConstraints(maxHeight: 300),
-                          child: ListView.builder(
-                            itemCount: _filteredMusicians.length,
-                            shrinkWrap: true,
-                            physics: const BouncingScrollPhysics(),
-                            itemBuilder: (context, index) {
-                              final musician = _filteredMusicians[index];
-
-                              return Container(
-                                margin: const EdgeInsets.only(bottom: 10),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.02),
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                    color: Colors.white.withOpacity(0.05),
-                                    width: 1,
-                                  ),
-                                ),
-                                child: ListTile(
-                                  title: Text(
-                                    musician.displayName ?? musician.nickname ?? 'Musician',
-                                    style: GoogleFonts.outfit(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 16,
-                                    ),
-                                  ),
-                                  subtitle: Text(
-                                    musician.instrumentsStr,
-                                    style: GoogleFonts.inter(
-                                      color: AppTheme.textSecondary,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                  trailing: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      if (musician.level != null)
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 8, vertical: 4),
-                                          decoration: BoxDecoration(
-                                            color: Colors.white10,
-                                            borderRadius: BorderRadius.circular(6),
-                                          ),
-                                          child: Text(
-                                            musician.level!.split(' = ').last,
-                                            style: GoogleFonts.inter(
-                                              fontSize: 10,
-                                              color: Colors.white70,
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                          ),
-                                        ),
-                                      if (musician.canMixMaster) ...[
-                                        const SizedBox(width: 6),
-                                        const Tooltip(
-                                          message: 'Mix/Master Specialist',
-                                          child: Icon(
-                                            Icons.adjust_rounded,
-                                            color: AppTheme.primaryAccent,
-                                            size: 16,
-                                          ),
-                                        ),
-                                      ],
-                                    ],
-                                  ),
-                                  onTap: () {
-                                    Navigator.pushNamed(
-                                      context,
-                                      '/profile-detail',
-                                      arguments: musician,
-                                    );
-                                  },
-                                ),
-                              );
-                            },
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24.0),
+                        child: Text(
+                          'No musicians match your filters.',
+                          style: GoogleFonts.inter(
+                            color: AppTheme.textSecondary,
                           ),
                         ),
+                      ),
+                    )
+                  : Container(
+                      constraints: const BoxConstraints(maxHeight: 300),
+                      child: ListView.builder(
+                        itemCount: _filteredMusicians.length,
+                        shrinkWrap: true,
+                        physics: const BouncingScrollPhysics(),
+                        itemBuilder: (context, index) {
+                          final musician = _filteredMusicians[index];
+
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 10),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.02),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: Colors.white.withOpacity(0.05),
+                                width: 1,
+                              ),
+                            ),
+                            child: ListTile(
+                              title: Text(
+                                musician.displayName ??
+                                    musician.nickname ??
+                                    'Musician',
+                                style: GoogleFonts.outfit(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
+                              ),
+                              subtitle: Text(
+                                musician.instrumentsStr,
+                                style: GoogleFonts.inter(
+                                  color: AppTheme.textSecondary,
+                                  fontSize: 12,
+                                ),
+                              ),
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (musician.level != null)
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 4,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white10,
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: Text(
+                                        musician.level!.split(' = ').last,
+                                        style: GoogleFonts.inter(
+                                          fontSize: 10,
+                                          color: Colors.white70,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                  if (musician.canMixMaster) ...[
+                                    const SizedBox(width: 6),
+                                    const Tooltip(
+                                      message: 'Mix/Master Specialist',
+                                      child: Icon(
+                                        Icons.adjust_rounded,
+                                        color: AppTheme.primaryAccent,
+                                        size: 16,
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                              onTap: () {
+                                Navigator.pushNamed(
+                                  context,
+                                  '/profile-detail',
+                                  arguments: musician,
+                                );
+                              },
+                            ),
+                          );
+                        },
+                      ),
+                    ),
               const SizedBox(height: 32),
 
               // Request Creation Form
@@ -485,10 +508,16 @@ class _ProducerSearchScreenState extends State<ProducerSearchScreen> {
                     TextField(
                       controller: _messageController,
                       maxLines: 3,
-                      style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
+                      style: GoogleFonts.inter(
+                        color: Colors.white,
+                        fontSize: 14,
+                      ),
                       decoration: InputDecoration(
-                        hintText: 'Describe your project (e.g. Need a vocalist for a pop/rock track. Standard studio session.)',
-                        hintStyle: GoogleFonts.inter(color: AppTheme.textSecondary),
+                        hintText:
+                            'Describe your project (e.g. Need a vocalist for a pop/rock track. Standard studio session.)',
+                        hintStyle: GoogleFonts.inter(
+                          color: AppTheme.textSecondary,
+                        ),
                         filled: true,
                         fillColor: AppTheme.inputBackground,
                         border: OutlineInputBorder(
@@ -570,7 +599,10 @@ class _ProducerSearchScreenState extends State<ProducerSearchScreen> {
               }).toList(),
               onChanged: onChanged,
               dropdownColor: AppTheme.cardBackground,
-              icon: const Icon(Icons.arrow_drop_down, color: AppTheme.primaryAccent),
+              icon: const Icon(
+                Icons.arrow_drop_down,
+                color: AppTheme.primaryAccent,
+              ),
               isExpanded: true,
             ),
           ),

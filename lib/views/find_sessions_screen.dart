@@ -25,9 +25,23 @@ class _FindSessionsScreenState extends State<FindSessionsScreen> {
   String _selectedType = 'All';
   String _selectedRole = 'All';
 
-  final List<String> _categories = ["All", "Songwriting", "Recording", "Production", "Jam", "Other"];
+  final List<String> _categories = [
+    "All",
+    "Songwriting",
+    "Recording",
+    "Production",
+    "Jam",
+    "Other",
+  ];
   final List<String> _types = ["All", "In person", "Remote", "Hybrid"];
-  final List<String> _roles = ["All", "Songwriter", "Producer", "Engineer", "Vocalist", "Musician"];
+  final List<String> _roles = [
+    "All",
+    "Songwriter",
+    "Producer",
+    "Engineer",
+    "Vocalist",
+    "Musician",
+  ];
 
   @override
   void initState() {
@@ -65,23 +79,34 @@ class _FindSessionsScreenState extends State<FindSessionsScreen> {
     setState(() {
       _filteredSessions = _allSessions.where((session) {
         // Text search
-        final matchesSearch = session.title.toLowerCase().contains(query) ||
+        final matchesSearch =
+            session.title.toLowerCase().contains(query) ||
             session.description.toLowerCase().contains(query) ||
             (session.location?.toLowerCase().contains(query) ?? false);
 
         // Category filter
-        final matchesCategory = _selectedCategory == 'All' ||
-            session.sessionCategory.toLowerCase() == _selectedCategory.toLowerCase();
+        final matchesCategory =
+            _selectedCategory == 'All' ||
+            session.sessionCategory.toLowerCase() ==
+                _selectedCategory.toLowerCase();
 
         // Session type filter
-        final matchesType = _selectedType == 'All' ||
+        final matchesType =
+            _selectedType == 'All' ||
             session.sessionType.toLowerCase() == _selectedType.toLowerCase();
 
         // Role needed filter
-        final matchesRole = _selectedRole == 'All' ||
-            session.lookingForRoles.any((r) => r.toLowerCase() == _selectedRole.toLowerCase());
+        final matchesRole =
+            _selectedRole == 'All' ||
+            session.lookingForRoles.any(
+              (r) => r.toLowerCase() == _selectedRole.toLowerCase(),
+            );
 
-        return matchesSearch && matchesCategory && matchesType && matchesRole && session.status == 'active';
+        return matchesSearch &&
+            matchesCategory &&
+            matchesType &&
+            matchesRole &&
+            session.status == 'active';
       }).toList();
     });
   }
@@ -89,10 +114,7 @@ class _FindSessionsScreenState extends State<FindSessionsScreen> {
   @override
   Widget build(BuildContext context) {
     return GradientScaffold(
-      appBar: const CustomTopBar(
-        title: 'Find Sessions',
-        showBack: true,
-      ),
+      appBar: const CustomTopBar(title: 'Find Sessions', showBack: true),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -120,13 +142,21 @@ class _FindSessionsScreenState extends State<FindSessionsScreen> {
                     icon: const Icon(Icons.add, size: 16),
                     label: Text(
                       'New Session',
-                      style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold),
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppTheme.primaryAccent,
                       foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
                     ),
                   ),
                 ],
@@ -138,7 +168,10 @@ class _FindSessionsScreenState extends State<FindSessionsScreen> {
                 controller: _searchController,
                 decoration: const InputDecoration(
                   hintText: 'Search by title, location or keywords...',
-                  prefixIcon: Icon(Icons.search_rounded, color: AppTheme.textSecondary),
+                  prefixIcon: Icon(
+                    Icons.search_rounded,
+                    color: AppTheme.textSecondary,
+                  ),
                 ),
               ),
               const SizedBox(height: 12),
@@ -197,37 +230,52 @@ class _FindSessionsScreenState extends State<FindSessionsScreen> {
               // Sessions List
               Expanded(
                 child: _isLoading
-                    ? const Center(child: CircularProgressIndicator(color: AppTheme.primaryAccent))
+                    ? const Center(
+                        child: CircularProgressIndicator(
+                          color: AppTheme.primaryAccent,
+                        ),
+                      )
                     : _filteredSessions.isEmpty
-                        ? Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                const Icon(Icons.forum_outlined, color: AppTheme.textMuted, size: 48),
-                                const SizedBox(height: 16),
-                                Text(
-                                  'No sessions found matching filters.',
-                                  style: GoogleFonts.inter(color: AppTheme.textSecondary),
-                                ),
-                                const SizedBox(height: 12),
-                                TextButton(
-                                  onPressed: () async {
-                                    await Navigator.pushNamed(context, '/create-session');
-                                    _loadSessions();
-                                  },
-                                  child: const Text('Create a Collaboration Session!'),
-                                ),
-                              ],
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(
+                              Icons.forum_outlined,
+                              color: AppTheme.textMuted,
+                              size: 48,
                             ),
-                          )
-                        : ListView.builder(
-                            itemCount: _filteredSessions.length,
-                            physics: const BouncingScrollPhysics(),
-                            itemBuilder: (context, index) {
-                              final session = _filteredSessions[index];
-                              return _buildSessionCard(session);
-                            },
-                          ),
+                            const SizedBox(height: 16),
+                            Text(
+                              'No sessions found matching filters.',
+                              style: GoogleFonts.inter(
+                                color: AppTheme.textSecondary,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            TextButton(
+                              onPressed: () async {
+                                await Navigator.pushNamed(
+                                  context,
+                                  '/create-session',
+                                );
+                                _loadSessions();
+                              },
+                              child: const Text(
+                                'Create a Collaboration Session!',
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    : ListView.builder(
+                        itemCount: _filteredSessions.length,
+                        physics: const BouncingScrollPhysics(),
+                        itemBuilder: (context, index) {
+                          final session = _filteredSessions[index];
+                          return _buildSessionCard(session);
+                        },
+                      ),
               ),
             ],
           ),
@@ -253,14 +301,19 @@ class _FindSessionsScreenState extends State<FindSessionsScreen> {
         child: DropdownButton<String>(
           value: value,
           dropdownColor: AppTheme.cardBackground,
-          icon: const Icon(Icons.arrow_drop_down, color: Colors.white, size: 18),
-          style: GoogleFonts.inter(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+          icon: const Icon(
+            Icons.arrow_drop_down,
+            color: Colors.white,
+            size: 18,
+          ),
+          style: GoogleFonts.inter(
+            color: Colors.white,
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+          ),
           onChanged: onChanged,
           items: items.map((String item) {
-            return DropdownMenuItem<String>(
-              value: item,
-              child: Text(item),
-            );
+            return DropdownMenuItem<String>(value: item, child: Text(item));
           }).toList(),
         ),
       ),
@@ -268,7 +321,11 @@ class _FindSessionsScreenState extends State<FindSessionsScreen> {
   }
 
   Widget _buildSessionCard(CollabSession session) {
-    final dateStr = session.isDateFlexible ? 'Flexible Date' : (session.startDateTime != null ? session.startDateTime!.substring(0, 10) : 'Date not set');
+    final dateStr = session.isDateFlexible
+        ? 'Flexible Date'
+        : (session.startDateTime != null
+              ? session.startDateTime!.substring(0, 10)
+              : 'Date not set');
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -282,7 +339,11 @@ class _FindSessionsScreenState extends State<FindSessionsScreen> {
         child: InkWell(
           borderRadius: BorderRadius.circular(16),
           onTap: () async {
-            await Navigator.pushNamed(context, '/session-details', arguments: session);
+            await Navigator.pushNamed(
+              context,
+              '/session-details',
+              arguments: session,
+            );
             _loadSessions();
           },
           child: Padding(
@@ -294,7 +355,10 @@ class _FindSessionsScreenState extends State<FindSessionsScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
                       decoration: BoxDecoration(
                         color: AppTheme.primaryAccent.withOpacity(0.15),
                         borderRadius: BorderRadius.circular(6),
@@ -310,7 +374,11 @@ class _FindSessionsScreenState extends State<FindSessionsScreen> {
                     ),
                     Text(
                       session.sessionType,
-                      style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary, fontWeight: FontWeight.bold),
+                      style: GoogleFonts.inter(
+                        fontSize: 11,
+                        color: AppTheme.textSecondary,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ],
                 ),
@@ -344,21 +412,35 @@ class _FindSessionsScreenState extends State<FindSessionsScreen> {
                 // Date & Location Info
                 Row(
                   children: [
-                    const Icon(Icons.calendar_today_outlined, color: AppTheme.textSecondary, size: 12),
+                    const Icon(
+                      Icons.calendar_today_outlined,
+                      color: AppTheme.textSecondary,
+                      size: 12,
+                    ),
                     const SizedBox(width: 4),
                     Text(
                       dateStr,
-                      style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary),
+                      style: GoogleFonts.inter(
+                        fontSize: 11,
+                        color: AppTheme.textSecondary,
+                      ),
                     ),
                     const SizedBox(width: 16),
-                    const Icon(Icons.location_on_outlined, color: AppTheme.textSecondary, size: 12),
+                    const Icon(
+                      Icons.location_on_outlined,
+                      color: AppTheme.textSecondary,
+                      size: 12,
+                    ),
                     const SizedBox(width: 4),
                     Expanded(
                       child: Text(
                         session.location ?? 'Remote',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary),
+                        style: GoogleFonts.inter(
+                          fontSize: 11,
+                          color: AppTheme.textSecondary,
+                        ),
                       ),
                     ),
                   ],
@@ -369,7 +451,11 @@ class _FindSessionsScreenState extends State<FindSessionsScreen> {
                 if (session.lookingForRoles.isNotEmpty) ...[
                   Text(
                     'Looking for:',
-                    style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary, fontWeight: FontWeight.bold),
+                    style: GoogleFonts.inter(
+                      fontSize: 11,
+                      color: AppTheme.textSecondary,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   const SizedBox(height: 6),
                   Wrap(
@@ -377,7 +463,10 @@ class _FindSessionsScreenState extends State<FindSessionsScreen> {
                     runSpacing: 6,
                     children: session.lookingForRoles.map((role) {
                       return Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 3,
+                        ),
                         decoration: BoxDecoration(
                           color: const Color(0xFF1E1A3A),
                           borderRadius: BorderRadius.circular(8),

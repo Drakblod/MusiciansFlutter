@@ -30,12 +30,9 @@ class _BrowseMusiciansScreenState extends State<BrowseMusiciansScreen> {
       'Strings',
       'Keyboards',
       'Percussion',
-      'Miscellaneous'
+      'Miscellaneous',
     ],
-    'VOICES': [
-      'Choir & Classical',
-      'Popular Music'
-    ],
+    'VOICES': ['Choir & Classical', 'Popular Music'],
     'SONGWRITERS, PRODUCERS, etc': [
       'Songwriter',
       'Composer',
@@ -44,7 +41,7 @@ class _BrowseMusiciansScreenState extends State<BrowseMusiciansScreen> {
       'Artist',
       'Beatmaker',
       'Rapper',
-      'DJ'
+      'DJ',
     ],
     'STUDIOS/ENGINEERS': [
       'Studios',
@@ -52,14 +49,9 @@ class _BrowseMusiciansScreenState extends State<BrowseMusiciansScreen> {
       'Recording Engineer',
       'Mix Engineer',
       'Mastering Engineer',
-      'Live Engineer'
+      'Live Engineer',
     ],
-    'PR & MANAGEMENT': [
-      'Managers',
-      'Agencies',
-      'Consultants',
-      'Other'
-    ]
+    'PR & MANAGEMENT': ['Managers', 'Agencies', 'Consultants', 'Other'],
   };
 
   String? _selectedMainCategory;
@@ -91,18 +83,23 @@ class _BrowseMusiciansScreenState extends State<BrowseMusiciansScreen> {
     setState(() => _isLoading = true);
     try {
       final appState = Provider.of<AppState>(context, listen: false);
-      
+
       // Load favorites
       final favIds = await appState.firebaseService.getFavoriteUserIdsAsync();
       _favoriteUserIds = favIds.toSet();
 
       // Load musicians
-      List<UserProfile> users = await appState.firebaseService.getAllUsersAsync();
+      List<UserProfile> users = await appState.firebaseService
+          .getAllUsersAsync();
       final selfId = appState.currentUserId;
       _allMusicians = users.where((u) => u.userId != selfId).toList();
 
       if (widget.favoritesOnly) {
-        _allMusicians = _allMusicians.where((u) => u.userId != null && _favoriteUserIds.contains(u.userId)).toList();
+        _allMusicians = _allMusicians
+            .where(
+              (u) => u.userId != null && _favoriteUserIds.contains(u.userId),
+            )
+            .toList();
       }
 
       // Seed mock musicians if empty and not favoritesOnly
@@ -138,7 +135,8 @@ class _BrowseMusiciansScreenState extends State<BrowseMusiciansScreen> {
         location: 'Stockholm, Sweden',
         instruments: ['Vocalist', 'Popular Music'],
         genres: ['Rock', 'Pop', 'Indie'],
-        about: 'Passionate vocalist with experience in live performances and studio recordings. Love rock, pop and indie vibes!',
+        about:
+            'Passionate vocalist with experience in live performances and studio recordings. Love rock, pop and indie vibes!',
         profilePictureUrl: '',
       ),
       UserProfile(
@@ -149,7 +147,8 @@ class _BrowseMusiciansScreenState extends State<BrowseMusiciansScreen> {
         location: 'Gothenburg, Sweden',
         instruments: ['Electric Guitar', 'Strings'],
         genres: ['Rock', 'Blues', 'Metal'],
-        about: 'Lead guitarist playing for over 10 years. Looking for heavy rock bands or acoustic side gigs.',
+        about:
+            'Lead guitarist playing for over 10 years. Looking for heavy rock bands or acoustic side gigs.',
         profilePictureUrl: '',
       ),
       UserProfile(
@@ -160,7 +159,8 @@ class _BrowseMusiciansScreenState extends State<BrowseMusiciansScreen> {
         location: 'Malmö, Sweden',
         instruments: ['Electric Bass', 'Strings'],
         genres: ['Pop', 'Funk', 'Soul'],
-        about: 'Bass player with a strong focus on groove and pocket. Experienced in musical theater and pop cover groups.',
+        about:
+            'Bass player with a strong focus on groove and pocket. Experienced in musical theater and pop cover groups.',
         profilePictureUrl: '',
       ),
       UserProfile(
@@ -171,7 +171,8 @@ class _BrowseMusiciansScreenState extends State<BrowseMusiciansScreen> {
         location: 'Uppsala, Sweden',
         instruments: ['Drums', 'Percussion'],
         genres: ['Rock', 'Alternative', 'Indie'],
-        about: 'Energetic drummer who plays both acoustic and electronic setups. Available for rehearsal substitutes and studio sessions.',
+        about:
+            'Energetic drummer who plays both acoustic and electronic setups. Available for rehearsal substitutes and studio sessions.',
         profilePictureUrl: '',
       ),
     ];
@@ -189,7 +190,8 @@ class _BrowseMusiciansScreenState extends State<BrowseMusiciansScreen> {
         rehearsalDayOfWeek: 'Wednesday',
         rehearsalStartTime: '18:00',
         rehearsalEndTime: '21:00',
-        about: 'We are a 4-piece indie rock band looking for active gigs and occasional synth player substitutes.',
+        about:
+            'We are a 4-piece indie rock band looking for active gigs and occasional synth player substitutes.',
         description: 'Indie rock band from Stockholm.',
       ),
       Band(
@@ -202,7 +204,8 @@ class _BrowseMusiciansScreenState extends State<BrowseMusiciansScreen> {
         rehearsalDayOfWeek: 'Monday',
         rehearsalStartTime: '19:00',
         rehearsalEndTime: '21:30',
-        about: 'A loose collective of soul and jazz lovers. We play cover events and corporate gigs.',
+        about:
+            'A loose collective of soul and jazz lovers. We play cover events and corporate gigs.',
         description: 'Funk and Soul collective in Gothenburg.',
       ),
     ];
@@ -214,65 +217,147 @@ class _BrowseMusiciansScreenState extends State<BrowseMusiciansScreen> {
 
   void _applyFilters() {
     final query = _searchController.text.toLowerCase();
-    
+
     if (_activeTab == 0) {
       // Musicians filtering
       setState(() {
         _filteredMusicians = _allMusicians.where((m) {
-          final matchesSearch = (m.displayName?.toLowerCase().contains(query) ?? false) ||
+          final matchesSearch =
+              (m.displayName?.toLowerCase().contains(query) ?? false) ||
               (m.location?.toLowerCase().contains(query) ?? false);
-          
+
           if (!matchesSearch) return false;
-          
+
           if (_selectedMainCategory == null) return true;
-          
+
           final subcats = _searchCategories[_selectedMainCategory] ?? [];
           final activeSub = _selectedSubcategory;
-          
-          final userInstruments = m.instruments.map((i) => i.toLowerCase()).toList();
+
+          final userInstruments = m.instruments
+              .map((i) => i.toLowerCase())
+              .toList();
           final userType = m.userType?.toLowerCase() ?? '';
-          
+
           bool matchesSub(String sub) {
             final s = sub.toLowerCase();
-            
+
             // Check exact or substring match
-            if (userType.contains(s) || userInstruments.any((i) => i.contains(s))) {
+            if (userType.contains(s) ||
+                userInstruments.any((i) => i.contains(s))) {
               return true;
             }
-            
+
             // Group mappings
             if (s == 'woodwinds') {
-              final woodwindKeywords = ['flute', 'clarinet', 'oboe', 'bassoon', 'sax', 'recorder', 'piccolo', 'horn'];
-              return woodwindKeywords.any((kw) => userType.contains(kw) || userInstruments.any((i) => i.contains(kw)));
+              final woodwindKeywords = [
+                'flute',
+                'clarinet',
+                'oboe',
+                'bassoon',
+                'sax',
+                'recorder',
+                'piccolo',
+                'horn',
+              ];
+              return woodwindKeywords.any(
+                (kw) =>
+                    userType.contains(kw) ||
+                    userInstruments.any((i) => i.contains(kw)),
+              );
             }
             if (s == 'brass') {
-              final brassKeywords = ['trumpet', 'trombone', 'tuba', 'french horn', 'cornet', 'euphonium'];
-              return brassKeywords.any((kw) => userType.contains(kw) || userInstruments.any((i) => i.contains(kw)));
+              final brassKeywords = [
+                'trumpet',
+                'trombone',
+                'tuba',
+                'french horn',
+                'cornet',
+                'euphonium',
+              ];
+              return brassKeywords.any(
+                (kw) =>
+                    userType.contains(kw) ||
+                    userInstruments.any((i) => i.contains(kw)),
+              );
             }
             if (s == 'strings') {
-              final stringsKeywords = ['violin', 'viola', 'cello', 'contrabass', 'harp', 'guitar', 'bass', 'lute', 'gamba'];
-              return stringsKeywords.any((kw) => userType.contains(kw) || userInstruments.any((i) => i.contains(kw)));
+              final stringsKeywords = [
+                'violin',
+                'viola',
+                'cello',
+                'contrabass',
+                'harp',
+                'guitar',
+                'bass',
+                'lute',
+                'gamba',
+              ];
+              return stringsKeywords.any(
+                (kw) =>
+                    userType.contains(kw) ||
+                    userInstruments.any((i) => i.contains(kw)),
+              );
             }
             if (s == 'keyboards') {
-              final keysKeywords = ['piano', 'keyboard', 'synth', 'organ', 'harpsichord'];
-              return keysKeywords.any((kw) => userType.contains(kw) || userInstruments.any((i) => i.contains(kw)));
+              final keysKeywords = [
+                'piano',
+                'keyboard',
+                'synth',
+                'organ',
+                'harpsichord',
+              ];
+              return keysKeywords.any(
+                (kw) =>
+                    userType.contains(kw) ||
+                    userInstruments.any((i) => i.contains(kw)),
+              );
             }
             if (s == 'percussion') {
-              final percKeywords = ['drum', 'percussion', 'steel pan', 'steel drum'];
-              return percKeywords.any((kw) => userType.contains(kw) || userInstruments.any((i) => i.contains(kw)));
+              final percKeywords = [
+                'drum',
+                'percussion',
+                'steel pan',
+                'steel drum',
+              ];
+              return percKeywords.any(
+                (kw) =>
+                    userType.contains(kw) ||
+                    userInstruments.any((i) => i.contains(kw)),
+              );
             }
             if (s == 'choir & classical') {
-              final classicalKeywords = ['choir', 'classical', 'opera', 'choral'];
-              return classicalKeywords.any((kw) => userType.contains(kw) || userInstruments.any((i) => i.contains(kw)));
+              final classicalKeywords = [
+                'choir',
+                'classical',
+                'opera',
+                'choral',
+              ];
+              return classicalKeywords.any(
+                (kw) =>
+                    userType.contains(kw) ||
+                    userInstruments.any((i) => i.contains(kw)),
+              );
             }
             if (s == 'popular music') {
-              final popKeywords = ['pop', 'rock', 'jazz', 'blues', 'metal', 'soul', 'folk'];
-              return popKeywords.any((kw) => userType.contains(kw) || userInstruments.any((i) => i.contains(kw)));
+              final popKeywords = [
+                'pop',
+                'rock',
+                'jazz',
+                'blues',
+                'metal',
+                'soul',
+                'folk',
+              ];
+              return popKeywords.any(
+                (kw) =>
+                    userType.contains(kw) ||
+                    userInstruments.any((i) => i.contains(kw)),
+              );
             }
-            
+
             return false;
           }
-          
+
           if (activeSub != null) {
             return matchesSub(activeSub);
           } else {
@@ -284,7 +369,8 @@ class _BrowseMusiciansScreenState extends State<BrowseMusiciansScreen> {
       // Bands filtering
       setState(() {
         _filteredBands = _allBands.where((b) {
-          final matchesSearch = (b.name?.toLowerCase().contains(query) ?? false) ||
+          final matchesSearch =
+              (b.name?.toLowerCase().contains(query) ?? false) ||
               (b.location?.toLowerCase().contains(query) ?? false) ||
               (b.description?.toLowerCase().contains(query) ?? false) ||
               b.genres.any((g) => g.toLowerCase().contains(query));
@@ -344,11 +430,16 @@ class _BrowseMusiciansScreenState extends State<BrowseMusiciansScreen> {
                     ),
                   ),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: AppTheme.primaryAccent.withOpacity(0.15),
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.3)),
+                      border: Border.all(
+                        color: AppTheme.primaryAccent.withOpacity(0.3),
+                      ),
                     ),
                     child: Text(
                       band.ensembleType ?? 'Band',
@@ -365,11 +456,18 @@ class _BrowseMusiciansScreenState extends State<BrowseMusiciansScreen> {
                 const SizedBox(height: 8),
                 Row(
                   children: [
-                    const Icon(Icons.location_on_outlined, color: AppTheme.textSecondary, size: 16),
+                    const Icon(
+                      Icons.location_on_outlined,
+                      color: AppTheme.textSecondary,
+                      size: 16,
+                    ),
                     const SizedBox(width: 6),
                     Text(
                       band.location!,
-                      style: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 13),
+                      style: GoogleFonts.inter(
+                        color: AppTheme.textSecondary,
+                        fontSize: 13,
+                      ),
                     ),
                   ],
                 ),
@@ -408,35 +506,54 @@ class _BrowseMusiciansScreenState extends State<BrowseMusiciansScreen> {
               const SizedBox(height: 8),
               Row(
                 children: [
-                  const Icon(Icons.calendar_month_rounded, color: AppTheme.primaryAccent, size: 16),
+                  const Icon(
+                    Icons.calendar_month_rounded,
+                    color: AppTheme.primaryAccent,
+                    size: 16,
+                  ),
                   const SizedBox(width: 8),
                   Text(
-                    band.rehearsalDayOfWeek != null 
+                    band.rehearsalDayOfWeek != null
                         ? 'Every ${band.rehearsalDayOfWeek}'
                         : 'No set schedule',
                     style: GoogleFonts.inter(color: Colors.white, fontSize: 13),
                   ),
                   if (band.rehearsalStartTime != null) ...[
                     const SizedBox(width: 12),
-                    const Icon(Icons.access_time_rounded, color: AppTheme.primaryAccent, size: 16),
+                    const Icon(
+                      Icons.access_time_rounded,
+                      color: AppTheme.primaryAccent,
+                      size: 16,
+                    ),
                     const SizedBox(width: 8),
                     Text(
                       '${band.rehearsalStartTime} - ${band.rehearsalEndTime ?? ""}',
-                      style: GoogleFonts.inter(color: Colors.white, fontSize: 13),
+                      style: GoogleFonts.inter(
+                        color: Colors.white,
+                        fontSize: 13,
+                      ),
                     ),
                   ],
                 ],
               ),
-              if (band.rehearsalLocation != null && band.rehearsalLocation!.isNotEmpty) ...[
+              if (band.rehearsalLocation != null &&
+                  band.rehearsalLocation!.isNotEmpty) ...[
                 const SizedBox(height: 8),
                 Row(
                   children: [
-                    const Icon(Icons.room_rounded, color: AppTheme.primaryAccent, size: 16),
+                    const Icon(
+                      Icons.room_rounded,
+                      color: AppTheme.primaryAccent,
+                      size: 16,
+                    ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         band.rehearsalLocation!,
-                        style: GoogleFonts.inter(color: Colors.white, fontSize: 13),
+                        style: GoogleFonts.inter(
+                          color: Colors.white,
+                          fontSize: 13,
+                        ),
                       ),
                     ),
                   ],
@@ -453,7 +570,10 @@ class _BrowseMusiciansScreenState extends State<BrowseMusiciansScreen> {
                         decoration: BoxDecoration(
                           color: AppTheme.cardBackground,
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: const Color(0xFF2E2A4E), width: 1.5),
+                          border: Border.all(
+                            color: const Color(0xFF2E2A4E),
+                            width: 1.5,
+                          ),
                         ),
                         child: Center(
                           child: Text(
@@ -515,7 +635,10 @@ class _BrowseMusiciansScreenState extends State<BrowseMusiciansScreen> {
                   decoration: BoxDecoration(
                     color: AppTheme.cardBackground,
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFF231F45), width: 1.5),
+                    border: Border.all(
+                      color: const Color(0xFF231F45),
+                      width: 1.5,
+                    ),
                   ),
                   child: Row(
                     children: [
@@ -592,8 +715,13 @@ class _BrowseMusiciansScreenState extends State<BrowseMusiciansScreen> {
               child: TextField(
                 controller: _searchController,
                 decoration: InputDecoration(
-                  hintText: _activeTab == 0 ? 'Search musicians, vocalists, songwriters, producers...' : 'Search bands, ensembles...',
-                  prefixIcon: const Icon(Icons.search_rounded, color: AppTheme.textSecondary),
+                  hintText: _activeTab == 0
+                      ? 'Search musicians, vocalists, songwriters, producers...'
+                      : 'Search bands, ensembles...',
+                  prefixIcon: const Icon(
+                    Icons.search_rounded,
+                    color: AppTheme.textSecondary,
+                  ),
                 ),
               ),
             ),
@@ -624,12 +752,18 @@ class _BrowseMusiciansScreenState extends State<BrowseMusiciansScreen> {
                       backgroundColor: AppTheme.inputBackground,
                       labelStyle: GoogleFonts.inter(
                         fontSize: 12,
-                        fontWeight: _selectedMainCategory == null ? FontWeight.bold : FontWeight.normal,
+                        fontWeight: _selectedMainCategory == null
+                            ? FontWeight.bold
+                            : FontWeight.normal,
                         color: Colors.white,
                       ),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
                       side: BorderSide(
-                        color: _selectedMainCategory == null ? AppTheme.primaryAccent : const Color(0xFF2E2A4E),
+                        color: _selectedMainCategory == null
+                            ? AppTheme.primaryAccent
+                            : const Color(0xFF2E2A4E),
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -653,12 +787,18 @@ class _BrowseMusiciansScreenState extends State<BrowseMusiciansScreen> {
                           backgroundColor: AppTheme.inputBackground,
                           labelStyle: GoogleFonts.inter(
                             fontSize: 12,
-                            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                            fontWeight: isSelected
+                                ? FontWeight.bold
+                                : FontWeight.normal,
                             color: Colors.white,
                           ),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
                           side: BorderSide(
-                            color: isSelected ? AppTheme.primaryAccent : const Color(0xFF2E2A4E),
+                            color: isSelected
+                                ? AppTheme.primaryAccent
+                                : const Color(0xFF2E2A4E),
                           ),
                         ),
                       );
@@ -677,7 +817,9 @@ class _BrowseMusiciansScreenState extends State<BrowseMusiciansScreen> {
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     children: [
                       ChoiceChip(
-                        label: Text('All ${_selectedMainCategory!.toLowerCase()}'),
+                        label: Text(
+                          'All ${_selectedMainCategory!.toLowerCase()}',
+                        ),
                         selected: _selectedSubcategory == null,
                         onSelected: (val) {
                           if (val) {
@@ -691,16 +833,24 @@ class _BrowseMusiciansScreenState extends State<BrowseMusiciansScreen> {
                         backgroundColor: AppTheme.cardBackground,
                         labelStyle: GoogleFonts.inter(
                           fontSize: 11,
-                          fontWeight: _selectedSubcategory == null ? FontWeight.bold : FontWeight.normal,
+                          fontWeight: _selectedSubcategory == null
+                              ? FontWeight.bold
+                              : FontWeight.normal,
                           color: Colors.white,
                         ),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
                         side: BorderSide(
-                          color: _selectedSubcategory == null ? AppTheme.primaryAccent : const Color(0xFF2E2A4E),
+                          color: _selectedSubcategory == null
+                              ? AppTheme.primaryAccent
+                              : const Color(0xFF2E2A4E),
                         ),
                       ),
                       const SizedBox(width: 6),
-                      ...(_searchCategories[_selectedMainCategory] ?? []).map((subCat) {
+                      ...(_searchCategories[_selectedMainCategory] ?? []).map((
+                        subCat,
+                      ) {
                         final isSelected = _selectedSubcategory == subCat;
                         return Padding(
                           padding: const EdgeInsets.only(right: 6),
@@ -715,16 +865,24 @@ class _BrowseMusiciansScreenState extends State<BrowseMusiciansScreen> {
                                 });
                               }
                             },
-                            selectedColor: AppTheme.primaryAccent.withOpacity(0.4),
+                            selectedColor: AppTheme.primaryAccent.withOpacity(
+                              0.4,
+                            ),
                             backgroundColor: AppTheme.cardBackground,
                             labelStyle: GoogleFonts.inter(
                               fontSize: 11,
-                              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                              fontWeight: isSelected
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
                               color: Colors.white,
                             ),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
                             side: BorderSide(
-                              color: isSelected ? AppTheme.primaryAccent : const Color(0xFF2E2A4E),
+                              color: isSelected
+                                  ? AppTheme.primaryAccent
+                                  : const Color(0xFF2E2A4E),
                             ),
                           ),
                         );
@@ -739,10 +897,14 @@ class _BrowseMusiciansScreenState extends State<BrowseMusiciansScreen> {
             // Content List (Musicians or Bands)
             Expanded(
               child: _isLoading
-                  ? const Center(child: CircularProgressIndicator(color: AppTheme.primaryAccent))
+                  ? const Center(
+                      child: CircularProgressIndicator(
+                        color: AppTheme.primaryAccent,
+                      ),
+                    )
                   : _activeTab == 0
-                      ? _buildMusiciansList()
-                      : _buildBandsList(),
+                  ? _buildMusiciansList()
+                  : _buildBandsList(),
             ),
           ],
         ),
@@ -819,15 +981,20 @@ class _BrowseMusiciansScreenState extends State<BrowseMusiciansScreen> {
                     CircleAvatar(
                       radius: 30,
                       backgroundColor: AppTheme.primaryAccent.withOpacity(0.2),
-                      backgroundImage: user.profilePictureUrl != null &&
+                      backgroundImage:
+                          user.profilePictureUrl != null &&
                               user.profilePictureUrl!.isNotEmpty
                           ? NetworkImage(user.profilePictureUrl!)
                           : null,
-                      child: user.profilePictureUrl == null ||
+                      child:
+                          user.profilePictureUrl == null ||
                               user.profilePictureUrl!.isEmpty
                           ? Text(
-                              (user.displayName != null && user.displayName!.isNotEmpty)
-                                  ? user.displayName!.substring(0, 1).toUpperCase()
+                              (user.displayName != null &&
+                                      user.displayName!.isNotEmpty)
+                                  ? user.displayName!
+                                        .substring(0, 1)
+                                        .toUpperCase()
                                   : 'U',
                               style: GoogleFonts.inter(
                                 color: Colors.white,
@@ -846,7 +1013,10 @@ class _BrowseMusiciansScreenState extends State<BrowseMusiciansScreen> {
                         decoration: BoxDecoration(
                           color: AppTheme.success,
                           shape: BoxShape.circle,
-                          border: Border.all(color: AppTheme.cardBackground, width: 2),
+                          border: Border.all(
+                            color: AppTheme.cardBackground,
+                            width: 2,
+                          ),
                         ),
                       ),
                     ),
@@ -874,7 +1044,9 @@ class _BrowseMusiciansScreenState extends State<BrowseMusiciansScreen> {
                           ),
                           Builder(
                             builder: (context) {
-                              final isFav = _favoriteUserIds.contains(user.userId ?? '');
+                              final isFav = _favoriteUserIds.contains(
+                                user.userId ?? '',
+                              );
                               return GestureDetector(
                                 onTap: () async {
                                   final targetId = user.userId ?? '';
@@ -887,15 +1059,21 @@ class _BrowseMusiciansScreenState extends State<BrowseMusiciansScreen> {
                                     } else {
                                       _favoriteUserIds.remove(targetId);
                                       if (widget.favoritesOnly) {
-                                        _allMusicians.removeWhere((u) => u.userId == targetId);
+                                        _allMusicians.removeWhere(
+                                          (u) => u.userId == targetId,
+                                        );
                                         _applyFilters();
                                       }
                                     }
                                   });
                                 },
                                 child: Icon(
-                                  isFav ? Icons.star_rounded : Icons.star_border_rounded,
-                                  color: isFav ? AppTheme.primaryAccent : AppTheme.textSecondary,
+                                  isFav
+                                      ? Icons.star_rounded
+                                      : Icons.star_border_rounded,
+                                  color: isFav
+                                      ? AppTheme.primaryAccent
+                                      : AppTheme.textSecondary,
                                   size: 24,
                                 ),
                               );
@@ -917,7 +1095,11 @@ class _BrowseMusiciansScreenState extends State<BrowseMusiciansScreen> {
                       const SizedBox(height: 6),
                       Row(
                         children: [
-                          const Icon(Icons.location_on_outlined, color: AppTheme.textSecondary, size: 14),
+                          const Icon(
+                            Icons.location_on_outlined,
+                            color: AppTheme.textSecondary,
+                            size: 14,
+                          ),
                           const SizedBox(width: 4),
                           Text(
                             user.location ?? 'Unknown',
@@ -934,7 +1116,10 @@ class _BrowseMusiciansScreenState extends State<BrowseMusiciansScreen> {
                         runSpacing: 6,
                         children: user.genres.map((genre) {
                           return Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 4,
+                            ),
                             decoration: BoxDecoration(
                               color: const Color(0xFF1E1A3A),
                               borderRadius: BorderRadius.circular(8),
@@ -995,7 +1180,10 @@ class _BrowseMusiciansScreenState extends State<BrowseMusiciansScreen> {
                       ),
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 2,
+                      ),
                       decoration: BoxDecoration(
                         color: AppTheme.primaryAccent.withOpacity(0.12),
                         borderRadius: BorderRadius.circular(6),
@@ -1015,7 +1203,11 @@ class _BrowseMusiciansScreenState extends State<BrowseMusiciansScreen> {
                 if (band.location != null)
                   Row(
                     children: [
-                      const Icon(Icons.location_on_outlined, color: AppTheme.textSecondary, size: 14),
+                      const Icon(
+                        Icons.location_on_outlined,
+                        color: AppTheme.textSecondary,
+                        size: 14,
+                      ),
                       const SizedBox(width: 4),
                       Text(
                         band.location!,
@@ -1027,7 +1219,8 @@ class _BrowseMusiciansScreenState extends State<BrowseMusiciansScreen> {
                     ],
                   ),
                 const SizedBox(height: 12),
-                if (band.description != null && band.description!.isNotEmpty) ...[
+                if (band.description != null &&
+                    band.description!.isNotEmpty) ...[
                   Text(
                     band.description!,
                     style: GoogleFonts.inter(
@@ -1045,7 +1238,11 @@ class _BrowseMusiciansScreenState extends State<BrowseMusiciansScreen> {
                     // Member count badge
                     Row(
                       children: [
-                        const Icon(Icons.people_alt_rounded, color: AppTheme.textSecondary, size: 16),
+                        const Icon(
+                          Icons.people_alt_rounded,
+                          color: AppTheme.textSecondary,
+                          size: 16,
+                        ),
                         const SizedBox(width: 6),
                         Text(
                           '${band.membersBand.length} member${band.membersBand.length == 1 ? "" : "s"}',
@@ -1061,7 +1258,10 @@ class _BrowseMusiciansScreenState extends State<BrowseMusiciansScreen> {
                       children: band.genres.take(2).map((genre) {
                         return Container(
                           margin: const EdgeInsets.only(left: 6),
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 3,
+                          ),
                           decoration: BoxDecoration(
                             color: const Color(0xFF1E1A3A),
                             borderRadius: BorderRadius.circular(6),

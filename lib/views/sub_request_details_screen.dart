@@ -12,13 +12,11 @@ import '../widgets/animated_tap_detector.dart';
 class SubRequestDetailsScreen extends StatefulWidget {
   final SubRequest subRequest;
 
-  const SubRequestDetailsScreen({
-    super.key,
-    required this.subRequest,
-  });
+  const SubRequestDetailsScreen({super.key, required this.subRequest});
 
   @override
-  State<SubRequestDetailsScreen> createState() => _SubRequestDetailsScreenState();
+  State<SubRequestDetailsScreen> createState() =>
+      _SubRequestDetailsScreenState();
 }
 
 class _SubRequestDetailsScreenState extends State<SubRequestDetailsScreen> {
@@ -29,16 +27,16 @@ class _SubRequestDetailsScreenState extends State<SubRequestDetailsScreen> {
     final appState = Provider.of<AppState>(context);
     final currentUserId = appState.currentUserId;
     final gig = widget.subRequest;
-    final hasApplied = currentUserId != null && gig.responses.containsKey(currentUserId);
-    
-    final date = gig.date != null ? DateTime.tryParse(gig.date!) ?? DateTime.now() : DateTime.now();
+    final hasApplied =
+        currentUserId != null && gig.responses.containsKey(currentUserId);
+
+    final date = gig.date != null
+        ? DateTime.tryParse(gig.date!) ?? DateTime.now()
+        : DateTime.now();
     final formattedDate = DateFormat('EEEE, MMMM dd, yyyy').format(date);
 
     return GradientScaffold(
-      appBar: const CustomTopBar(
-        title: 'Gig Details',
-        showBack: true,
-      ),
+      appBar: const CustomTopBar(title: 'Gig Details', showBack: true),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24.0),
         child: Column(
@@ -70,7 +68,10 @@ class _SubRequestDetailsScreenState extends State<SubRequestDetailsScreen> {
                         ),
                       ),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
                         decoration: BoxDecoration(
                           color: gig.isPaid
                               ? AppTheme.primaryAccent.withOpacity(0.15)
@@ -81,7 +82,9 @@ class _SubRequestDetailsScreenState extends State<SubRequestDetailsScreen> {
                           gig.isPaid ? 'Paid' : 'Unpaid',
                           style: GoogleFonts.inter(
                             fontSize: 10,
-                            color: gig.isPaid ? AppTheme.primaryAccent : AppTheme.textSecondary,
+                            color: gig.isPaid
+                                ? AppTheme.primaryAccent
+                                : AppTheme.textSecondary,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
@@ -126,7 +129,11 @@ class _SubRequestDetailsScreenState extends State<SubRequestDetailsScreen> {
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(Icons.location_on_rounded, color: AppTheme.primaryAccent, size: 20),
+                      const Icon(
+                        Icons.location_on_rounded,
+                        color: AppTheme.primaryAccent,
+                        size: 20,
+                      ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Column(
@@ -161,7 +168,11 @@ class _SubRequestDetailsScreenState extends State<SubRequestDetailsScreen> {
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(Icons.calendar_today_rounded, color: AppTheme.primaryAccent, size: 20),
+                      const Icon(
+                        Icons.calendar_today_rounded,
+                        color: AppTheme.primaryAccent,
+                        size: 20,
+                      ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Column(
@@ -196,7 +207,11 @@ class _SubRequestDetailsScreenState extends State<SubRequestDetailsScreen> {
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(Icons.access_time_rounded, color: AppTheme.primaryAccent, size: 20),
+                      const Icon(
+                        Icons.access_time_rounded,
+                        color: AppTheme.primaryAccent,
+                        size: 20,
+                      ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Column(
@@ -248,7 +263,8 @@ class _SubRequestDetailsScreenState extends State<SubRequestDetailsScreen> {
                 border: Border.all(color: const Color(0xFF231F45), width: 1),
               ),
               child: Text(
-                gig.description ?? 'No description has been provided for this substitute request.',
+                gig.description ??
+                    'No description has been provided for this substitute request.',
                 style: GoogleFonts.inter(
                   fontSize: 14,
                   color: AppTheme.textSecondary,
@@ -260,90 +276,97 @@ class _SubRequestDetailsScreenState extends State<SubRequestDetailsScreen> {
 
             // Action Apply Button
             _isApplying
-                ? const Center(child: CircularProgressIndicator(color: AppTheme.primaryAccent))
+                ? const Center(
+                    child: CircularProgressIndicator(
+                      color: AppTheme.primaryAccent,
+                    ),
+                  )
                 : hasApplied
-                    ? Container(
-                        width: double.infinity,
-                        height: 55,
-                        decoration: BoxDecoration(
-                          color: Colors.white10,
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: Colors.white12),
+                ? Container(
+                    width: double.infinity,
+                    height: 55,
+                    decoration: BoxDecoration(
+                      color: Colors.white10,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: Colors.white12),
+                    ),
+                    child: Center(
+                      child: Text(
+                        'Applied',
+                        style: GoogleFonts.inter(
+                          color: Colors.white54,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
                         ),
-                        child: Center(
-                          child: Text(
-                            'Applied',
-                            style: GoogleFonts.inter(
-                              color: Colors.white54,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                            ),
-                          ),
-                        ),
-                      )
-                    : AnimatedTapDetector(
-                        onTap: () async {
-                          if (currentUserId == null) return;
-                          setState(() => _isApplying = true);
-                          try {
-                            if ((gig.id ?? '').startsWith('mock_')) {
-                              // Simulate apply for mock gig
-                              await Future.delayed(const Duration(milliseconds: 300));
-                            } else {
-                              await appState.firebaseService.addResponseToSubRequestAsync(
+                      ),
+                    ),
+                  )
+                : AnimatedTapDetector(
+                    onTap: () async {
+                      if (currentUserId == null) return;
+                      setState(() => _isApplying = true);
+                      try {
+                        if ((gig.id ?? '').startsWith('mock_')) {
+                          // Simulate apply for mock gig
+                          await Future.delayed(
+                            const Duration(milliseconds: 300),
+                          );
+                        } else {
+                          await appState.firebaseService
+                              .addResponseToSubRequestAsync(
                                 gig.subRequestId ?? gig.id!,
                                 currentUserId,
                               );
-                            }
-                            if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Successfully applied for gig!'),
-                                  backgroundColor: AppTheme.success,
-                                ),
-                              );
-                              setState(() {
-                                gig.responses[currentUserId] = true;
-                              });
-                            }
-                          } catch (e) {
-                            if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Failed to apply: $e'),
-                                  backgroundColor: AppTheme.danger,
-                                ),
-                              );
-                            }
-                          } finally {
-                            if (mounted) setState(() => _isApplying = false);
-                          }
-                        },
-                        child: Container(
-                          height: 55,
-                          decoration: BoxDecoration(
-                            gradient: AppTheme.primaryGradient,
-                            borderRadius: BorderRadius.circular(14),
-                            boxShadow: [
-                              BoxShadow(
-                                color: AppTheme.primaryAccent.withOpacity(0.3),
-                                blurRadius: 10,
-                                offset: const Offset(0, 4),
-                              )
-                            ],
-                          ),
-                          child: Center(
-                            child: Text(
-                              'Apply for Gig',
-                              style: GoogleFonts.inter(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                              ),
+                        }
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Successfully applied for gig!'),
+                              backgroundColor: AppTheme.success,
                             ),
+                          );
+                          setState(() {
+                            gig.responses[currentUserId] = true;
+                          });
+                        }
+                      } catch (e) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Failed to apply: $e'),
+                              backgroundColor: AppTheme.danger,
+                            ),
+                          );
+                        }
+                      } finally {
+                        if (mounted) setState(() => _isApplying = false);
+                      }
+                    },
+                    child: Container(
+                      height: 55,
+                      decoration: BoxDecoration(
+                        gradient: AppTheme.primaryGradient,
+                        borderRadius: BorderRadius.circular(14),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppTheme.primaryAccent.withOpacity(0.3),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Center(
+                        child: Text(
+                          'Apply for Gig',
+                          style: GoogleFonts.inter(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
                           ),
                         ),
                       ),
+                    ),
+                  ),
             const SizedBox(height: 40),
           ],
         ),
