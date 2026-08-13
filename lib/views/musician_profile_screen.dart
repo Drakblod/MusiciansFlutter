@@ -36,7 +36,9 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
 
   Future<void> _checkFavorite() async {
     final appState = Provider.of<AppState>(context, listen: false);
-    final fav = await appState.firebaseService.isFavoriteAsync(widget.musician.userId ?? '');
+    final fav = await appState.firebaseService.isFavoriteAsync(
+      widget.musician.userId ?? '',
+    );
     if (mounted) {
       setState(() {
         _isFavorite = fav;
@@ -50,13 +52,19 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
     setState(() {
       _isFavorite = !_isFavorite;
     });
-    await appState.firebaseService.toggleFavoriteAsync(widget.musician.userId ?? '', _isFavorite);
+    await appState.firebaseService.toggleFavoriteAsync(
+      widget.musician.userId ?? '',
+      _isFavorite,
+    );
   }
 
   Future<void> _launchUrl(String urlString) async {
     try {
       final uri = Uri.parse(urlString.trim());
-      final success = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      final success = await launchUrl(
+        uri,
+        mode: LaunchMode.externalApplication,
+      );
       if (!success) {
         await launchUrl(uri);
       }
@@ -80,7 +88,8 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
     if (selfId == null || otherId == null) return;
 
     // Create or retrieve conversation UID
-    final convId = await appState.firebaseService.getOrCreateDirectConversationAsync(selfId, otherId);
+    final convId = await appState.firebaseService
+        .getOrCreateDirectConversationAsync(selfId, otherId);
 
     if (mounted) {
       Navigator.pushNamed(
@@ -99,7 +108,7 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
   Widget build(BuildContext context) {
     final defaultAbout =
         "Passionate musician looking to collaborate. Love playing live gigs and creating fresh arrangements in the studio.";
-    final skills = widget.musician.instruments.isEmpty 
+    final skills = widget.musician.instruments.isEmpty
         ? ['Studio Recording', 'Live Performance', 'Songwriting']
         : [...widget.musician.instruments, 'Live Performance', 'Songwriting'];
 
@@ -134,11 +143,15 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
                     height: 110,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      border: Border.all(color: AppTheme.primaryAccent, width: 2),
+                      border: Border.all(
+                        color: AppTheme.primaryAccent,
+                        width: 2,
+                      ),
                       color: AppTheme.inputBackground,
                     ),
                     child: Center(
-                      child: widget.musician.profilePictureUrl != null &&
+                      child:
+                          widget.musician.profilePictureUrl != null &&
                               widget.musician.profilePictureUrl!.isNotEmpty
                           ? ClipOval(
                               child: Image.network(
@@ -149,8 +162,11 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
                               ),
                             )
                           : Text(
-                              (widget.musician.displayName != null && widget.musician.displayName!.isNotEmpty)
-                                  ? widget.musician.displayName!.substring(0, 1).toUpperCase()
+                              (widget.musician.displayName != null &&
+                                      widget.musician.displayName!.isNotEmpty)
+                                  ? widget.musician.displayName!
+                                        .substring(0, 1)
+                                        .toUpperCase()
                                   : 'U',
                               style: GoogleFonts.inter(
                                 color: Colors.white,
@@ -213,16 +229,29 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
                           color: AppTheme.textSecondary,
                         ),
                       ),
-                      if (widget.musician.level != null && widget.musician.level!.isNotEmpty) ...[
+                      if (widget.musician.level != null &&
+                          widget.musician.level!.isNotEmpty) ...[
                         const SizedBox(width: 8),
-                        Text('•', style: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 13)),
+                        Text(
+                          '•',
+                          style: GoogleFonts.inter(
+                            color: AppTheme.textSecondary,
+                            fontSize: 13,
+                          ),
+                        ),
                         const SizedBox(width: 8),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
                           decoration: BoxDecoration(
                             color: AppTheme.primaryAccent.withOpacity(0.15),
                             borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.4), width: 1),
+                            border: Border.all(
+                              color: AppTheme.primaryAccent.withOpacity(0.4),
+                              width: 1,
+                            ),
                           ),
                           child: Text(
                             widget.musician.level!,
@@ -263,33 +292,54 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
                       ],
                     ),
                   ],
-                  if (widget.musician.spotifyUrl != null || widget.musician.youtubeUrl != null) ...[
+                  if (widget.musician.spotifyUrl != null ||
+                      widget.musician.youtubeUrl != null) ...[
                     const SizedBox(height: 12),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        if (widget.musician.spotifyUrl != null && widget.musician.spotifyUrl!.isNotEmpty)
+                        if (widget.musician.spotifyUrl != null &&
+                            widget.musician.spotifyUrl!.isNotEmpty)
                           Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8.0,
+                            ),
                             child: IconButton(
-                              icon: const Icon(Icons.music_note, color: Colors.green, size: 24),
-                              onPressed: () => _launchUrl(widget.musician.spotifyUrl!),
+                              icon: const Icon(
+                                Icons.music_note,
+                                color: Colors.green,
+                                size: 24,
+                              ),
+                              onPressed: () =>
+                                  _launchUrl(widget.musician.spotifyUrl!),
                               style: IconButton.styleFrom(
                                 backgroundColor: AppTheme.inputBackground,
-                                side: const BorderSide(color: Color(0xFF2E2A4E)),
+                                side: const BorderSide(
+                                  color: Color(0xFF2E2A4E),
+                                ),
                                 padding: const EdgeInsets.all(8),
                               ),
                             ),
                           ),
-                        if (widget.musician.youtubeUrl != null && widget.musician.youtubeUrl!.isNotEmpty)
+                        if (widget.musician.youtubeUrl != null &&
+                            widget.musician.youtubeUrl!.isNotEmpty)
                           Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8.0,
+                            ),
                             child: IconButton(
-                              icon: const Icon(Icons.play_circle_fill, color: Colors.red, size: 24),
-                              onPressed: () => _launchUrl(widget.musician.youtubeUrl!),
+                              icon: const Icon(
+                                Icons.play_circle_fill,
+                                color: Colors.red,
+                                size: 24,
+                              ),
+                              onPressed: () =>
+                                  _launchUrl(widget.musician.youtubeUrl!),
                               style: IconButton.styleFrom(
                                 backgroundColor: AppTheme.inputBackground,
-                                side: const BorderSide(color: Color(0xFF2E2A4E)),
+                                side: const BorderSide(
+                                  color: Color(0xFF2E2A4E),
+                                ),
                                 padding: const EdgeInsets.all(8),
                               ),
                             ),
@@ -304,26 +354,35 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
                     spacing: 8,
                     runSpacing: 8,
                     alignment: WrapAlignment.center,
-                    children: (widget.musician.genres.isEmpty
-                            ? ['Rock', 'Pop', 'Indie']
-                            : widget.musician.genres)
-                        .map((genre) => Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: AppTheme.inputBackground,
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
-                              ),
-                              child: Text(
-                                genre,
-                                style: GoogleFonts.inter(
-                                  fontSize: 11,
-                                  color: AppTheme.secondaryAccent,
-                                  fontWeight: FontWeight.w500,
+                    children:
+                        (widget.musician.genres.isEmpty
+                                ? ['Rock', 'Pop', 'Indie']
+                                : widget.musician.genres)
+                            .map(
+                              (genre) => Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.inputBackground,
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                    color: const Color(0xFF2E2A4E),
+                                    width: 1,
+                                  ),
+                                ),
+                                child: Text(
+                                  genre,
+                                  style: GoogleFonts.inter(
+                                    fontSize: 11,
+                                    color: AppTheme.secondaryAccent,
+                                    fontWeight: FontWeight.w500,
+                                  ),
                                 ),
                               ),
-                            ))
-                        .toList(),
+                            )
+                            .toList(),
                   ),
                 ],
               ),
@@ -352,16 +411,26 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
                       runSpacing: 8,
                       children: widget.musician.mainSkills.map((skill) {
                         return Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 8,
+                          ),
                           decoration: BoxDecoration(
                             color: AppTheme.primaryAccent.withOpacity(0.15),
                             borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.5), width: 1.5),
+                            border: Border.all(
+                              color: AppTheme.primaryAccent.withOpacity(0.5),
+                              width: 1.5,
+                            ),
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Icon(Icons.star_rounded, color: AppTheme.primaryAccent, size: 16),
+                              const Icon(
+                                Icons.star_rounded,
+                                color: AppTheme.primaryAccent,
+                                size: 16,
+                              ),
                               const SizedBox(width: 6),
                               Text(
                                 skill,
@@ -395,11 +464,17 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
                       runSpacing: 8,
                       children: widget.musician.secondarySkills.map((skill) {
                         return Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
                           decoration: BoxDecoration(
                             color: const Color(0xFF1E1A3A),
                             borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
+                            border: Border.all(
+                              color: const Color(0xFF2E2A4E),
+                              width: 1,
+                            ),
                           ),
                           child: Text(
                             skill,
@@ -430,11 +505,17 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
                       runSpacing: 8,
                       children: widget.musician.genres.map((genre) {
                         return Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
                           decoration: BoxDecoration(
                             color: AppTheme.cardBackground,
                             borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.4), width: 1),
+                            border: Border.all(
+                              color: AppTheme.primaryAccent.withOpacity(0.4),
+                              width: 1,
+                            ),
                           ),
                           child: Text(
                             genre,
@@ -466,10 +547,14 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
                     decoration: BoxDecoration(
                       color: AppTheme.cardBackground,
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: const Color(0xFF231F45), width: 1),
+                      border: Border.all(
+                        color: const Color(0xFF231F45),
+                        width: 1,
+                      ),
                     ),
                     child: Text(
-                      widget.musician.about != null && widget.musician.about!.isNotEmpty
+                      widget.musician.about != null &&
+                              widget.musician.about!.isNotEmpty
                           ? widget.musician.about!
                           : defaultAbout,
                       style: GoogleFonts.inter(
@@ -497,10 +582,14 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
                     decoration: BoxDecoration(
                       color: AppTheme.cardBackground,
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: const Color(0xFF231F45), width: 1),
+                      border: Border.all(
+                        color: const Color(0xFF231F45),
+                        width: 1,
+                      ),
                     ),
                     child: Text(
-                      widget.musician.collabBio != null && widget.musician.collabBio!.isNotEmpty
+                      widget.musician.collabBio != null &&
+                              widget.musician.collabBio!.isNotEmpty
                           ? widget.musician.collabBio!
                           : "I'm looking for musical collaborations!",
                       style: GoogleFonts.inter(
@@ -513,8 +602,10 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
                   const SizedBox(height: 24),
 
                   // 6. SOCIAL LINKS
-                  if ((widget.musician.spotifyUrl != null && widget.musician.spotifyUrl!.isNotEmpty) ||
-                      (widget.musician.youtubeUrl != null && widget.musician.youtubeUrl!.isNotEmpty)) ...[
+                  if ((widget.musician.spotifyUrl != null &&
+                          widget.musician.spotifyUrl!.isNotEmpty) ||
+                      (widget.musician.youtubeUrl != null &&
+                          widget.musician.youtubeUrl!.isNotEmpty)) ...[
                     Text(
                       'SOCIAL LINKS',
                       style: GoogleFonts.outfit(
@@ -526,32 +617,58 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
                     const SizedBox(height: 10),
                     Row(
                       children: [
-                        if (widget.musician.spotifyUrl != null && widget.musician.spotifyUrl!.isNotEmpty)
+                        if (widget.musician.spotifyUrl != null &&
+                            widget.musician.spotifyUrl!.isNotEmpty)
                           Expanded(
                             child: OutlinedButton.icon(
-                              onPressed: () => _launchUrl(widget.musician.spotifyUrl!),
-                              icon: const Icon(Icons.music_note, color: Colors.green),
-                              label: Text('Spotify', style: GoogleFonts.inter(color: Colors.white)),
+                              onPressed: () =>
+                                  _launchUrl(widget.musician.spotifyUrl!),
+                              icon: const Icon(
+                                Icons.music_note,
+                                color: Colors.green,
+                              ),
+                              label: Text(
+                                'Spotify',
+                                style: GoogleFonts.inter(color: Colors.white),
+                              ),
                               style: OutlinedButton.styleFrom(
                                 side: const BorderSide(color: Colors.green),
-                                padding: const EdgeInsets.symmetric(vertical: 12),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 12,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
                               ),
                             ),
                           ),
-                        if (widget.musician.spotifyUrl != null && widget.musician.spotifyUrl!.isNotEmpty &&
-                            widget.musician.youtubeUrl != null && widget.musician.youtubeUrl!.isNotEmpty)
+                        if (widget.musician.spotifyUrl != null &&
+                            widget.musician.spotifyUrl!.isNotEmpty &&
+                            widget.musician.youtubeUrl != null &&
+                            widget.musician.youtubeUrl!.isNotEmpty)
                           const SizedBox(width: 12),
-                        if (widget.musician.youtubeUrl != null && widget.musician.youtubeUrl!.isNotEmpty)
+                        if (widget.musician.youtubeUrl != null &&
+                            widget.musician.youtubeUrl!.isNotEmpty)
                           Expanded(
                             child: OutlinedButton.icon(
-                              onPressed: () => _launchUrl(widget.musician.youtubeUrl!),
-                              icon: const Icon(Icons.play_circle_fill, color: Colors.red),
-                              label: Text('YouTube', style: GoogleFonts.inter(color: Colors.white)),
+                              onPressed: () =>
+                                  _launchUrl(widget.musician.youtubeUrl!),
+                              icon: const Icon(
+                                Icons.play_circle_fill,
+                                color: Colors.red,
+                              ),
+                              label: Text(
+                                'YouTube',
+                                style: GoogleFonts.inter(color: Colors.white),
+                              ),
                               style: OutlinedButton.styleFrom(
                                 side: const BorderSide(color: Colors.red),
-                                padding: const EdgeInsets.symmetric(vertical: 12),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 12,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
                               ),
                             ),
                           ),
@@ -561,7 +678,8 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
                   ],
 
                   // 7. TRACKS
-                  if (widget.musician.audioSnippetUrl != null && widget.musician.audioSnippetUrl!.isNotEmpty) ...[
+                  if (widget.musician.audioSnippetUrl != null &&
+                      widget.musician.audioSnippetUrl!.isNotEmpty) ...[
                     Text(
                       'TRACKS',
                       style: GoogleFonts.outfit(
@@ -571,18 +689,23 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    AudioSnippetPlayer(audioUrl: widget.musician.audioSnippetUrl!),
+                    AudioSnippetPlayer(
+                      audioUrl: widget.musician.audioSnippetUrl!,
+                    ),
                     const SizedBox(height: 24),
                   ],
                   const SizedBox(height: 20),
-// Bottom Action Buttons (Message & Add, or Edit & Logout if isMe)
+                  // Bottom Action Buttons (Message & Add, or Edit & Logout if isMe)
                   Row(
                     children: [
                       // Primary Button (Message or Edit Profile)
                       Expanded(
                         child: AnimatedTapDetector(
                           onTap: isMe
-                              ? () => Navigator.pushNamed(context, '/edit-profile')
+                              ? () => Navigator.pushNamed(
+                                  context,
+                                  '/edit-profile',
+                                )
                               : _openChat,
                           child: Container(
                             height: 55,
@@ -591,17 +714,21 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
                               borderRadius: BorderRadius.circular(14),
                               boxShadow: [
                                 BoxShadow(
-                                  color: AppTheme.primaryAccent.withOpacity(0.3),
+                                  color: AppTheme.primaryAccent.withOpacity(
+                                    0.3,
+                                  ),
                                   blurRadius: 10,
                                   offset: const Offset(0, 4),
-                                )
+                                ),
                               ],
                             ),
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 Icon(
-                                  isMe ? Icons.edit_rounded : Icons.chat_bubble_outline_rounded,
+                                  isMe
+                                      ? Icons.edit_rounded
+                                      : Icons.chat_bubble_outline_rounded,
                                   color: Colors.white,
                                   size: 20,
                                 ),
@@ -632,7 +759,10 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
                           decoration: BoxDecoration(
                             color: AppTheme.cardBackground,
                             borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: const Color(0xFF231F45), width: 1),
+                            border: Border.all(
+                              color: const Color(0xFF231F45),
+                              width: 1,
+                            ),
                           ),
                           child: Center(
                             child: isMe
@@ -642,19 +772,23 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
                                     size: 24,
                                   )
                                 : (_isCheckingFav
-                                    ? const SizedBox(
-                                        width: 20,
-                                        height: 20,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          color: AppTheme.primaryAccent,
-                                        ),
-                                      )
-                                    : Icon(
-                                        _isFavorite ? Icons.star_rounded : Icons.star_border_rounded,
-                                        color: _isFavorite ? AppTheme.primaryAccent : Colors.white,
-                                        size: 26,
-                                      )),
+                                      ? const SizedBox(
+                                          width: 20,
+                                          height: 20,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: AppTheme.primaryAccent,
+                                          ),
+                                        )
+                                      : Icon(
+                                          _isFavorite
+                                              ? Icons.star_rounded
+                                              : Icons.star_border_rounded,
+                                          color: _isFavorite
+                                              ? AppTheme.primaryAccent
+                                              : Colors.white,
+                                          size: 26,
+                                        )),
                           ),
                         ),
                       ),
@@ -686,7 +820,11 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.logout_rounded, color: Colors.redAccent, size: 48),
+                const Icon(
+                  Icons.logout_rounded,
+                  color: Colors.redAccent,
+                  size: 48,
+                ),
                 const SizedBox(height: 16),
                 Text(
                   'Logout',
@@ -734,7 +872,9 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
                           Navigator.pop(context); // Close dialog
                           await appState.logout();
                           if (context.mounted) {
-                            Navigator.of(context).pushReplacementNamed('/login');
+                            Navigator.of(
+                              context,
+                            ).pushReplacementNamed('/login');
                           }
                         },
                         child: Text(

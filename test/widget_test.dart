@@ -19,19 +19,17 @@ void main() {
     await tester.pumpWidget(const MyApp());
     await tester.pumpAndSettle();
 
-    // Verify that our login title "Musicians Only" is present.
-    expect(find.text('Musicians Only'), findsOneWidget);
-    
+    // Verify that our login title "Musicians" is present.
+    expect(find.text('Musicians'), findsOneWidget);
+
     // Verify that the email and password labels are present.
     expect(find.text('Email Address'), findsOneWidget);
     expect(find.text('Password'), findsOneWidget);
 
     // Verify there is a submit button with the text "Login"
     expect(find.text('Login'), findsOneWidget);
-    
+
     // Verify registration link is visible
     expect(find.text('Register here'), findsOneWidget);
   });
 }
-
-

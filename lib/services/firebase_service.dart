@@ -6,6 +6,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:image_picker/image_picker.dart';
 import '../models/user_profile.dart';
 import '../models/band.dart';
@@ -20,7 +21,8 @@ import '../models/collab_session.dart';
 import '../models/collab_studio.dart';
 
 class FirebaseService {
-  static final StreamController<Map<String, dynamic>> _notificationClickStreamController =
+  static final StreamController<Map<String, dynamic>>
+  _notificationClickStreamController =
       StreamController<Map<String, dynamic>>.broadcast();
 
   static Stream<Map<String, dynamic>> get notificationClickStream =>
@@ -38,6 +40,9 @@ class FirebaseService {
       databaseURL: databaseUrl,
     ).ref(path);
   }
+
+  FirebaseFunctions get _functions =>
+      FirebaseFunctions.instanceFor(region: 'europe-west1');
 
   // ==========================================
   // 1. Authentication
@@ -69,7 +74,8 @@ class FirebaseService {
         userType: userType,
         nickname: nickname,
         displayName: nickname,
-        location: 'Stockholm, Sweden',
+        email: email,
+        location: null,
         level: level ?? 'C = INTERMEDIATE',
         about: 'Hey! I am a musician ready to play.',
         instruments: [userType],
@@ -93,8 +99,51 @@ class FirebaseService {
   // 2. User Profiles
   // ==========================================
 
+  Future<void> updateUserProfileFields(
+    String userId,
+    Map<String, dynamic> fields,
+  ) async {
+    final updates = <String, dynamic>{};
+    final allowedInfoKeys = {
+      'DisplayName',
+      'Email',
+      'Level',
+      'Location',
+      'About',
+      'Instruments',
+      'Styles',
+      'Genres',
+      'Contact',
+      'History',
+      'Projects',
+      'ProfilePictureUrl',
+      'SpotifyUrl',
+      'YoutubeUrl',
+      'AudioSnippetUrl',
+      'CollabRoles',
+      'CollabRemote',
+      'CollabBio',
+      'MainInstrument',
+      'UserType',
+      'Nickname',
+    };
+
+    fields.forEach((key, value) {
+      if (allowedInfoKeys.contains(key)) {
+        updates['users/$userId/info/$key'] = value;
+        if (key == 'UserType' || key == 'Nickname' || key == 'DisplayName') {
+          updates['users/$userId/$key'] = value;
+        }
+      }
+    });
+
+    if (updates.isNotEmpty) {
+      await _dbRef().update(updates);
+    }
+  }
+
   Future<void> saveUserProfileAsync(String userId, UserProfile profile) async {
-    final infoMap = {
+    final fields = <String, dynamic>{
       'DisplayName': profile.displayName,
       'Email': profile.email,
       'Level': profile.level,
@@ -114,9 +163,10 @@ class FirebaseService {
       'CollabRemote': profile.collabRemote,
       'CollabBio': profile.collabBio,
       'MainInstrument': profile.mainInstrument,
+      if (profile.userType != null) 'UserType': profile.userType,
+      if (profile.nickname != null) 'Nickname': profile.nickname,
     };
-    await _dbRef('users/$userId/info').set(infoMap);
-    await _dbRef('users/$userId/DisplayName').set(profile.displayName);
+    await updateUserProfileFields(userId, fields);
   }
 
   Future<UserProfile?> getUserProfileAsync([String? userId]) async {
@@ -129,9 +179,13 @@ class FirebaseService {
       final infoMap = rootMap['info'] is Map ? rootMap['info'] as Map : {};
       return UserProfile(
         userId: targetId,
-        userType: rootMap['UserType']?.toString() ?? infoMap['UserType']?.toString(),
-        nickname: rootMap['Nickname']?.toString() ?? infoMap['Nickname']?.toString(),
-        displayName: infoMap['DisplayName']?.toString() ?? rootMap['DisplayName']?.toString(),
+        userType:
+            rootMap['UserType']?.toString() ?? infoMap['UserType']?.toString(),
+        nickname:
+            rootMap['Nickname']?.toString() ?? infoMap['Nickname']?.toString(),
+        displayName:
+            infoMap['DisplayName']?.toString() ??
+            rootMap['DisplayName']?.toString(),
         email: infoMap['Email']?.toString() ?? infoMap['Contact']?.toString(),
         location: infoMap['Location']?.toString(),
         about: infoMap['About']?.toString(),
@@ -165,36 +219,48 @@ class FirebaseService {
           final userId = k.toString();
           final rootMap = v;
           final infoMap = rootMap['info'] is Map ? rootMap['info'] as Map : {};
-          users.add(UserProfile(
-            userId: userId,
-            userType: rootMap['UserType']?.toString() ?? infoMap['UserType']?.toString(),
-            nickname: rootMap['Nickname']?.toString() ?? infoMap['Nickname']?.toString(),
-            displayName: infoMap['DisplayName']?.toString() ?? rootMap['DisplayName']?.toString(),
-            location: infoMap['Location']?.toString(),
-            about: infoMap['About']?.toString(),
-            level: infoMap['Level']?.toString(),
-            instruments: _parseList(infoMap['Instruments']),
-            styles: _parseList(infoMap['Styles']),
-            genres: _parseList(infoMap['Genres']),
-            contact: infoMap['Contact']?.toString(),
-            history: infoMap['History']?.toString(),
-            projects: infoMap['Projects']?.toString(),
-            profilePictureUrl: infoMap['ProfilePictureUrl']?.toString(),
-            spotifyUrl: infoMap['SpotifyUrl']?.toString(),
-            youtubeUrl: infoMap['YoutubeUrl']?.toString(),
-            audioSnippetUrl: infoMap['AudioSnippetUrl']?.toString(),
-            collabRoles: _parseList(infoMap['CollabRoles']),
-            collabRemote: infoMap['CollabRemote'] == true,
-            collabBio: infoMap['CollabBio']?.toString(),
-            mainInstrument: infoMap['MainInstrument']?.toString(),
-          ));
+          users.add(
+            UserProfile(
+              userId: userId,
+              userType:
+                  rootMap['UserType']?.toString() ??
+                  infoMap['UserType']?.toString(),
+              nickname:
+                  rootMap['Nickname']?.toString() ??
+                  infoMap['Nickname']?.toString(),
+              displayName:
+                  infoMap['DisplayName']?.toString() ??
+                  rootMap['DisplayName']?.toString(),
+              location: infoMap['Location']?.toString(),
+              about: infoMap['About']?.toString(),
+              level: infoMap['Level']?.toString(),
+              instruments: _parseList(infoMap['Instruments']),
+              styles: _parseList(infoMap['Styles']),
+              genres: _parseList(infoMap['Genres']),
+              contact: infoMap['Contact']?.toString(),
+              history: infoMap['History']?.toString(),
+              projects: infoMap['Projects']?.toString(),
+              profilePictureUrl: infoMap['ProfilePictureUrl']?.toString(),
+              spotifyUrl: infoMap['SpotifyUrl']?.toString(),
+              youtubeUrl: infoMap['YoutubeUrl']?.toString(),
+              audioSnippetUrl: infoMap['AudioSnippetUrl']?.toString(),
+              collabRoles: _parseList(infoMap['CollabRoles']),
+              collabRemote: infoMap['CollabRemote'] == true,
+              collabBio: infoMap['CollabBio']?.toString(),
+              mainInstrument: infoMap['MainInstrument']?.toString(),
+            ),
+          );
         }
       });
     }
     return users;
   }
 
-  Future<String> uploadAudioSnippetAsync(String userId, Uint8List? bytes, String? path) async {
+  Future<String> uploadAudioSnippetAsync(
+    String userId,
+    Uint8List? bytes,
+    String? path,
+  ) async {
     try {
       final ref = FirebaseStorage.instance
           .ref()
@@ -204,7 +270,10 @@ class FirebaseService {
 
       UploadTask uploadTask;
       if (bytes != null) {
-        uploadTask = ref.putData(bytes, SettableMetadata(contentType: 'audio/mpeg'));
+        uploadTask = ref.putData(
+          bytes,
+          SettableMetadata(contentType: 'audio/mpeg'),
+        );
       } else if (path != null) {
         uploadTask = ref.putFile(File(path));
       } else {
@@ -219,12 +288,18 @@ class FirebaseService {
     }
   }
 
-  Future<String> uploadProfilePictureAsync(String userId, Uint8List? bytes, String? path) async {
+  Future<String> uploadProfilePictureAsync(
+    String userId,
+    Uint8List? bytes,
+    String? path,
+  ) async {
     try {
       final ref = FirebaseStorage.instance
           .ref()
           .child('profilePictures')
-          .child('profile_${userId}_${DateTime.now().millisecondsSinceEpoch}.jpg');
+          .child(
+            'profile_${userId}_${DateTime.now().millisecondsSinceEpoch}.jpg',
+          );
 
       UploadTask uploadTask;
       final metadata = SettableMetadata(contentType: 'image/jpeg');
@@ -258,7 +333,9 @@ class FirebaseService {
   Future<bool> isFavoriteAsync(String targetUserId) async {
     final selfId = currentUserId;
     if (selfId == null) return false;
-    final snapshot = await _dbRef('users/$selfId/Favorites/$targetUserId').get();
+    final snapshot = await _dbRef(
+      'users/$selfId/Favorites/$targetUserId',
+    ).get();
     return snapshot.exists && snapshot.value == true;
   }
 
@@ -294,7 +371,8 @@ class FirebaseService {
         value.forEach((k, v) {
           final bandId = k.toString();
           if (v is Map) {
-            final name = v['Name']?.toString() ?? v['name']?.toString() ?? bandId;
+            final name =
+                v['Name']?.toString() ?? v['name']?.toString() ?? bandId;
             bands[bandId] = name;
           } else if (v is String) {
             bands[bandId] = v;
@@ -307,7 +385,10 @@ class FirebaseService {
           final item = value[i];
           if (item != null) {
             if (item is Map) {
-              final name = item['Name']?.toString() ?? item['name']?.toString() ?? i.toString();
+              final name =
+                  item['Name']?.toString() ??
+                  item['name']?.toString() ??
+                  i.toString();
               bands[i.toString()] = name;
             } else {
               bands[i.toString()] = item.toString();
@@ -330,7 +411,7 @@ class FirebaseService {
   Future<void> createBandAsync(String userId, Band band) async {
     final bandNameKey = (band.name ?? 'My Band').replaceAll(' ', '_');
     final bandRef = _dbRef('Bands/$bandNameKey');
-    
+
     final updatedBand = Band(
       id: bandNameKey,
       name: band.name,
@@ -343,18 +424,15 @@ class FirebaseService {
       rehearsalEndTime: band.rehearsalEndTime,
       about: band.about,
       description: band.description,
-      membersBand: {
-        userId: BandMember(nickname: 'Leader', role: 'Leader'),
-      },
+      membersBand: {userId: BandMember(nickname: 'Leader', role: 'Leader')},
     );
 
     // Save globally
     await bandRef.set(updatedBand.toJson());
     // Assign Leader in global band members
-    await _dbRef('Bands/$bandNameKey/Members_band/$userId').set({
-      'Nickname': 'Leader',
-      'Role': 'Leader',
-    });
+    await _dbRef(
+      'Bands/$bandNameKey/Members_band/$userId',
+    ).set({'Nickname': 'Leader', 'Role': 'Leader'});
     // Link band in user's profile
     await _dbRef('users/$userId/Bands/$bandNameKey').set(updatedBand.toJson());
     // Add member to band conversation
@@ -432,13 +510,15 @@ class FirebaseService {
         eventId: request.eventId,
         bandId: request.bandId,
       );
-      
+
       // Save in root SubRequests
       await newRef.set(updated.toJson());
 
       // Save under user's profile SubRequests
       if (currentUserId != null) {
-        await _dbRef('users/$currentUserId/SubRequests/$key').set(updated.toJson());
+        await _dbRef(
+          'users/$currentUserId/SubRequests/$key',
+        ).set(updated.toJson());
       }
       return key;
     }
@@ -457,7 +537,8 @@ class FirebaseService {
           if (targets == null || targets.isEmpty) {
             requests.add(req);
           } else {
-            if (selfId != null && (targets.contains(selfId) || req.creatorUserId == selfId)) {
+            if (selfId != null &&
+                (targets.contains(selfId) || req.creatorUserId == selfId)) {
               requests.add(req);
             }
           }
@@ -479,7 +560,8 @@ class FirebaseService {
           if (targets == null || targets.isEmpty) {
             requests.add(req);
           } else {
-            if (selfId != null && (targets.contains(selfId) || req.creatorUserId == selfId)) {
+            if (selfId != null &&
+                (targets.contains(selfId) || req.creatorUserId == selfId)) {
               requests.add(req);
             }
           }
@@ -489,45 +571,65 @@ class FirebaseService {
     return requests;
   }
 
-  Future<void> addResponseToSubRequestAsync(String subRequestId, String userId) async {
+  Future<void> addResponseToSubRequestAsync(
+    String subRequestId,
+    String userId,
+  ) async {
     await _dbRef('SubRequests/$subRequestId/Responses/$userId').set(true);
 
     try {
       final snapshot = await _dbRef('SubRequests/$subRequestId').get();
       if (snapshot.exists && snapshot.value is Map) {
-        final subRequest = SubRequest.fromJson(snapshot.value as Map, subRequestId);
+        final subRequest = SubRequest.fromJson(
+          snapshot.value as Map,
+          subRequestId,
+        );
         final bandId = subRequest.bandId;
         final eventId = subRequest.eventId;
-        if (bandId != null && eventId != null && bandId.isNotEmpty && eventId.isNotEmpty) {
+        if (bandId != null &&
+            eventId != null &&
+            bandId.isNotEmpty &&
+            eventId.isNotEmpty) {
           final profile = await getUserProfileAsync(userId);
           final invitee = ExternalInvitee(
             userId: userId,
             status: 'pending',
-            instrument: profile?.instruments.isNotEmpty == true ? profile?.instruments.first : profile?.userType,
+            instrument: profile?.instruments.isNotEmpty == true
+                ? profile?.instruments.first
+                : profile?.userType,
             invitedAt: DateTime.now().millisecondsSinceEpoch,
             source: 'subRequest',
             subRequestId: subRequestId,
             displayName: profile?.displayName ?? profile?.nickname,
           );
-          await _dbRef('Bands/$bandId/Events/$eventId/externalInvitees/$userId').set(invitee.toJson());
-          await _dbRef('Bands/$bandId/Events/$eventId/updatedAt').set(DateTime.now().millisecondsSinceEpoch);
+          await _dbRef(
+            'Bands/$bandId/Events/$eventId/externalInvitees/$userId',
+          ).set(invitee.toJson());
+          await _dbRef(
+            'Bands/$bandId/Events/$eventId/updatedAt',
+          ).set(DateTime.now().millisecondsSinceEpoch);
         }
       }
     } catch (e) {
-      print("[FirebaseService] Error in addResponseToSubRequestAsync linking event: $e");
+      print(
+        "[FirebaseService] Error in addResponseToSubRequestAsync linking event: $e",
+      );
     }
   }
 
-  Future<bool> deleteSubRequestAsync(String creatorId, String subRequestId) async {
+  Future<bool> deleteSubRequestAsync(
+    String creatorId,
+    String subRequestId,
+  ) async {
     try {
       if (creatorId.isEmpty || subRequestId.isEmpty) return false;
-      
+
       // Delete from user's subrequests
       await _dbRef('users/$creatorId/SubRequests/$subRequestId').remove();
-      
+
       // Delete from root SubRequests
       await _dbRef('SubRequests/$subRequestId').remove();
-      
+
       return true;
     } catch (e) {
       print("[FirebaseService] Error deleting subrequest: $e");
@@ -537,7 +639,9 @@ class FirebaseService {
 
   Future<int> getSubRequestResponseCountAsync(String subRequestId) async {
     try {
-      final snapshot = await _dbRef('SubRequests/$subRequestId/Responses').get();
+      final snapshot = await _dbRef(
+        'SubRequests/$subRequestId/Responses',
+      ).get();
       if (snapshot.exists && snapshot.value is Map) {
         return (snapshot.value as Map).length;
       }
@@ -554,24 +658,21 @@ class FirebaseService {
     Agreement agreement,
     Message message,
   ) async {
-    final convRef = _dbRef('conversations').push();
-    final conversationId = convRef.key!;
-    
-    await convRef.set({
-      'Participants': [senderId, receiverId],
-      'CreatedTimestamp': DateTime.now().toUtc().toIso8601String(),
-      'Agreement': agreement.toJson(),
-    });
-    
-    final msgRef = _dbRef('conversations/$conversationId/messages').push();
-    
-    // Build message JSON and write
-    final msgJson = message.toJson();
-    await msgRef.set(msgJson);
-    
-    // Mark as unread for the receiver
-    await _dbRef('conversations/$conversationId/unread/$receiverId').set(true);
-
+    final subRequestId = agreement.subRequestId ?? '';
+    final conversationId = await createAgreementConversationAsync(
+      subRequestId,
+      receiverId,
+    );
+    if (conversationId.isNotEmpty &&
+        message.text != null &&
+        message.text!.isNotEmpty) {
+      await sendConversationMessageAsync(
+        conversationId,
+        message.text!,
+        receiverId,
+        message.senderName ?? 'System',
+      );
+    }
     return conversationId;
   }
 
@@ -579,42 +680,32 @@ class FirebaseService {
   // 6. Direct Chat Messages
   // ==========================================
 
-  Future<String> getOrCreateDirectConversationAsync(String userId1, String userId2) async {
-    final snapshot = await _dbRef('conversations').get();
-    if (snapshot.exists && snapshot.value is Map) {
-      final conversationsMap = snapshot.value as Map;
-      for (var entry in conversationsMap.entries) {
-        final convId = entry.key.toString();
-        final convData = entry.value;
-        if (convData is Map) {
-          final participantsRaw = convData['Participants'] ?? convData['participants'];
-          List<String> participants = [];
-          if (participantsRaw is List) {
-            participants = participantsRaw.map((e) => e.toString()).toList();
-          } else if (participantsRaw is Map) {
-            participants = participantsRaw.values.map((e) => e.toString()).toList();
-          }
-          final agreement = convData['Agreement'] ?? convData['agreement'];
-          
-          if (participants.length == 2 &&
-              participants.contains(userId1) &&
-              participants.contains(userId2) &&
-              agreement == null) {
-            return convId;
-          }
-        }
-      }
-    }
+  Future<String> createAgreementConversationAsync(
+    String subRequestId,
+    String applicantId,
+  ) async {
+    final result = await _functions
+        .httpsCallable('createAgreementConversation')
+        .call({'subRequestId': subRequestId, 'applicantId': applicantId});
+    return result.data['conversationId']?.toString() ?? '';
+  }
 
-    // Create a new direct conversation with participant list
-    final newRef = _dbRef('conversations').push();
-    final newId = newRef.key!;
-    await newRef.set({
-      'Participants': [userId1, userId2],
-      'CreatedTimestamp': DateTime.now().toUtc().toIso8601String(),
-      'Agreement': null,
-    });
-    return newId;
+  // ==========================================
+  // 6. Direct Chat Messages
+  // ==========================================
+
+  Future<String> getOrCreateDirectConversationAsync(
+    String userId1, [
+    String? userId2,
+  ]) async {
+    final targetUserId = (userId2 != null && userId2.isNotEmpty)
+        ? (userId1 == currentUserId ? userId2 : userId1)
+        : userId1;
+
+    final result = await _functions
+        .httpsCallable('getOrCreateDirectConversation')
+        .call({'otherUserId': targetUserId});
+    return result.data['conversationId']?.toString() ?? '';
   }
 
   Future<void> sendConversationMessageAsync(
@@ -623,29 +714,16 @@ class FirebaseService {
     String receiverUserId,
     String senderName,
   ) async {
-    final selfId = currentUserId;
-    if (selfId == null) return;
-
-    final msgRef = _dbRef('conversations/$conversationId/messages').push();
-    final key = msgRef.key;
-
-    final message = Message(
-      id: key,
-      senderId: selfId,
-      receiverId: receiverUserId,
-      text: text,
-      timestamp: DateTime.now(),
-      isRead: false,
-      senderName: senderName,
-    );
-
-    await msgRef.set(message.toJson());
-
-    // Trigger local unread flag in database
-    await _dbRef('conversations/$conversationId/unread/$receiverUserId').set(true);
+    await _functions.httpsCallable('sendDirectMessage').call({
+      'conversationId': conversationId,
+      'text': text,
+      'receiverUserId': receiverUserId,
+    });
   }
 
-  Stream<Map<String, dynamic>?> subscribeToConversationMetadata(String conversationId) {
+  Stream<Map<String, dynamic>?> subscribeToConversationMetadata(
+    String conversationId,
+  ) {
     return _dbRef('conversations/$conversationId').onValue.map((event) {
       final data = event.snapshot.value;
       if (data is Map) {
@@ -655,7 +733,9 @@ class FirebaseService {
           agreement = Agreement.fromJson(agreementRaw);
         }
         return {
-          'participants': _parseList(data['Participants'] ?? data['participants']),
+          'participants': _parseList(
+            data['Participants'] ?? data['participants'],
+          ),
           'agreement': agreement,
         };
       }
@@ -664,39 +744,37 @@ class FirebaseService {
   }
 
   Stream<List<Message>> subscribeToMessages(String conversationId) {
-    return _dbRef('conversations/$conversationId/messages')
-        .orderByChild('Timestamp')
-        .onValue
-        .map((event) {
+    return _dbRef(
+      'conversations/$conversationId/messages',
+    ).orderByChild('Timestamp').onValue.map((event) {
       final List<Message> list = [];
       final data = event.snapshot.value;
       if (data is Map) {
         data.forEach((k, v) {
           if (v is Map) {
-            list.add(Message.fromJson(v, k.toString(), currentUserId: currentUserId));
+            list.add(
+              Message.fromJson(v, k.toString(), currentUserId: currentUserId),
+            );
           }
         });
         // Sort chronologically
-        list.sort((a, b) => (a.timestamp ?? DateTime.now())
-            .compareTo(b.timestamp ?? DateTime.now()));
+        list.sort(
+          (a, b) => (a.timestamp ?? DateTime.now()).compareTo(
+            b.timestamp ?? DateTime.now(),
+          ),
+        );
       }
       return list;
     });
   }
 
   Future<void> markConversationAsRead(String conversationId) async {
-    final selfId = currentUserId;
-    if (selfId == null) return;
-    await _dbRef('conversations/$conversationId/unread/$selfId').remove();
-
-    // Mark specific incoming messages in list as read
-    final snapshot = await _dbRef('conversations/$conversationId/messages').get();
-    if (snapshot.exists && snapshot.value is Map) {
-      (snapshot.value as Map).forEach((k, v) async {
-        if (v is Map && v['ReceiverId'] == selfId && v['IsRead'] != true) {
-          await _dbRef('conversations/$conversationId/messages/$k/IsRead').set(true);
-        }
+    try {
+      await _functions.httpsCallable('markDirectConversationRead').call({
+        'conversationId': conversationId,
       });
+    } catch (e) {
+      print("[FirebaseService] Error marking conversation as read: $e");
     }
   }
 
@@ -704,16 +782,13 @@ class FirebaseService {
     final selfId = currentUserId;
     if (selfId == null) return Stream.value(false);
 
-    return _dbRef('conversations').onValue.map((event) {
+    return _dbRef('userConversations/$selfId').onValue.map((event) {
       final data = event.snapshot.value;
       if (data is Map) {
         for (var convId in data.keys) {
-          final conv = data[convId];
-          if (conv is Map && conv['unread'] is Map) {
-            final unreadMap = conv['unread'] as Map;
-            if (unreadMap[selfId] == true) {
-              return true;
-            }
+          final item = data[convId];
+          if (item is Map && item['hasUnread'] == true) {
+            return true;
           }
         }
       }
@@ -725,16 +800,13 @@ class FirebaseService {
     final selfId = currentUserId;
     if (selfId == null) return false;
 
-    final snapshot = await _dbRef('conversations').get();
+    final snapshot = await _dbRef('userConversations/$selfId').get();
     if (snapshot.exists && snapshot.value is Map) {
       final data = snapshot.value as Map;
       for (var convId in data.keys) {
-        final conv = data[convId];
-        if (conv is Map && conv['unread'] is Map) {
-          final unreadMap = conv['unread'] as Map;
-          if (unreadMap[selfId] == true) {
-            return true;
-          }
+        final item = data[convId];
+        if (item is Map && item['hasUnread'] == true) {
+          return true;
         }
       }
     }
@@ -745,76 +817,40 @@ class FirebaseService {
     final selfId = currentUserId;
     if (selfId == null) return [];
 
-    final snapshot = await _dbRef('conversations').get();
+    final snapshot = await _dbRef('userConversations/$selfId').get();
     final List<Map<String, dynamic>> conversations = [];
 
     if (snapshot.exists && snapshot.value is Map) {
       final data = snapshot.value as Map;
       for (var entry in data.entries) {
         final convId = entry.key.toString();
-        final convData = entry.value;
-        if (convData is Map) {
-          final participantsRaw = convData['Participants'] ?? convData['participants'];
-          List<String> participants = [];
-          if (participantsRaw is List) {
-            participants = participantsRaw.map((e) => e.toString()).toList();
-          } else if (participantsRaw is Map) {
-            participants = participantsRaw.values.map((e) => e.toString()).toList();
+        final item = entry.value;
+        if (item is Map) {
+          final otherUserId = item['otherUserId']?.toString();
+          if (otherUserId == null || otherUserId.isEmpty) continue;
+
+          String otherUserName = "Musician";
+          String? profilePic;
+          final profile = await getUserProfileAsync(otherUserId);
+          if (profile != null) {
+            otherUserName =
+                profile.displayName ?? profile.nickname ?? "Musician";
+            profilePic = profile.profilePictureUrl;
           }
 
-          if (participants.contains(selfId)) {
-            final otherUserId = participants.firstWhere((id) => id != selfId, orElse: () => '');
-            if (otherUserId.isEmpty) continue;
-
-            String lastMessageText = "No messages yet";
-            DateTime timestamp = DateTime.now();
-            final messagesData = convData['messages'] ?? convData['Messages'];
-            bool hasUnread = false;
-
-            if (convData['unread'] is Map) {
-              final unreadMap = convData['unread'] as Map;
-              if (unreadMap[selfId] == true) {
-                hasUnread = true;
-              }
-            }
-
-            if (messagesData is Map) {
-              final List<Message> msgs = [];
-              messagesData.forEach((k, v) {
-                if (v is Map) {
-                  msgs.add(Message.fromJson(v, k.toString(), currentUserId: selfId));
-                }
-              });
-              if (msgs.isNotEmpty) {
-                msgs.sort((a, b) => (a.timestamp ?? DateTime.now())
-                    .compareTo(b.timestamp ?? DateTime.now()));
-                lastMessageText = msgs.last.text ?? "No messages yet";
-                timestamp = msgs.last.timestamp ?? DateTime.now();
-              }
-            }
-
-            String otherUserName = "Loading...";
-            final profile = await getUserProfileAsync(otherUserId);
-            if (profile != null) {
-              otherUserName = profile.displayName ?? profile.nickname ?? "Unknown User";
-            }
-
-            final agreementRaw = convData['Agreement'] ?? convData['agreement'];
-            Agreement? agreement;
-            if (agreementRaw != null && agreementRaw is Map) {
-              agreement = Agreement.fromJson(agreementRaw);
-            }
-
-            conversations.add({
-              'conversationId': convId,
-              'otherUserId': otherUserId,
-              'otherUserName': otherUserName,
-              'lastMessageText': lastMessageText,
-              'timestamp': timestamp,
-              'hasUnread': hasUnread,
-              'agreement': agreement,
-            });
-          }
+          conversations.add({
+            'conversationId': convId,
+            'otherUserId': otherUserId,
+            'otherUserName': otherUserName,
+            'otherUserProfilePicture': profilePic,
+            'lastMessageText':
+                item['lastMessageText']?.toString() ?? 'No messages yet',
+            'lastMessageTimestamp':
+                item['lastMessageTimestamp']?.toString() ?? '',
+            'hasUnread': item['hasUnread'] == true,
+            'conversationType':
+                item['conversationType']?.toString() ?? 'direct',
+          });
         }
       }
     }
@@ -823,7 +859,9 @@ class FirebaseService {
       if (a['hasUnread'] != b['hasUnread']) {
         return a['hasUnread'] ? -1 : 1;
       }
-      return (b['timestamp'] as DateTime).compareTo(a['timestamp'] as DateTime);
+      return (b['lastMessageTimestamp']?.toString() ?? '').compareTo(
+        a['lastMessageTimestamp']?.toString() ?? '',
+      );
     });
 
     return conversations;
@@ -877,20 +915,24 @@ class FirebaseService {
   // ==========================================
 
   Stream<List<Message>> subscribeToBandMessages(String bandId) {
-    return _dbRef('bandconversations/$bandId/messages')
-        .orderByChild('Timestamp')
-        .onValue
-        .map((event) {
+    return _dbRef(
+      'bandconversations/$bandId/messages',
+    ).orderByChild('Timestamp').onValue.map((event) {
       final List<Message> list = [];
       final data = event.snapshot.value;
       if (data is Map) {
         data.forEach((k, v) {
           if (v is Map) {
-            list.add(Message.fromJson(v, k.toString(), currentUserId: currentUserId));
+            list.add(
+              Message.fromJson(v, k.toString(), currentUserId: currentUserId),
+            );
           }
         });
-        list.sort((a, b) => (a.timestamp ?? DateTime.now())
-            .compareTo(b.timestamp ?? DateTime.now()));
+        list.sort(
+          (a, b) => (a.timestamp ?? DateTime.now()).compareTo(
+            b.timestamp ?? DateTime.now(),
+          ),
+        );
       }
       return list;
     });
@@ -922,35 +964,36 @@ class FirebaseService {
     await msgRef.set(message.toJson());
   }
 
-  Future<Map<String, Map<String, String>>> getBandFilesAsync(String bandId) async {
+  Future<Map<String, Map<String, String>>> getBandFilesAsync(
+    String bandId,
+  ) async {
     final snapshot = await _dbRef('files/$bandId').get();
     final Map<String, Map<String, String>> files = {};
     if (snapshot.exists && snapshot.value is Map) {
       (snapshot.value as Map).forEach((k, v) {
         if (v is Map) {
-          final fileName = v['FileName']?.toString() ?? v['fileName']?.toString() ?? 'Uploaded File';
-          final fileUrl = v['FileUrl']?.toString() ?? v['fileUrl']?.toString() ?? '';
-          files[k.toString()] = {
-            'FileName': fileName,
-            'FileUrl': fileUrl,
-          };
+          final fileName =
+              v['FileName']?.toString() ??
+              v['fileName']?.toString() ??
+              'Uploaded File';
+          final fileUrl =
+              v['FileUrl']?.toString() ?? v['fileUrl']?.toString() ?? '';
+          files[k.toString()] = {'FileName': fileName, 'FileUrl': fileUrl};
         } else if (v is String) {
-          files[k.toString()] = {
-            'FileName': v,
-            'FileUrl': '',
-          };
+          files[k.toString()] = {'FileName': v, 'FileUrl': ''};
         }
       });
     }
     return files;
   }
 
-  Future<void> addBandFileAsync(String bandId, String fileName, String fileUrl) async {
+  Future<void> addBandFileAsync(
+    String bandId,
+    String fileName,
+    String fileUrl,
+  ) async {
     final ref = _dbRef('files/$bandId').push();
-    await ref.set({
-      'FileName': fileName,
-      'FileUrl': fileUrl,
-    });
+    await ref.set({'FileName': fileName, 'FileUrl': fileUrl});
   }
 
   Future<void> removeBandFileAsync(String bandId, String fileId) async {
@@ -994,7 +1037,12 @@ class FirebaseService {
     }
   }
 
-  Future<String> uploadBandFileAsync(String bandId, Uint8List? bytes, String? path, String fileName) async {
+  Future<String> uploadBandFileAsync(
+    String bandId,
+    Uint8List? bytes,
+    String? path,
+    String fileName,
+  ) async {
     try {
       final ref = FirebaseStorage.instance
           .ref()
@@ -1080,9 +1128,13 @@ class FirebaseService {
       });
 
       // Handle terminated app launch from notification
-      FirebaseMessaging.instance.getInitialMessage().then((RemoteMessage? message) {
+      FirebaseMessaging.instance.getInitialMessage().then((
+        RemoteMessage? message,
+      ) {
         if (message != null) {
-          print("PUSH: TERMINATED APP LAUNCH FROM NOTIFICATION: ${message.data}");
+          print(
+            "PUSH: TERMINATED APP LAUNCH FROM NOTIFICATION: ${message.data}",
+          );
           _notificationClickStreamController.add(message.data);
         }
       });
@@ -1095,7 +1147,10 @@ class FirebaseService {
   // 9. Marketplace
   // ==========================================
 
-  Future<List<String>> uploadListingImagesAsync(String listingId, List<XFile> images) async {
+  Future<List<String>> uploadListingImagesAsync(
+    String listingId,
+    List<XFile> images,
+  ) async {
     List<String> urls = [];
     for (int i = 0; i < images.length; i++) {
       try {
@@ -1109,7 +1164,10 @@ class FirebaseService {
         UploadTask uploadTask;
         if (kIsWeb) {
           final bytes = await image.readAsBytes();
-          uploadTask = ref.putData(bytes, SettableMetadata(contentType: 'image/jpeg'));
+          uploadTask = ref.putData(
+            bytes,
+            SettableMetadata(contentType: 'image/jpeg'),
+          );
         } else {
           uploadTask = ref.putFile(File(image.path));
         }
@@ -1156,14 +1214,14 @@ class FirebaseService {
 
   Future<void> updateListingStatusAsync(String listingId, String status) async {
     await _dbRef('marketplaceListings/$listingId/status').set(status);
-    await _dbRef('marketplaceListings/$listingId/updatedAt').set(DateTime.now().millisecondsSinceEpoch);
+    await _dbRef(
+      'marketplaceListings/$listingId/updatedAt',
+    ).set(DateTime.now().millisecondsSinceEpoch);
   }
 
   Future<List<Listing>> getActiveListingsAsync() async {
     // Limit to latest 100 listings by key (chronological push ID) to optimize queries.
-    final query = _dbRef('marketplaceListings')
-        .orderByKey()
-        .limitToLast(100);
+    final query = _dbRef('marketplaceListings').orderByKey().limitToLast(100);
 
     final snapshot = await query.get();
     final List<Listing> listings = [];
@@ -1198,7 +1256,11 @@ class FirebaseService {
     return listings;
   }
 
-  Future<void> reportListingAsync(String listingId, String reportedByUserId, String reason) async {
+  Future<void> reportListingAsync(
+    String listingId,
+    String reportedByUserId,
+    String reason,
+  ) async {
     final ref = _dbRef('reportedListings').push();
     await ref.set({
       'listingId': listingId,
@@ -1212,9 +1274,27 @@ class FirebaseService {
   // 10. Band Room Events (Spond-like)
   // ==========================================
 
-  Future<String> saveBandEventAsync(String bandId, BandEvent event) async {
-    final eventId = event.id ?? _dbRef('Bands/$bandId/Events').push().key ?? DateTime.now().millisecondsSinceEpoch.toString();
-    final updated = BandEvent(
+  static const Set<String> _eventEditableWhitelist = {
+    'title',
+    'description',
+    'eventType',
+    'location',
+    'startDateTime',
+    'endDateTime',
+    'additionalNotes',
+    'requireResponse',
+    'rsvpDeadline',
+    'reminderIntervalHours',
+    'updatedAt',
+  };
+
+  Future<String> createBandEventAsync(String bandId, BandEvent event) async {
+    final eventId =
+        event.id ??
+        _dbRef('Bands/$bandId/Events').push().key ??
+        DateTime.now().millisecondsSinceEpoch.toString();
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    final created = BandEvent(
       id: eventId,
       title: event.title,
       description: event.description,
@@ -1223,17 +1303,73 @@ class FirebaseService {
       startDateTime: event.startDateTime,
       endDateTime: event.endDateTime,
       additionalNotes: event.additionalNotes,
-      createdBy: event.createdBy.isNotEmpty ? event.createdBy : (currentUserId ?? ''),
-      createdAt: event.createdAt != 0 ? event.createdAt : DateTime.now().millisecondsSinceEpoch,
-      updatedAt: DateTime.now().millisecondsSinceEpoch,
+      createdBy: event.createdBy.isNotEmpty
+          ? event.createdBy
+          : (currentUserId ?? ''),
+      createdAt: event.createdAt != 0 ? event.createdAt : timestamp,
+      updatedAt: timestamp,
       requireResponse: event.requireResponse,
       responses: event.responses,
       rsvpDeadline: event.rsvpDeadline,
       reminderIntervalHours: event.reminderIntervalHours,
       temporaryRoomId: event.temporaryRoomId,
+      parentEventId: event.parentEventId,
+      subEventSequence: event.subEventSequence,
     );
-    await _dbRef('Bands/$bandId/Events/$eventId').set(updated.toJson());
+    await _dbRef('Bands/$bandId/Events/$eventId').set(created.toJson());
     return eventId;
+  }
+
+  Future<void> updateBandEventAsync(
+    String bandId,
+    String eventId,
+    Map<String, dynamic> editableFields,
+  ) async {
+    final eventRef = _dbRef('Bands/$bandId/Events/$eventId');
+    final result = await eventRef.runTransaction((currentData) {
+      if (currentData == null) {
+        return Transaction.abort(); // Abort if event was deleted
+      }
+      if (currentData is Map) {
+        final Map<String, dynamic> updatedMap = Map<String, dynamic>.from(
+          currentData,
+        );
+        for (final key in _eventEditableWhitelist) {
+          if (editableFields.containsKey(key)) {
+            updatedMap[key] = editableFields[key];
+          }
+        }
+        updatedMap['updatedAt'] = DateTime.now().millisecondsSinceEpoch;
+        return Transaction.success(updatedMap);
+      }
+      return Transaction.abort();
+    });
+
+    if (!result.committed) {
+      throw Exception(
+        "Failed to update event: Event $eventId does not exist or transaction aborted.",
+      );
+    }
+  }
+
+  Future<String> saveBandEventAsync(String bandId, BandEvent event) async {
+    if (event.id == null || event.id!.isEmpty) {
+      return await createBandEventAsync(bandId, event);
+    } else {
+      await updateBandEventAsync(bandId, event.id!, {
+        'title': event.title,
+        'description': event.description,
+        'eventType': event.eventType,
+        'location': event.location,
+        'startDateTime': event.startDateTime,
+        'endDateTime': event.endDateTime,
+        'additionalNotes': event.additionalNotes,
+        'requireResponse': event.requireResponse,
+        'rsvpDeadline': event.rsvpDeadline,
+        'reminderIntervalHours': event.reminderIntervalHours,
+      });
+      return event.id!;
+    }
   }
 
   Future<List<BandEvent>> getBandEventsListAsync(String bandId) async {
@@ -1287,7 +1423,9 @@ class FirebaseService {
       'timestamp': timestamp,
       if (comment != null) 'comment': comment,
     });
-    await _dbRef('Bands/$bandId/Events/$eventId/updatedAt').set(DateTime.now().millisecondsSinceEpoch);
+    await _dbRef(
+      'Bands/$bandId/Events/$eventId/updatedAt',
+    ).set(DateTime.now().millisecondsSinceEpoch);
   }
 
   Future<void> deleteBandEventAsync(String bandId, String eventId) async {
@@ -1300,10 +1438,9 @@ class FirebaseService {
     String role,
     String nickname,
   ) async {
-    await _dbRef('Bands/$bandId/Members_band/$userId').set({
-      'Nickname': nickname,
-      'Role': role,
-    });
+    await _dbRef(
+      'Bands/$bandId/Members_band/$userId',
+    ).set({'Nickname': nickname, 'Role': role});
     final band = await getBandInfoAsync(bandId);
     if (band != null) {
       await _dbRef('users/$userId/Bands/$bandId').set(band.toJson());
@@ -1317,11 +1454,18 @@ class FirebaseService {
     await _dbRef('bandconversations/$bandId/members/$userId').remove();
   }
 
-  Future<void> updateBandMemberRoleAsync(String bandId, String userId, String newRole) async {
+  Future<void> updateBandMemberRoleAsync(
+    String bandId,
+    String userId,
+    String newRole,
+  ) async {
     await _dbRef('Bands/$bandId/Members_band/$userId/Role').set(newRole);
   }
 
-  Future<void> postGigsNewsAsync(String bandId, Map<String, dynamic> data) async {
+  Future<void> postGigsNewsAsync(
+    String bandId,
+    Map<String, dynamic> data,
+  ) async {
     final ref = _dbRef('Bands/$bandId/GigsNews').push();
     final updatedData = {
       ...data,
@@ -1344,7 +1488,11 @@ class FirebaseService {
           }
         });
       }
-      list.sort((a, b) => (b['timestamp'] as num? ?? 0).compareTo(a['timestamp'] as num? ?? 0));
+      list.sort(
+        (a, b) => (b['timestamp'] as num? ?? 0).compareTo(
+          a['timestamp'] as num? ?? 0,
+        ),
+      );
       return list;
     });
   }
@@ -1376,11 +1524,18 @@ class FirebaseService {
     return result;
   }
 
-  Future<void> saveButtonClickAsync(String userId, String buttonId, int count) async {
+  Future<void> saveButtonClickAsync(
+    String userId,
+    String buttonId,
+    int count,
+  ) async {
     await _dbRef('users/$userId/metrics/buttonClicks/$buttonId').set(count);
   }
 
-  Future<BandEvent?> getBandEventOnceAsync(String bandId, String eventId) async {
+  Future<BandEvent?> getBandEventOnceAsync(
+    String bandId,
+    String eventId,
+  ) async {
     final snapshot = await _dbRef('Bands/$bandId/Events/$eventId').get();
     if (snapshot.exists && snapshot.value is Map) {
       return BandEvent.fromJson(snapshot.value as Map, eventId);
@@ -1401,13 +1556,16 @@ class FirebaseService {
       final invitee = ExternalInvitee(
         userId: uid,
         status: 'pending',
-        instrument: profile?.instruments.isNotEmpty == true ? profile?.instruments.first : profile?.userType,
+        instrument: profile?.instruments.isNotEmpty == true
+            ? profile?.instruments.first
+            : profile?.userType,
         invitedAt: timestamp,
         source: subRequestId != null ? 'subRequest' : null,
         subRequestId: subRequestId,
         displayName: profile?.displayName ?? profile?.nickname,
       );
-      updates['Bands/$bandId/Events/$eventId/externalInvitees/$uid'] = invitee.toJson();
+      updates['Bands/$bandId/Events/$eventId/externalInvitees/$uid'] = invitee
+          .toJson();
     }
     updates['Bands/$bandId/Events/$eventId/updatedAt'] = timestamp;
     await _dbRef().update(updates);
@@ -1421,11 +1579,10 @@ class FirebaseService {
     String? comment,
   }) async {
     final timestamp = DateTime.now().millisecondsSinceEpoch;
-    final updates = {
-      'status': status,
-      if (comment != null) 'comment': comment,
-    };
-    await _dbRef('Bands/$bandId/Events/$eventId/externalInvitees/$userId').update(updates);
+    final updates = {'status': status, if (comment != null) 'comment': comment};
+    await _dbRef(
+      'Bands/$bandId/Events/$eventId/externalInvitees/$userId',
+    ).update(updates);
     await _dbRef('Bands/$bandId/Events/$eventId/updatedAt').set(timestamp);
   }
 
@@ -1451,7 +1608,9 @@ class FirebaseService {
   }
 
   Future<String?> getUserBandRoleAsync(String bandId, String userId) async {
-    final snapshot = await _dbRef('Bands/$bandId/Members_band/$userId/Role').get();
+    final snapshot = await _dbRef(
+      'Bands/$bandId/Members_band/$userId/Role',
+    ).get();
     if (snapshot.exists) {
       return snapshot.value?.toString();
     }
@@ -1489,7 +1648,9 @@ class FirebaseService {
       facilities: studio.facilities,
       contactInfo: studio.contactInfo,
       creatorId: studio.creatorId,
-      createdAt: studio.createdAt == 0 ? DateTime.now().millisecondsSinceEpoch : studio.createdAt,
+      createdAt: studio.createdAt == 0
+          ? DateTime.now().millisecondsSinceEpoch
+          : studio.createdAt,
       updatedAt: DateTime.now().millisecondsSinceEpoch,
     );
     await _dbRef('Collabs/Studios/$id').set(updatedStudio.toJson());
@@ -1530,7 +1691,9 @@ class FirebaseService {
       lookingForRoles: session.lookingForRoles,
       lookingForInstruments: session.lookingForInstruments,
       creatorId: session.creatorId,
-      createdAt: session.createdAt == 0 ? DateTime.now().millisecondsSinceEpoch : session.createdAt,
+      createdAt: session.createdAt == 0
+          ? DateTime.now().millisecondsSinceEpoch
+          : session.createdAt,
       updatedAt: DateTime.now().millisecondsSinceEpoch,
       status: session.status,
     );
@@ -1557,11 +1720,19 @@ class FirebaseService {
   }
 
   // Applications
-  Future<void> applyToCollabSessionAsync(String sessionId, String userId, CollabSessionApplication application) async {
-    await _dbRef('Collabs/Applications/$sessionId/$userId').set(application.toJson());
+  Future<void> applyToCollabSessionAsync(
+    String sessionId,
+    String userId,
+    CollabSessionApplication application,
+  ) async {
+    await _dbRef(
+      'Collabs/Applications/$sessionId/$userId',
+    ).set(application.toJson());
   }
 
-  Future<List<CollabSessionApplication>> getCollabSessionApplicationsAsync(String sessionId) async {
+  Future<List<CollabSessionApplication>> getCollabSessionApplicationsAsync(
+    String sessionId,
+  ) async {
     final snapshot = await _dbRef('Collabs/Applications/$sessionId').get();
     final List<CollabSessionApplication> apps = [];
     if (snapshot.exists && snapshot.value is Map) {
@@ -1575,19 +1746,36 @@ class FirebaseService {
     return apps;
   }
 
-  Future<CollabSessionApplication?> getCollabSessionApplicationAsync(String sessionId, String applicantId) async {
-    final snapshot = await _dbRef('Collabs/Applications/$sessionId/$applicantId').get();
+  Future<CollabSessionApplication?> getCollabSessionApplicationAsync(
+    String sessionId,
+    String applicantId,
+  ) async {
+    final snapshot = await _dbRef(
+      'Collabs/Applications/$sessionId/$applicantId',
+    ).get();
     if (snapshot.exists && snapshot.value is Map) {
-      return CollabSessionApplication.fromJson(snapshot.value as Map, applicantId);
+      return CollabSessionApplication.fromJson(
+        snapshot.value as Map,
+        applicantId,
+      );
     }
     return null;
   }
 
-  Future<void> updateCollabApplicationStatusAsync(String sessionId, String applicantId, String status) async {
-    await _dbRef('Collabs/Applications/$sessionId/$applicantId/Status').set(status);
+  Future<void> updateCollabApplicationStatusAsync(
+    String sessionId,
+    String applicantId,
+    String status,
+  ) async {
+    await _dbRef(
+      'Collabs/Applications/$sessionId/$applicantId/Status',
+    ).set(status);
   }
 
-  Future<void> cancelCollabSessionApplicationAsync(String sessionId, String applicantId) async {
+  Future<void> cancelCollabSessionApplicationAsync(
+    String sessionId,
+    String applicantId,
+  ) async {
     final app = await getCollabSessionApplicationAsync(sessionId, applicantId);
     if (app != null && app.status == 'pending') {
       await _dbRef('Collabs/Applications/$sessionId/$applicantId').remove();
@@ -1609,9 +1797,7 @@ class FirebaseService {
     final roomId = ref.key!;
     final timestamp = DateTime.now().millisecondsSinceEpoch;
 
-    final Map<String, String> membersMap = {
-      createdBy: 'leader',
-    };
+    final Map<String, String> membersMap = {createdBy: 'leader'};
     for (final memberId in initialMembers) {
       if (memberId.isNotEmpty) {
         membersMap[memberId] = 'member';
@@ -1676,45 +1862,37 @@ class FirebaseService {
   // God Mode / Admin Reminder Triggers
   // ==========================================
 
-  Future<int> triggerEventReminderAsync(
+  Future<Map<String, dynamic>> triggerEventReminderAsync(
     String bandId,
     String eventId,
     String reminderType, // '24h', '48h', '72h', 'last'
   ) async {
-    final event = await getBandEventOnceAsync(bandId, eventId);
-    if (event == null) return 0;
+    try {
+      final callable = _functions.httpsCallable('triggerEventReminder');
+      final result = await callable.call({
+        'bandId': bandId,
+        'eventId': eventId,
+        'reminderType': reminderType,
+      });
 
-    final members = await getBandMembersAsync(bandId);
-    int notifiedCount = 0;
-
-    for (final m in members) {
-      final uid = m.userId;
-      if (uid == null) continue;
-      final status = event.responses[uid]?.status;
-      if (status == null || status == 'pending') {
-        notifiedCount++;
+      if (result.data is Map) {
+        return Map<String, dynamic>.from(result.data as Map);
       }
+      return {'status': 'completed', 'successCount': 0};
+    } on FirebaseFunctionsException catch (e) {
+      return {
+        'status': 'error',
+        'code': e.code,
+        'message': e.message ?? e.toString(),
+        'successCount': 0,
+      };
+    } catch (e) {
+      return {
+        'status': 'error',
+        'code': 'unknown',
+        'message': e.toString(),
+        'successCount': 0,
+      };
     }
-
-    final timestamp = DateTime.now().millisecondsSinceEpoch;
-    final Map<String, dynamic> updates = {
-      'updatedAt': timestamp,
-    };
-    if (reminderType == '24h') updates['sentReminder24h'] = true;
-    if (reminderType == '48h') updates['sentReminder48h'] = true;
-    if (reminderType == '72h') updates['sentReminder72h'] = true;
-    if (reminderType == 'last') updates['sentReminder84h'] = true;
-
-    await _dbRef('Bands/$bandId/Events/$eventId').update(updates);
-
-    final titleLabel = reminderType == 'last' ? 'FINAL RSVP REMINDER' : '${reminderType.toUpperCase()} RSVP REMINDER';
-    await sendBandMessageAsync(
-      bandId,
-      '🔔 [$titleLabel] Please confirm your attendance for "${event.title}"!',
-      'System Reminder',
-    );
-
-    return notifiedCount;
   }
 }
-

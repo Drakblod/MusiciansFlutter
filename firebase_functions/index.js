@@ -1,7 +1,11 @@
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
-const { onValueCreated } = require('firebase-functions/v2/database');
-admin.initializeApp();
+const { onValueCreated, onValueWritten } = require('firebase-functions/v2/database');
+const { onCall, HttpsError } = require('firebase-functions/v2/https');
+const crypto = require('crypto');
+if (!admin.apps.length) {
+  admin.initializeApp();
+}
 
 /**
  * Triggered when a new event is created under /Bands/{bandId}/Events/{eventId}.
@@ -675,4 +679,613 @@ exports.onCollabSessionApplicationChanged = onValueWritten({
   }
 });
 
+// ============================================================================
+// BACKEND-OWNED CALLABLE CLOUD FUNCTIONS (v2 - europe-west1)
+// ============================================================================
 
+/**
+ * 1. getOrCreateDirectConversation
+ */
+exports.getOrCreateDirectConversation = onCall({ region: 'europe-west1' }, async (request) => {
+  const uid1 = request.auth?.uid;
+  if (!uid1) {
+    throw new HttpsError('unauthenticated', 'User must be authenticated.');
+  }
+
+  const uid2 = request.data?.otherUserId;
+  if (!uid2 || typeof uid2 !== 'string' || uid2.trim().length === 0) {
+    throw new HttpsError('invalid-argument', 'otherUserId must be a valid non-empty string.');
+  }
+  if (uid1 === uid2) {
+    throw new HttpsError('invalid-argument', 'Cannot create a direct conversation with yourself.');
+  }
+
+  // Deterministic SHA-256 pair key
+  const sorted = [uid1, uid2].sort();
+  const pairKeyRaw = `${sorted[0]}_${sorted[1]}`;
+  const pairHash = crypto.createHash('sha256').update(pairKeyRaw).digest('hex');
+
+  const pairRef = admin.database().ref(`/directConversationKeys/${pairHash}`);
+
+  let conversationId;
+  const txResult = await pairRef.transaction((current) => {
+    if (current && current.conversationId) {
+      return current;
+    }
+    const newId = admin.database().ref('/conversations').push().key;
+    return {
+      conversationId: newId,
+      createdTimestamp: new Date().toISOString(),
+    };
+  });
+
+  if (!txResult.committed && !txResult.snapshot.exists()) {
+    throw new HttpsError('internal', 'Transaction failed to claim or retrieve conversation key.');
+  }
+
+  const val = txResult.snapshot.val();
+  conversationId = val ? val.conversationId : null;
+  if (!conversationId) {
+    throw new HttpsError('internal', 'Failed to resolve conversation ID.');
+  }
+
+  // Check existing canonical conversation
+  const convRef = admin.database().ref(`/conversations/${conversationId}`);
+  const convSnap = await convRef.once('value');
+  const convVal = convSnap.val();
+
+  if (convSnap.exists() && convVal) {
+    // Requirement 3: Verify that an existing canonical conversation contains EXACTLY the expected participant pair
+    const pMap = convVal.participants || convVal.Participants;
+    let existingUids = [];
+    if (Array.isArray(pMap)) {
+      existingUids = pMap.map(String);
+    } else if (pMap && typeof pMap === 'object') {
+      existingUids = Object.keys(pMap);
+    }
+
+    const isMatch = existingUids.length === 2 &&
+      existingUids.includes(sorted[0]) &&
+      existingUids.includes(sorted[1]);
+
+    if (!isMatch) {
+      console.error(`Corrupted pair key ${pairHash}: conversation ${conversationId} participants mismatch. Expected ${sorted}, found ${existingUids}`);
+      throw new HttpsError('data-loss', 'Conversation participant mismatch for pair key.');
+    }
+  } else {
+    // Initialize new canonical conversation
+    await convRef.set({
+      participants: { [uid1]: true, [uid2]: true },
+      Participants: [uid1, uid2],
+      createdTimestamp: new Date().toISOString(),
+      agreement: null,
+    });
+  }
+
+  // Idempotent repair phase: Requirement 4 - merge ONLY missing structural fields
+  const user1ConvRef = admin.database().ref(`/userConversations/${uid1}/${conversationId}`);
+  const user2ConvRef = admin.database().ref(`/userConversations/${uid2}/${conversationId}`);
+
+  const [u1Snap, u2Snap] = await Promise.all([
+    user1ConvRef.once('value'),
+    user2ConvRef.once('value'),
+  ]);
+
+  if (!u1Snap.exists()) {
+    await user1ConvRef.set({
+      otherUserId: uid2,
+      lastMessageText: '',
+      lastMessageTimestamp: new Date().toISOString(),
+      hasUnread: false,
+      conversationType: 'direct',
+    });
+  }
+
+  if (!u2Snap.exists()) {
+    await user2ConvRef.set({
+      otherUserId: uid1,
+      lastMessageText: '',
+      lastMessageTimestamp: new Date().toISOString(),
+      hasUnread: false,
+      conversationType: 'direct',
+    });
+  }
+
+  return { conversationId };
+});
+
+/**
+ * 2. createAgreementConversation
+ */
+exports.createAgreementConversation = onCall({ region: 'europe-west1' }, async (request) => {
+  const callerUid = request.auth?.uid;
+  if (!callerUid) {
+    throw new HttpsError('unauthenticated', 'User must be authenticated.');
+  }
+
+  const subRequestId = request.data?.subRequestId;
+  const applicantId = request.data?.applicantId;
+
+  if (!subRequestId || typeof subRequestId !== 'string' || subRequestId.trim().length === 0) {
+    throw new HttpsError('invalid-argument', 'subRequestId is required.');
+  }
+  if (!applicantId || typeof applicantId !== 'string' || applicantId.trim().length === 0) {
+    throw new HttpsError('invalid-argument', 'applicantId is required.');
+  }
+
+  // Database verification: Load SubRequest
+  const subReqSnap = await admin.database().ref(`/SubRequests/${subRequestId}`).once('value');
+  if (!subReqSnap.exists()) {
+    throw new HttpsError('not-found', `SubRequest ${subRequestId} does not exist.`);
+  }
+  const subReqData = subReqSnap.val();
+  const creatorUid = subReqData.CreatorUserId || subReqData.UserId || subReqData.createdBy || subReqData.userId || subReqData.creatorUserId;
+
+  if (!creatorUid) {
+    throw new HttpsError('failed-precondition', 'SubRequest has no valid creator.');
+  }
+
+  // Caller must be either creatorUid or applicantId
+  if (callerUid !== creatorUid && callerUid !== applicantId) {
+    throw new HttpsError('permission-denied', 'You are not authorized for this agreement conversation.');
+  }
+
+  // Receiver is the other party
+  const receiverUid = (callerUid === applicantId) ? creatorUid : applicantId;
+
+  const agreementConvKeyRaw = `agreement_${subRequestId}_${applicantId}`;
+  const agreementConvHash = crypto.createHash('sha256').update(agreementConvKeyRaw).digest('hex');
+
+  const agreementKeyRef = admin.database().ref(`/agreementConversationKeys/${agreementConvHash}`);
+
+  let conversationId;
+  const txResult = await agreementKeyRef.transaction((current) => {
+    if (current && current.conversationId) {
+      return current;
+    }
+    const newId = admin.database().ref('/conversations').push().key;
+    return {
+      conversationId: newId,
+      createdTimestamp: new Date().toISOString(),
+    };
+  });
+
+  const val = txResult.snapshot.val();
+  conversationId = val ? val.conversationId : null;
+  if (!conversationId) {
+    throw new HttpsError('internal', 'Failed to resolve agreement conversation ID.');
+  }
+
+  const agreementPayload = {
+    subRequestId: subRequestId,
+    applicantId: applicantId,
+    creatorId: creatorUid,
+    bandName: subReqData.BandName || 'Gig Agreement',
+    voicePart: subReqData.VoicePart || 'Musician',
+    status: 'pending',
+  };
+
+  const convRef = admin.database().ref(`/conversations/${conversationId}`);
+  const convSnap = await convRef.once('value');
+
+  if (!convSnap.exists()) {
+    await convRef.set({
+      participants: { [callerUid]: true, [receiverUid]: true },
+      Participants: [callerUid, receiverUid],
+      createdTimestamp: new Date().toISOString(),
+      agreement: agreementPayload,
+      Agreement: agreementPayload,
+    });
+  }
+
+  // Idempotent user index repair
+  const u1Ref = admin.database().ref(`/userConversations/${callerUid}/${conversationId}`);
+  const u2Ref = admin.database().ref(`/userConversations/${receiverUid}/${conversationId}`);
+
+  const [u1Snap, u2Snap] = await Promise.all([u1Ref.once('value'), u2Ref.once('value')]);
+
+  if (!u1Snap.exists()) {
+    await u1Ref.set({
+      otherUserId: receiverUid,
+      lastMessageText: `Agreement Request: ${subReqData.VoicePart || 'Gig'}`,
+      lastMessageTimestamp: new Date().toISOString(),
+      hasUnread: false,
+      conversationType: 'agreement',
+    });
+  }
+
+  if (!u2Snap.exists()) {
+    await u2Ref.set({
+      otherUserId: callerUid,
+      lastMessageText: `Agreement Request: ${subReqData.VoicePart || 'Gig'}`,
+      lastMessageTimestamp: new Date().toISOString(),
+      hasUnread: true,
+      conversationType: 'agreement',
+    });
+  }
+
+  return { conversationId };
+});
+
+/**
+ * 3. sendDirectMessage
+ */
+exports.sendDirectMessage = onCall({ region: 'europe-west1' }, async (request) => {
+  const senderUid = request.auth?.uid;
+  if (!senderUid) {
+    throw new HttpsError('unauthenticated', 'User must be authenticated.');
+  }
+
+  const conversationId = request.data?.conversationId;
+  const text = request.data?.text;
+
+  if (!conversationId || typeof conversationId !== 'string' || conversationId.trim().length === 0) {
+    throw new HttpsError('invalid-argument', 'conversationId is required.');
+  }
+  if (!text || typeof text !== 'string' || text.trim().length === 0) {
+    throw new HttpsError('invalid-argument', 'Message text cannot be empty.');
+  }
+  if (text.length > 4000) {
+    throw new HttpsError('invalid-argument', 'Message exceeds maximum length of 4000 characters.');
+  }
+
+  const convRef = admin.database().ref(`/conversations/${conversationId}`);
+  const convSnap = await convRef.once('value');
+  if (!convSnap.exists()) {
+    throw new HttpsError('not-found', 'Conversation does not exist.');
+  }
+  const convVal = convSnap.val() || {};
+
+  const pMap = convVal.participants || convVal.Participants;
+  let isParticipant = false;
+  let receiverUid = null;
+
+  if (Array.isArray(pMap)) {
+    isParticipant = pMap.map(String).includes(senderUid);
+    receiverUid = pMap.map(String).find(id => id !== senderUid);
+  } else if (pMap && typeof pMap === 'object') {
+    isParticipant = pMap[senderUid] === true;
+    receiverUid = Object.keys(pMap).find(id => id !== senderUid);
+  }
+
+  if (!isParticipant) {
+    throw new HttpsError('permission-denied', 'You are not a participant in this conversation.');
+  }
+
+  if (!receiverUid) {
+    receiverUid = request.data?.receiverUserId;
+  }
+  if (!receiverUid) {
+    throw new HttpsError('failed-precondition', 'Could not determine receiver for this message.');
+  }
+
+  const msgRef = admin.database().ref(`/conversations/${conversationId}/messages`).push();
+  const msgId = msgRef.key;
+  const timestampIso = new Date().toISOString();
+
+  const messageData = {
+    id: msgId,
+    senderId: senderUid,
+    SenderId: senderUid,
+    receiverId: receiverUid,
+    ReceiverId: receiverUid,
+    text: text.trim(),
+    Text: text.trim(),
+    timestamp: timestampIso,
+    Timestamp: timestampIso,
+    isRead: false,
+    IsRead: false,
+  };
+
+  await msgRef.set(messageData);
+
+  const updates = {};
+  updates[`/userConversations/${senderUid}/${conversationId}/lastMessageText`] = text.trim();
+  updates[`/userConversations/${senderUid}/${conversationId}/lastMessageTimestamp`] = timestampIso;
+  updates[`/userConversations/${senderUid}/${conversationId}/otherUserId`] = receiverUid;
+  updates[`/userConversations/${senderUid}/${conversationId}/hasUnread`] = false;
+
+  updates[`/userConversations/${receiverUid}/${conversationId}/lastMessageText`] = text.trim();
+  updates[`/userConversations/${receiverUid}/${conversationId}/lastMessageTimestamp`] = timestampIso;
+  updates[`/userConversations/${receiverUid}/${conversationId}/otherUserId`] = senderUid;
+  updates[`/userConversations/${receiverUid}/${conversationId}/hasUnread`] = true;
+
+  await admin.database().ref().update(updates);
+
+  return { messageId: msgId };
+});
+
+/**
+ * 4. markDirectConversationRead
+ */
+exports.markDirectConversationRead = onCall({ region: 'europe-west1' }, async (request) => {
+  const selfUid = request.auth?.uid;
+  if (!selfUid) {
+    throw new HttpsError('unauthenticated', 'User must be authenticated.');
+  }
+
+  const conversationId = request.data?.conversationId;
+  if (!conversationId || typeof conversationId !== 'string' || conversationId.trim().length === 0) {
+    throw new HttpsError('invalid-argument', 'conversationId is required.');
+  }
+
+  const convRef = admin.database().ref(`/conversations/${conversationId}`);
+  const convSnap = await convRef.once('value');
+  if (!convSnap.exists()) {
+    throw new HttpsError('not-found', 'Conversation does not exist.');
+  }
+  const convVal = convSnap.val() || {};
+  const pMap = convVal.participants || convVal.Participants;
+
+  let isParticipant = false;
+  if (Array.isArray(pMap)) {
+    isParticipant = pMap.map(String).includes(selfUid);
+  } else if (pMap && typeof pMap === 'object') {
+    isParticipant = pMap[selfUid] === true;
+  }
+
+  if (!isParticipant) {
+    throw new HttpsError('permission-denied', 'You are not a participant in this conversation.');
+  }
+
+  const updates = {};
+  updates[`/userConversations/${selfUid}/${conversationId}/hasUnread`] = false;
+
+  const msgsSnap = await admin.database().ref(`/conversations/${conversationId}/messages`).once('value');
+  if (msgsSnap.exists() && msgsSnap.val()) {
+    const msgs = msgsSnap.val();
+    Object.keys(msgs).forEach((msgId) => {
+      const msg = msgs[msgId];
+      if (msg && typeof msg === 'object') {
+        const receiver = msg.receiverId || msg.ReceiverId;
+        if (receiver === selfUid) {
+          updates[`/conversations/${conversationId}/messages/${msgId}/isRead`] = true;
+          updates[`/conversations/${conversationId}/messages/${msgId}/IsRead`] = true;
+        }
+      }
+    });
+  }
+
+  await admin.database().ref().update(updates);
+  return { success: true };
+});
+
+/**
+ * 5. triggerEventReminder
+ */
+exports.triggerEventReminder = onCall({ region: 'europe-west1' }, async (request) => {
+  const callerUid = request.auth?.uid;
+  if (!callerUid) {
+    throw new HttpsError('unauthenticated', 'User must be authenticated.');
+  }
+
+  const { bandId, eventId, reminderType } = request.data || {};
+  if (!bandId || typeof bandId !== 'string' || bandId.trim().length === 0) {
+    throw new HttpsError('invalid-argument', 'bandId is required.');
+  }
+  if (!eventId || typeof eventId !== 'string' || eventId.trim().length === 0) {
+    throw new HttpsError('invalid-argument', 'eventId is required.');
+  }
+
+  const allowedTypes = ['24h', '48h', '72h', 'last'];
+  if (!reminderType || !allowedTypes.includes(reminderType)) {
+    throw new HttpsError('invalid-argument', `reminderType must be one of: ${allowedTypes.join(', ')}`);
+  }
+
+  const roleSnap = await admin.database().ref(`/Bands/${bandId}/Members_band/${callerUid}/Role`).once('value');
+  const role = roleSnap.val();
+  if (role !== 'Leader' && role !== 'Admin') {
+    throw new HttpsError('permission-denied', 'Only Leader or Admin members can trigger event reminders.');
+  }
+
+  const eventSnap = await admin.database().ref(`/Bands/${bandId}/Events/${eventId}`).once('value');
+  if (!eventSnap.exists()) {
+    throw new HttpsError('not-found', `Event ${eventId} not found.`);
+  }
+  const eventData = eventSnap.val();
+  if (eventData.isLocked === true) {
+    throw new HttpsError('failed-precondition', 'Cannot send reminder for a locked event.');
+  }
+  if (eventData.startDateTime && new Date(eventData.startDateTime).getTime() <= Date.now()) {
+    throw new HttpsError('failed-precondition', 'Cannot send reminder for an event that has already started.');
+  }
+  // Load authoritative audit record early to check completed state before token checks
+  const auditRef = admin.database().ref(`/eventReminderAudit/${bandId}/${eventId}/${reminderType}`);
+  const auditSnap = await auditRef.once('value');
+  if (auditSnap.exists()) {
+    const existingAudit = auditSnap.val();
+    if (existingAudit && existingAudit.status === 'completed') {
+      const sentCount = existingAudit.successCount !== undefined
+        ? existingAudit.successCount
+        : (existingAudit.recipients ? Object.values(existingAudit.recipients).filter(r => r && r.status === 'sent').length : 0);
+      return {
+        status: 'already_sent',
+        successCount: sentCount,
+        failureCount: existingAudit.failureCount || 0,
+        attemptedCount: existingAudit.attemptedCount || sentCount,
+      };
+    }
+  }
+
+  const membersSnap = await admin.database().ref(`/Bands/${bandId}/Members_band`).once('value');
+  const members = membersSnap.val() || {};
+  const memberIds = Object.keys(members);
+
+  const responses = eventData.Responses || {};
+  const realResponseStatuses = ['YES', 'NO', 'UNCERTAIN', 'attending', 'declined', 'maybe'];
+
+  const nonResponders = memberIds.filter((uid) => {
+    const resp = responses[uid];
+    if (!resp) return true;
+    const status = (typeof resp === 'string' ? resp : resp.status || resp.Status || '').toUpperCase();
+    if (!status || status === 'PENDING') return true;
+    return !realResponseStatuses.map(s => s.toUpperCase()).includes(status);
+  });
+
+  if (nonResponders.length === 0) {
+    return { status: 'no_non_responders', successCount: 0, attemptedCount: 0, failureCount: 0 };
+  }
+
+  let currentAudit = null;
+  const nowIso = new Date().toISOString();
+  const nowMs = Date.now();
+
+  const txResult = await auditRef.transaction((current) => {
+    if (current) {
+      if (current.status === 'completed') {
+        return current;
+      }
+      if (current.status === 'sending') {
+        const reqAtMs = current.requestedAt ? new Date(current.requestedAt).getTime() : 0;
+        if (nowMs - reqAtMs < 5 * 60 * 1000) {
+          return;
+        }
+      }
+    }
+    return {
+      status: 'sending',
+      requestedBy: callerUid,
+      requestedAt: nowIso,
+      recipients: (current && current.recipients) ? current.recipients : {},
+      attemptedCount: current ? (current.attemptedCount || 0) : 0,
+      successCount: current ? (current.successCount || 0) : 0,
+      failureCount: current ? (current.failureCount || 0) : 0,
+    };
+  });
+
+  if (!txResult.committed) {
+    const snapVal = txResult.snapshot.val();
+    if (snapVal && snapVal.status === 'completed') {
+      return { status: 'already_sent', successCount: snapVal.successCount || 0, attemptedCount: snapVal.attemptedCount || 0, failureCount: 0 };
+    }
+    throw new HttpsError('already-exists', 'A reminder request is currently in progress for this event.');
+  }
+
+  currentAudit = txResult.snapshot.val() || {};
+  const existingRecipients = currentAudit.recipients || {};
+
+  const eligibleRecipients = nonResponders.filter(uid => existingRecipients[uid]?.status !== 'sent');
+
+  if (eligibleRecipients.length === 0) {
+    return { status: 'already_sent', successCount: currentAudit.successCount || 0, attemptedCount: currentAudit.attemptedCount || 0, failureCount: 0 };
+  }
+
+  const recipientsWithTokens = [];
+  const tokenPromises = eligibleRecipients.map(async (uid) => {
+    const tokenSnap = await admin.database().ref(`/users/${uid}/info/PushToken`).once('value');
+    const token = tokenSnap.val();
+    if (token && typeof token === 'string' && token.trim().length > 0) {
+      recipientsWithTokens.push({ userId: uid, token: token.trim() });
+    }
+  });
+
+  await Promise.all(tokenPromises);
+
+  if (recipientsWithTokens.length === 0) {
+    await auditRef.update({
+      status: 'failed',
+      completedAt: new Date().toISOString(),
+      failureReason: 'no_valid_tokens',
+    });
+    return { status: 'no_valid_tokens', successCount: 0, attemptedCount: 0, failureCount: eligibleRecipients.length };
+  }
+
+  const messages = recipientsWithTokens.map(r => ({
+    token: r.token,
+    notification: {
+      title: `⏰ RSVP Reminder: ${eventData.title || 'Band Event'}`,
+      body: `Please RSVP to the upcoming ${eventData.eventType || 'event'}! Let the band know if you can make it.`,
+    },
+    data: {
+      click_action: 'FLUTTER_NOTIFICATION_CLICK',
+      bandId: bandId,
+      eventId: eventId,
+      type: 'event_reminder',
+    },
+    android: {
+      notification: {
+        sound: 'guitarsound',
+        channelId: 'event_notifications',
+      },
+    },
+    apns: {
+      payload: {
+        aps: {
+          sound: 'guitarsound.caf',
+        },
+      },
+    },
+  }));
+
+  let fcmResponse;
+  if (process.env.FUNCTIONS_EMULATOR === 'true' || process.env.IS_EMULATOR_TEST === 'true') {
+    // Emulator test transport: Safe mock responses without contacting external FCM
+    fcmResponse = {
+      responses: messages.map(() => ({ success: true, messageId: 'emulator_mock_fcm_id' })),
+    };
+  } else {
+    fcmResponse = await admin.messaging().sendEach(messages);
+  }
+
+  let batchSuccess = 0;
+  let batchFailure = 0;
+  const recipientUpdates = {};
+
+  fcmResponse.responses.forEach((res, index) => {
+    const recipient = recipientsWithTokens[index];
+    if (!recipient) return;
+
+    if (res.success) {
+      batchSuccess++;
+      recipientUpdates[`recipients/${recipient.userId}`] = { status: 'sent', sentAt: new Date().toISOString() };
+    } else {
+      batchFailure++;
+      recipientUpdates[`recipients/${recipient.userId}`] = { status: 'failed', error: res.error ? res.error.message : 'Unknown FCM error' };
+      if (res.error && (res.error.code === 'messaging/invalid-registration-token' || res.error.code === 'messaging/registration-token-not-registered')) {
+        admin.database().ref(`/users/${recipient.userId}/info/PushToken`).remove();
+      }
+    }
+  });
+
+  const totalAttempted = (currentAudit.attemptedCount || 0) + recipientsWithTokens.length;
+  const totalSuccess = (currentAudit.successCount || 0) + batchSuccess;
+  const totalFailure = (currentAudit.failureCount || 0) + batchFailure;
+
+  let finalStatus = 'completed';
+  if (totalSuccess === 0 && totalFailure > 0) {
+    finalStatus = 'failed';
+  } else if (totalFailure > 0) {
+    finalStatus = 'partial_success';
+  }
+
+  const auditUpdates = {
+    ...recipientUpdates,
+    status: finalStatus,
+    attemptedCount: totalAttempted,
+    successCount: totalSuccess,
+    failureCount: totalFailure,
+    completedAt: new Date().toISOString(),
+  };
+
+  await auditRef.update(auditUpdates);
+
+  if (finalStatus === 'completed') {
+    const legacyKeyMap = {
+      '24h': 'sentReminder24h',
+      '48h': 'sentReminder48h',
+      '72h': 'sentReminder72h',
+      'last': 'sentReminder84h',
+    };
+    const legacyKey = legacyKeyMap[reminderType];
+    if (legacyKey) {
+      await admin.database().ref(`/Bands/${bandId}/Events/${eventId}/${legacyKey}`).set(true);
+    }
+  }
+
+  return {
+    status: finalStatus,
+    successCount: totalSuccess,
+    failureCount: totalFailure,
+    attemptedCount: totalAttempted,
+  };
+});
