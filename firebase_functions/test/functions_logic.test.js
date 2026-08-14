@@ -273,18 +273,25 @@ async function handleSendDirectMessage(request, db) {
   return { success: true };
 }
 
-function extractParticipantList(pMap) {
-  if (!pMap) return [];
+function isParticipantMember(pMap, targetUid) {
+  if (!pMap || !targetUid || typeof targetUid !== 'string') return false;
+
   if (Array.isArray(pMap)) {
-    return pMap.map(v => String(v).trim()).filter(Boolean);
+    return pMap.some(item => item === targetUid);
   }
+
   if (typeof pMap === 'object' && pMap !== null) {
-    return Object.keys(pMap).map(k => String(k).trim()).filter(k => {
-      const val = pMap[k];
-      return val !== false && val !== null && val !== undefined;
-    });
+    if (!Object.prototype.hasOwnProperty.call(pMap, targetUid)) {
+      return false;
+    }
+    const val = pMap[targetUid];
+    if (val === false || val === 0 || val === 'false' || val === '' || val === null || val === undefined) {
+      return false;
+    }
+    return true;
   }
-  return [];
+
+  return false;
 }
 
 async function handleMarkDirectConversationRead(request, db) {
@@ -301,9 +308,7 @@ async function handleMarkDirectConversationRead(request, db) {
 
   const convVal = convSnap.val() || {};
   const pMap = convVal.participants || convVal.Participants;
-  const participants = extractParticipantList(pMap);
-
-  const isParticipant = participants.some(uid => uid === selfUid || uid.toLowerCase() === selfUid.toLowerCase());
+  const isParticipant = isParticipantMember(pMap, selfUid);
   if (!isParticipant) throw new Error('permission-denied');
 
   const updates = {};
@@ -321,9 +326,9 @@ async function handleMarkDirectConversationRead(request, db) {
 
           let isForSelf = false;
           if (receiver) {
-            isForSelf = (receiver === selfUid || receiver.toLowerCase() === selfUid.toLowerCase());
+            isForSelf = (receiver === selfUid);
           } else if (sender) {
-            isForSelf = (sender !== selfUid && sender.toLowerCase() !== selfUid.toLowerCase());
+            isForSelf = (sender !== selfUid);
           }
 
           if (isForSelf) {
@@ -530,6 +535,95 @@ describe('v2 Callable Cloud Functions Logic Tests', () => {
       db
     );
     assert.strictEqual(db.data['userConversations/user_x/legacy_map_conv'].hasUnread, false);
+  });
+
+  it('7c. Exact case-sensitive UID authorization security tests', async () => {
+    // Setup conversation with exact case UID "User_ExactCase"
+    db.data['conversations/conv_security'] = {
+      participants: {
+        'User_ExactCase': true,
+        'user_role_owner': 'owner',
+        'user_role_member': 'member',
+        'user_num_1': 1,
+        'user_str_true': 'true',
+        'user_false_bool': false,
+        'user_false_str': 'false',
+        'user_zero': 0,
+        'user_empty': '',
+        'user_null': null,
+      }
+    };
+
+    // 1. Exact UID is accepted
+    const okRes = await handleMarkDirectConversationRead(
+      { auth: { uid: 'User_ExactCase' }, data: { conversationId: 'conv_security' } },
+      db
+    );
+    assert.strictEqual(okRes.success, true);
+
+    // 2. Differently cased UID is rejected with permission-denied
+    await assert.rejects(
+      handleMarkDirectConversationRead(
+        { auth: { uid: 'user_exactcase' }, data: { conversationId: 'conv_security' } },
+        db
+      ),
+      /permission-denied/
+    );
+
+    // 3. Valid legacy role-map entries accepted
+    await handleMarkDirectConversationRead(
+      { auth: { uid: 'user_role_owner' }, data: { conversationId: 'conv_security' } },
+      db
+    );
+    await handleMarkDirectConversationRead(
+      { auth: { uid: 'user_role_member' }, data: { conversationId: 'conv_security' } },
+      db
+    );
+    await handleMarkDirectConversationRead(
+      { auth: { uid: 'user_num_1' }, data: { conversationId: 'conv_security' } },
+      db
+    );
+    await handleMarkDirectConversationRead(
+      { auth: { uid: 'user_str_true' }, data: { conversationId: 'conv_security' } },
+      db
+    );
+
+    // 4. False/null/zero/empty membership values rejected with permission-denied
+    await assert.rejects(
+      handleMarkDirectConversationRead(
+        { auth: { uid: 'user_false_bool' }, data: { conversationId: 'conv_security' } },
+        db
+      ),
+      /permission-denied/
+    );
+    await assert.rejects(
+      handleMarkDirectConversationRead(
+        { auth: { uid: 'user_false_str' }, data: { conversationId: 'conv_security' } },
+        db
+      ),
+      /permission-denied/
+    );
+    await assert.rejects(
+      handleMarkDirectConversationRead(
+        { auth: { uid: 'user_zero' }, data: { conversationId: 'conv_security' } },
+        db
+      ),
+      /permission-denied/
+    );
+    await assert.rejects(
+      handleMarkDirectConversationRead(
+        { auth: { uid: 'user_empty' }, data: { conversationId: 'conv_security' } },
+        db
+      ),
+      /permission-denied/
+    );
+    await assert.rejects(
+      handleMarkDirectConversationRead(
+        { auth: { uid: 'user_null' }, data: { conversationId: 'conv_security' } },
+        db
+      ),
+      /permission-denied/
+    );
   });
 
   it('8. Leader/Admin reminder authorization & member rejection', async () => {

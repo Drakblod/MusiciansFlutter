@@ -938,15 +938,13 @@ exports.sendDirectMessage = onCall({ region: 'europe-west1' }, async (request) =
   const convVal = convSnap.val() || {};
 
   const pMap = convVal.participants || convVal.Participants;
-  let isParticipant = false;
+  const isParticipant = isParticipantMember(pMap, senderUid);
   let receiverUid = null;
 
   if (Array.isArray(pMap)) {
-    isParticipant = pMap.map(String).includes(senderUid);
     receiverUid = pMap.map(String).find(id => id !== senderUid);
   } else if (pMap && typeof pMap === 'object') {
-    isParticipant = pMap[senderUid] === true;
-    receiverUid = Object.keys(pMap).find(id => id !== senderUid);
+    receiverUid = Object.keys(pMap).find(id => id !== senderUid && isParticipantMember(pMap, id));
   }
 
   if (!isParticipant) {
@@ -996,18 +994,25 @@ exports.sendDirectMessage = onCall({ region: 'europe-west1' }, async (request) =
   return { messageId: msgId };
 });
 
-function extractParticipantList(pMap) {
-  if (!pMap) return [];
+function isParticipantMember(pMap, targetUid) {
+  if (!pMap || !targetUid || typeof targetUid !== 'string') return false;
+
   if (Array.isArray(pMap)) {
-    return pMap.map(v => String(v).trim()).filter(Boolean);
+    return pMap.some(item => item === targetUid);
   }
+
   if (typeof pMap === 'object' && pMap !== null) {
-    return Object.keys(pMap).map(k => String(k).trim()).filter(k => {
-      const val = pMap[k];
-      return val !== false && val !== null && val !== undefined;
-    });
+    if (!Object.prototype.hasOwnProperty.call(pMap, targetUid)) {
+      return false;
+    }
+    const val = pMap[targetUid];
+    if (val === false || val === 0 || val === 'false' || val === '' || val === null || val === undefined) {
+      return false;
+    }
+    return true;
   }
-  return [];
+
+  return false;
 }
 
 /**
@@ -1035,9 +1040,8 @@ exports.markDirectConversationRead = onCall({ region: 'europe-west1' }, async (r
 
     const convVal = convSnap.val() || {};
     const pMap = convVal.participants || convVal.Participants;
-    const participants = extractParticipantList(pMap);
+    const isParticipant = isParticipantMember(pMap, selfUid);
 
-    const isParticipant = participants.some(uid => uid === selfUid || uid.toLowerCase() === selfUid.toLowerCase());
     if (!isParticipant) {
       throw new HttpsError('permission-denied', 'You are not a participant in this conversation.');
     }
@@ -1057,9 +1061,9 @@ exports.markDirectConversationRead = onCall({ region: 'europe-west1' }, async (r
 
             let isForSelf = false;
             if (receiver) {
-              isForSelf = (receiver === selfUid || receiver.toLowerCase() === selfUid.toLowerCase());
+              isForSelf = (receiver === selfUid);
             } else if (sender) {
-              isForSelf = (sender !== selfUid && sender.toLowerCase() !== selfUid.toLowerCase());
+              isForSelf = (sender !== selfUid);
             }
 
             if (isForSelf) {
