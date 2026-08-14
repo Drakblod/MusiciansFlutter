@@ -35,11 +35,16 @@ class FirebaseService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
   // Use the explicit Database URL for European Realtime Database instance
-  DatabaseReference _dbRef([String path = '']) {
-    return FirebaseDatabase.instanceFor(
+  // Use the explicit Database URL for European Realtime Database instance
+  DatabaseReference _dbRef([String? path]) {
+    final db = FirebaseDatabase.instanceFor(
       app: FirebaseDatabase.instance.app,
       databaseURL: databaseUrl,
-    ).ref(path);
+    );
+    if (path == null || path.trim().isEmpty) {
+      return db.ref();
+    }
+    return db.ref(path.trim());
   }
 
   FirebaseFunctions get _functions =>
@@ -68,21 +73,50 @@ class FirebaseService {
       password: password,
     );
 
-    final userId = credential.user?.uid;
-    if (userId != null) {
+    final newAuthUser = credential.user;
+    final userId = newAuthUser?.uid;
+
+    if (userId == null || userId.trim().isEmpty) {
+      throw Exception(
+        'Registration failed: Authentication did not return a valid user ID.',
+      );
+    }
+
+    final trimmedUid = userId.trim();
+    final trimmedNickname = nickname.trim();
+    final trimmedEmail = email.trim();
+
+    try {
+      if (newAuthUser != null && trimmedNickname.isNotEmpty) {
+        await newAuthUser.updateDisplayName(trimmedNickname);
+      }
+
       final profile = UserProfile(
-        userId: userId,
+        userId: trimmedUid,
         userType: userType,
-        nickname: nickname,
-        displayName: nickname,
-        email: email,
+        nickname: trimmedNickname,
+        displayName: trimmedNickname,
+        email: trimmedEmail,
         location: null,
         level: level ?? 'C = INTERMEDIATE',
         about: 'Hey! I am a musician ready to play.',
         instruments: [userType],
       );
-      await saveUserProfileAsync(userId, profile);
+
+      await saveUserProfileAsync(trimmedUid, profile);
+    } catch (e) {
+      try {
+        await newAuthUser?.delete();
+      } catch (deleteError) {
+        await _auth.signOut();
+        throw Exception(
+          'Registration failed during profile setup ($e). '
+          'Auth account cleanup failed: $deleteError. You have been signed out. Please try registering again.',
+        );
+      }
+      rethrow;
     }
+
     return credential;
   }
 
@@ -104,6 +138,13 @@ class FirebaseService {
     String userId,
     Map<String, dynamic> fields,
   ) async {
+    final trimmedUid = userId.trim();
+    if (trimmedUid.isEmpty) {
+      throw ArgumentError(
+        'userId cannot be empty when updating profile fields.',
+      );
+    }
+
     final updates = <String, dynamic>{};
     final allowedInfoKeys = {
       'DisplayName',
@@ -131,9 +172,9 @@ class FirebaseService {
 
     fields.forEach((key, value) {
       if (allowedInfoKeys.contains(key)) {
-        updates['users/$userId/info/$key'] = value;
+        updates['users/$trimmedUid/info/$key'] = value;
         if (key == 'UserType' || key == 'Nickname' || key == 'DisplayName') {
-          updates['users/$userId/$key'] = value;
+          updates['users/$trimmedUid/$key'] = value;
         }
       }
     });
@@ -144,6 +185,11 @@ class FirebaseService {
   }
 
   Future<void> saveUserProfileAsync(String userId, UserProfile profile) async {
+    final trimmedUid = userId.trim();
+    if (trimmedUid.isEmpty) {
+      throw ArgumentError('userId cannot be empty when saving user profile.');
+    }
+
     final fields = <String, dynamic>{
       'DisplayName': profile.displayName,
       'Email': profile.email,
@@ -167,7 +213,7 @@ class FirebaseService {
       if (profile.userType != null) 'UserType': profile.userType,
       if (profile.nickname != null) 'Nickname': profile.nickname,
     };
-    await updateUserProfileFields(userId, fields);
+    await updateUserProfileFields(trimmedUid, fields);
   }
 
   Future<UserProfile?> getUserProfileAsync([String? userId]) async {
