@@ -2,6 +2,7 @@ const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const { onValueCreated, onValueWritten } = require('firebase-functions/v2/database');
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
+const logger = require('firebase-functions/logger');
 const crypto = require('crypto');
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -995,59 +996,104 @@ exports.sendDirectMessage = onCall({ region: 'europe-west1' }, async (request) =
   return { messageId: msgId };
 });
 
+function extractParticipantList(pMap) {
+  if (!pMap) return [];
+  if (Array.isArray(pMap)) {
+    return pMap.map(v => String(v).trim()).filter(Boolean);
+  }
+  if (typeof pMap === 'object' && pMap !== null) {
+    return Object.keys(pMap).map(k => String(k).trim()).filter(k => {
+      const val = pMap[k];
+      return val !== false && val !== null && val !== undefined;
+    });
+  }
+  return [];
+}
+
 /**
  * 4. markDirectConversationRead
  */
 exports.markDirectConversationRead = onCall({ region: 'europe-west1' }, async (request) => {
   const selfUid = request.auth?.uid;
-  if (!selfUid) {
-    throw new HttpsError('unauthenticated', 'User must be authenticated.');
-  }
-
   const conversationId = request.data?.conversationId;
-  if (!conversationId || typeof conversationId !== 'string' || conversationId.trim().length === 0) {
-    throw new HttpsError('invalid-argument', 'conversationId is required.');
-  }
 
-  const convRef = admin.database().ref(`/conversations/${conversationId}`);
-  const convSnap = await convRef.once('value');
-  if (!convSnap.exists()) {
-    throw new HttpsError('not-found', 'Conversation does not exist.');
-  }
-  const convVal = convSnap.val() || {};
-  const pMap = convVal.participants || convVal.Participants;
+  try {
+    if (!selfUid) {
+      throw new HttpsError('unauthenticated', 'User must be authenticated.');
+    }
 
-  let isParticipant = false;
-  if (Array.isArray(pMap)) {
-    isParticipant = pMap.map(String).includes(selfUid);
-  } else if (pMap && typeof pMap === 'object') {
-    isParticipant = pMap[selfUid] === true;
-  }
+    if (!conversationId || typeof conversationId !== 'string' || conversationId.trim().length === 0) {
+      throw new HttpsError('invalid-argument', 'conversationId is required.');
+    }
 
-  if (!isParticipant) {
-    throw new HttpsError('permission-denied', 'You are not a participant in this conversation.');
-  }
+    const trimmedConvId = conversationId.trim();
+    const convRef = admin.database().ref(`/conversations/${trimmedConvId}`);
+    const convSnap = await convRef.once('value');
+    if (!convSnap.exists()) {
+      throw new HttpsError('not-found', 'Conversation does not exist.');
+    }
 
-  const updates = {};
-  updates[`/userConversations/${selfUid}/${conversationId}/hasUnread`] = false;
+    const convVal = convSnap.val() || {};
+    const pMap = convVal.participants || convVal.Participants;
+    const participants = extractParticipantList(pMap);
 
-  const msgsSnap = await admin.database().ref(`/conversations/${conversationId}/messages`).once('value');
-  if (msgsSnap.exists() && msgsSnap.val()) {
-    const msgs = msgsSnap.val();
-    Object.keys(msgs).forEach((msgId) => {
-      const msg = msgs[msgId];
-      if (msg && typeof msg === 'object') {
-        const receiver = msg.receiverId || msg.ReceiverId;
-        if (receiver === selfUid) {
-          updates[`/conversations/${conversationId}/messages/${msgId}/isRead`] = true;
-          updates[`/conversations/${conversationId}/messages/${msgId}/IsRead`] = true;
-        }
+    const isParticipant = participants.some(uid => uid === selfUid || uid.toLowerCase() === selfUid.toLowerCase());
+    if (!isParticipant) {
+      throw new HttpsError('permission-denied', 'You are not a participant in this conversation.');
+    }
+
+    const updates = {};
+    updates[`/userConversations/${selfUid}/${trimmedConvId}/hasUnread`] = false;
+
+    const msgsSnap = await admin.database().ref(`/conversations/${trimmedConvId}/messages`).once('value');
+    if (msgsSnap.exists() && msgsSnap.val()) {
+      const msgs = msgsSnap.val();
+      if (typeof msgs === 'object' && msgs !== null) {
+        Object.keys(msgs).forEach((msgId) => {
+          const msg = msgs[msgId];
+          if (msg && typeof msg === 'object') {
+            const sender = (msg.senderId || msg.SenderId || '').toString();
+            const receiver = (msg.receiverId || msg.ReceiverId || '').toString();
+
+            let isForSelf = false;
+            if (receiver) {
+              isForSelf = (receiver === selfUid || receiver.toLowerCase() === selfUid.toLowerCase());
+            } else if (sender) {
+              isForSelf = (sender !== selfUid && sender.toLowerCase() !== selfUid.toLowerCase());
+            }
+
+            if (isForSelf) {
+              updates[`/conversations/${trimmedConvId}/messages/${msgId}/isRead`] = true;
+              updates[`/conversations/${trimmedConvId}/messages/${msgId}/IsRead`] = true;
+            }
+          }
+        });
       }
-    });
-  }
+    }
 
-  await admin.database().ref().update(updates);
-  return { success: true };
+    if (Object.keys(updates).length > 0) {
+      await admin.database().ref().update(updates);
+    }
+
+    return { success: true };
+  } catch (err) {
+    if (err instanceof HttpsError) {
+      throw err;
+    }
+
+    logger.error('markDirectConversationRead failed with unexpected error', {
+      functionName: 'markDirectConversationRead',
+      stage: 'execution',
+      conversationId: conversationId || null,
+      callerUid: selfUid || null,
+      errorName: err.name || 'Error',
+      errorMessage: err.message || String(err),
+      errorCode: err.code || null,
+      errorStack: err.stack || null,
+    });
+
+    throw new HttpsError('internal', `An internal error occurred: ${err.message || 'Unknown error'}`);
+  }
 });
 
 /**

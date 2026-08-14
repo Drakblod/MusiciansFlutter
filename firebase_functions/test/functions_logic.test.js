@@ -21,7 +21,27 @@ class MockRef {
   }
 
   async get() {
-    return new MockSnapshot(this.db.data[this.path] || null);
+    if (this.db.data[this.path] !== undefined) {
+      return new MockSnapshot(this.db.data[this.path]);
+    }
+    for (const dbKey of Object.keys(this.db.data)) {
+      if (this.path.startsWith(dbKey + '/')) {
+        const subPath = this.path.substring(dbKey.length + 1).split('/');
+        let curr = this.db.data[dbKey];
+        for (const part of subPath) {
+          if (curr && typeof curr === 'object') {
+            curr = curr[part];
+          } else {
+            curr = undefined;
+            break;
+          }
+        }
+        if (curr !== undefined) {
+          return new MockSnapshot(curr);
+        }
+      }
+    }
+    return new MockSnapshot(null);
   }
 
   async set(val) {
@@ -29,8 +49,48 @@ class MockRef {
   }
 
   async update(val) {
-    if (!this.db.data[this.path]) this.db.data[this.path] = {};
-    Object.assign(this.db.data[this.path], JSON.parse(JSON.stringify(val)));
+    if (!val || typeof val !== 'object') return;
+    const targetPath = this.path ? (this.path.startsWith('/') ? this.path.substring(1) : this.path) : '';
+    if (targetPath) {
+      if (!this.db.data[targetPath] || typeof this.db.data[targetPath] !== 'object') {
+        this.db.data[targetPath] = {};
+      }
+      Object.assign(this.db.data[targetPath], JSON.parse(JSON.stringify(val)));
+    }
+
+    Object.keys(val).forEach((k) => {
+      const relPath = k.startsWith('/') ? k.substring(1) : k;
+      const fullPath = targetPath ? `${targetPath}/${relPath}` : relPath;
+      this.db.data[fullPath] = val[k];
+
+      const parts = fullPath.split('/');
+      if (parts.length > 1) {
+        const parentPath = parts.slice(0, -1).join('/');
+        const leafKey = parts[parts.length - 1];
+        if (!this.db.data[parentPath] || typeof this.db.data[parentPath] !== 'object') {
+          this.db.data[parentPath] = {};
+        }
+        this.db.data[parentPath][leafKey] = val[k];
+      }
+
+      Object.keys(this.db.data).forEach((dbKey) => {
+        if (fullPath.startsWith(dbKey + '/')) {
+          const subPath = fullPath.substring(dbKey.length + 1).split('/');
+          let curr = this.db.data[dbKey];
+          for (let i = 0; i < subPath.length - 1; i++) {
+            if (curr && typeof curr === 'object') {
+              curr = curr[subPath[i]];
+            } else {
+              curr = null;
+              break;
+            }
+          }
+          if (curr && typeof curr === 'object') {
+            curr[subPath[subPath.length - 1]] = val[k];
+          }
+        }
+      });
+    });
   }
 
   push() {
@@ -213,20 +273,71 @@ async function handleSendDirectMessage(request, db) {
   return { success: true };
 }
 
+function extractParticipantList(pMap) {
+  if (!pMap) return [];
+  if (Array.isArray(pMap)) {
+    return pMap.map(v => String(v).trim()).filter(Boolean);
+  }
+  if (typeof pMap === 'object' && pMap !== null) {
+    return Object.keys(pMap).map(k => String(k).trim()).filter(k => {
+      const val = pMap[k];
+      return val !== false && val !== null && val !== undefined;
+    });
+  }
+  return [];
+}
+
 async function handleMarkDirectConversationRead(request, db) {
-  const uid = request.auth?.uid;
-  if (!uid) throw new Error('unauthenticated');
+  const selfUid = request.auth?.uid;
+  if (!selfUid) throw new Error('unauthenticated');
   const { conversationId } = request.data || {};
-  if (!conversationId) throw new Error('invalid-argument');
+  if (!conversationId || typeof conversationId !== 'string' || conversationId.trim().length === 0) {
+    throw new Error('invalid-argument');
+  }
 
-  const convSnap = await db.ref(`conversations/${conversationId}`).get();
+  const trimmedConvId = conversationId.trim();
+  const convSnap = await db.ref(`conversations/${trimmedConvId}`).get();
   if (!convSnap.exists()) throw new Error('not-found');
-  const parts = convSnap.val().participants || {};
-  if (!parts[uid]) throw new Error('permission-denied');
 
-  await db.ref(`userConversations/${uid}/${conversationId}`).update({
-    hasUnread: false
-  });
+  const convVal = convSnap.val() || {};
+  const pMap = convVal.participants || convVal.Participants;
+  const participants = extractParticipantList(pMap);
+
+  const isParticipant = participants.some(uid => uid === selfUid || uid.toLowerCase() === selfUid.toLowerCase());
+  if (!isParticipant) throw new Error('permission-denied');
+
+  const updates = {};
+  updates[`userConversations/${selfUid}/${trimmedConvId}/hasUnread`] = false;
+
+  const msgsSnap = await db.ref(`conversations/${trimmedConvId}/messages`).get();
+  if (msgsSnap.exists() && msgsSnap.val()) {
+    const msgs = msgsSnap.val();
+    if (typeof msgs === 'object' && msgs !== null) {
+      Object.keys(msgs).forEach((msgId) => {
+        const msg = msgs[msgId];
+        if (msg && typeof msg === 'object') {
+          const sender = (msg.senderId || msg.SenderId || '').toString();
+          const receiver = (msg.receiverId || msg.ReceiverId || '').toString();
+
+          let isForSelf = false;
+          if (receiver) {
+            isForSelf = (receiver === selfUid || receiver.toLowerCase() === selfUid.toLowerCase());
+          } else if (sender) {
+            isForSelf = (sender !== selfUid && sender.toLowerCase() !== selfUid.toLowerCase());
+          }
+
+          if (isForSelf) {
+            updates[`conversations/${trimmedConvId}/messages/${msgId}/isRead`] = true;
+            updates[`conversations/${trimmedConvId}/messages/${msgId}/IsRead`] = true;
+          }
+        }
+      });
+    }
+  }
+
+  if (Object.keys(updates).length > 0) {
+    await db.ref('').update(updates);
+  }
 
   return { success: true };
 }
@@ -385,6 +496,40 @@ describe('v2 Callable Cloud Functions Logic Tests', () => {
       ),
       /permission-denied/
     );
+  });
+
+  it('7b. Mark-as-read handles legacy Participants array, non-boolean maps, missing receiverId, and sparse message arrays', async () => {
+    // Legacy conversation with Participants array and messages without receiverId
+    db.data['conversations/legacy_conv'] = {
+      Participants: ['user_x', 'user_y'],
+      messages: {
+        msg_1: { SenderId: 'user_y', Text: 'Legacy message', IsRead: false },
+        msg_2: { SenderId: 'user_x', Text: 'My reply', IsRead: false }
+      }
+    };
+    db.data['userConversations/user_x/legacy_conv'] = { hasUnread: true };
+
+    await handleMarkDirectConversationRead(
+      { auth: { uid: 'user_x' }, data: { conversationId: 'legacy_conv' } },
+      db
+    );
+
+    assert.strictEqual(db.data['userConversations/user_x/legacy_conv'].hasUnread, false);
+    // msg_1 from user_y to user_x marked as read
+    assert.strictEqual(db.data['conversations/legacy_conv'].messages.msg_1.isRead, true);
+    assert.strictEqual(db.data['conversations/legacy_conv'].messages.msg_1.IsRead, true);
+    // msg_2 from user_x not marked as read for user_x
+    assert.strictEqual(db.data['conversations/legacy_conv'].messages.msg_2.isRead, undefined);
+
+    // Legacy conversation with non-boolean participant map
+    db.data['conversations/legacy_map_conv'] = {
+      participants: { user_x: 'owner', user_y: 'member' }
+    };
+    await handleMarkDirectConversationRead(
+      { auth: { uid: 'user_x' }, data: { conversationId: 'legacy_map_conv' } },
+      db
+    );
+    assert.strictEqual(db.data['userConversations/user_x/legacy_map_conv'].hasUnread, false);
   });
 
   it('8. Leader/Admin reminder authorization & member rejection', async () => {
