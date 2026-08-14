@@ -7,6 +7,7 @@ import '../theme/app_theme.dart';
 import '../widgets/gradient_scaffold.dart';
 import '../widgets/custom_top_bar.dart';
 import '../models/agreement.dart';
+import '../utils/date_parser.dart';
 
 class InboxScreen extends StatefulWidget {
   const InboxScreen({super.key});
@@ -45,7 +46,8 @@ class _InboxScreenState extends State<InboxScreen> {
     }
   }
 
-  String _formatTimestamp(DateTime dt) {
+  String _formatTimestamp(DateTime? dt) {
+    if (dt == null) return '';
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final yesterday = today.subtract(const Duration(days: 1));
@@ -227,8 +229,11 @@ class _InboxScreenState extends State<InboxScreen> {
                         itemCount: filteredThreads.length,
                         itemBuilder: (context, index) {
                           final thread = filteredThreads[index];
-                          final hasUnread = thread['hasUnread'] as bool;
-                          final timestamp = thread['timestamp'] as DateTime;
+                          final hasUnread = thread['hasUnread'] == true;
+                          final timestamp = parseDateTime(
+                            thread['timestamp'] ??
+                                thread['lastMessageTimestamp'],
+                          );
                           final otherUserId = thread['otherUserId'] as String;
                           final otherUserName =
                               thread['otherUserName'] as String;

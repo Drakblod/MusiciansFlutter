@@ -19,6 +19,7 @@ import '../models/band_event.dart';
 import '../models/event_room.dart';
 import '../models/collab_session.dart';
 import '../models/collab_studio.dart';
+import '../utils/date_parser.dart';
 
 class FirebaseService {
   static final StreamController<Map<String, dynamic>>
@@ -838,6 +839,13 @@ class FirebaseService {
             profilePic = profile.profilePictureUrl;
           }
 
+          final rawTs =
+              item['lastMessageTimestamp'] ??
+              item['lastMessageTime'] ??
+              item['createdTimestamp'] ??
+              item['CreatedTimestamp'];
+          final parsedDt = parseDateTime(rawTs);
+
           conversations.add({
             'conversationId': convId,
             'otherUserId': otherUserId,
@@ -847,6 +855,7 @@ class FirebaseService {
                 item['lastMessageText']?.toString() ?? 'No messages yet',
             'lastMessageTimestamp':
                 item['lastMessageTimestamp']?.toString() ?? '',
+            'timestamp': parsedDt,
             'hasUnread': item['hasUnread'] == true,
             'conversationType':
                 item['conversationType']?.toString() ?? 'direct',
@@ -857,11 +866,21 @@ class FirebaseService {
 
     conversations.sort((a, b) {
       if (a['hasUnread'] != b['hasUnread']) {
-        return a['hasUnread'] ? -1 : 1;
+        return (a['hasUnread'] == true) ? -1 : 1;
       }
-      return (b['lastMessageTimestamp']?.toString() ?? '').compareTo(
-        a['lastMessageTimestamp']?.toString() ?? '',
-      );
+      final dtA = a['timestamp'] as DateTime?;
+      final dtB = b['timestamp'] as DateTime?;
+
+      if (dtA != null && dtB != null) {
+        return dtB.compareTo(dtA);
+      }
+      if (dtA != null && dtB == null) {
+        return -1;
+      }
+      if (dtA == null && dtB != null) {
+        return 1;
+      }
+      return 0;
     });
 
     return conversations;
