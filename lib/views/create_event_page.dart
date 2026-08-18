@@ -529,8 +529,13 @@ class _CreateEventPageState extends State<CreateEventPage> {
         allEventsToSave.addAll(_additionalEvents);
       }
 
+      final publishedAt = DateTime.now().millisecondsSinceEpoch;
       final String? groupId = allEventsToSave.length > 1
-          ? 'group_${DateTime.now().millisecondsSinceEpoch}'
+          ? 'group_$publishedAt'
+          : null;
+
+      final int? rsvpDeadline = (_requireResponse && _reminderIntervalHours > 0)
+          ? publishedAt + (_reminderIntervalHours * 3600 * 1000)
           : null;
 
       for (int i = 0; i < allEventsToSave.length; i++) {
@@ -555,8 +560,6 @@ class _CreateEventPageState extends State<CreateEventPage> {
           end = end.add(const Duration(days: 1));
         }
 
-        final deadline = start.subtract(Duration(hours: _reminderIntervalHours > 0 ? _reminderIntervalHours : 24));
-
         final newEvent = BandEvent(
           title: draft.title,
           description: draft.description.isNotEmpty ? draft.description : _descriptionController.text.trim(),
@@ -566,10 +569,10 @@ class _CreateEventPageState extends State<CreateEventPage> {
           endDateTime: end.toIso8601String(),
           additionalNotes: _notesController.text.trim(),
           createdBy: appState.currentUserId ?? '',
-          createdAt: DateTime.now().millisecondsSinceEpoch,
-          updatedAt: DateTime.now().millisecondsSinceEpoch,
+          createdAt: publishedAt,
+          updatedAt: publishedAt,
           requireResponse: _requireResponse,
-          rsvpDeadline: deadline.millisecondsSinceEpoch,
+          rsvpDeadline: rsvpDeadline,
           reminderIntervalHours: _reminderIntervalHours,
           responses: {},
           parentEventId: groupId,
@@ -1144,7 +1147,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                               border: OutlineInputBorder(),
                             ),
                             items: const [
-                              DropdownMenuItem(value: -1, child: Text('Set hours here')),
+                              DropdownMenuItem(value: -1, child: Text('Set your own hours')),
                               DropdownMenuItem(value: 48, child: Text('48 hours (From event is published)')),
                               DropdownMenuItem(value: 24, child: Text('24 hours (From event is published)')),
                               DropdownMenuItem(value: 12, child: Text('12 hours (From event is published)')),
@@ -1170,7 +1173,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                               keyboardType: TextInputType.number,
                               style: GoogleFonts.inter(color: Colors.white),
                               decoration: InputDecoration(
-                                labelText: 'Set hours here',
+                                labelText: 'Input chosen hours here',
                                 hintText: 'e.g. 48, 24, 12',
                                 prefixIcon: Icon(Icons.timer_outlined, color: AppTheme.textSecondary),
                                 suffixText: 'hours',

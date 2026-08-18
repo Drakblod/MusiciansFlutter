@@ -926,7 +926,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         const Icon(Icons.star_rounded, color: AppTheme.primaryAccent, size: 18),
                         const SizedBox(width: 8),
                         Text(
-                          'SKILLS & TALENTS',
+                          'SKILLS/TALENTS',
                           style: GoogleFonts.outfit(
                             fontSize: 15,
                             fontWeight: FontWeight.bold,

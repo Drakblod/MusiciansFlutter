@@ -293,7 +293,7 @@ class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
                 _buildMenuItem(
                   context,
                   icon: Icons.grid_view_rounded,
-                  title: 'Choose Bubbles',
+                  title: 'Home View Shortcuts',
                   color: Colors.purpleAccent,
                   onTap: () {
                     Navigator.pop(context); // Close settings menu
@@ -359,7 +359,7 @@ class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Text(
-                      'HOME BUBBLES',
+                      'HOME VIEW SHORTCUTS',
                       textAlign: TextAlign.center,
                       style: GoogleFonts.outfit(
                         fontSize: 18,
@@ -370,7 +370,7 @@ class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Choose exactly 3 shortcuts to show as bubbles at the top of your Home screen.',
+                      'Choose exactly 3 shortcuts to show at the top of your Home screen.',
                       textAlign: TextAlign.center,
                       style: GoogleFonts.inter(
                         fontSize: 13,
@@ -412,7 +412,7 @@ class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
                                       } else {
                                         ScaffoldMessenger.of(context).showSnackBar(
                                           const SnackBar(
-                                            content: Text('You can select exactly 3 bubbles.'),
+                                            content: Text('You can select exactly 3 shortcuts.'),
                                             duration: Duration(seconds: 1),
                                             backgroundColor: AppTheme.warning,
                                           ),
@@ -459,7 +459,7 @@ class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
                                       Navigator.pop(context);
                                       ScaffoldMessenger.of(context).showSnackBar(
                                         const SnackBar(
-                                          content: Text('Home bubbles updated successfully!'),
+                                          content: Text('Home View shortcuts updated successfully!'),
                                           backgroundColor: AppTheme.success,
                                         ),
                                       );

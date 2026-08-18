@@ -3035,7 +3035,16 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
 
     final startLocal = group.overallStart;
     final endLocal = group.overallEnd;
-    final dateRangeStr = '${DateFormat('EEE, MMM d').format(startLocal)} – ${DateFormat('EEE, MMM d').format(endLocal)}';
+    final isSameDay = startLocal.year == endLocal.year &&
+        startLocal.month == endLocal.month &&
+        startLocal.day == endLocal.day;
+
+    final String dateRangeStr;
+    if (isSameDay) {
+      dateRangeStr = DateFormat('EEE, MMM d').format(startLocal);
+    } else {
+      dateRangeStr = '${DateFormat('EEE, MMM d').format(startLocal)} – ${DateFormat('EEE, MMM d').format(endLocal)}';
+    }
 
     return GestureDetector(
       onTap: () {
@@ -3074,7 +3083,7 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                           border: Border.all(color: Colors.purpleAccent.withOpacity(0.4)),
                         ),
                         child: Text(
-                          'Multi-Part / Tour',
+                          'Tour',
                           style: GoogleFonts.inter(
                             fontSize: 10,
                             color: Colors.purpleAccent,

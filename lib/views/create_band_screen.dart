@@ -318,7 +318,7 @@ class _CreateBandScreenState extends State<CreateBandScreen> {
                             const Icon(Icons.music_note_rounded, color: AppTheme.primaryAccent, size: 18),
                             const SizedBox(width: 8),
                             Text(
-                              'GENRES & BAND TYPES',
+                              'BAND TYPES',
                               style: GoogleFonts.outfit(
                                 fontSize: 15,
                                 fontWeight: FontWeight.bold,
@@ -628,7 +628,7 @@ class _CreateBandScreenState extends State<CreateBandScreen> {
 
               // About/Description
               Text(
-                'About the Band',
+                'About',
                 style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
               ),
               const SizedBox(height: 8),
