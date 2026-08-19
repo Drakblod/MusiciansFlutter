@@ -649,7 +649,6 @@ class _FindCollabsScreenState extends State<FindCollabsScreen> {
                         style: GoogleFonts.inter(
                           fontSize: 13,
                           color: AppTheme.textSecondary,
-                          fontStyle: FontStyle.italic,
                         ),
                       )
                     else
@@ -863,6 +862,7 @@ class _FindCollabsScreenState extends State<FindCollabsScreen> {
                                 children: _filteredFavorites.map((fav) {
                                   final isChecked = _selectedFavorites[fav.userId] ?? false;
                                   return CheckboxListTile(
+                                    controlAffinity: ListTileControlAffinity.leading,
                                     value: isChecked,
                                     activeColor: AppTheme.primaryAccent,
                                     checkColor: Colors.white,

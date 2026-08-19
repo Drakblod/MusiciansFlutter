@@ -917,7 +917,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
             ),
             const SizedBox(height: 12),
 
-            // Gig/Rehearsal Details card
+            // Gig/Event Details card
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
@@ -933,7 +933,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
                       const Icon(Icons.calendar_today_rounded, color: AppTheme.primaryAccent, size: 18),
                       const SizedBox(width: 8),
                       Text(
-                        'Gig/Rehearsal Details',
+                        'Gig/Event Details',
                         style: GoogleFonts.outfit(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
@@ -946,7 +946,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
 
                   // Event Description Text Input
                   Text(
-                    'Gig / Event Details',
+                    'Gig/Event Details',
                     style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
                   ),
                   SizedBox(height: 8),

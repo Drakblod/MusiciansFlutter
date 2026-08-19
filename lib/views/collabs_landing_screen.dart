@@ -634,7 +634,6 @@ class _CollabsLandingScreenState extends State<CollabsLandingScreen> {
                         style: GoogleFonts.inter(
                           fontSize: 13,
                           color: AppTheme.textSecondary,
-                          fontStyle: FontStyle.italic,
                         ),
                       )
                     else
@@ -848,6 +847,7 @@ class _CollabsLandingScreenState extends State<CollabsLandingScreen> {
                                 children: _filteredFavorites.map((fav) {
                                   final isChecked = _selectedFavorites[fav.userId] ?? false;
                                   return CheckboxListTile(
+                                    controlAffinity: ListTileControlAffinity.leading,
                                     value: isChecked,
                                     activeColor: AppTheme.primaryAccent,
                                     checkColor: Colors.white,

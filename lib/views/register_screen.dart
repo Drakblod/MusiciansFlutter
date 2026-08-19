@@ -204,6 +204,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   decoration: const InputDecoration(
                     labelText: 'Profile Name',
                     hintText: 'Enter your name or stage name',
+                    helperText:
+                        'Preferably use your real name to make it easier for users to find you',
+                    helperMaxLines: 3,
                     prefixIcon: Icon(
                       Icons.person_outline_rounded,
                       color: AppTheme.textSecondary,
