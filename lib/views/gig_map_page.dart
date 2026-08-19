@@ -11,6 +11,8 @@ import '../config/feature_flags.dart';
 import '../models/mock_live_rehearsal.dart';
 import '../data/mock_live_rehearsals.dart';
 import '../services/mock_rehearsal_audio_controller.dart';
+import '../widgets/map_crosshair.dart';
+import '../utils/map_crosshair_targeting.dart';
 
 class GigMapPage extends StatefulWidget {
   const GigMapPage({super.key});
@@ -29,6 +31,14 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
   // Prototype Mock Live Rehearsal Audio State
   MockRehearsalAudioController? _audioController;
   MockLiveRehearsal? _selectedRehearsal;
+
+  // MAP-02 Automatic Crosshair Targeting State
+  CameraPosition _currentCameraPosition = const CameraPosition(
+    target: LatLng(59.3293, 18.0686),
+    zoom: 5.5,
+  );
+  bool _isAutoSelected = false;
+  String? _manuallyClosedTargetId;
 
   static const String _darkMapStyle = '''
 [
@@ -264,7 +274,63 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
+        final appState = Provider.of<AppState>(context, listen: false);
+        _evaluateCrosshairTargeting(_getFilteredGigs(appState.currentUserProfile));
       }
+    }
+  }
+
+  void _evaluateCrosshairTargeting(List<SubRequest> filteredGigs) {
+    final candidates = <MapTargetCandidate>[];
+
+    for (final gig in filteredGigs) {
+      if (gig.latitude != null && gig.longitude != null) {
+        candidates.add(MapTargetCandidate.fromSubRequest(gig));
+      }
+    }
+
+    if (FeatureFlags.enableMockLiveRehearsals) {
+      for (final reh in mockLiveRehearsals) {
+        candidates.add(MapTargetCandidate.fromRehearsal(reh));
+      }
+    }
+
+    final bestTarget = MapCrosshairTargeting.findNearestTarget(
+      cameraLat: _currentCameraPosition.target.latitude,
+      cameraLng: _currentCameraPosition.target.longitude,
+      zoom: _currentCameraPosition.zoom,
+      candidates: candidates,
+    );
+
+    if (bestTarget == null) {
+      if (_isAutoSelected && (_selectedGig != null || _selectedRehearsal != null)) {
+        setState(() {
+          _selectedGig = null;
+          _selectedRehearsal = null;
+          _isAutoSelected = false;
+        });
+      }
+      return;
+    }
+
+    if (bestTarget.id == _manuallyClosedTargetId) {
+      return;
+    }
+
+    final currentSelectedId = _selectedGig?.id ?? _selectedGig?.subRequestId ?? _selectedRehearsal?.id;
+
+    if (bestTarget.id != currentSelectedId) {
+      setState(() {
+        if (bestTarget.kind == MapTargetKind.subRequest) {
+          _selectedGig = bestTarget.subRequest;
+          _selectedRehearsal = null;
+        } else {
+          _selectedRehearsal = bestTarget.rehearsal;
+          _selectedGig = null;
+        }
+        _isAutoSelected = true;
+        _manuallyClosedTargetId = null;
+      });
     }
   }
 
@@ -324,6 +390,8 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
           setState(() {
             _selectedGig = gig;
             _selectedRehearsal = null;
+            _isAutoSelected = false;
+            _manuallyClosedTargetId = null;
           });
         },
       );
@@ -346,6 +414,8 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
           setState(() {
             _selectedRehearsal = rehearsal;
             _selectedGig = null;
+            _isAutoSelected = false;
+            _manuallyClosedTargetId = null;
           });
         },
       );
@@ -405,6 +475,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                       }
                     },
                     onCameraMove: (position) {
+                      _currentCameraPosition = position;
                       if (FeatureFlags.enableMockLiveRehearsals) {
                         _audioController?.updateCameraTarget(position.target);
                       }
@@ -413,6 +484,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                       if (FeatureFlags.enableMockLiveRehearsals && _mapController != null) {
                         _mapController?.getVisibleRegion();
                       }
+                      _evaluateCrosshairTargeting(filteredGigs);
                     },
                     markers: markers,
                     mapToolbarEnabled: false,
@@ -420,60 +492,20 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                     myLocationButtonEnabled: false,
                     onTap: (_) {
                       // Deselect gig and rehearsal on tapping map empty space
+                      final closedId = _selectedGig?.id ?? _selectedGig?.subRequestId ?? _selectedRehearsal?.id;
                       setState(() {
                         _selectedGig = null;
                         _selectedRehearsal = null;
+                        _isAutoSelected = false;
+                        _manuallyClosedTargetId = closedId;
                       });
                     },
                   ),
 
             // Center Map Crosshair Overlay
             Center(
-              child: IgnorePointer(
-                child: Container(
-                  width: 38,
-                  height: 38,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: AppTheme.primaryAccent.withOpacity(0.65),
-                      width: 1.5,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppTheme.primaryAccent.withOpacity(0.25),
-                        blurRadius: 10,
-                        spreadRadius: 1,
-                      ),
-                    ],
-                  ),
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      // Center dot
-                      Container(
-                        width: 6,
-                        height: 6,
-                        decoration: const BoxDecoration(
-                          color: AppTheme.primaryAccent,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                      // Horizontal reticle line
-                      Container(
-                        width: 18,
-                        height: 1.5,
-                        color: AppTheme.primaryAccent.withOpacity(0.75),
-                      ),
-                      // Vertical reticle line
-                      Container(
-                        width: 1.5,
-                        height: 18,
-                        color: AppTheme.primaryAccent.withOpacity(0.75),
-                      ),
-                    ],
-                  ),
-                ),
+              child: MapCrosshair(
+                isTargetAcquired: _selectedGig != null || _selectedRehearsal != null,
               ),
             ),
 
@@ -656,8 +688,11 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                 IconButton(
                   icon: const Icon(Icons.close_rounded, color: AppTheme.textSecondary, size: 20),
                   onPressed: () {
+                    final closedId = _selectedRehearsal?.id;
                     setState(() {
                       _selectedRehearsal = null;
+                      _isAutoSelected = false;
+                      _manuallyClosedTargetId = closedId;
                     });
                   },
                 ),
@@ -715,6 +750,8 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
             _selectedFilter = label;
             _selectedGig = null;
             _selectedRehearsal = null;
+            _isAutoSelected = false;
+            _manuallyClosedTargetId = null;
           });
         },
         child: Container(
@@ -788,8 +825,11 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                 ),
                 GestureDetector(
                   onTap: () {
+                    final closedId = _selectedGig?.id ?? _selectedGig?.subRequestId;
                     setState(() {
                       _selectedGig = null;
+                      _isAutoSelected = false;
+                      _manuallyClosedTargetId = closedId;
                     });
                   },
                   child: Container(
