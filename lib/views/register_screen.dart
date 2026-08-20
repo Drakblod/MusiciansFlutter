@@ -307,7 +307,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     child: DropdownButtonFormField<String>(
                       initialValue: _selectedUserType,
                       decoration: const InputDecoration(
-                        labelText: 'Primary Skill / Talent (Select 1)',
+                        labelText: 'Primary Skill/Talent (Select 1)',
                         filled: false,
                         border: InputBorder.none,
                         enabledBorder: InputBorder.none,

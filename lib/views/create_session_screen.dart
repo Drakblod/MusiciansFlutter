@@ -471,7 +471,7 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
 
                 // Genres Selector
                 Text(
-                  'Genres / Styles',
+                  'Genres/Band Types',
                   style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
                 ),
                 const SizedBox(height: 10),

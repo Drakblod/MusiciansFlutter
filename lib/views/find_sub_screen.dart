@@ -289,13 +289,13 @@ class _FindSubScreenState extends State<FindSubScreen> {
       'Mezzo Soprano', 'Contralto', 'Counter Tenor',
       'Male Lead Vocals', 'Female Lead vocals', 'Male Backing vocals', 'Female Backing vocals'
     ],
-    '🎧 Songwriters & Producers': [
+    '🎧 Songwriters/Producers': [
       'Songwriter', 'Producer', 'Composer', 'Lyricist', 'Beatmaker', 'DJ'
     ],
-    '🎛️ Studios & Engineers': [
+    '🎛️ Studios/Engineers': [
       'Studio', 'Home Studio', 'Recording Engineer', 'Mix engineer', 'Live Engineer'
     ],
-    '💼 PR & Management': [
+    '💼 PR/Management': [
       'Manager', 'Promotor', 'Agency', 'Other'
     ],
   };
@@ -303,7 +303,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
   Future<void> _openInstrumentPicker() async {
     final result = await SearchableCategoryMultiSelectSheet.show(
       context: context,
-      title: 'Instrument / Skills',
+      title: 'Instrument/Skills',
       categoryMap: _allSkillsCategoryMap,
       initialSelected: [_selectedInstrument],
       maxSelection: 1,
@@ -857,7 +857,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
                           const Icon(Icons.music_note_rounded, color: AppTheme.primaryAccent, size: 18),
                           const SizedBox(width: 8),
                           Text(
-                            'INSTRUMENT / SKILLS',
+                            'INSTRUMENT/SKILLS',
                             style: GoogleFonts.outfit(
                               fontSize: 15,
                               fontWeight: FontWeight.bold,

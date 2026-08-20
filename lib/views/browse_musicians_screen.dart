@@ -54,7 +54,7 @@ class _BrowseMusiciansScreenState extends State<BrowseMusiciansScreen> {
       'Mastering Engineer',
       'Live Engineer'
     ],
-    'PR & MANAGEMENT': [
+    'PR/MANAGEMENT': [
       'Managers',
       'Agencies',
       'Consultants',

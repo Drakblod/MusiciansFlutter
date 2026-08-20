@@ -150,7 +150,7 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                           ),
                           const SizedBox(height: 8),
 
-                          // Location & Level Row
+                          // Location
                           Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
@@ -167,27 +167,6 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                                   color: AppTheme.textSecondary,
                                 ),
                               ),
-                              if (user.level != null && user.level!.isNotEmpty) ...[
-                                const SizedBox(width: 8),
-                                Text('•', style: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 12)),
-                                const SizedBox(width: 8),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: AppTheme.primaryAccent.withOpacity(0.15),
-                                    borderRadius: BorderRadius.circular(10),
-                                    border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.4), width: 1),
-                                  ),
-                                  child: Text(
-                                    user.level!,
-                                    style: GoogleFonts.inter(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.bold,
-                                      color: AppTheme.primaryAccent,
-                                    ),
-                                  ),
-                                ),
-                              ],
                             ],
                           ),
                           if (user.genres.isNotEmpty) ...[
@@ -480,6 +459,36 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                   ),
                 );
               }).toList(),
+            ),
+            const SizedBox(height: 24),
+          ],
+
+          // 4. Level
+          if (user.level != null && user.level!.isNotEmpty) ...[
+            Text(
+              'Level',
+              style: GoogleFonts.outfit(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: AppTheme.cardBackground,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.4), width: 1),
+              ),
+              child: Text(
+                user.level!,
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  color: Colors.white,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
             ),
             const SizedBox(height: 24),
           ],

@@ -80,13 +80,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       'Mezzo Soprano', 'Contralto', 'Counter Tenor',
       'Male Lead Vocals', 'Female Lead vocals', 'Male Backing vocals', 'Female Backing vocals'
     ],
-    '🎧 Songwriters & Producers': [
+    '🎧 Songwriters/Producers': [
       'Songwriter', 'Producer', 'Composer', 'Lyricist', 'Beatmaker', 'DJ'
     ],
-    '🎛️ Studios & Engineers': [
+    '🎛️ Studios/Engineers': [
       'Studio', 'Home Studio', 'Recording Engineer', 'Mix engineer', 'Live Engineer'
     ],
-    '💼 PR & Management': [
+    '💼 PR/Management': [
       'Manager', 'Promotor', 'Agency', 'Other'
     ],
   };
@@ -179,7 +179,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   Future<void> _openPrimarySkillPicker() async {
     final result = await SearchableCategoryMultiSelectSheet.show(
       context: context,
-      title: 'Primary Skill / Talent (Select 1)',
+      title: 'Primary Skill/Talent (Select 1)',
       categoryMap: _allSkillsCategoryMap,
       initialSelected: _primarySkills,
       maxSelection: 1,
@@ -224,7 +224,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   Future<void> _openGenrePicker() async {
     final result = await SearchableCategoryMultiSelectSheet.show(
       context: context,
-      title: 'Genres & Band Types',
+      title: 'Genres/Band Types',
       categoryMap: _genreCategoryMap,
       initialSelected: _selectedGenres,
     );
@@ -855,9 +855,19 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               const SizedBox(height: 20),
 
               // 3. Location (City, Country)
-              Text(
-                'Location (City, Country)',
-                style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+              Text.rich(
+                TextSpan(
+                  children: [
+                    TextSpan(
+                      text: 'Location',
+                      style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                    ),
+                    TextSpan(
+                      text: ' (City, Country)',
+                      style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.normal, color: Colors.white),
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(height: 8),
               TextFormField(
@@ -865,47 +875,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
                 decoration: const InputDecoration(
                   hintText: 'Stockholm, Sweden',
-                ),
-              ),
-              const SizedBox(height: 20),
-
-              // 4. Level
-              Text(
-                'Level',
-                style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
-              ),
-              const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                decoration: BoxDecoration(
-                  color: AppTheme.inputBackground,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
-                ),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButtonFormField<String>(
-                    value: _level,
-                    dropdownColor: AppTheme.cardBackground,
-                    style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
-                    icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppTheme.textSecondary),
-                    decoration: const InputDecoration(
-                      border: InputBorder.none,
-                      contentPadding: EdgeInsets.zero,
-                    ),
-                    items: _levels.map((String val) {
-                      return DropdownMenuItem<String>(
-                        value: val,
-                        child: Text(val),
-                      );
-                    }).toList(),
-                    onChanged: (newValue) {
-                      if (newValue != null) {
-                        setState(() {
-                          _level = newValue;
-                        });
-                      }
-                    },
-                  ),
                 ),
               ),
               const SizedBox(height: 24),
@@ -942,9 +911,19 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          'Primary Skill / Talent (Select 1)',
-                          style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white70),
+                        Text.rich(
+                          TextSpan(
+                            children: [
+                              TextSpan(
+                                text: 'Primary Skill/Talent',
+                                style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white70),
+                              ),
+                              TextSpan(
+                                text: ' (Select 1)',
+                                style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.normal, color: Colors.white70),
+                              ),
+                            ],
+                          ),
                         ),
                         AnimatedTapDetector(
                           onTap: _openPrimarySkillPicker,
@@ -960,7 +939,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       InkWell(
                         onTap: _openPrimarySkillPicker,
                         child: Text(
-                          'Tap to select your Primary Skill / Talent...',
+                          'Tap to select your Primary Skill/Talent...',
                           style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textMuted, fontStyle: FontStyle.italic),
                         ),
                       )
@@ -990,9 +969,19 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          'Secondary Skills (Optional)',
-                          style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white70),
+                        Text.rich(
+                          TextSpan(
+                            children: [
+                              TextSpan(
+                                text: 'Secondary Skills',
+                                style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white70),
+                              ),
+                              TextSpan(
+                                text: ' (Optional)',
+                                style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.normal, color: Colors.white70),
+                              ),
+                            ],
+                          ),
                         ),
                         AnimatedTapDetector(
                           onTap: _openSecondarySkillsPicker,
@@ -1040,9 +1029,19 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          'Other Skills (Optional)',
-                          style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white70),
+                        Text.rich(
+                          TextSpan(
+                            children: [
+                              TextSpan(
+                                text: 'Other Skills',
+                                style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white70),
+                              ),
+                              TextSpan(
+                                text: ' (Optional)',
+                                style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.normal, color: Colors.white70),
+                              ),
+                            ],
+                          ),
                         ),
                         AnimatedTapDetector(
                           onTap: _openOtherSkillsPicker,
@@ -1105,7 +1104,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                             const Icon(Icons.music_note_rounded, color: AppTheme.primaryAccent, size: 18),
                             const SizedBox(width: 8),
                             Text(
-                              'GENRES & STYLES',
+                              'GENRES/BAND TYPES',
                               style: GoogleFonts.outfit(
                                 fontSize: 15,
                                 fontWeight: FontWeight.bold,
@@ -1129,7 +1128,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       InkWell(
                         onTap: _openGenrePicker,
                         child: Text(
-                          'No genres selected yet. Tap to add...',
+                          'Tap to select Genres/Band Types',
                           style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textMuted, fontStyle: FontStyle.italic),
                         ),
                       )
@@ -1153,6 +1152,47 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         }).toList(),
                       ),
                   ],
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // 4. Level
+              Text(
+                'Level',
+                style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+              ),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppTheme.inputBackground,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButtonFormField<String>(
+                    value: _level,
+                    dropdownColor: AppTheme.cardBackground,
+                    style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
+                    icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppTheme.textSecondary),
+                    decoration: const InputDecoration(
+                      border: InputBorder.none,
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                    items: _levels.map((String val) {
+                      return DropdownMenuItem<String>(
+                        value: val,
+                        child: Text(val),
+                      );
+                    }).toList(),
+                    onChanged: (newValue) {
+                      if (newValue != null) {
+                        setState(() {
+                          _level = newValue;
+                        });
+                      }
+                    },
+                  ),
                 ),
               ),
               const SizedBox(height: 24),

@@ -43,10 +43,10 @@ class _CollabsLandingScreenState extends State<CollabsLandingScreen> {
 
   // Master Skills & Talents Category Map
   static final Map<String, List<String>> _allSkillsCategoryMap = {
-    '🎼 Songwriters & Producers': [
+    '🎼 Songwriters/Producers': [
       'Songwriter', 'Composer', 'Lyricist', 'Beatmaker', 'Producer', 'Co-Writer'
     ],
-    '🎛️ Studios & Engineers': [
+    '🎛️ Studios/Engineers': [
       'Studio', 'Home Studio', 'Recording Engineer', 'Mix Engineer', 'Live Engineer', 'Mastering Engineer'
     ],
     '🎷 Woodwinds': [
@@ -77,7 +77,7 @@ class _CollabsLandingScreenState extends State<CollabsLandingScreen> {
       'Soprano', 'Mezzo Soprano', 'Contralto',
       'Counter Tenor', 'Tenor', 'Baritone', 'Bass'
     ],
-    '📢 PR & Management': [
+    '📢 PR/Management': [
       'Manager', 'Promotor', 'Agency', 'PR Specialist'
     ],
   };
@@ -525,9 +525,9 @@ class _CollabsLandingScreenState extends State<CollabsLandingScreen> {
             // 1. Major Category Selector (Songwriters/Producers, Studios/Engineers, Sessions)
             Row(
               children: [
-                _buildCategoryButton('Songwriters/Producers', 'Songwriters /\nProducers'),
+                _buildCategoryButton('Songwriters/Producers', 'Songwriters/\nProducers'),
                 const SizedBox(width: 6),
-                _buildCategoryButton('Studios/Engineers', 'Studios /\nEngineers'),
+                _buildCategoryButton('Studios/Engineers', 'Studios/\nEngineers'),
                 const SizedBox(width: 6),
                 _buildCategoryButton('Sessions', 'Sessions'),
               ],
@@ -688,9 +688,19 @@ class _CollabsLandingScreenState extends State<CollabsLandingScreen> {
                   const SizedBox(height: 16),
 
                   // Location (City, Country)
-                  Text(
-                    'Location (City, Country)',
-                    style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
+                  Text.rich(
+                    TextSpan(
+                      children: [
+                        TextSpan(
+                          text: 'Location',
+                          style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
+                        ),
+                        TextSpan(
+                          text: ' (City, Country)',
+                          style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.normal, color: Colors.white),
+                        ),
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 6),
                   TextFormField(

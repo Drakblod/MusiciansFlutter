@@ -301,7 +301,7 @@ class _ProducerSearchScreenState extends State<ProducerSearchScreen> {
                     const SizedBox(height: 12),
                     // Genre selector
                     _buildDropdownFilter(
-                      label: 'Genre / Style',
+                      label: 'Genres/Band Types',
                       value: _selectedGenre,
                       items: _genres,
                       onChanged: (val) {

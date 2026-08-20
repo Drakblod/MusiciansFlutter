@@ -148,7 +148,7 @@ class _CreateBandScreenState extends State<CreateBandScreen> {
   Future<void> _openGenrePicker() async {
     final result = await SearchableCategoryMultiSelectSheet.show(
       context: context,
-      title: 'Genres & Band Types',
+      title: 'Genres/Band Types',
       categoryMap: _genreCategoryMap,
       initialSelected: _selectedGenres,
     );
@@ -318,7 +318,7 @@ class _CreateBandScreenState extends State<CreateBandScreen> {
                             const Icon(Icons.music_note_rounded, color: AppTheme.primaryAccent, size: 18),
                             const SizedBox(width: 8),
                             Text(
-                              'BAND TYPES',
+                              'GENRES/BAND TYPES',
                               style: GoogleFonts.outfit(
                                 fontSize: 15,
                                 fontWeight: FontWeight.bold,
@@ -342,7 +342,7 @@ class _CreateBandScreenState extends State<CreateBandScreen> {
                       InkWell(
                         onTap: _openGenrePicker,
                         child: Text(
-                          'No genres selected yet. Tap to add...',
+                          'Tap to select Genres/Band Types',
                           style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textMuted, fontStyle: FontStyle.italic),
                         ),
                       )
@@ -412,9 +412,19 @@ class _CreateBandScreenState extends State<CreateBandScreen> {
               const SizedBox(height: 20),
 
               // Location (City, Country)
-              Text(
-                'Location (City, Country)',
-                style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+              Text.rich(
+                TextSpan(
+                  children: [
+                    TextSpan(
+                      text: 'Location',
+                      style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                    ),
+                    TextSpan(
+                      text: ' (City, Country)',
+                      style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.normal, color: Colors.white),
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(height: 8),
               TextFormField(
@@ -433,9 +443,19 @@ class _CreateBandScreenState extends State<CreateBandScreen> {
               const SizedBox(height: 20),
 
               // Rehearsal Location (if any)
-              Text(
-                'Rehearsal Location (if any)',
-                style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+              Text.rich(
+                TextSpan(
+                  children: [
+                    TextSpan(
+                      text: 'Rehearsal Location',
+                      style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                    ),
+                    TextSpan(
+                      text: ' (if any)',
+                      style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.normal, color: Colors.white),
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(height: 8),
               TextFormField(
@@ -448,9 +468,19 @@ class _CreateBandScreenState extends State<CreateBandScreen> {
               const SizedBox(height: 20),
 
               // Map view location (if other than Rehearsal Location)
-              Text(
-                'Map view location (if other than Rehearsal Location)',
-                style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+              Text.rich(
+                TextSpan(
+                  children: [
+                    TextSpan(
+                      text: 'Map view location',
+                      style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                    ),
+                    TextSpan(
+                      text: ' (if other than Rehearsal Location)',
+                      style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.normal, color: Colors.white),
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(height: 4),
               Text(

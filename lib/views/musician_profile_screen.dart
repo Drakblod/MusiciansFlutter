@@ -212,7 +212,7 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
                   ),
                   const SizedBox(height: 6),
 
-                  // Location & Level Row
+                  // Location
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -229,40 +229,6 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
                           color: AppTheme.textSecondary,
                         ),
                       ),
-                      if (widget.musician.level != null &&
-                          widget.musician.level!.isNotEmpty) ...[
-                        const SizedBox(width: 8),
-                        Text(
-                          '•',
-                          style: GoogleFonts.inter(
-                            color: AppTheme.textSecondary,
-                            fontSize: 13,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppTheme.primaryAccent.withOpacity(0.15),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: AppTheme.primaryAccent.withOpacity(0.4),
-                              width: 1,
-                            ),
-                          ),
-                          child: Text(
-                            widget.musician.level!,
-                            style: GoogleFonts.inter(
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
-                              color: AppTheme.primaryAccent,
-                            ),
-                          ),
-                        ),
-                      ],
                     ],
                   ),
                   if (widget.musician.genres.isNotEmpty) ...[
@@ -527,6 +493,43 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
                           ),
                         );
                       }).toList(),
+                    ),
+                    const SizedBox(height: 24),
+                  ],
+
+                  // 4. Level
+                  if (widget.musician.level != null &&
+                      widget.musician.level!.isNotEmpty) ...[
+                    Text(
+                      'Level',
+                      style: GoogleFonts.outfit(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppTheme.cardBackground,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: AppTheme.primaryAccent.withOpacity(0.4),
+                          width: 1,
+                        ),
+                      ),
+                      child: Text(
+                        widget.musician.level!,
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          color: Colors.white,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
                     ),
                     const SizedBox(height: 24),
                   ],
