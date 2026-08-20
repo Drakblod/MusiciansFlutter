@@ -908,250 +908,300 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     const SizedBox(height: 16),
 
                     // Primary Skill (Select 1)
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text.rich(
-                          TextSpan(
+                    AnimatedTapDetector(
+                      enableFocus: true,
+                      semanticLabel: 'Primary Skill/Talent',
+                      onTap: _openPrimarySkillPicker,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              TextSpan(
-                                text: 'Primary Skill/Talent',
-                                style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white70),
+                              Text.rich(
+                                TextSpan(
+                                  children: [
+                                    TextSpan(
+                                      text: 'Primary Skill/Talent',
+                                      style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white70),
+                                    ),
+                                    TextSpan(
+                                      text: ' (Select 1)',
+                                      style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.normal, color: Colors.white70),
+                                    ),
+                                  ],
+                                ),
                               ),
-                              TextSpan(
-                                text: ' (Select 1)',
-                                style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.normal, color: Colors.white70),
-                              ),
+                              const Icon(Icons.chevron_right_rounded, color: AppTheme.textMuted, size: 20),
                             ],
                           ),
-                        ),
-                        AnimatedTapDetector(
-                          onTap: _openPrimarySkillPicker,
-                          child: Text(
-                            _primarySkills.isEmpty ? '+ Select' : 'Change',
-                            style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.primaryAccent),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    if (_primarySkills.isEmpty)
-                      InkWell(
-                        onTap: _openPrimarySkillPicker,
-                        child: Text(
-                          'Tap to select your Primary Skill/Talent...',
-                          style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textMuted, fontStyle: FontStyle.italic),
-                        ),
-                      )
-                    else
-                      Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
-                        children: _primarySkills.map((skill) {
-                          return InputChip(
-                            label: Text(skill),
-                            selected: false,
-                            onPressed: _openPrimarySkillPicker,
-                            backgroundColor: AppTheme.primaryAccent.withOpacity(0.25),
-                            labelStyle: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                            side: const BorderSide(color: AppTheme.primaryAccent, width: 1),
-                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
-                          );
-                        }).toList(),
+                          const SizedBox(height: 8),
+                          if (_primarySkills.isEmpty)
+                            Text(
+                              'Tap to select your Primary Skill/Talent...',
+                              style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textMuted, fontStyle: FontStyle.italic),
+                            )
+                          else
+                            Wrap(
+                              spacing: 6,
+                              runSpacing: 6,
+                              children: _primarySkills.map((skill) {
+                                return InputChip(
+                                  label: Text(skill),
+                                  selected: false,
+                                  onPressed: _openPrimarySkillPicker,
+                                  backgroundColor: AppTheme.primaryAccent.withOpacity(0.25),
+                                  labelStyle: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                                  side: const BorderSide(color: AppTheme.primaryAccent, width: 1),
+                                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+                                );
+                              }).toList(),
+                            ),
+                        ],
                       ),
+                    ),
 
                     const SizedBox(height: 16),
                     const Divider(color: Color(0xFF231F45), height: 1),
                     const SizedBox(height: 16),
 
                     // Secondary Skills (Optional)
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text.rich(
-                          TextSpan(
+                    AnimatedTapDetector(
+                      enableFocus: true,
+                      semanticLabel: 'Secondary Skills',
+                      onTap: _openSecondarySkillsPicker,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              TextSpan(
-                                text: 'Secondary Skills',
-                                style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white70),
+                              Text.rich(
+                                TextSpan(
+                                  children: [
+                                    TextSpan(
+                                      text: 'Secondary Skills',
+                                      style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white70),
+                                    ),
+                                    TextSpan(
+                                      text: ' (Optional)',
+                                      style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.normal, color: Colors.white70),
+                                    ),
+                                  ],
+                                ),
                               ),
-                              TextSpan(
-                                text: ' (Optional)',
-                                style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.normal, color: Colors.white70),
+                              Row(
+                                children: [
+                                  if (_secondarySkills.isNotEmpty)
+                                    Container(
+                                      margin: const EdgeInsets.only(right: 6),
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: AppTheme.primaryAccent.withOpacity(0.2),
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Text(
+                                        '${_secondarySkills.length}',
+                                        style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.primaryAccent),
+                                      ),
+                                    ),
+                                  const Icon(Icons.chevron_right_rounded, color: AppTheme.textMuted, size: 20),
+                                ],
                               ),
                             ],
                           ),
-                        ),
-                        AnimatedTapDetector(
-                          onTap: _openSecondarySkillsPicker,
-                          child: Text(
-                            _secondarySkills.isEmpty ? '+ Add' : 'Edit (${_secondarySkills.length})',
-                            style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.primaryAccent),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    if (_secondarySkills.isEmpty)
-                      InkWell(
-                        onTap: _openSecondarySkillsPicker,
-                        child: Text(
-                          'Tap to add secondary skills...',
-                          style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textMuted, fontStyle: FontStyle.italic),
-                        ),
-                      )
-                    else
-                      Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
-                        children: _secondarySkills.map((skill) {
-                          return InputChip(
-                            label: Text(skill),
-                            selected: false,
-                            onDeleted: () => setState(() => _secondarySkills.remove(skill)),
-                            deleteIcon: const Icon(Icons.close_rounded, size: 14, color: Colors.white70),
-                            backgroundColor: const Color(0xFF1B1735),
-                            labelStyle: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w500, color: Colors.white70),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                            side: const BorderSide(color: Color(0xFF38325E), width: 1),
-                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
-                            visualDensity: VisualDensity.compact,
-                          );
-                        }).toList(),
+                          const SizedBox(height: 8),
+                          if (_secondarySkills.isEmpty)
+                            Text(
+                              'Tap to add secondary skills...',
+                              style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textMuted, fontStyle: FontStyle.italic),
+                            )
+                          else
+                            Wrap(
+                              spacing: 6,
+                              runSpacing: 6,
+                              children: _secondarySkills.map((skill) {
+                                return InputChip(
+                                  label: Text(skill),
+                                  selected: false,
+                                  onDeleted: () => setState(() => _secondarySkills.remove(skill)),
+                                  deleteIcon: const Icon(Icons.close_rounded, size: 14, color: Colors.white70),
+                                  backgroundColor: const Color(0xFF1B1735),
+                                  labelStyle: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w500, color: Colors.white70),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                                  side: const BorderSide(color: Color(0xFF38325E), width: 1),
+                                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+                                  visualDensity: VisualDensity.compact,
+                                );
+                              }).toList(),
+                            ),
+                        ],
                       ),
+                    ),
 
                     const SizedBox(height: 16),
                     const Divider(color: Color(0xFF231F45), height: 1),
                     const SizedBox(height: 16),
 
                     // Other Skills (Optional)
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text.rich(
-                          TextSpan(
+                    AnimatedTapDetector(
+                      enableFocus: true,
+                      semanticLabel: 'Other Skills',
+                      onTap: _openOtherSkillsPicker,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              TextSpan(
-                                text: 'Other Skills',
-                                style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white70),
+                              Text.rich(
+                                TextSpan(
+                                  children: [
+                                    TextSpan(
+                                      text: 'Other Skills',
+                                      style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white70),
+                                    ),
+                                    TextSpan(
+                                      text: ' (Optional)',
+                                      style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.normal, color: Colors.white70),
+                                    ),
+                                  ],
+                                ),
                               ),
-                              TextSpan(
-                                text: ' (Optional)',
-                                style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.normal, color: Colors.white70),
+                              Row(
+                                children: [
+                                  if (_otherSkills.isNotEmpty)
+                                    Container(
+                                      margin: const EdgeInsets.only(right: 6),
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: AppTheme.primaryAccent.withOpacity(0.2),
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Text(
+                                        '${_otherSkills.length}',
+                                        style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.primaryAccent),
+                                      ),
+                                    ),
+                                  const Icon(Icons.chevron_right_rounded, color: AppTheme.textMuted, size: 20),
+                                ],
                               ),
                             ],
                           ),
-                        ),
-                        AnimatedTapDetector(
-                          onTap: _openOtherSkillsPicker,
-                          child: Text(
-                            _otherSkills.isEmpty ? '+ Add' : 'Edit (${_otherSkills.length})',
-                            style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.primaryAccent),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    if (_otherSkills.isEmpty)
-                      InkWell(
-                        onTap: _openOtherSkillsPicker,
-                        child: Text(
-                          'Tap to add other skills...',
-                          style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textMuted, fontStyle: FontStyle.italic),
-                        ),
-                      )
-                    else
-                      Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
-                        children: _otherSkills.map((skill) {
-                          return InputChip(
-                            label: Text(skill),
-                            selected: false,
-                            onDeleted: () => setState(() => _otherSkills.remove(skill)),
-                            deleteIcon: const Icon(Icons.close_rounded, size: 14, color: Colors.white70),
-                            backgroundColor: const Color(0xFF1B1735),
-                            labelStyle: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w500, color: Colors.white70),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                            side: const BorderSide(color: Color(0xFF38325E), width: 1),
-                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
-                            visualDensity: VisualDensity.compact,
-                          );
-                        }).toList(),
+                          const SizedBox(height: 8),
+                          if (_otherSkills.isEmpty)
+                            Text(
+                              'Tap to add other skills...',
+                              style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textMuted, fontStyle: FontStyle.italic),
+                            )
+                          else
+                            Wrap(
+                              spacing: 6,
+                              runSpacing: 6,
+                              children: _otherSkills.map((skill) {
+                                return InputChip(
+                                  label: Text(skill),
+                                  selected: false,
+                                  onDeleted: () => setState(() => _otherSkills.remove(skill)),
+                                  deleteIcon: const Icon(Icons.close_rounded, size: 14, color: Colors.white70),
+                                  backgroundColor: const Color(0xFF1B1735),
+                                  labelStyle: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w500, color: Colors.white70),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                                  side: const BorderSide(color: Color(0xFF38325E), width: 1),
+                                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+                                  visualDensity: VisualDensity.compact,
+                                );
+                              }).toList(),
+                            ),
+                        ],
                       ),
+                    ),
                   ],
                 ),
               ),
               const SizedBox(height: 20),
 
               // ================= GENRES CARD =================
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppTheme.cardBackground,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFF2E2A4E), width: 1.2),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
-                          children: [
-                            const Icon(Icons.music_note_rounded, color: AppTheme.primaryAccent, size: 18),
-                            const SizedBox(width: 8),
-                            Text(
-                              'GENRES/BAND TYPES',
-                              style: GoogleFonts.outfit(
-                                fontSize: 15,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                                letterSpacing: 1.2,
+              AnimatedTapDetector(
+                enableFocus: true,
+                semanticLabel: 'GENRES/BAND TYPES',
+                onTap: _openGenrePicker,
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppTheme.cardBackground,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFF2E2A4E), width: 1.2),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.music_note_rounded, color: AppTheme.primaryAccent, size: 18),
+                              const SizedBox(width: 8),
+                              Text(
+                                'GENRES/BAND TYPES',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                  letterSpacing: 1.2,
+                                ),
                               ),
-                            ),
-                          ],
-                        ),
-                        AnimatedTapDetector(
-                          onTap: _openGenrePicker,
-                          child: Text(
-                            _selectedGenres.isEmpty ? '+ Add' : 'Edit (${_selectedGenres.length})',
-                            style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.primaryAccent),
+                            ],
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    if (_selectedGenres.isEmpty)
-                      InkWell(
-                        onTap: _openGenrePicker,
-                        child: Text(
+                          Row(
+                            children: [
+                              if (_selectedGenres.isNotEmpty)
+                                Container(
+                                  margin: const EdgeInsets.only(right: 6),
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.primaryAccent.withOpacity(0.2),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Text(
+                                    '${_selectedGenres.length}',
+                                    style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.primaryAccent),
+                                  ),
+                                ),
+                              const Icon(Icons.chevron_right_rounded, color: AppTheme.textMuted, size: 20),
+                            ],
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      if (_selectedGenres.isEmpty)
+                        Text(
                           'Tap to select Genres/Band Types',
                           style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textMuted, fontStyle: FontStyle.italic),
+                        )
+                      else
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: _selectedGenres.map((genre) {
+                            return InputChip(
+                              label: Text(genre),
+                              selected: false,
+                              onDeleted: () => _toggleGenre(genre),
+                              deleteIcon: const Icon(Icons.close_rounded, size: 14, color: Colors.white70),
+                              backgroundColor: const Color(0xFF1B1735),
+                              labelStyle: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.white),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                              side: const BorderSide(color: AppTheme.primaryAccent, width: 1),
+                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+                              visualDensity: VisualDensity.compact,
+                            );
+                          }).toList(),
                         ),
-                      )
-                    else
-                      Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
-                        children: _selectedGenres.map((genre) {
-                          return InputChip(
-                            label: Text(genre),
-                            selected: false,
-                            onDeleted: () => _toggleGenre(genre),
-                            deleteIcon: const Icon(Icons.close_rounded, size: 14, color: Colors.white70),
-                            backgroundColor: const Color(0xFF1B1735),
-                            labelStyle: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.white),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                            side: const BorderSide(color: AppTheme.primaryAccent, width: 1),
-                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
-                            visualDensity: VisualDensity.compact,
-                          );
-                        }).toList(),
-                      ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
               const SizedBox(height: 24),

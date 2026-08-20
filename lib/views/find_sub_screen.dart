@@ -838,70 +838,65 @@ class _FindSubScreenState extends State<FindSubScreen> {
             ),
             const SizedBox(height: 20),
 
-            // Instrument / Skills Container Card (Exact match with Edit Profile, Edit Band & Create Band)
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: AppTheme.cardBackground,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFF2E2A4E), width: 1.2),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Row(
-                        children: [
-                          const Icon(Icons.music_note_rounded, color: AppTheme.primaryAccent, size: 18),
-                          const SizedBox(width: 8),
-                          Text(
-                            'INSTRUMENT/SKILLS',
-                            style: GoogleFonts.outfit(
-                              fontSize: 15,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                              letterSpacing: 1.2,
+            AnimatedTapDetector(
+              enableFocus: true,
+              semanticLabel: 'INSTRUMENT/SKILLS',
+              onTap: _openInstrumentPicker,
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppTheme.cardBackground,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFF2E2A4E), width: 1.2),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.music_note_rounded, color: AppTheme.primaryAccent, size: 18),
+                            const SizedBox(width: 8),
+                            Text(
+                              'INSTRUMENT/SKILLS',
+                              style: GoogleFonts.outfit(
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                                letterSpacing: 1.2,
+                              ),
                             ),
+                          ],
+                        ),
+                        const Icon(Icons.chevron_right_rounded, color: AppTheme.textMuted, size: 20),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    if (_selectedInstrument.isEmpty)
+                      Text(
+                        'No instrument selected. Tap to select...',
+                        style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textMuted, fontStyle: FontStyle.italic),
+                      )
+                    else
+                      Wrap(
+                        children: [
+                          InputChip(
+                            label: Text(_selectedInstrument),
+                            selected: false,
+                            onPressed: _openInstrumentPicker,
+                            backgroundColor: const Color(0xFF1B1735),
+                            labelStyle: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.white),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                            side: const BorderSide(color: AppTheme.primaryAccent, width: 1),
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            visualDensity: VisualDensity.compact,
                           ),
                         ],
                       ),
-                      AnimatedTapDetector(
-                        onTap: _openInstrumentPicker,
-                        child: Text(
-                          _selectedInstrument.isEmpty ? '+ Select' : 'Change',
-                          style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.primaryAccent),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  if (_selectedInstrument.isEmpty)
-                    InkWell(
-                      onTap: _openInstrumentPicker,
-                      child: Text(
-                        'No instrument selected. Tap to select...',
-                        style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textMuted, fontStyle: FontStyle.italic),
-                      ),
-                    )
-                  else
-                    Wrap(
-                      children: [
-                        InputChip(
-                          label: Text(_selectedInstrument),
-                          selected: false,
-                          onPressed: _openInstrumentPicker,
-                          backgroundColor: const Color(0xFF1B1735),
-                          labelStyle: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.white),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                          side: const BorderSide(color: AppTheme.primaryAccent, width: 1),
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                          visualDensity: VisualDensity.compact,
-                        ),
-                      ],
-                    ),
-                ],
+                  ],
+                ),
               ),
             ),
             const SizedBox(height: 24),

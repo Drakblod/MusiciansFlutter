@@ -299,73 +299,85 @@ class _CreateBandScreenState extends State<CreateBandScreen> {
               ),
               const SizedBox(height: 20),
 
-              // Genres / Band Types Container Card (Exact match with Edit Profile)
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppTheme.cardBackground,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFF2E2A4E), width: 1.2),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
-                          children: [
-                            const Icon(Icons.music_note_rounded, color: AppTheme.primaryAccent, size: 18),
-                            const SizedBox(width: 8),
-                            Text(
-                              'GENRES/BAND TYPES',
-                              style: GoogleFonts.outfit(
-                                fontSize: 15,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                                letterSpacing: 1.2,
+              AnimatedTapDetector(
+                enableFocus: true,
+                semanticLabel: 'GENRES/BAND TYPES',
+                onTap: _openGenrePicker,
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppTheme.cardBackground,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFF2E2A4E), width: 1.2),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.music_note_rounded, color: AppTheme.primaryAccent, size: 18),
+                              const SizedBox(width: 8),
+                              Text(
+                                'GENRES/BAND TYPES',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                  letterSpacing: 1.2,
+                                ),
                               ),
-                            ),
-                          ],
-                        ),
-                        AnimatedTapDetector(
-                          onTap: _openGenrePicker,
-                          child: Text(
-                            _selectedGenres.isEmpty ? '+ Add' : 'Edit (${_selectedGenres.length})',
-                            style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.primaryAccent),
+                            ],
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    if (_selectedGenres.isEmpty)
-                      InkWell(
-                        onTap: _openGenrePicker,
-                        child: Text(
+                          Row(
+                            children: [
+                              if (_selectedGenres.isNotEmpty)
+                                Container(
+                                  margin: const EdgeInsets.only(right: 6),
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.primaryAccent.withValues(alpha: 0.2),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Text(
+                                    '${_selectedGenres.length}',
+                                    style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.primaryAccent),
+                                  ),
+                                ),
+                              const Icon(Icons.chevron_right_rounded, color: AppTheme.textMuted, size: 20),
+                            ],
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      if (_selectedGenres.isEmpty)
+                        Text(
                           'Tap to select Genres/Band Types',
                           style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textMuted, fontStyle: FontStyle.italic),
+                        )
+                      else
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: _selectedGenres.map((genre) {
+                            return InputChip(
+                              label: Text(genre),
+                              selected: false,
+                              onDeleted: () => setState(() => _selectedGenres.remove(genre)),
+                              deleteIcon: const Icon(Icons.close_rounded, size: 14, color: Colors.white70),
+                              backgroundColor: const Color(0xFF1B1735),
+                              labelStyle: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.white),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                              side: const BorderSide(color: AppTheme.primaryAccent, width: 1),
+                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+                              visualDensity: VisualDensity.compact,
+                            );
+                          }).toList(),
                         ),
-                      )
-                    else
-                      Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
-                        children: _selectedGenres.map((genre) {
-                          return InputChip(
-                            label: Text(genre),
-                            selected: false,
-                            onDeleted: () => setState(() => _selectedGenres.remove(genre)),
-                            deleteIcon: const Icon(Icons.close_rounded, size: 14, color: Colors.white70),
-                            backgroundColor: const Color(0xFF1B1735),
-                            labelStyle: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.white),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                            side: const BorderSide(color: AppTheme.primaryAccent, width: 1),
-                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
-                            visualDensity: VisualDensity.compact,
-                          );
-                        }).toList(),
-                      ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
               const SizedBox(height: 20),
