@@ -17,6 +17,7 @@ class MockProfilesFirebaseService extends FirebaseService {
       UserProfile(
         userId: 'm1',
         displayName: 'Alice Sax',
+        nickname: 'alicesax99',
         userType: 'Woodwinds',
         instruments: ['Alto Sax'],
         genres: ['Jazz'],
@@ -24,6 +25,7 @@ class MockProfilesFirebaseService extends FirebaseService {
       UserProfile(
         userId: 'm2',
         displayName: 'Bob Drummer',
+        nickname: 'bobbeat',
         userType: 'Drums',
         instruments: ['Drums'],
         genres: ['Rock'],
@@ -69,13 +71,32 @@ void main() {
     await Firebase.initializeApp();
   });
 
-  group('Profiles Page Interactive Picker Popup Tests', () {
-    testWidgets('Tapping search/selection card on PROFILES page opens popup window sheet', (WidgetTester tester) async {
+  group('Profiles Page Free-Text Search & Skills Picker Tests', () {
+    testWidgets('Free-text search filters profiles by member name / username', (WidgetTester tester) async {
       await tester.pumpWidget(createTestWidget(const BrowseMusiciansScreen()));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
-      final cardFinder = find.text('Search musicians, vocalists, songwriters, producers...');
+      expect(find.text('Alice Sax'), findsOneWidget);
+      expect(find.text('Bob Drummer'), findsOneWidget);
+
+      final searchInput = find.byType(TextField);
+      expect(searchInput, findsOneWidget);
+
+      await tester.enterText(searchInput, 'alicesax99');
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.text('Alice Sax'), findsOneWidget);
+      expect(find.text('Bob Drummer'), findsNothing);
+    });
+
+    testWidgets('Tapping skills selection card on PROFILES page opens popup window sheet', (WidgetTester tester) async {
+      await tester.pumpWidget(createTestWidget(const BrowseMusiciansScreen()));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      final cardFinder = find.text('Filter by Skills & Instruments...');
       expect(cardFinder, findsOneWidget);
 
       await tester.tap(cardFinder);
