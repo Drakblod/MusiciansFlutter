@@ -43,6 +43,14 @@ class _CollabsLandingScreenState extends State<CollabsLandingScreen> {
 
   // Master Skills & Talents Category Map
   static final Map<String, List<String>> _allSkillsCategoryMap = {
+    '🎛️ Sessions / Collaboration': [
+      'Create Session',
+      'Create Jam',
+      'Find Session',
+      'Studio Session',
+      'Rehearsal Jam',
+      'Co-Writing Session',
+    ],
     '🎧 Roles / Production': [
       'BANDLEADER',
       'SONGWRITER',
@@ -228,6 +236,16 @@ class _CollabsLandingScreenState extends State<CollabsLandingScreen> {
       initialSelected: _selectedCollabAreas,
     );
     if (result != null) {
+      if (result.contains('Create Session')) {
+        if (mounted) Navigator.pushNamed(context, '/create-session');
+        return;
+      } else if (result.contains('Create Jam')) {
+        if (mounted) Navigator.pushNamed(context, '/create-session', arguments: 'Jam');
+        return;
+      } else if (result.contains('Find Session')) {
+        if (mounted) Navigator.pushNamed(context, '/find-sessions');
+        return;
+      }
       setState(() {
         _selectedCollabAreas = result;
       });
@@ -569,58 +587,7 @@ class _CollabsLandingScreenState extends State<CollabsLandingScreen> {
                 ),
               ),
             ),
-            const SizedBox(height: 24),
-
-            // 1. Major Category Selector (Songwriters/Producers, Studios/Engineers, Sessions)
-            Row(
-              children: [
-                _buildCategoryButton('Songwriters/Producers', 'Songwriters/\nProducers'),
-                const SizedBox(width: 6),
-                _buildCategoryButton('Studios/Engineers', 'Studios/\nEngineers'),
-                const SizedBox(width: 6),
-                _buildCategoryButton('Sessions', 'Sessions'),
-              ],
-            ),
-            const SizedBox(height: 14),
-
-            // Sub-Role Pill Chips
-            Wrap(
-              spacing: 8,
-              children: _currentSubRoles.map((subRole) {
-                final isSel = _selectedSubRole == subRole;
-                return ChoiceChip(
-                  label: Text(subRole),
-                  selected: isSel,
-                  selectedColor: AppTheme.primaryAccent,
-                  backgroundColor: AppTheme.cardBackground,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
-                    side: BorderSide(
-                      color: isSel ? AppTheme.primaryAccent : const Color(0xFF2E2A4E),
-                    ),
-                  ),
-                  labelStyle: GoogleFonts.inter(
-                    color: Colors.white,
-                    fontWeight: isSel ? FontWeight.bold : FontWeight.w500,
-                    fontSize: 12,
-                  ),
-                  onSelected: (_) {
-                    if (subRole == 'Create Session') {
-                      Navigator.pushNamed(context, '/create-session');
-                    } else if (subRole == 'Create Jam') {
-                      Navigator.pushNamed(context, '/create-session', arguments: 'Jam');
-                    } else if (subRole == 'Find Session') {
-                      Navigator.pushNamed(context, '/find-sessions');
-                    } else {
-                      setState(() {
-                        _selectedSubRole = subRole;
-                      });
-                    }
-                  },
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 16),
 
             // 2. COLLABORATION AREA Card Container (Matching Edit Profile / Genres style)
             AnimatedTapDetector(
