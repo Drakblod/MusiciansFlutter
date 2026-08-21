@@ -45,6 +45,14 @@ class _FindCollabsScreenState extends State<FindCollabsScreen> {
 
   // Master Skills & Talents Category Map
   static final Map<String, List<String>> _allSkillsCategoryMap = {
+    '🎛️ Sessions / Collaboration': [
+      'Create Session',
+      'Create Jam',
+      'Find Session',
+      'Studio Session',
+      'Rehearsal Jam',
+      'Co-Writing Session',
+    ],
     '🎧 Roles / Production': [
       'BANDLEADER',
       'SONGWRITER',
