@@ -8,6 +8,7 @@ import '../models/band.dart';
 import '../widgets/custom_top_bar.dart';
 import '../widgets/gradient_scaffold.dart';
 import '../widgets/animated_tap_detector.dart';
+import '../widgets/searchable_category_multi_select_sheet.dart';
 
 class BrowseMusiciansScreen extends StatefulWidget {
   final bool favoritesOnly;
@@ -22,48 +23,97 @@ class _BrowseMusiciansScreenState extends State<BrowseMusiciansScreen> {
   final _searchController = TextEditingController();
   int _activeTab = 0; // 0 = Musicians, 1 = Bands
 
-  // Categories definition from SÖKKATEGORIER sheet
-  final Map<String, List<String>> _searchCategories = {
-    'INSTRUMENTS': [
-      'Woodwinds',
-      'Brass',
-      'Strings',
-      'Keyboards',
-      'Percussion',
-      'Miscellaneous'
+  // Master Skills & Talents Category Map
+  static final Map<String, List<String>> _allSkillsCategoryMap = {
+    '🎧 Roles / Production': [
+      'BANDLEADER',
+      'SONGWRITER',
+      'PRODUCER',
+      'COMPOSER',
+      'LYRICIST',
+      'BEATMAKER',
+      'STUDIO/ENGINEER, etc',
     ],
-    'VOICES': [
-      'Choir & Classical',
-      'Popular Music'
+    '🎷 Woodwinds': [
+      'Recorder',
+      'Flute',
+      'Oboe',
+      'Clarinet',
+      'Bassoon',
+      'Soprano Sax',
+      'Alto Sax',
+      'Tenor Sax',
+      'Bari Sax',
     ],
-    'SONGWRITERS, PRODUCERS, etc': [
-      'Songwriter',
-      'Composer',
-      'Producer',
-      'Lyricist',
-      'Artist',
-      'Beatmaker',
-      'Rapper',
-      'DJ'
+    '🎺 Brass': [
+      'Trumpet',
+      'Cornet',
+      'Trombone',
+      'French Horn',
+      'Euphonium',
+      'Tuba',
     ],
-    'STUDIOS/ENGINEERS': [
-      'Studios',
-      'Home Studios',
-      'Recording Engineer',
-      'Mix Engineer',
-      'Mastering Engineer',
-      'Live Engineer'
+    '🎻 Strings': [
+      'Violin',
+      'Viola',
+      'Cello',
+      'Contrabass',
+      'Acoustic Guitar',
+      'Electric Guitar',
+      'Electric Bass',
+      'Harp',
     ],
-    'PR/MANAGEMENT': [
-      'Managers',
-      'Agencies',
-      'Consultants',
-      'Other'
-    ]
+    '🎹 Keyboards': [
+      'Piano',
+      'Keyboard/Synth',
+      'Harpsichord',
+      'Organ (Hammond)',
+    ],
+    '🥁 Percussion': [
+      'Drums',
+      'Latin Percussion (congas, timbales, etc)',
+      'Classical Percussion (timpani, cymbals, etc)',
+    ],
+    '🗣️ Voices (Choir)': [
+      'Soprano',
+      'Alto',
+      'Tenor',
+      'Baritone',
+      'Bass',
+    ],
+    '🎭 Miscellaneous Voices (Classical, Choir)': [
+      'Mezzo Soprano',
+      'Contralto',
+      'Counter Tenor',
+    ],
+    '🎤 Voices (Popular Music)': [
+      'Male Lead Vocals',
+      'Female Lead vocals',
+      'Male Backing vocals',
+      'Female Backing vocals',
+    ],
+    '🪈 Miscellaneous Instruments': [
+      'Soprano Recorder',
+      'Alto Recorder',
+      'Tenor Recorder',
+      'Bass Recorder',
+      'Piccolo Flute',
+      'Alto Flute',
+      'Bass Flute',
+      'English Horn',
+      'Eb Clarinet',
+      'Alto Clarinet',
+      'Bass Clarinet',
+      'Contra Bassoon',
+      'Piccolo Trumpet',
+      'Alto Trombone',
+      'Viola da Gamba',
+      'Steel Guitar',
+      'Steel Pan',
+    ],
   };
 
-  String? _selectedMainCategory;
-  String? _selectedSubcategory;
+  List<String> _selectedSkills = [];
 
   List<UserProfile> _allMusicians = [];
   List<UserProfile> _filteredMusicians = [];
@@ -212,6 +262,21 @@ class _BrowseMusiciansScreenState extends State<BrowseMusiciansScreen> {
     _applyFilters();
   }
 
+  Future<void> _openSkillsPicker() async {
+    final result = await SearchableCategoryMultiSelectSheet.show(
+      context: context,
+      title: 'Filter Skills & Instruments',
+      categoryMap: _allSkillsCategoryMap,
+      initialSelected: _selectedSkills,
+    );
+    if (result != null) {
+      setState(() {
+        _selectedSkills = result;
+        _applyFilters();
+      });
+    }
+  }
+
   void _applyFilters() {
     final query = _searchController.text.toLowerCase();
     
@@ -219,76 +284,50 @@ class _BrowseMusiciansScreenState extends State<BrowseMusiciansScreen> {
       // Musicians filtering
       setState(() {
         _filteredMusicians = _allMusicians.where((m) {
-          final matchesSearch = (m.displayName?.toLowerCase().contains(query) ?? false) ||
-              (m.location?.toLowerCase().contains(query) ?? false);
+          final matchesSearch = query.isEmpty ||
+              (m.displayName?.toLowerCase().contains(query) ?? false) ||
+              (m.location?.toLowerCase().contains(query) ?? false) ||
+              (m.about?.toLowerCase().contains(query) ?? false) ||
+              (m.userType?.toLowerCase().contains(query) ?? false) ||
+              m.instruments.any((i) => i.toLowerCase().contains(query));
           
           if (!matchesSearch) return false;
           
-          if (_selectedMainCategory == null) return true;
-          
-          final subcats = _searchCategories[_selectedMainCategory] ?? [];
-          final activeSub = _selectedSubcategory;
-          
+          if (_selectedSkills.isEmpty) return true;
+
           final userInstruments = m.instruments.map((i) => i.toLowerCase()).toList();
           final userType = m.userType?.toLowerCase() ?? '';
-          
-          bool matchesSub(String sub) {
-            final s = sub.toLowerCase();
-            
-            // Check exact or substring match
-            if (userType.contains(s) || userInstruments.any((i) => i.contains(s))) {
-              return true;
-            }
-            
-            // Group mappings
-            if (s == 'woodwinds') {
-              final woodwindKeywords = ['flute', 'clarinet', 'oboe', 'bassoon', 'sax', 'recorder', 'piccolo', 'horn'];
-              return woodwindKeywords.any((kw) => userType.contains(kw) || userInstruments.any((i) => i.contains(kw)));
-            }
-            if (s == 'brass') {
-              final brassKeywords = ['trumpet', 'trombone', 'tuba', 'french horn', 'cornet', 'euphonium'];
-              return brassKeywords.any((kw) => userType.contains(kw) || userInstruments.any((i) => i.contains(kw)));
-            }
-            if (s == 'strings') {
-              final stringsKeywords = ['violin', 'viola', 'cello', 'contrabass', 'harp', 'guitar', 'bass', 'lute', 'gamba'];
-              return stringsKeywords.any((kw) => userType.contains(kw) || userInstruments.any((i) => i.contains(kw)));
-            }
-            if (s == 'keyboards') {
-              final keysKeywords = ['piano', 'keyboard', 'synth', 'organ', 'harpsichord'];
-              return keysKeywords.any((kw) => userType.contains(kw) || userInstruments.any((i) => i.contains(kw)));
-            }
-            if (s == 'percussion') {
-              final percKeywords = ['drum', 'percussion', 'steel pan', 'steel drum'];
-              return percKeywords.any((kw) => userType.contains(kw) || userInstruments.any((i) => i.contains(kw)));
-            }
-            if (s == 'choir & classical') {
-              final classicalKeywords = ['choir', 'classical', 'opera', 'choral'];
-              return classicalKeywords.any((kw) => userType.contains(kw) || userInstruments.any((i) => i.contains(kw)));
-            }
-            if (s == 'popular music') {
-              final popKeywords = ['pop', 'rock', 'jazz', 'blues', 'metal', 'soul', 'folk'];
-              return popKeywords.any((kw) => userType.contains(kw) || userInstruments.any((i) => i.contains(kw)));
-            }
-            
-            return false;
-          }
-          
-          if (activeSub != null) {
-            return matchesSub(activeSub);
-          } else {
-            return subcats.any((sub) => matchesSub(sub));
-          }
+          final about = m.about?.toLowerCase() ?? '';
+
+          return _selectedSkills.any((skill) {
+            final s = skill.toLowerCase();
+            return userType.contains(s) ||
+                userInstruments.any((i) => i.contains(s)) ||
+                about.contains(s);
+          });
         }).toList();
       });
     } else {
       // Bands filtering
       setState(() {
         _filteredBands = _allBands.where((b) {
-          final matchesSearch = (b.name?.toLowerCase().contains(query) ?? false) ||
+          final matchesSearch = query.isEmpty ||
+              (b.name?.toLowerCase().contains(query) ?? false) ||
               (b.location?.toLowerCase().contains(query) ?? false) ||
               (b.description?.toLowerCase().contains(query) ?? false) ||
               b.genres.any((g) => g.toLowerCase().contains(query));
-          return matchesSearch;
+
+          if (!matchesSearch) return false;
+
+          if (_selectedSkills.isEmpty) return true;
+
+          final genres = b.genres.map((g) => g.toLowerCase()).toList();
+          final about = b.about?.toLowerCase() ?? '';
+
+          return _selectedSkills.any((skill) {
+            final s = skill.toLowerCase();
+            return genres.any((g) => g.contains(s)) || about.contains(s);
+          });
         }).toList();
       });
     }
@@ -586,155 +625,96 @@ class _BrowseMusiciansScreenState extends State<BrowseMusiciansScreen> {
               const SizedBox(height: 16),
             ],
 
-            // Search input
+            // Interactive Search & Selection Box
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: TextField(
-                controller: _searchController,
-                decoration: InputDecoration(
-                  hintText: _activeTab == 0 ? 'Search musicians, vocalists, songwriters, producers...' : 'Search bands, ensembles...',
-                  prefixIcon: const Icon(Icons.search_rounded, color: AppTheme.textSecondary),
+              child: AnimatedTapDetector(
+                enableFocus: true,
+                semanticLabel: 'Filter Skills and Instruments',
+                onTap: _openSkillsPicker,
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: AppTheme.inputBackground,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: _selectedSkills.isNotEmpty
+                          ? AppTheme.primaryAccent.withOpacity(0.5)
+                          : const Color(0xFF2E2A4E),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.search_rounded, color: AppTheme.textSecondary),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _selectedSkills.isEmpty
+                            ? Text(
+                                _activeTab == 0
+                                    ? 'Search musicians, vocalists, songwriters, producers...'
+                                    : 'Search bands, ensembles...',
+                                style: GoogleFonts.inter(
+                                  color: AppTheme.textSecondary,
+                                  fontSize: 13,
+                                ),
+                              )
+                            : Wrap(
+                                spacing: 6,
+                                runSpacing: 6,
+                                children: _selectedSkills.map((skill) {
+                                  return Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: AppTheme.primaryAccent.withOpacity(0.2),
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(
+                                        color: AppTheme.primaryAccent.withOpacity(0.4),
+                                      ),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          skill,
+                                          style: GoogleFonts.inter(
+                                            color: Colors.white,
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 4),
+                                        GestureDetector(
+                                          onTap: () {
+                                            setState(() {
+                                              _selectedSkills.remove(skill);
+                                              _applyFilters();
+                                            });
+                                          },
+                                          child: const Icon(
+                                            Icons.close_rounded,
+                                            size: 14,
+                                            color: AppTheme.textSecondary,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
+                      ),
+                      const SizedBox(width: 8),
+                      Icon(
+                        Icons.tune_rounded,
+                        color: _selectedSkills.isNotEmpty ? AppTheme.primaryAccent : AppTheme.textSecondary,
+                        size: 20,
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
             const SizedBox(height: 16),
-
-            // Category selector (Only shown under Musicians tab)
-            if (_activeTab == 0) ...[
-              // Main Categories Row
-              SizedBox(
-                height: 38,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  children: [
-                    ChoiceChip(
-                      label: const Text('All'),
-                      selected: _selectedMainCategory == null,
-                      onSelected: (val) {
-                        if (val) {
-                          setState(() {
-                            _selectedMainCategory = null;
-                            _selectedSubcategory = null;
-                            _applyFilters();
-                          });
-                        }
-                      },
-                      selectedColor: AppTheme.primaryAccent,
-                      backgroundColor: AppTheme.inputBackground,
-                      labelStyle: GoogleFonts.inter(
-                        fontSize: 12,
-                        fontWeight: _selectedMainCategory == null ? FontWeight.bold : FontWeight.normal,
-                        color: Colors.white,
-                      ),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      side: BorderSide(
-                        color: _selectedMainCategory == null ? AppTheme.primaryAccent : const Color(0xFF2E2A4E),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    ..._searchCategories.keys.map((mainCat) {
-                      final isSelected = _selectedMainCategory == mainCat;
-                      return Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: ChoiceChip(
-                          label: Text(mainCat),
-                          selected: isSelected,
-                          onSelected: (val) {
-                            if (val) {
-                              setState(() {
-                                _selectedMainCategory = mainCat;
-                                _selectedSubcategory = null;
-                                _applyFilters();
-                              });
-                            }
-                          },
-                          selectedColor: AppTheme.primaryAccent,
-                          backgroundColor: AppTheme.inputBackground,
-                          labelStyle: GoogleFonts.inter(
-                            fontSize: 12,
-                            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                            color: Colors.white,
-                          ),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                          side: BorderSide(
-                            color: isSelected ? AppTheme.primaryAccent : const Color(0xFF2E2A4E),
-                          ),
-                        ),
-                      );
-                    }),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-
-              // Subcategories Row (Shown if a main category is selected)
-              if (_selectedMainCategory != null) ...[
-                SizedBox(
-                  height: 34,
-                  child: ListView(
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    children: [
-                      ChoiceChip(
-                        label: Text('All ${_selectedMainCategory!.toLowerCase()}'),
-                        selected: _selectedSubcategory == null,
-                        onSelected: (val) {
-                          if (val) {
-                            setState(() {
-                              _selectedSubcategory = null;
-                              _applyFilters();
-                            });
-                          }
-                        },
-                        selectedColor: AppTheme.primaryAccent.withOpacity(0.4),
-                        backgroundColor: AppTheme.cardBackground,
-                        labelStyle: GoogleFonts.inter(
-                          fontSize: 11,
-                          fontWeight: _selectedSubcategory == null ? FontWeight.bold : FontWeight.normal,
-                          color: Colors.white,
-                        ),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        side: BorderSide(
-                          color: _selectedSubcategory == null ? AppTheme.primaryAccent : const Color(0xFF2E2A4E),
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      ...(_searchCategories[_selectedMainCategory] ?? []).map((subCat) {
-                        final isSelected = _selectedSubcategory == subCat;
-                        return Padding(
-                          padding: const EdgeInsets.only(right: 6),
-                          child: ChoiceChip(
-                            label: Text(subCat),
-                            selected: isSelected,
-                            onSelected: (val) {
-                              if (val) {
-                                setState(() {
-                                  _selectedSubcategory = subCat;
-                                  _applyFilters();
-                                });
-                              }
-                            },
-                            selectedColor: AppTheme.primaryAccent.withOpacity(0.4),
-                            backgroundColor: AppTheme.cardBackground,
-                            labelStyle: GoogleFonts.inter(
-                              fontSize: 11,
-                              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                              color: Colors.white,
-                            ),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                            side: BorderSide(
-                              color: isSelected ? AppTheme.primaryAccent : const Color(0xFF2E2A4E),
-                            ),
-                          ),
-                        );
-                      }),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 12),
-              ],
-            ],
 
             // Content List (Musicians or Bands)
             Expanded(
