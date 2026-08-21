@@ -264,39 +264,91 @@ class _FindSubScreenState extends State<FindSubScreen> {
   ];
 
   static final Map<String, List<String>> _allSkillsCategoryMap = {
+    '🎧 Roles / Production': [
+      'BANDLEADER',
+      'SONGWRITER',
+      'PRODUCER',
+      'COMPOSER',
+      'LYRICIST',
+      'BEATMAKER',
+      'STUDIO/ENGINEER, etc',
+    ],
     '🎷 Woodwinds': [
-      'Flute', 'Piccolo Flute', 'Alto Flute', 'Bass Flute',
-      'Oboe', 'English Horn', 'Clarinet', 'Eb Clarinet', 'Alto Clarinet', 'Bass Clarinet',
-      'Bassoon', 'Contra Bassoon', 'Soprano Sax', 'Alto Sax', 'Tenor Sax', 'Bari Sax',
-      'Recorder', 'Soprano Recorder', 'Alto Recorder', 'Tenor Recorder', 'Bass Recorder'
+      'Recorder',
+      'Flute',
+      'Oboe',
+      'Clarinet',
+      'Bassoon',
+      'Soprano Sax',
+      'Alto Sax',
+      'Tenor Sax',
+      'Bari Sax',
     ],
     '🎺 Brass': [
-      'Trumpet', 'Cornet', 'Piccolo Trumpet', 'Trombone', 'Alto Trombone',
-      'French Horn', 'Euphonium', 'Tuba'
+      'Trumpet',
+      'Cornet',
+      'Trombone',
+      'French Horn',
+      'Euphonium',
+      'Tuba',
     ],
     '🎻 Strings': [
-      'Acoustic Guitar', 'Electric Guitar', 'Electric Bass', 'Violin', 'Viola', 'Cello',
-      'Contrabass', 'Harp', 'Viola da Gamba', 'Steel Guitar', 'Steel Pan'
+      'Violin',
+      'Viola',
+      'Cello',
+      'Contrabass',
+      'Acoustic Guitar',
+      'Electric Guitar',
+      'Electric Bass',
+      'Harp',
     ],
     '🎹 Keyboards': [
-      'Piano', 'Keyboard/Synth', 'Harpsichord', 'Organ (Hammond)'
+      'Piano',
+      'Keyboard/Synth',
+      'Harpsichord',
+      'Organ (Hammond)',
     ],
     '🥁 Percussion': [
-      'Drums', 'Latin Percussion (congas, timbales, etc)', 'Classical Percussion (timpani, cymbals, etc)'
+      'Drums',
+      'Latin Percussion (congas, timbales, etc)',
+      'Classical Percussion (timpani, cymbals, etc)',
     ],
-    '🗣️ Voices': [
-      'Soprano', 'Alto', 'Tenor', 'Baritone', 'Bass',
-      'Mezzo Soprano', 'Contralto', 'Counter Tenor',
-      'Male Lead Vocals', 'Female Lead vocals', 'Male Backing vocals', 'Female Backing vocals'
+    '🗣️ Voices (Choir)': [
+      'Soprano',
+      'Alto',
+      'Tenor',
+      'Baritone',
+      'Bass',
     ],
-    '🎧 Songwriters/Producers': [
-      'Songwriter', 'Producer', 'Composer', 'Lyricist', 'Beatmaker', 'DJ'
+    '🎭 Miscellaneous Voices (Classical, Choir)': [
+      'Mezzo Soprano',
+      'Contralto',
+      'Counter Tenor',
     ],
-    '🎛️ Studios/Engineers': [
-      'Studio', 'Home Studio', 'Recording Engineer', 'Mix engineer', 'Live Engineer'
+    '🎤 Voices (Popular Music)': [
+      'Male Lead Vocals',
+      'Female Lead vocals',
+      'Male Backing vocals',
+      'Female Backing vocals',
     ],
-    '💼 PR/Management': [
-      'Manager', 'Promotor', 'Agency', 'Other'
+    '🪈 Miscellaneous Instruments': [
+      'Soprano Recorder',
+      'Alto Recorder',
+      'Tenor Recorder',
+      'Bass Recorder',
+      'Piccolo Flute',
+      'Alto Flute',
+      'Bass Flute',
+      'English Horn',
+      'Eb Clarinet',
+      'Alto Clarinet',
+      'Bass Clarinet',
+      'Contra Bassoon',
+      'Piccolo Trumpet',
+      'Alto Trombone',
+      'Viola da Gamba',
+      'Steel Guitar',
+      'Steel Pan',
     ],
   };
 

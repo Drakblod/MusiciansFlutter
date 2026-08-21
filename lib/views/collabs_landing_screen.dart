@@ -43,42 +43,91 @@ class _CollabsLandingScreenState extends State<CollabsLandingScreen> {
 
   // Master Skills & Talents Category Map
   static final Map<String, List<String>> _allSkillsCategoryMap = {
-    '🎼 Songwriters/Producers': [
-      'Songwriter', 'Composer', 'Lyricist', 'Beatmaker', 'Producer', 'Co-Writer'
-    ],
-    '🎛️ Studios/Engineers': [
-      'Studio', 'Home Studio', 'Recording Engineer', 'Mix Engineer', 'Live Engineer', 'Mastering Engineer'
+    '🎧 Roles / Production': [
+      'BANDLEADER',
+      'SONGWRITER',
+      'PRODUCER',
+      'COMPOSER',
+      'LYRICIST',
+      'BEATMAKER',
+      'STUDIO/ENGINEER, etc',
     ],
     '🎷 Woodwinds': [
-      'Flute', 'Piccolo Flute', 'Alto Flute', 'Bass Flute',
-      'Clarinet', 'Eb Clarinet', 'Alto Clarinet', 'Bass Clarinet',
-      'Oboe', 'English Horn', 'Bassoon', 'Contra Bassoon',
-      'Soprano Sax', 'Alto Sax', 'Tenor Sax', 'Bari Sax',
-      'Recorder', 'Soprano Recorder', 'Alto Recorder', 'Tenor Recorder', 'Bass Recorder'
+      'Recorder',
+      'Flute',
+      'Oboe',
+      'Clarinet',
+      'Bassoon',
+      'Soprano Sax',
+      'Alto Sax',
+      'Tenor Sax',
+      'Bari Sax',
     ],
     '🎺 Brass': [
-      'Trumpet', 'Piccolo Trumpet', 'Cornet', 'French Horn',
-      'Trombone', 'Alto Trombone', 'Euphonium', 'Tuba'
+      'Trumpet',
+      'Cornet',
+      'Trombone',
+      'French Horn',
+      'Euphonium',
+      'Tuba',
     ],
     '🎻 Strings': [
-      'Violin', 'Viola', 'Viola da Gamba', 'Cello', 'Contrabass',
-      'Acoustic Guitar', 'Electric Guitar', 'Steel Guitar', 'Electric Bass', 'Harp'
+      'Violin',
+      'Viola',
+      'Cello',
+      'Contrabass',
+      'Acoustic Guitar',
+      'Electric Guitar',
+      'Electric Bass',
+      'Harp',
     ],
     '🎹 Keyboards': [
-      'Piano', 'Keyboard/Synth', 'Organ (Hammond)', 'Harpsichord'
+      'Piano',
+      'Keyboard/Synth',
+      'Harpsichord',
+      'Organ (Hammond)',
     ],
     '🥁 Percussion': [
-      'Drums', 'Latin Percussion (congas, timbales, etc)',
-      'Classical Percussion (timpani, cymbals, etc)', 'Steel Pan'
+      'Drums',
+      'Latin Percussion (congas, timbales, etc)',
+      'Classical Percussion (timpani, cymbals, etc)',
     ],
-    '🎤 Voices': [
-      'Female Lead vocals', 'Male Lead Vocals',
-      'Female Backing vocals', 'Male Backing vocals',
-      'Soprano', 'Mezzo Soprano', 'Contralto',
-      'Counter Tenor', 'Tenor', 'Baritone', 'Bass'
+    '🗣️ Voices (Choir)': [
+      'Soprano',
+      'Alto',
+      'Tenor',
+      'Baritone',
+      'Bass',
     ],
-    '📢 PR/Management': [
-      'Manager', 'Promotor', 'Agency', 'PR Specialist'
+    '🎭 Miscellaneous Voices (Classical, Choir)': [
+      'Mezzo Soprano',
+      'Contralto',
+      'Counter Tenor',
+    ],
+    '🎤 Voices (Popular Music)': [
+      'Male Lead Vocals',
+      'Female Lead vocals',
+      'Male Backing vocals',
+      'Female Backing vocals',
+    ],
+    '🪈 Miscellaneous Instruments': [
+      'Soprano Recorder',
+      'Alto Recorder',
+      'Tenor Recorder',
+      'Bass Recorder',
+      'Piccolo Flute',
+      'Alto Flute',
+      'Bass Flute',
+      'English Horn',
+      'Eb Clarinet',
+      'Alto Clarinet',
+      'Bass Clarinet',
+      'Contra Bassoon',
+      'Piccolo Trumpet',
+      'Alto Trombone',
+      'Viola da Gamba',
+      'Steel Guitar',
+      'Steel Pan',
     ],
   };
 
