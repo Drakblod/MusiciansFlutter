@@ -286,6 +286,7 @@ class _BrowseMusiciansScreenState extends State<BrowseMusiciansScreen> {
         _filteredMusicians = _allMusicians.where((m) {
           final matchesSearch = query.isEmpty ||
               (m.displayName?.toLowerCase().contains(query) ?? false) ||
+              (m.nickname?.toLowerCase().contains(query) ?? false) ||
               (m.location?.toLowerCase().contains(query) ?? false) ||
               (m.about?.toLowerCase().contains(query) ?? false) ||
               (m.userType?.toLowerCase().contains(query) ?? false) ||
@@ -625,7 +626,33 @@ class _BrowseMusiciansScreenState extends State<BrowseMusiciansScreen> {
               const SizedBox(height: 16),
             ],
 
-            // Interactive Search & Selection Box
+            // Free-Text Search (Name / Username / Location)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: TextField(
+                controller: _searchController,
+                style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
+                decoration: InputDecoration(
+                  hintText: _activeTab == 0
+                      ? 'Search by member name, username or location...'
+                      : 'Search by band name or location...',
+                  hintStyle: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 13),
+                  prefixIcon: const Icon(Icons.search_rounded, color: AppTheme.textSecondary),
+                  suffixIcon: _searchController.text.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear_rounded, color: AppTheme.textSecondary, size: 18),
+                          onPressed: () {
+                            _searchController.clear();
+                            _applyFilters();
+                          },
+                        )
+                      : null,
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+
+            // Skills & Instruments Category Selector Card
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: AnimatedTapDetector(
@@ -646,14 +673,16 @@ class _BrowseMusiciansScreenState extends State<BrowseMusiciansScreen> {
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.search_rounded, color: AppTheme.textSecondary),
+                      Icon(
+                        Icons.tune_rounded,
+                        color: _selectedSkills.isNotEmpty ? AppTheme.primaryAccent : AppTheme.textSecondary,
+                        size: 20,
+                      ),
                       const SizedBox(width: 10),
                       Expanded(
                         child: _selectedSkills.isEmpty
                             ? Text(
-                                _activeTab == 0
-                                    ? 'Search musicians, vocalists, songwriters, producers...'
-                                    : 'Search bands, ensembles...',
+                                'Filter by Skills & Instruments...',
                                 style: GoogleFonts.inter(
                                   color: AppTheme.textSecondary,
                                   fontSize: 13,
@@ -704,9 +733,9 @@ class _BrowseMusiciansScreenState extends State<BrowseMusiciansScreen> {
                               ),
                       ),
                       const SizedBox(width: 8),
-                      Icon(
-                        Icons.tune_rounded,
-                        color: _selectedSkills.isNotEmpty ? AppTheme.primaryAccent : AppTheme.textSecondary,
+                      const Icon(
+                        Icons.keyboard_arrow_down_rounded,
+                        color: AppTheme.textSecondary,
                         size: 20,
                       ),
                     ],
