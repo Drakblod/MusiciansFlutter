@@ -1,14 +1,33 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:firebase_core/firebase_core.dart' hide FirebaseService;
+import 'package:firebase_core_platform_interface/test.dart';
 import 'package:provider/provider.dart';
 
 import 'package:musicians_flutter/providers/app_state.dart';
+import 'package:musicians_flutter/services/firebase_service.dart';
 import 'package:musicians_flutter/models/user_profile.dart';
 import 'package:musicians_flutter/views/edit_profile_screen.dart';
 import 'package:musicians_flutter/views/find_sub_screen.dart';
 import 'package:musicians_flutter/widgets/searchable_category_multi_select_sheet.dart';
 
+class MockInstrumentFirebaseService extends FirebaseService {
+  @override
+  Future<UserProfile?> getUserProfileAsync([String? userId]) async {
+    return UserProfile(
+      userId: 'test_user_inst',
+      displayName: 'Test Musician',
+      email: 'test@example.com',
+      genres: ['Rock'],
+      instruments: ['Guitar'],
+    );
+  }
+}
+
 class MockAppStateForInstrumentTest extends AppState {
+  @override
+  final FirebaseService firebaseService = MockInstrumentFirebaseService();
+
   @override
   UserProfile? get currentUserProfile => UserProfile(
         userId: 'test_user_inst',
@@ -23,8 +42,8 @@ class MockAppStateForInstrumentTest extends AppState {
 }
 
 Widget createTestWidget(Widget child) {
-  return ChangeNotifierProvider<AppState>.value(
-    value: MockAppStateForInstrumentTest(),
+  return ChangeNotifierProvider<AppState>(
+    create: (_) => MockAppStateForInstrumentTest(),
     child: MaterialApp(
       home: Scaffold(body: child),
     ),
@@ -33,6 +52,11 @@ Widget createTestWidget(Widget child) {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  setupFirebaseCoreMocks();
+
+  setUpAll(() async {
+    await Firebase.initializeApp();
+  });
 
   group('Master Instrument and Skills List Verification Tests', () {
     final expectedCategories = [
