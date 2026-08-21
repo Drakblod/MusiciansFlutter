@@ -7,7 +7,6 @@ import 'package:provider/provider.dart';
 import 'package:musicians_flutter/providers/app_state.dart';
 import 'package:musicians_flutter/services/firebase_service.dart';
 import 'package:musicians_flutter/models/user_profile.dart';
-import 'command_line_mock_app_state.dart' if (dart.library.html) '';
 import 'package:musicians_flutter/views/collabs_landing_screen.dart';
 import 'package:musicians_flutter/widgets/searchable_category_multi_select_sheet.dart';
 
