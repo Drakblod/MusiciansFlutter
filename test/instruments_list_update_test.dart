@@ -88,7 +88,7 @@ void main() {
         expect(find.text(cat), findsOneWidget);
       }
 
-      await tester.tap(find.text('Cancel'));
+      await tester.tap(find.text('Done'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
     });
@@ -111,7 +111,7 @@ void main() {
       expect(find.text('🗣️ Voices (Choir)'), findsOneWidget);
       expect(find.text('🎭 Miscellaneous Voices (Classical, Choir)'), findsOneWidget);
 
-      await tester.tap(find.text('Cancel'));
+      await tester.tap(find.text('Done'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
     });
