@@ -74,8 +74,7 @@ void main() {
   group('Profiles Page Free-Text Search & Skills Picker Tests', () {
     testWidgets('Free-text search filters profiles by member name / username', (WidgetTester tester) async {
       await tester.pumpWidget(createTestWidget(const BrowseMusiciansScreen()));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pumpAndSettle();
 
       expect(find.text('Alice Sax'), findsOneWidget);
       expect(find.text('Bob Drummer'), findsOneWidget);
@@ -84,8 +83,7 @@ void main() {
       expect(searchInput, findsOneWidget);
 
       await tester.enterText(searchInput, 'alicesax99');
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pumpAndSettle();
 
       expect(find.text('Alice Sax'), findsOneWidget);
       expect(find.text('Bob Drummer'), findsNothing);
@@ -93,21 +91,18 @@ void main() {
 
     testWidgets('Tapping skills selection card on PROFILES page opens popup window sheet', (WidgetTester tester) async {
       await tester.pumpWidget(createTestWidget(const BrowseMusiciansScreen()));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pumpAndSettle();
 
       final cardFinder = find.text('Filter by Skills & Instruments...');
       expect(cardFinder, findsOneWidget);
 
       await tester.tap(cardFinder);
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pumpAndSettle();
 
       expect(find.byType(SearchableCategoryMultiSelectSheet), findsOneWidget);
 
       await tester.tap(find.text('Done'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pumpAndSettle();
       expect(find.byType(SearchableCategoryMultiSelectSheet), findsNothing);
     });
   });
