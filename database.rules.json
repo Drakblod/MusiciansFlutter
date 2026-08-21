@@ -10,17 +10,13 @@
       "$bandId": {
         "Events": {
           "$eventId": {
-            // Only Leader or Admin can create, modify, or delete events
-            ".write": "root.child('Bands').child($bandId).child('Members_band').child(auth.uid).child('Role').val() == 'Leader' || root.child('Bands').child($bandId).child('Members_band').child(auth.uid).child('Role').val() == 'Admin'",
             "Responses": {
               "$userId": {
-                // A member can write their own response, but only if the event is not locked
                 ".write": "auth.uid == $userId && root.child('Bands').child($bandId).child('Events').child($eventId).child('isLocked').val() != true"
               }
             },
             "externalInvitees": {
               "$userId": {
-                // Guests can update their own response if not locked, and Leaders/Admins can invite/update them
                 ".write": "(auth.uid == $userId && root.child('Bands').child($bandId).child('Events').child($eventId).child('isLocked').val() != true) || root.child('Bands').child($bandId).child('Members_band').child(auth.uid).child('Role').val() == 'Leader' || root.child('Bands').child($bandId).child('Members_band').child(auth.uid).child('Role').val() == 'Admin'"
               }
             }
@@ -33,8 +29,24 @@
       ".write": "auth != null"
     },
     "conversations": {
+      "$conversationId": {
+        ".read": "auth != null && data.child('participants').child(auth.uid).val() == true",
+        ".write": false
+      }
+    },
+    "userConversations": {
+      "$userId": {
+        ".read": "auth != null && auth.uid == $userId",
+        ".write": false
+      }
+    },
+    "directConversationKeys": {
+      ".read": false,
+      ".write": false
+    },
+    "eventReminderAudit": {
       ".read": "auth != null",
-      ".write": "auth != null"
+      ".write": false
     },
     "bandconversations": {
       ".read": "auth != null",
@@ -76,15 +88,7 @@
           "$applicantId": {
             ".read": "auth != null && (auth.uid == $applicantId || root.child('Collabs').child('Sessions').child($sessionId).child('CreatorId').val() == auth.uid)",
             ".write": "auth != null && (auth.uid == $applicantId || root.child('Collabs').child('Sessions').child($sessionId).child('CreatorId').val() == auth.uid)",
-            ".validate": "newData.exists() ? (
-              (!data.exists() ? (
-                newData.child('Status').val() == 'pending' &&
-                newData.child('CreatorId').val() == root.child('Collabs').child('Sessions').child($sessionId).child('CreatorId').val()
-              ) : (
-                (auth.uid == $applicantId && newData.child('Status').val() == data.child('Status').val() && newData.child('CreatorId').val() == data.child('CreatorId').val()) ||
-                (root.child('Collabs').child('Sessions').child($sessionId).child('CreatorId').val() == auth.uid && newData.child('CreatorId').val() == data.child('CreatorId').val() && (newData.child('Status').val() == 'accepted' || newData.child('Status').val() == 'declined' || newData.child('Status').val() == 'pending'))
-              ))
-            ) : true"
+            ".validate": "newData.exists() ? ( (!data.exists() ? ( newData.child('Status').val() == 'pending' && newData.child('CreatorId').val() == root.child('Collabs').child('Sessions').child($sessionId).child('CreatorId').val() ) : ( (auth.uid == $applicantId && newData.child('Status').val() == data.child('Status').val() && newData.child('CreatorId').val() == data.child('CreatorId').val()) || (root.child('Collabs').child('Sessions').child($sessionId).child('CreatorId').val() == auth.uid && newData.child('CreatorId').val() == data.child('CreatorId').val() && (newData.child('Status').val() == 'accepted' || newData.child('Status').val() == 'declined' || newData.child('Status').val() == 'pending')) )) ) : true"
           }
         }
       }

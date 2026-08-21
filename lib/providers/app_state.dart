@@ -22,7 +22,11 @@ class AppState extends ChangeNotifier {
   Map<String, int> _buttonClicks = {};
   Map<String, dynamic>? _pendingNotificationPayload;
 
-  List<String> _selectedBubbles = ['browse_musicians', 'find_gigs', 'find_musicians'];
+  List<String> _selectedBubbles = [
+    'browse_musicians',
+    'find_gigs',
+    'find_musicians',
+  ];
   List<String> get selectedBubbles => _selectedBubbles;
 
   StreamSubscription<bool>? _unreadSubscription;
@@ -37,11 +41,9 @@ class AppState extends ChangeNotifier {
 
   Future<void> loadSelectedBubbles() async {
     final prefs = await SharedPreferences.getInstance();
-    _selectedBubbles = prefs.getStringList('home_selected_bubbles') ?? [
-      'browse_musicians',
-      'find_gigs',
-      'find_musicians',
-    ];
+    _selectedBubbles =
+        prefs.getStringList('home_selected_bubbles') ??
+        ['browse_musicians', 'find_gigs', 'find_musicians'];
     notifyListeners();
   }
 
@@ -63,7 +65,9 @@ class AppState extends ChangeNotifier {
   }
 
   void handlePendingNotification() {
-    if (_pendingNotificationPayload != null && firebaseService.isLoggedIn && _currentUserProfile != null) {
+    if (_pendingNotificationPayload != null &&
+        firebaseService.isLoggedIn &&
+        _currentUserProfile != null) {
       final payload = _pendingNotificationPayload!;
       _pendingNotificationPayload = null;
       Future.delayed(const Duration(milliseconds: 500), () {
@@ -76,11 +80,16 @@ class AppState extends ChangeNotifier {
     final type = data['type']?.toString();
     if (MyApp.navigatorKey.currentState == null) return;
 
-    if (type == 'event_invite' || type == 'event_reminder' || type == 'event_threshold') {
+    if (type == 'event_invite' ||
+        type == 'event_reminder' ||
+        type == 'event_threshold') {
       final bandId = data['bandId']?.toString();
       final eventId = data['eventId']?.toString();
       if (bandId != null && eventId != null) {
-        final event = await firebaseService.getBandEventOnceAsync(bandId, eventId);
+        final event = await firebaseService.getBandEventOnceAsync(
+          bandId,
+          eventId,
+        );
         if (event != null && MyApp.navigatorKey.currentState != null) {
           MyApp.navigatorKey.currentState!.push(
             MaterialPageRoute(
@@ -104,9 +113,8 @@ class AppState extends ChangeNotifier {
         if (MyApp.navigatorKey.currentState != null) {
           MyApp.navigatorKey.currentState!.push(
             MaterialPageRoute(
-              builder: (context) => SubRequestDetailsScreen(
-                subRequest: subRequest,
-              ),
+              builder: (context) =>
+                  SubRequestDetailsScreen(subRequest: subRequest),
             ),
           );
         }
@@ -128,33 +136,53 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  void _clearProfileState() {
+    _currentUserProfile = null;
+    _activeBandId = null;
+    _activeBandName = null;
+    _hasUnreadMessages = false;
+    _buttonClicks = {};
+    _unreadSubscription?.cancel();
+    _unreadSubscription = null;
+  }
+
   void _initializeAuthListener() {
     // Check if user is already logged in on startup
     if (firebaseService.isLoggedIn) {
       _loadProfileAndSubscribe();
     } else {
+      _clearProfileState();
       _isLoading = false;
       notifyListeners();
     }
   }
 
   Future<void> _loadProfileAndSubscribe() async {
+    final uid = currentUserId;
+    if (uid == null || uid.isEmpty) {
+      _clearProfileState();
+      _isLoading = false;
+      notifyListeners();
+      return;
+    }
+
     try {
-      _currentUserProfile = await firebaseService.getUserProfileAsync();
-      _subscribeToUnread();
-      if (!kIsWeb) {
-        unawaited(firebaseService.initializePushNotifications());
-      }
-      if (currentUserId != null) {
+      final profile = await firebaseService.getUserProfileAsync(uid);
+      if (currentUserId == uid) {
+        _currentUserProfile = profile;
+        _subscribeToUnread();
+        if (!kIsWeb) {
+          unawaited(firebaseService.initializePushNotifications());
+        }
         await _loadButtonClicks();
-        final bands = await firebaseService.getUserBandsAsync(currentUserId!);
+        final bands = await firebaseService.getUserBandsAsync(uid);
         if (bands.isNotEmpty && _activeBandId == null) {
           final firstBandId = bands.keys.first;
           _activeBandId = firstBandId;
           _activeBandName = bands[firstBandId];
         }
+        handlePendingNotification();
       }
-      handlePendingNotification();
     } catch (e) {
       debugPrint("Error loading profile: $e");
     } finally {
@@ -165,24 +193,28 @@ class AppState extends ChangeNotifier {
 
   void _subscribeToUnread() {
     _unreadSubscription?.cancel();
-    _unreadSubscription = firebaseService.subscribeToUnreadNotifications().listen(
-      (hasUnread) {
-        _hasUnreadMessages = hasUnread;
-        notifyListeners();
-      },
-      onError: (err) {
-        debugPrint("Error in unread stream: $err");
-      },
-    );
+    _unreadSubscription = firebaseService
+        .subscribeToUnreadNotifications()
+        .listen(
+          (hasUnread) {
+            _hasUnreadMessages = hasUnread;
+            notifyListeners();
+          },
+          onError: (err) {
+            debugPrint("Error in unread stream: $err");
+          },
+        );
   }
 
   Future<void> login(String email, String password) async {
     _isLoading = true;
+    _clearProfileState();
     notifyListeners();
     try {
       await firebaseService.loginAsync(email, password);
       await _loadProfileAndSubscribe();
     } catch (e) {
+      _clearProfileState();
       _isLoading = false;
       notifyListeners();
       rethrow;
@@ -193,14 +225,23 @@ class AppState extends ChangeNotifier {
     String email,
     String password,
     String userType,
-    String nickname,
-  ) async {
+    String nickname, [
+    String? level,
+  ]) async {
     _isLoading = true;
+    _clearProfileState();
     notifyListeners();
     try {
-      await firebaseService.registerAsync(email, password, userType, nickname);
+      await firebaseService.registerAsync(
+        email,
+        password,
+        userType,
+        nickname,
+        level,
+      );
       await _loadProfileAndSubscribe();
     } catch (e) {
+      _clearProfileState();
       _isLoading = false;
       notifyListeners();
       rethrow;
@@ -211,14 +252,8 @@ class AppState extends ChangeNotifier {
     _isLoading = true;
     notifyListeners();
     try {
-      _unreadSubscription?.cancel();
-      _unreadSubscription = null;
       await firebaseService.logoutAsync();
-      _currentUserProfile = null;
-      _activeBandId = null;
-      _activeBandName = null;
-      _hasUnreadMessages = false;
-      _buttonClicks = {};
+      _clearProfileState();
     } catch (e) {
       debugPrint("Error on logout: $e");
     } finally {
@@ -253,7 +288,9 @@ class AppState extends ChangeNotifier {
   Future<void> _loadButtonClicks() async {
     if (currentUserId != null) {
       try {
-        final clicks = await firebaseService.getButtonClicksAsync(currentUserId!);
+        final clicks = await firebaseService.getButtonClicksAsync(
+          currentUserId!,
+        );
         _buttonClicks = clicks;
       } catch (e) {
         debugPrint("Error loading button clicks: $e");
@@ -268,7 +305,11 @@ class AppState extends ChangeNotifier {
     _buttonClicks[buttonId] = newCount;
     notifyListeners();
     try {
-      await firebaseService.saveButtonClickAsync(currentUserId!, buttonId, newCount);
+      await firebaseService.saveButtonClickAsync(
+        currentUserId!,
+        buttonId,
+        newCount,
+      );
     } catch (e) {
       debugPrint("Error saving button click: $e");
     }

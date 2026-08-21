@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../models/band_event.dart';
 import '../providers/app_state.dart';
 import '../theme/app_theme.dart';
+import '../utils/rsvp_deadline_utils.dart';
 import 'animated_tap_detector.dart';
 
 /// Animated RSVP Reminder Popup Modal matching designer mockups
@@ -159,15 +160,8 @@ class _RsvpReminderDialogState extends State<RsvpReminderDialog> with SingleTick
     }
   }
 
-  int _calculateTimeLeftHours() {
-    final start = DateTime.tryParse(widget.event.startDateTime)?.toLocal();
-    if (start != null) {
-      final diff = start.difference(DateTime.now()).inHours;
-      if (diff > 0 && diff <= 72) {
-        return diff;
-      }
-    }
-    return 1;
+  int? _calculateTimeLeftHours() {
+    return RsvpDeadlineUtils.calculateRemainingRsvpHours(widget.event);
   }
 
   @override
@@ -268,27 +262,37 @@ class _RsvpReminderDialogState extends State<RsvpReminderDialog> with SingleTick
                   child: Column(
                     children: [
                       // Reminder header text: REMINDER(24h) Time left for your answer: (X)h
-                      RichText(
-                        textAlign: TextAlign.center,
-                        text: TextSpan(
-                          style: GoogleFonts.inter(
-                            fontSize: 13,
-                            color: Colors.black87,
-                            fontWeight: FontWeight.w600,
-                          ),
-                          children: [
-                            const TextSpan(text: 'REMINDER(24h) Time left for your answer: '),
-                            TextSpan(
-                              text: '($timeLeftHours)h',
+                      timeLeftHours != null
+                          ? RichText(
+                              textAlign: TextAlign.center,
+                              text: TextSpan(
+                                style: GoogleFonts.inter(
+                                  fontSize: 13,
+                                  color: Colors.black87,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                children: [
+                                  const TextSpan(text: 'REMINDER(24h) Time left for your answer: '),
+                                  TextSpan(
+                                    text: '($timeLeftHours)h',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 14,
+                                      color: const Color(0xFFE53935),
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            )
+                          : Text(
+                              'Response requested — no automatic deadline.',
+                              textAlign: TextAlign.center,
                               style: GoogleFonts.inter(
-                                fontSize: 14,
-                                color: const Color(0xFFE53935),
-                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                                color: Colors.black87,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
-                          ],
-                        ),
-                      ),
                       const SizedBox(height: 14),
 
                       // Event Title

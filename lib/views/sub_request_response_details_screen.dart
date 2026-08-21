@@ -13,10 +13,7 @@ import '../widgets/animated_tap_detector.dart';
 class SubRequestResponseDetailsScreen extends StatefulWidget {
   final SubRequest subRequest;
 
-  const SubRequestResponseDetailsScreen({
-    super.key,
-    required this.subRequest,
-  });
+  const SubRequestResponseDetailsScreen({super.key, required this.subRequest});
 
   @override
   State<SubRequestResponseDetailsScreen> createState() =>
@@ -92,7 +89,9 @@ class _SubRequestResponseDetailsScreenState
 
   Future<void> _confirmSelection() async {
     if (_selectedUserId == null) return;
-    final selectedSub = _responders.firstWhere((r) => r.userId == _selectedUserId);
+    final selectedSub = _responders.firstWhere(
+      (r) => r.userId == _selectedUserId,
+    );
 
     setState(() => _isLoading = true);
 
@@ -130,12 +129,13 @@ class _SubRequestResponseDetailsScreenState
       );
 
       // 3. Save agreement chat
-      final conversationId = await appState.firebaseService.createAgreementChatAsync(
-        currentUserId,
-        selectedSub.userId,
-        agreement,
-        message,
-      );
+      final conversationId = await appState.firebaseService
+          .createAgreementChatAsync(
+            currentUserId,
+            selectedSub.userId,
+            agreement,
+            message,
+          );
 
       // If connected to event, update external invitee status to attending
       if (widget.subRequest.bandId != null &&
@@ -144,7 +144,7 @@ class _SubRequestResponseDetailsScreenState
           widget.subRequest.eventId!.isNotEmpty) {
         final bandId = widget.subRequest.bandId!;
         final eventId = widget.subRequest.eventId!;
-        
+
         await appState.firebaseService.updateExternalInviteeResponseAsync(
           bandId,
           eventId,
@@ -152,9 +152,13 @@ class _SubRequestResponseDetailsScreenState
           'attending',
         );
 
-        final event = await appState.firebaseService.getBandEventOnceAsync(bandId, eventId);
+        final event = await appState.firebaseService.getBandEventOnceAsync(
+          bandId,
+          eventId,
+        );
         if (event != null) {
-          if (event.temporaryRoomId != null && event.temporaryRoomId!.isNotEmpty) {
+          if (event.temporaryRoomId != null &&
+              event.temporaryRoomId!.isNotEmpty) {
             await appState.firebaseService.addMemberToEventRoomAsync(
               bandId,
               event.temporaryRoomId!,
@@ -167,17 +171,37 @@ class _SubRequestResponseDetailsScreenState
               context: context,
               builder: (ctx) => AlertDialog(
                 backgroundColor: const Color(0xFF0F0C20),
-                title: Text("Create Event Room?", style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold)),
+                title: Text(
+                  "Create Event Room?",
+                  style: GoogleFonts.outfit(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
                 content: Text(
                   "A substitute has been approved! Would you like to create a temporary event room for this event?",
                   style: GoogleFonts.inter(color: AppTheme.textSecondary),
                 ),
                 actions: [
-                  TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("No thanks", style: TextStyle(color: AppTheme.textSecondary))),
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    child: Text(
+                      "No thanks",
+                      style: GoogleFonts.inter(color: AppTheme.textSecondary),
+                    ),
+                  ),
                   ElevatedButton(
-                    style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryAccent),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.primaryAccent,
+                    ),
                     onPressed: () => Navigator.pop(ctx, true),
-                    child: const Text("Create Room", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    child: Text(
+                      "Create Room",
+                      style: GoogleFonts.inter(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -197,7 +221,10 @@ class _SubRequestResponseDetailsScreenState
       }
 
       // 4. Remove sub request globally and locally
-      await appState.firebaseService.deleteSubRequestAsync(currentUserId, reqId);
+      await appState.firebaseService.deleteSubRequestAsync(
+        currentUserId,
+        reqId,
+      );
 
       // 5. Navigate to Receipt Screen
       if (mounted) {
@@ -232,10 +259,7 @@ class _SubRequestResponseDetailsScreenState
   @override
   Widget build(BuildContext context) {
     return GradientScaffold(
-      appBar: const CustomTopBar(
-        title: 'Responses',
-        showBack: true,
-      ),
+      appBar: const CustomTopBar(title: 'Responses', showBack: true),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -254,162 +278,169 @@ class _SubRequestResponseDetailsScreenState
               const SizedBox(height: 12),
               Expanded(
                 child: _isLoading
-                    ? const Center(child: CircularProgressIndicator(color: AppTheme.primaryAccent))
+                    ? const Center(
+                        child: CircularProgressIndicator(
+                          color: AppTheme.primaryAccent,
+                        ),
+                      )
                     : _responders.isEmpty
-                        ? Center(
-                            child: Text(
-                              'No responses received yet.',
-                              style: GoogleFonts.inter(color: AppTheme.textSecondary),
-                            ),
-                          )
-                        : ListView.builder(
-                            itemCount: _responders.length,
-                            physics: const BouncingScrollPhysics(),
-                            itemBuilder: (context, index) {
-                              final item = _responders[index];
-                              final isSelected = _selectedUserId == item.userId;
+                    ? Center(
+                        child: Text(
+                          'No responses received yet.',
+                          style: GoogleFonts.inter(
+                            color: AppTheme.textSecondary,
+                          ),
+                        ),
+                      )
+                    : ListView.builder(
+                        itemCount: _responders.length,
+                        physics: const BouncingScrollPhysics(),
+                        itemBuilder: (context, index) {
+                          final item = _responders[index];
+                          final isSelected = _selectedUserId == item.userId;
 
-                              return Container(
-                                margin: const EdgeInsets.only(bottom: 16),
-                                decoration: BoxDecoration(
-                                  color: AppTheme.cardBackground,
-                                  borderRadius: BorderRadius.circular(16),
-                                  border: Border.all(
-                                    color: isSelected
-                                        ? AppTheme.primaryAccent
-                                        : const Color(0xFF2E2A4E),
-                                    width: isSelected ? 1.5 : 1,
-                                  ),
-                                ),
-                                child: Padding(
-                                  padding: const EdgeInsets.all(16.0),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 16),
+                            decoration: BoxDecoration(
+                              color: AppTheme.cardBackground,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: isSelected
+                                    ? AppTheme.primaryAccent
+                                    : const Color(0xFF2E2A4E),
+                                width: isSelected ? 1.5 : 1,
+                              ),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.all(16.0),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
                                     children: [
-                                      Row(
-                                        children: [
-                                          Checkbox(
-                                            value: isSelected,
-                                            activeColor: AppTheme.primaryAccent,
-                                            checkColor: Colors.white,
-                                            onChanged: (val) {
-                                              setState(() {
-                                                if (val == true) {
-                                                  _selectedUserId = item.userId;
-                                                } else {
-                                                  _selectedUserId = null;
-                                                }
-                                              });
-                                            },
-                                          ),
-                                          const SizedBox(width: 8),
-                                          Expanded(
-                                            child: Text(
-                                              item.name,
-                                              style: GoogleFonts.outfit(
-                                                fontSize: 18,
-                                                fontWeight: FontWeight.bold,
-                                                color: Colors.white,
-                                              ),
-                                            ),
-                                          ),
-                                        ],
+                                      Checkbox(
+                                        value: isSelected,
+                                        activeColor: AppTheme.primaryAccent,
+                                        checkColor: Colors.white,
+                                        onChanged: (val) {
+                                          setState(() {
+                                            if (val == true) {
+                                              _selectedUserId = item.userId;
+                                            } else {
+                                              _selectedUserId = null;
+                                            }
+                                          });
+                                        },
                                       ),
-                                      const SizedBox(height: 8),
-                                      Container(
-                                        padding: const EdgeInsets.all(12),
-                                        decoration: BoxDecoration(
-                                          color: Colors.white.withOpacity(0.02),
-                                          borderRadius: BorderRadius.circular(10),
-                                          border: Border.all(
-                                            color: Colors.white.withOpacity(0.05),
-                                            width: 1,
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          item.name,
+                                          style: GoogleFonts.outfit(
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.white,
                                           ),
-                                        ),
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Row(
-                                              children: [
-                                                const Icon(
-                                                  Icons.music_note_rounded,
-                                                  color: AppTheme.primaryAccent,
-                                                  size: 16,
-                                                ),
-                                                const SizedBox(width: 8),
-                                                Expanded(
-                                                  child: Text(
-                                                    item.instruments,
-                                                    style: GoogleFonts.inter(
-                                                      color: Colors.white,
-                                                      fontSize: 13,
-                                                      fontWeight: FontWeight.w600,
-                                                    ),
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                            const SizedBox(height: 6),
-                                            Row(
-                                              children: [
-                                                const Icon(
-                                                  Icons.location_on_outlined,
-                                                  color: AppTheme.textSecondary,
-                                                  size: 16,
-                                                ),
-                                                const SizedBox(width: 8),
-                                                Expanded(
-                                                  child: Text(
-                                                    item.location,
-                                                    style: GoogleFonts.inter(
-                                                      color: AppTheme.textSecondary,
-                                                      fontSize: 13,
-                                                    ),
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                            const SizedBox(height: 6),
-                                            Row(
-                                              children: [
-                                                const Icon(
-                                                  Icons.star_outline_rounded,
-                                                  color: AppTheme.warning,
-                                                  size: 16,
-                                                ),
-                                                const SizedBox(width: 8),
-                                                Text(
-                                                  'Level: ${item.level}',
-                                                  style: GoogleFonts.inter(
-                                                    color: AppTheme.textSecondary,
-                                                    fontSize: 13,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                            if (item.about.isNotEmpty) ...[
-                                              const Divider(
-                                                color: Colors.white10,
-                                                height: 16,
-                                              ),
-                                              Text(
-                                                item.about,
-                                                style: GoogleFonts.inter(
-                                                  color: AppTheme.textSecondary,
-                                                  fontSize: 12,
-                                                  fontStyle: FontStyle.italic,
-                                                ),
-                                              ),
-                                            ],
-                                          ],
                                         ),
                                       ),
                                     ],
                                   ),
-                                ),
-                              );
-                            },
-                          ),
+                                  const SizedBox(height: 8),
+                                  Container(
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withOpacity(0.02),
+                                      borderRadius: BorderRadius.circular(10),
+                                      border: Border.all(
+                                        color: Colors.white.withOpacity(0.05),
+                                        width: 1,
+                                      ),
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            const Icon(
+                                              Icons.music_note_rounded,
+                                              color: AppTheme.primaryAccent,
+                                              size: 16,
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Expanded(
+                                              child: Text(
+                                                item.instruments,
+                                                style: GoogleFonts.inter(
+                                                  color: Colors.white,
+                                                  fontSize: 13,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 6),
+                                        Row(
+                                          children: [
+                                            const Icon(
+                                              Icons.location_on_outlined,
+                                              color: AppTheme.textSecondary,
+                                              size: 16,
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Expanded(
+                                              child: Text(
+                                                item.location,
+                                                style: GoogleFonts.inter(
+                                                  color: AppTheme.textSecondary,
+                                                  fontSize: 13,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 6),
+                                        Row(
+                                          children: [
+                                            const Icon(
+                                              Icons.star_outline_rounded,
+                                              color: AppTheme.warning,
+                                              size: 16,
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Text(
+                                              'Level: ${item.level}',
+                                              style: GoogleFonts.inter(
+                                                color: AppTheme.textSecondary,
+                                                fontSize: 13,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        if (item.about.isNotEmpty) ...[
+                                          const Divider(
+                                            color: Colors.white10,
+                                            height: 16,
+                                          ),
+                                          Text(
+                                            item.about,
+                                            style: GoogleFonts.inter(
+                                              color: AppTheme.textSecondary,
+                                              fontSize: 12,
+                                              fontStyle: FontStyle.italic,
+                                            ),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
               ),
               if (_responders.isNotEmpty) ...[
                 const SizedBox(height: 16),

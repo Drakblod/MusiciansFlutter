@@ -213,7 +213,7 @@ class _CreateListingPageState extends State<CreateListingPage> {
       ),
       body: SafeArea(
         child: _isSubmitting
-            ? const Center(
+            ? Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -221,7 +221,7 @@ class _CreateListingPageState extends State<CreateListingPage> {
                     SizedBox(height: 16),
                     Text(
                       'Creating listing and uploading images...',
-                      style: TextStyle(color: Colors.white, fontSize: 14),
+                      style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
                     ),
                   ],
                 ),

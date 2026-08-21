@@ -8,6 +8,7 @@ import '../models/sub_request.dart';
 import '../widgets/animated_tap_detector.dart';
 import '../widgets/custom_top_bar.dart';
 import '../widgets/gradient_scaffold.dart';
+import '../config/feature_toggles.dart';
 
 class FindGigsScreen extends StatefulWidget {
   const FindGigsScreen({super.key});
@@ -281,10 +282,10 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(color: Colors.white12),
                           ),
-                          child: const Center(
+                          child: Center(
                             child: Text(
                               'Applied',
-                              style: TextStyle(
+                              style: GoogleFonts.inter(
                                 color: Colors.white54,
                                 fontWeight: FontWeight.bold,
                                 fontSize: 16,
@@ -329,10 +330,10 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                               gradient: AppTheme.primaryGradient,
                               borderRadius: BorderRadius.circular(12),
                             ),
-                            child: const Center(
+                            child: Center(
                               child: Text(
                                 'Apply for Gig',
-                                style: TextStyle(
+                                style: GoogleFonts.inter(
                                   color: Colors.white,
                                   fontWeight: FontWeight.bold,
                                   fontSize: 16,
@@ -378,29 +379,31 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                 ),
                 Row(
                   children: [
-                    TextButton.icon(
-                      onPressed: () {
-                        Navigator.pushNamed(context, '/gig-map');
-                      },
-                      icon: const Icon(Icons.map_rounded, color: AppTheme.primaryAccent, size: 18),
-                      label: Text(
-                        'Map View',
-                        style: GoogleFonts.inter(
-                          color: AppTheme.primaryAccent,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13,
+                    if (!FeatureToggles.showMapInTopBar) ...[
+                      TextButton.icon(
+                        onPressed: () {
+                          Navigator.pushNamed(context, '/gig-map');
+                        },
+                        icon: const Icon(Icons.map_rounded, color: AppTheme.primaryAccent, size: 18),
+                        label: Text(
+                          'Map View',
+                          style: GoogleFonts.inter(
+                            color: AppTheme.primaryAccent,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                          ),
+                        ),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          backgroundColor: AppTheme.primaryAccent.withOpacity(0.12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            side: BorderSide(color: AppTheme.primaryAccent.withOpacity(0.3)),
+                          ),
                         ),
                       ),
-                      style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        backgroundColor: AppTheme.primaryAccent.withOpacity(0.12),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          side: BorderSide(color: AppTheme.primaryAccent.withOpacity(0.3)),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
+                      const SizedBox(width: 12),
+                    ],
                     const Icon(Icons.filter_list_rounded, color: Colors.white, size: 24),
                   ],
                 ),

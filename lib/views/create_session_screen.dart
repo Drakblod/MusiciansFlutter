@@ -75,6 +75,8 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
             _selectedTime = TimeOfDay.fromDateTime(dt);
           }
         }
+      } else if (args is String && args == 'Jam') {
+        _sessionCategory = 'Jam';
       }
       _initialized = true;
     }
@@ -469,7 +471,7 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
 
                 // Genres Selector
                 Text(
-                  'Genres / Styles',
+                  'Genres/Band Types',
                   style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
                 ),
                 const SizedBox(height: 10),

@@ -7,6 +7,7 @@ import '../theme/app_theme.dart';
 import '../widgets/gradient_scaffold.dart';
 import '../widgets/custom_top_bar.dart';
 import '../models/agreement.dart';
+import '../utils/date_parser.dart';
 
 class InboxScreen extends StatefulWidget {
   const InboxScreen({super.key});
@@ -45,7 +46,8 @@ class _InboxScreenState extends State<InboxScreen> {
     }
   }
 
-  String _formatTimestamp(DateTime dt) {
+  String _formatTimestamp(DateTime? dt) {
+    if (dt == null) return '';
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final yesterday = today.subtract(const Duration(days: 1));
@@ -65,9 +67,7 @@ class _InboxScreenState extends State<InboxScreen> {
     final appState = Provider.of<AppState>(context);
 
     return GradientScaffold(
-      appBar: const CustomTopBar(
-        showBack: true,
-      ),
+      appBar: const CustomTopBar(showBack: true),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -83,7 +83,7 @@ class _InboxScreenState extends State<InboxScreen> {
               ),
             ),
           ),
-          
+
           // Custom Tab Switcher
           Container(
             margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -101,7 +101,9 @@ class _InboxScreenState extends State<InboxScreen> {
                     child: Container(
                       padding: const EdgeInsets.symmetric(vertical: 10),
                       decoration: BoxDecoration(
-                        color: _activeTab == 0 ? AppTheme.primaryAccent : Colors.transparent,
+                        color: _activeTab == 0
+                            ? AppTheme.primaryAccent
+                            : Colors.transparent,
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Center(
@@ -110,7 +112,9 @@ class _InboxScreenState extends State<InboxScreen> {
                           style: GoogleFonts.outfit(
                             fontSize: 14,
                             fontWeight: FontWeight.bold,
-                            color: _activeTab == 0 ? Colors.white : AppTheme.textSecondary,
+                            color: _activeTab == 0
+                                ? Colors.white
+                                : AppTheme.textSecondary,
                           ),
                         ),
                       ),
@@ -123,7 +127,9 @@ class _InboxScreenState extends State<InboxScreen> {
                     child: Container(
                       padding: const EdgeInsets.symmetric(vertical: 10),
                       decoration: BoxDecoration(
-                        color: _activeTab == 1 ? const Color(0xFF0F4D25) : Colors.transparent,
+                        color: _activeTab == 1
+                            ? const Color(0xFF0F4D25)
+                            : Colors.transparent,
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Center(
@@ -132,7 +138,9 @@ class _InboxScreenState extends State<InboxScreen> {
                           style: GoogleFonts.outfit(
                             fontSize: 14,
                             fontWeight: FontWeight.bold,
-                            color: _activeTab == 1 ? Colors.white : AppTheme.textSecondary,
+                            color: _activeTab == 1
+                                ? Colors.white
+                                : AppTheme.textSecondary,
                           ),
                         ),
                       ),
@@ -149,7 +157,11 @@ class _InboxScreenState extends State<InboxScreen> {
               color: AppTheme.primaryAccent,
               backgroundColor: AppTheme.cardBackground,
               child: _isLoading
-                  ? const Center(child: CircularProgressIndicator(color: AppTheme.primaryAccent))
+                  ? const Center(
+                      child: CircularProgressIndicator(
+                        color: AppTheme.primaryAccent,
+                      ),
+                    )
                   : () {
                       final filteredThreads = _threads.where((t) {
                         final hasAgreement = t['agreement'] != null;
@@ -160,22 +172,28 @@ class _InboxScreenState extends State<InboxScreen> {
                         return ListView(
                           physics: const AlwaysScrollableScrollPhysics(),
                           children: [
-                            SizedBox(height: MediaQuery.of(context).size.height * 0.2),
+                            SizedBox(
+                              height: MediaQuery.of(context).size.height * 0.2,
+                            ),
                             Center(
                               child: Column(
                                 children: [
                                   Icon(
-                                    _activeTab == 0 
-                                        ? Icons.chat_bubble_outline_rounded 
+                                    _activeTab == 0
+                                        ? Icons.chat_bubble_outline_rounded
                                         : Icons.handshake_outlined,
                                     size: 64,
-                                    color: _activeTab == 0 
-                                        ? AppTheme.textSecondary.withOpacity(0.5)
+                                    color: _activeTab == 0
+                                        ? AppTheme.textSecondary.withOpacity(
+                                            0.5,
+                                          )
                                         : Colors.greenAccent.withOpacity(0.5),
                                   ),
                                   const SizedBox(height: 16),
                                   Text(
-                                    _activeTab == 0 ? 'No direct conversations.' : 'No active gig agreements.',
+                                    _activeTab == 0
+                                        ? 'No direct conversations.'
+                                        : 'No active gig agreements.',
                                     style: GoogleFonts.outfit(
                                       fontSize: 18,
                                       fontWeight: FontWeight.bold,
@@ -184,9 +202,11 @@ class _InboxScreenState extends State<InboxScreen> {
                                   ),
                                   const SizedBox(height: 8),
                                   Padding(
-                                    padding: const EdgeInsets.symmetric(horizontal: 40),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 40,
+                                    ),
                                     child: Text(
-                                      _activeTab == 0 
+                                      _activeTab == 0
                                           ? 'Start a chat by tapping Message on a musician\'s profile.'
                                           : 'Agreements are started when a sub request is accepted.',
                                       style: GoogleFonts.inter(
@@ -209,22 +229,30 @@ class _InboxScreenState extends State<InboxScreen> {
                         itemCount: filteredThreads.length,
                         itemBuilder: (context, index) {
                           final thread = filteredThreads[index];
-                          final hasUnread = thread['hasUnread'] as bool;
-                          final timestamp = thread['timestamp'] as DateTime;
+                          final hasUnread = thread['hasUnread'] == true;
+                          final timestamp = parseDateTime(
+                            thread['timestamp'] ??
+                                thread['lastMessageTimestamp'],
+                          );
                           final otherUserId = thread['otherUserId'] as String;
-                          final otherUserName = thread['otherUserName'] as String;
-                          final lastMessage = thread['lastMessageText'] as String;
-                          final conversationId = thread['conversationId'] as String;
+                          final otherUserName =
+                              thread['otherUserName'] as String;
+                          final lastMessage =
+                              thread['lastMessageText'] as String;
+                          final conversationId =
+                              thread['conversationId'] as String;
                           final agreement = thread['agreement'] as Agreement?;
-                          
+
                           final isAgreement = agreement != null;
-                          final cardBorderColor = hasUnread 
+                          final cardBorderColor = hasUnread
                               ? AppTheme.primaryAccent.withOpacity(0.5)
                               : isAgreement
-                                  ? const Color(0xFF0F4D25).withOpacity(0.6)
-                                  : const Color(0xFF231F45);
-                          final cardBgColor = isAgreement 
-                              ? const Color(0xFF0A1C12) // Low-opacity forest green background
+                              ? const Color(0xFF0F4D25).withOpacity(0.6)
+                              : const Color(0xFF231F45);
+                          final cardBgColor = isAgreement
+                              ? const Color(
+                                  0xFF0A1C12,
+                                ) // Low-opacity forest green background
                               : AppTheme.cardBackground;
 
                           return Container(
@@ -243,11 +271,12 @@ class _InboxScreenState extends State<InboxScreen> {
                                 borderRadius: BorderRadius.circular(16),
                                 onTap: () async {
                                   // Mark conversation as read
-                                  await appState.firebaseService.markConversationAsRead(conversationId);
-                                  
+                                  await appState.firebaseService
+                                      .markConversationAsRead(conversationId);
+
                                   // Trigger state update
                                   appState.refreshProfile();
-                                  
+
                                   if (context.mounted) {
                                     await Navigator.pushNamed(
                                       context,
@@ -263,19 +292,31 @@ class _InboxScreenState extends State<InboxScreen> {
                                   }
                                 },
                                 child: Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 14,
+                                  ),
                                   child: Row(
                                     children: [
                                       // Avatar
                                       CircleAvatar(
                                         radius: 24,
-                                        backgroundColor: isAgreement 
-                                            ? const Color(0xFF0D3A20).withOpacity(0.3)
-                                            : AppTheme.primaryAccent.withOpacity(0.15),
+                                        backgroundColor: isAgreement
+                                            ? const Color(
+                                                0xFF0D3A20,
+                                              ).withOpacity(0.3)
+                                            : AppTheme.primaryAccent
+                                                  .withOpacity(0.15),
                                         child: Text(
-                                          otherUserName.isNotEmpty ? otherUserName.substring(0, 1).toUpperCase() : 'U',
-                                          style: TextStyle(
-                                            color: isAgreement ? Colors.greenAccent : Colors.white,
+                                          otherUserName.isNotEmpty
+                                              ? otherUserName
+                                                    .substring(0, 1)
+                                                    .toUpperCase()
+                                              : 'U',
+                                          style: GoogleFonts.inter(
+                                            color: isAgreement
+                                                ? Colors.greenAccent
+                                                : Colors.white,
                                             fontSize: 18,
                                             fontWeight: FontWeight.bold,
                                           ),
@@ -286,10 +327,13 @@ class _InboxScreenState extends State<InboxScreen> {
                                       // Details
                                       Expanded(
                                         child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
                                           children: [
                                             Row(
-                                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment
+                                                      .spaceBetween,
                                               children: [
                                                 Expanded(
                                                   child: Row(
@@ -297,29 +341,55 @@ class _InboxScreenState extends State<InboxScreen> {
                                                       Flexible(
                                                         child: Text(
                                                           otherUserName,
-                                                          style: GoogleFonts.outfit(
-                                                            fontSize: 16,
-                                                            fontWeight: FontWeight.bold,
-                                                            color: Colors.white,
-                                                          ),
-                                                          overflow: TextOverflow.ellipsis,
+                                                          style:
+                                                              GoogleFonts.outfit(
+                                                                fontSize: 16,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .bold,
+                                                                color: Colors
+                                                                    .white,
+                                                              ),
+                                                          overflow: TextOverflow
+                                                              .ellipsis,
                                                         ),
                                                       ),
                                                       if (isAgreement) ...[
-                                                        const SizedBox(width: 6),
+                                                        const SizedBox(
+                                                          width: 6,
+                                                        ),
                                                         Container(
-                                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                          padding:
+                                                              const EdgeInsets.symmetric(
+                                                                horizontal: 6,
+                                                                vertical: 2,
+                                                              ),
                                                           decoration: BoxDecoration(
-                                                            color: const Color(0xFF0F4D25),
-                                                            borderRadius: BorderRadius.circular(6),
-                                                            border: Border.all(color: Colors.greenAccent.withOpacity(0.3), width: 0.8),
+                                                            color: const Color(
+                                                              0xFF0F4D25,
+                                                            ),
+                                                            borderRadius:
+                                                                BorderRadius.circular(
+                                                                  6,
+                                                                ),
+                                                            border: Border.all(
+                                                              color: Colors
+                                                                  .greenAccent
+                                                                  .withOpacity(
+                                                                    0.3,
+                                                                  ),
+                                                              width: 0.8,
+                                                            ),
                                                           ),
                                                           child: Text(
                                                             'Agreement',
                                                             style: GoogleFonts.inter(
-                                                              color: Colors.greenAccent,
+                                                              color: Colors
+                                                                  .greenAccent,
                                                               fontSize: 9,
-                                                              fontWeight: FontWeight.bold,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .bold,
                                                             ),
                                                           ),
                                                         ),
@@ -331,30 +401,42 @@ class _InboxScreenState extends State<InboxScreen> {
                                                   _formatTimestamp(timestamp),
                                                   style: GoogleFonts.inter(
                                                     fontSize: 11,
-                                                    color: hasUnread ? AppTheme.primaryAccent : AppTheme.textMuted,
-                                                    fontWeight: hasUnread ? FontWeight.bold : FontWeight.normal,
+                                                    color: hasUnread
+                                                        ? AppTheme.primaryAccent
+                                                        : AppTheme.textMuted,
+                                                    fontWeight: hasUnread
+                                                        ? FontWeight.bold
+                                                        : FontWeight.normal,
                                                   ),
                                                 ),
                                               ],
                                             ),
                                             const SizedBox(height: 6),
-                                            
+
                                             // Context info for agreements
                                             if (isAgreement) ...[
                                               Row(
                                                 children: [
-                                                  const Icon(Icons.music_note_rounded, size: 13, color: Colors.greenAccent),
+                                                  const Icon(
+                                                    Icons.music_note_rounded,
+                                                    size: 13,
+                                                    color: Colors.greenAccent,
+                                                  ),
                                                   const SizedBox(width: 4),
                                                   Expanded(
                                                     child: Text(
                                                       '${agreement.bandName ?? "Unknown Band"} • Sub: ${agreement.voicePart ?? "Musician"}',
                                                       style: GoogleFonts.inter(
-                                                        color: Colors.greenAccent.withOpacity(0.8),
+                                                        color: Colors
+                                                            .greenAccent
+                                                            .withOpacity(0.8),
                                                         fontSize: 12,
-                                                        fontWeight: FontWeight.w500,
+                                                        fontWeight:
+                                                            FontWeight.w500,
                                                       ),
                                                       maxLines: 1,
-                                                      overflow: TextOverflow.ellipsis,
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
                                                     ),
                                                   ),
                                                 ],
@@ -369,22 +451,34 @@ class _InboxScreenState extends State<InboxScreen> {
                                                     lastMessage,
                                                     style: GoogleFonts.inter(
                                                       fontSize: 13,
-                                                      color: hasUnread ? Colors.white : AppTheme.textSecondary,
-                                                      fontWeight: hasUnread ? FontWeight.bold : FontWeight.normal,
+                                                      color: hasUnread
+                                                          ? Colors.white
+                                                          : AppTheme
+                                                                .textSecondary,
+                                                      fontWeight: hasUnread
+                                                          ? FontWeight.bold
+                                                          : FontWeight.normal,
                                                     ),
                                                     maxLines: 1,
-                                                    overflow: TextOverflow.ellipsis,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
                                                   ),
                                                 ),
                                                 if (hasUnread)
                                                   Container(
                                                     width: 8,
                                                     height: 8,
-                                                    margin: const EdgeInsets.only(left: 8),
-                                                    decoration: const BoxDecoration(
-                                                      color: Colors.redAccent,
-                                                      shape: BoxShape.circle,
-                                                    ),
+                                                    margin:
+                                                        const EdgeInsets.only(
+                                                          left: 8,
+                                                        ),
+                                                    decoration:
+                                                        const BoxDecoration(
+                                                          color:
+                                                              Colors.redAccent,
+                                                          shape:
+                                                              BoxShape.circle,
+                                                        ),
                                                   ),
                                               ],
                                             ),

@@ -31,10 +31,20 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   final _spotifyController = TextEditingController();
   final _youtubeController = TextEditingController();
   
-  List<String> _selectedInstruments = [];
-  List<String> _mainSkills = [];
+  List<String> _primarySkills = [];
+  List<String> _secondarySkills = [];
+  List<String> _otherSkills = [];
   List<String> _selectedGenres = [];
+  late String _level;
   bool _isSaving = false;
+
+  final List<String> _levels = [
+    'A = PRO',
+    'B = SEMI PRO',
+    'C = INTERMEDIATE',
+    'D = AMATEUR',
+    'E = BEGINNER'
+  ];
 
   String? _profilePictureUrl;
   bool _isUploadingProfilePic = false;
@@ -43,61 +53,93 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   String? _pickedAudioFileName;
   bool _isUploadingAudio = false;
 
-  // 1. Instruments
-  static final Map<String, List<String>> _instrumentsCategoryMap = {
+  // Master Skills & Talents Category Map
+  static final Map<String, List<String>> _allSkillsCategoryMap = {
+    '🎧 Roles / Production': [
+      'BANDLEADER',
+      'SONGWRITER',
+      'PRODUCER',
+      'COMPOSER',
+      'LYRICIST',
+      'BEATMAKER',
+      'STUDIO/ENGINEER, etc',
+    ],
     '🎷 Woodwinds': [
-      'Flute', 'Piccolo Flute', 'Alto Flute', 'Bass Flute',
-      'Oboe', 'English Horn', 'Clarinet', 'Eb Clarinet', 'Alto Clarinet', 'Bass Clarinet',
-      'Bassoon', 'Contra Bassoon', 'Soprano Sax', 'Alto Sax', 'Tenor Sax', 'Bari Sax',
-      'Recorder', 'Soprano Recorder', 'Alto Recorder', 'Tenor Recorder', 'Bass Recorder'
+      'Recorder',
+      'Flute',
+      'Oboe',
+      'Clarinet',
+      'Bassoon',
+      'Soprano Sax',
+      'Alto Sax',
+      'Tenor Sax',
+      'Bari Sax',
     ],
     '🎺 Brass': [
-      'Trumpet', 'Cornet', 'Piccolo Trumpet', 'Trombone', 'Alto Trombone',
-      'French Horn', 'Euphonium', 'Tuba'
+      'Trumpet',
+      'Cornet',
+      'Trombone',
+      'French Horn',
+      'Euphonium',
+      'Tuba',
     ],
     '🎻 Strings': [
-      'Acoustic Guitar', 'Electric Guitar', 'Electric Bass', 'Violin', 'Viola', 'Cello',
-      'Contrabass', 'Harp', 'Viola da Gamba', 'Steel Guitar', 'Steel Pan'
+      'Violin',
+      'Viola',
+      'Cello',
+      'Contrabass',
+      'Acoustic Guitar',
+      'Electric Guitar',
+      'Electric Bass',
+      'Harp',
     ],
     '🎹 Keyboards': [
-      'Piano', 'Keyboard/Synth', 'Harpsichord', 'Organ (Hammond)'
+      'Piano',
+      'Keyboard/Synth',
+      'Harpsichord',
+      'Organ (Hammond)',
     ],
     '🥁 Percussion': [
-      'Drums', 'Latin Percussion (congas, timbales, etc)', 'Classical Percussion (timpani, cymbals, etc)'
+      'Drums',
+      'Latin Percussion (congas, timbales, etc)',
+      'Classical Percussion (timpani, cymbals, etc)',
     ],
-  };
-
-  // 2. Voices
-  static final Map<String, List<String>> _voicesCategoryMap = {
     '🗣️ Voices (Choir)': [
-      'Soprano', 'Alto', 'Tenor', 'Baritone', 'Bass'
+      'Soprano',
+      'Alto',
+      'Tenor',
+      'Baritone',
+      'Bass',
     ],
-    '🎼 Misc Voices (Classical & Choir)': [
-      'Mezzo Soprano', 'Contralto', 'Counter Tenor'
+    '🎭 Miscellaneous Voices (Classical, Choir)': [
+      'Mezzo Soprano',
+      'Contralto',
+      'Counter Tenor',
     ],
-    '🎙️ Voices (Popular Music)': [
-      'Male Lead Vocals', 'Female Lead vocals', 'Male Backing vocals', 'Female Backing vocals'
+    '🎤 Voices (Popular Music)': [
+      'Male Lead Vocals',
+      'Female Lead vocals',
+      'Male Backing vocals',
+      'Female Backing vocals',
     ],
-  };
-
-  // 3. Songwriters/Producers, etc
-  static final Map<String, List<String>> _songwritersCategoryMap = {
-    '🎧 Songwriters & Producers': [
-      'Songwriter', 'Producer', 'Composer', 'Lyricist', 'Beatmaker', 'DJ', 'Other'
-    ],
-  };
-
-  // 4. Studios/Engineers
-  static final Map<String, List<String>> _studiosCategoryMap = {
-    '🎛️ Studios & Engineers': [
-      'Studio', 'Home Studio', 'Recording Engineer', 'Mix engineer', 'Live Engineer', 'Other'
-    ],
-  };
-
-  // 5. PR & Management
-  static final Map<String, List<String>> _prManagementCategoryMap = {
-    '💼 PR & Management': [
-      'Manager', 'Promotor', 'Agency', 'Other'
+    '🪈 Miscellaneous Instruments': [
+      'Soprano Recorder',
+      'Alto Recorder',
+      'Tenor Recorder',
+      'Bass Recorder',
+      'Piccolo Flute',
+      'Alto Flute',
+      'Bass Flute',
+      'English Horn',
+      'Eb Clarinet',
+      'Alto Clarinet',
+      'Bass Clarinet',
+      'Contra Bassoon',
+      'Piccolo Trumpet',
+      'Alto Trombone',
+      'Viola da Gamba',
+      'Steel Guitar',
+      'Steel Pan',
     ],
   };
 
@@ -186,32 +228,47 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     ],
   };
 
-  int _countSelectedForMap(Map<String, List<String>> categoryMap) {
-    int count = 0;
-    for (final list in categoryMap.values) {
-      for (final item in list) {
-        if (_selectedInstruments.contains(item)) {
-          count++;
-        }
-      }
-    }
-    return count;
-  }
-
-  Future<void> _openCategoryPicker(String title, Map<String, List<String>> categoryMap) async {
+  Future<void> _openPrimarySkillPicker() async {
     final result = await SearchableCategoryMultiSelectSheet.show(
       context: context,
-      title: title,
-      categoryMap: categoryMap,
-      initialSelected: _selectedInstruments,
+      title: 'Primary Skill/Talent (Select 1)',
+      categoryMap: _allSkillsCategoryMap,
+      initialSelected: _primarySkills,
+      maxSelection: 1,
     );
     if (result != null) {
       setState(() {
-        _selectedInstruments = result;
-        _mainSkills.removeWhere((skill) => !_selectedInstruments.contains(skill));
-        if (_mainSkills.isEmpty && _selectedInstruments.isNotEmpty) {
-          _mainSkills = [_selectedInstruments.first];
-        }
+        _primarySkills = result;
+        _secondarySkills.removeWhere((item) => _primarySkills.contains(item));
+        _otherSkills.removeWhere((item) => _primarySkills.contains(item));
+      });
+    }
+  }
+
+  Future<void> _openSecondarySkillsPicker() async {
+    final result = await SearchableCategoryMultiSelectSheet.show(
+      context: context,
+      title: 'Secondary Skills',
+      categoryMap: _allSkillsCategoryMap,
+      initialSelected: _secondarySkills,
+    );
+    if (result != null) {
+      setState(() {
+        _secondarySkills = result.where((item) => !_primarySkills.contains(item) && !_otherSkills.contains(item)).toList();
+      });
+    }
+  }
+
+  Future<void> _openOtherSkillsPicker() async {
+    final result = await SearchableCategoryMultiSelectSheet.show(
+      context: context,
+      title: 'Other Skills',
+      categoryMap: _allSkillsCategoryMap,
+      initialSelected: _otherSkills,
+    );
+    if (result != null) {
+      setState(() {
+        _otherSkills = result.where((item) => !_primarySkills.contains(item) && !_secondarySkills.contains(item)).toList();
       });
     }
   }
@@ -219,7 +276,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   Future<void> _openGenrePicker() async {
     final result = await SearchableCategoryMultiSelectSheet.show(
       context: context,
-      title: 'Select Genres/Band Types',
+      title: 'Genres/Band Types',
       categoryMap: _genreCategoryMap,
       initialSelected: _selectedGenres,
     );
@@ -259,29 +316,38 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         }
       }
       
-      _selectedInstruments = List<String>.from(user.instruments)
+      final rawAll = List<String>.from(user.instruments)
           .where((i) => i != 'Browse Musicians' && i != 'Browse Profiles' && i != 'browse_musicians')
           .toList();
+
       final role = user.userType ?? '';
-      if (role.isNotEmpty &&
-          role != 'Browse Musicians' &&
-          role != 'Browse Profiles' &&
-          role != 'browse_musicians' &&
-          !_selectedInstruments.contains(role)) {
-        _selectedInstruments.add(role);
+      if (user.mainInstrument != null && user.mainInstrument!.isNotEmpty) {
+        final parsed = user.mainInstrument!.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty && e != 'Browse Musicians' && e != 'Browse Profiles').toList();
+        _primarySkills = parsed.take(1).toList();
+      } else if (role.isNotEmpty && role != 'Browse Musicians' && role != 'Browse Profiles' && role != 'browse_musicians') {
+        _primarySkills = [role];
+      } else if (rawAll.isNotEmpty) {
+        _primarySkills = [rawAll.first];
+      } else {
+        _primarySkills = [];
       }
 
+      final remaining = rawAll.where((i) => !_primarySkills.contains(i)).toList();
       if (user.mainInstrument != null && user.mainInstrument!.isNotEmpty) {
-        final parsed = user.mainInstrument!.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
-        _mainSkills = parsed.where((item) => _selectedInstruments.contains(item)).take(3).toList();
-      }
-      if (_mainSkills.isEmpty && _selectedInstruments.isNotEmpty) {
-        _mainSkills = [_selectedInstruments.first];
+        final parsedAllMain = user.mainInstrument!.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+        final secondaryFromMain = parsedAllMain.skip(1).toList();
+        _secondarySkills = [...secondaryFromMain, ...remaining.take(3 - secondaryFromMain.length)].toSet().toList();
+        _otherSkills = remaining.where((i) => !_secondarySkills.contains(i)).toList();
+      } else {
+        _secondarySkills = remaining.take(3).toList();
+        _otherSkills = remaining.skip(3).toList();
       }
 
       _selectedGenres = List<String>.from(user.genres);
+      _level = _levels.contains(user.level) ? user.level! : 'C = INTERMEDIATE';
     } else {
       _emailController.text = appState.firebaseService.currentUser?.email ?? '';
+      _level = 'C = INTERMEDIATE';
     }
   }
 
@@ -320,10 +386,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       builder: (context) {
         return Container(
           decoration: BoxDecoration(
-            color: const Color(0xFF0F0C22).withOpacity(0.95),
+            color: const Color(0xFF16132D).withOpacity(0.95),
             borderRadius: const BorderRadius.only(
-              topLeft: Radius.circular(20),
-              topRight: Radius.circular(20),
+              topLeft: Radius.circular(24),
+              topRight: Radius.circular(24),
             ),
             border: Border.all(color: const Color(0xFF2E2A4E), width: 1.5),
           ),
@@ -331,31 +397,39 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                const SizedBox(height: 12),
+                Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.white24,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
                 const SizedBox(height: 16),
                 Text(
-                  'PROFILE PICTURE',
+                  'Profile Picture',
                   style: GoogleFonts.outfit(
-                    fontSize: 16,
+                    fontSize: 18,
                     fontWeight: FontWeight.bold,
                     color: Colors.white,
-                    letterSpacing: 2,
                   ),
                 ),
                 const SizedBox(height: 16),
                 ListTile(
-                  leading: const Icon(Icons.camera_alt_outlined, color: AppTheme.primaryAccent),
-                  title: Text('Take Photo', style: GoogleFonts.inter(color: Colors.white)),
-                  onTap: () {
-                    Navigator.pop(context);
-                    _pickAndUploadProfilePicture(ImageSource.camera);
-                  },
-                ),
-                ListTile(
-                  leading: const Icon(Icons.photo_library_outlined, color: AppTheme.primaryAccent),
+                  leading: const Icon(Icons.photo_library_rounded, color: AppTheme.primaryAccent),
                   title: Text('Choose from Gallery', style: GoogleFonts.inter(color: Colors.white)),
                   onTap: () {
                     Navigator.pop(context);
                     _pickAndUploadProfilePicture(ImageSource.gallery);
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.camera_alt_rounded, color: AppTheme.primaryAccent),
+                  title: Text('Take a Photo', style: GoogleFonts.inter(color: Colors.white)),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _pickAndUploadProfilePicture(ImageSource.camera);
                   },
                 ),
                 if (_profilePictureUrl != null && _profilePictureUrl!.isNotEmpty)
@@ -446,45 +520,43 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     try {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
-        allowedExtensions: ['mp3'],
+        allowedExtensions: ['mp3', 'm4a', 'wav', 'aac', 'ogg', 'flac'],
         withData: true,
       );
 
-      if (result != null) {
-        final file = result.files.single;
-        Uint8List? bytes = file.bytes;
-        if (bytes == null && file.path != null) {
-          bytes = await File(file.path!).readAsBytes();
-        }
+      if (result != null && result.files.isNotEmpty) {
+        final file = result.files.first;
+        final bytes = file.bytes;
+        final name = file.name;
 
-        setState(() {
-          _isUploadingAudio = true;
-          _pickedAudioFileName = file.name;
-        });
+        if (bytes != null) {
+          setState(() {
+            _isUploadingAudio = true;
+          });
 
-        final appState = Provider.of<AppState>(context, listen: false);
-        final userId = appState.currentUserProfile?.userId;
-        if (userId == null) {
-          throw Exception("User is not logged in");
-        }
+          final appState = Provider.of<AppState>(context, listen: false);
+          final userId = appState.currentUserProfile?.userId;
+          if (userId == null) throw Exception("User is not logged in");
 
-        final url = await appState.firebaseService.uploadAudioSnippetAsync(
-          userId,
-          bytes,
-          file.path,
-        );
-
-        setState(() {
-          _audioSnippetUrl = url;
-        });
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Track uploaded successfully!'),
-              backgroundColor: AppTheme.success,
-            ),
+          final url = await appState.firebaseService.uploadAudioSnippetAsync(
+            userId,
+            bytes,
+            name,
           );
+
+          setState(() {
+            _audioSnippetUrl = url;
+            _pickedAudioFileName = name;
+          });
+
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Track uploaded successfully!'),
+                backgroundColor: AppTheme.success,
+              ),
+            );
+          }
         }
       }
     } catch (e) {
@@ -505,26 +577,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     }
   }
 
-  void _toggleMainSkill(String skill) {
-    setState(() {
-      if (_mainSkills.contains(skill)) {
-        _mainSkills.remove(skill);
-      } else {
-        if (_mainSkills.length >= 3) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('You can select a maximum of 3 Primary Skills'),
-              backgroundColor: AppTheme.warning,
-              duration: Duration(seconds: 2),
-            ),
-          );
-        } else {
-          _mainSkills.add(skill);
-        }
-      }
-    });
-  }
-
   void _toggleGenre(String genre) {
     setState(() {
       if (_selectedGenres.contains(genre)) {
@@ -535,29 +587,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     });
   }
 
-  void _toggleInstrument(String instrument) {
-    setState(() {
-      if (_selectedInstruments.contains(instrument)) {
-        _selectedInstruments.remove(instrument);
-        _mainSkills.remove(instrument);
-        if (_mainSkills.isEmpty && _selectedInstruments.isNotEmpty) {
-          _mainSkills = [_selectedInstruments.first];
-        }
-      } else {
-        _selectedInstruments.add(instrument);
-        if (_mainSkills.length < 3) {
-          _mainSkills.add(instrument);
-        }
-      }
-    });
-  }
-
   Future<void> _saveProfile() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_selectedInstruments.isEmpty) {
+    if (_primarySkills.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please select at least one skill or talent'),
+          content: Text('Please select at least 1 Primary Skill/Talent'),
           backgroundColor: AppTheme.danger,
         ),
       );
@@ -570,22 +605,32 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     try {
       final user = appState.currentUserProfile;
       if (user != null) {
+        final allSelectedSkills = <String>[..._primarySkills];
+        for (var s in _secondarySkills) {
+          if (!allSelectedSkills.contains(s)) allSelectedSkills.add(s);
+        }
+        for (var s in _otherSkills) {
+          if (!allSelectedSkills.contains(s)) allSelectedSkills.add(s);
+        }
+        final mainInstrumentStr = ([..._primarySkills, ..._secondarySkills]).join(', ');
+
         final updatedProfile = UserProfile(
           userId: user.userId,
           nickname: user.nickname,
           displayName: _nameController.text.trim(),
           email: _emailController.text.trim().isEmpty ? null : _emailController.text.trim(),
-          userType: _mainSkills.isNotEmpty ? _mainSkills.first : (_selectedInstruments.isNotEmpty ? _selectedInstruments.first : 'Electric Guitar'),
+          userType: _primarySkills.first,
           location: _locationController.text.trim(),
+          level: _level,
           about: _aboutController.text.trim(),
           profilePictureUrl: _profilePictureUrl,
           genres: _selectedGenres,
-          instruments: _selectedInstruments,
+          instruments: allSelectedSkills,
           spotifyUrl: _spotifyController.text.trim().isEmpty ? null : _spotifyController.text.trim(),
           youtubeUrl: _youtubeController.text.trim().isEmpty ? null : _youtubeController.text.trim(),
           audioSnippetUrl: _audioSnippetUrl,
           collabBio: _collabBioController.text.trim().isEmpty ? null : _collabBioController.text.trim(),
-          mainInstrument: _mainSkills.isNotEmpty ? _mainSkills.join(', ') : (_selectedInstruments.isNotEmpty ? _selectedInstruments.first : null),
+          mainInstrument: mainInstrumentStr,
         );
 
         await appState.firebaseService.saveUserProfileAsync(user.userId ?? '', updatedProfile);
@@ -704,12 +749,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final instrumentsCount = _countSelectedForMap(_instrumentsCategoryMap);
-    final voicesCount = _countSelectedForMap(_voicesCategoryMap);
-    final songwritersCount = _countSelectedForMap(_songwritersCategoryMap);
-    final studiosCount = _countSelectedForMap(_studiosCategoryMap);
-    final prCount = _countSelectedForMap(_prManagementCategoryMap);
-
     return GradientScaffold(
       appBar: const CustomTopBar(
         showBack: true,
@@ -867,10 +906,20 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               ),
               const SizedBox(height: 20),
 
-              // 3. Location (incl. country)
-              Text(
-                'Location (incl. country)',
-                style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+              // 3. Location (City, Country)
+              Text.rich(
+                TextSpan(
+                  children: [
+                    TextSpan(
+                      text: 'Location',
+                      style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                    ),
+                    TextSpan(
+                      text: ' (City, Country)',
+                      style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.normal, color: Colors.white),
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(height: 8),
               TextFormField(
@@ -882,215 +931,372 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               ),
               const SizedBox(height: 24),
 
-              // 4. Primary Skills Selection Categories
-              _buildCategoryCard(
-                title: 'Instruments',
-                subtitle: 'Woodwinds, Brass, Strings, Keyboards, Percussion',
-                icon: Icons.music_note_rounded,
-                selectedCount: instrumentsCount,
-                onTap: () => _openCategoryPicker('Select Instruments', _instrumentsCategoryMap),
-              ),
-              const SizedBox(height: 10),
-              _buildCategoryCard(
-                title: 'Voices',
-                subtitle: 'Choir, Classical & Popular Music Vocals',
-                icon: Icons.mic_rounded,
-                selectedCount: voicesCount,
-                onTap: () => _openCategoryPicker('Select Voices', _voicesCategoryMap),
-              ),
-              const SizedBox(height: 10),
-              _buildCategoryCard(
-                title: 'Songwriters/Producers, etc',
-                subtitle: 'Songwriter, Producer, Composer, Lyricist, Beatmaker, DJ',
-                icon: Icons.headphones_rounded,
-                selectedCount: songwritersCount,
-                onTap: () => _openCategoryPicker('Select Songwriters/Producers', _songwritersCategoryMap),
-              ),
-              const SizedBox(height: 10),
-              _buildCategoryCard(
-                title: 'Studios/Engineers',
-                subtitle: 'Studio, Home Studio, Recording, Mix & Live Engineers',
-                icon: Icons.tune_rounded,
-                selectedCount: studiosCount,
-                onTap: () => _openCategoryPicker('Select Studios/Engineers', _studiosCategoryMap),
-              ),
-              const SizedBox(height: 10),
-              _buildCategoryCard(
-                title: 'PR & Management',
-                subtitle: 'Manager, Promotor, Agency',
-                icon: Icons.work_outline_rounded,
-                selectedCount: prCount,
-                onTap: () => _openCategoryPicker('Select PR & Management', _prManagementCategoryMap),
-              ),
-              const SizedBox(height: 24),
-
-              // 5. Primary Skills Selection
-              if (_selectedInstruments.isNotEmpty) ...[
-                Text(
-                  'Primary Skills',
-                  style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+              // ================= SKILLS & TALENTS CARD =================
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppTheme.cardBackground,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFF2E2A4E), width: 1.2),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  'Tap to select max. 3 Primary Skills. Put your No. 1 Skill/Instrument first...',
-                  style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
-                ),
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: _selectedInstruments.map((skill) {
-                    final isMain = _mainSkills.contains(skill);
-                    return FilterChip(
-                      label: Text(skill),
-                      selected: isMain,
-                      onSelected: (_) => _toggleMainSkill(skill),
-                      selectedColor: AppTheme.primaryAccent,
-                      backgroundColor: AppTheme.cardBackground,
-                      checkmarkColor: Colors.white,
-                      labelStyle: GoogleFonts.inter(
-                        fontSize: 12,
-                        fontWeight: isMain ? FontWeight.bold : FontWeight.normal,
-                        color: Colors.white,
-                      ),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      side: BorderSide(
-                        color: isMain ? AppTheme.primaryAccent : const Color(0xFF2E2A4E),
-                      ),
-                    );
-                  }).toList(),
-                ),
-                const SizedBox(height: 24),
-
-                // 6. Secondary Skills
-                Text(
-                  'Secondary Skills',
-                  style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Tap to input your secondary Skills/Talents...',
-                  style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
-                ),
-                const SizedBox(height: 10),
-                Builder(
-                  builder: (context) {
-                    final secondarySkills = _selectedInstruments
-                        .where((skill) => !_mainSkills.contains(skill))
-                        .toList();
-                    if (secondarySkills.isEmpty) {
-                      return Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: AppTheme.cardBackground,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: const Color(0xFF231F45)),
-                        ),
-                        child: Text(
-                          'All selected skills are assigned as Primary Skills.',
-                          style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textMuted),
-                        ),
-                      );
-                    }
-                    return Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: secondarySkills.map((skill) {
-                        return Chip(
-                          label: Text(skill),
-                          onDeleted: () => _toggleInstrument(skill),
-                          deleteIcon: const Icon(Icons.close_rounded, size: 16, color: Colors.white70),
-                          backgroundColor: const Color(0xFF1E1A3A),
-                          labelStyle: GoogleFonts.inter(
-                            fontSize: 12,
-                            color: Colors.white70,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.star_rounded, color: AppTheme.primaryAccent, size: 18),
+                        const SizedBox(width: 8),
+                        Text(
+                          'SKILLS/TALENTS',
+                          style: GoogleFonts.outfit(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                            letterSpacing: 1.2,
                           ),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          side: const BorderSide(color: Color(0xFF2E2A4E)),
-                        );
-                      }).toList(),
-                    );
-                  },
-                ),
-                const SizedBox(height: 24),
-              ],
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
 
-              // 7. Genres/Band Types
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Genres/Band Types',
-                    style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
-                  ),
-                  AnimatedTapDetector(
-                    onTap: _openGenrePicker,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: AppTheme.primaryAccent.withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.4)),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
+                    // Primary Skill (Select 1)
+                    AnimatedTapDetector(
+                      enableFocus: true,
+                      semanticLabel: 'Primary Skill/Talent',
+                      onTap: _openPrimarySkillPicker,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Icon(Icons.tune_rounded, color: AppTheme.primaryAccent, size: 16),
-                          const SizedBox(width: 6),
-                          Text(
-                            _selectedGenres.isEmpty ? 'Select Genres' : 'Edit (${_selectedGenres.length})',
-                            style: GoogleFonts.inter(
-                              color: Colors.white,
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                            ),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text.rich(
+                                TextSpan(
+                                  children: [
+                                    TextSpan(
+                                      text: 'Primary Skill/Talent',
+                                      style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white70),
+                                    ),
+                                    TextSpan(
+                                      text: ' (Select 1)',
+                                      style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.normal, color: Colors.white70),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const Icon(Icons.chevron_right_rounded, color: AppTheme.textMuted, size: 20),
+                            ],
                           ),
+                          const SizedBox(height: 8),
+                          if (_primarySkills.isEmpty)
+                            Text(
+                              'Tap to select your Primary Skill/Talent...',
+                              style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textMuted, fontStyle: FontStyle.italic),
+                            )
+                          else
+                            Wrap(
+                              spacing: 6,
+                              runSpacing: 6,
+                              children: _primarySkills.map((skill) {
+                                return InputChip(
+                                  label: Text(skill),
+                                  selected: false,
+                                  onPressed: _openPrimarySkillPicker,
+                                  backgroundColor: AppTheme.primaryAccent.withOpacity(0.25),
+                                  labelStyle: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                                  side: const BorderSide(color: AppTheme.primaryAccent, width: 1),
+                                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+                                );
+                              }).toList(),
+                            ),
                         ],
                       ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              if (_selectedGenres.isEmpty)
-                AnimatedTapDetector(
-                  onTap: _openGenrePicker,
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: AppTheme.cardBackground,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFF231F45)),
-                    ),
-                    child: Text(
-                      'No genres selected yet. Tap to add your musical styles...',
-                      style: GoogleFonts.inter(fontSize: 13, color: AppTheme.textSecondary),
-                    ),
-                  ),
-                )
-              else
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: _selectedGenres.map((genre) {
-                    return InputChip(
-                      label: Text(genre),
-                      selected: false,
-                      onDeleted: () => _toggleGenre(genre),
-                      deleteIcon: const Icon(Icons.close_rounded, size: 16, color: Colors.white70),
-                      backgroundColor: AppTheme.cardBackground,
-                      labelStyle: GoogleFonts.inter(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white,
+
+                    const SizedBox(height: 16),
+                    const Divider(color: Color(0xFF231F45), height: 1),
+                    const SizedBox(height: 16),
+
+                    // Secondary Skills (Optional)
+                    AnimatedTapDetector(
+                      enableFocus: true,
+                      semanticLabel: 'Secondary Skills',
+                      onTap: _openSecondarySkillsPicker,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text.rich(
+                                TextSpan(
+                                  children: [
+                                    TextSpan(
+                                      text: 'Secondary Skills',
+                                      style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white70),
+                                    ),
+                                    TextSpan(
+                                      text: ' (Optional)',
+                                      style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.normal, color: Colors.white70),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Row(
+                                children: [
+                                  if (_secondarySkills.isNotEmpty)
+                                    Container(
+                                      margin: const EdgeInsets.only(right: 6),
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: AppTheme.primaryAccent.withOpacity(0.2),
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Text(
+                                        '${_secondarySkills.length}',
+                                        style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.primaryAccent),
+                                      ),
+                                    ),
+                                  const Icon(Icons.chevron_right_rounded, color: AppTheme.textMuted, size: 20),
+                                ],
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          if (_secondarySkills.isEmpty)
+                            Text(
+                              'Tap to add secondary skills...',
+                              style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textMuted, fontStyle: FontStyle.italic),
+                            )
+                          else
+                            Wrap(
+                              spacing: 6,
+                              runSpacing: 6,
+                              children: _secondarySkills.map((skill) {
+                                return InputChip(
+                                  label: Text(skill),
+                                  selected: false,
+                                  onDeleted: () => setState(() => _secondarySkills.remove(skill)),
+                                  deleteIcon: const Icon(Icons.close_rounded, size: 14, color: Colors.white70),
+                                  backgroundColor: const Color(0xFF1B1735),
+                                  labelStyle: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w500, color: Colors.white70),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                                  side: const BorderSide(color: Color(0xFF38325E), width: 1),
+                                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+                                  visualDensity: VisualDensity.compact,
+                                );
+                              }).toList(),
+                            ),
+                        ],
                       ),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      side: const BorderSide(color: AppTheme.primaryAccent),
-                    );
-                  }).toList(),
+                    ),
+
+                    const SizedBox(height: 16),
+                    const Divider(color: Color(0xFF231F45), height: 1),
+                    const SizedBox(height: 16),
+
+                    // Other Skills (Optional)
+                    AnimatedTapDetector(
+                      enableFocus: true,
+                      semanticLabel: 'Other Skills',
+                      onTap: _openOtherSkillsPicker,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text.rich(
+                                TextSpan(
+                                  children: [
+                                    TextSpan(
+                                      text: 'Other Skills',
+                                      style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white70),
+                                    ),
+                                    TextSpan(
+                                      text: ' (Optional)',
+                                      style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.normal, color: Colors.white70),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Row(
+                                children: [
+                                  if (_otherSkills.isNotEmpty)
+                                    Container(
+                                      margin: const EdgeInsets.only(right: 6),
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: AppTheme.primaryAccent.withOpacity(0.2),
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Text(
+                                        '${_otherSkills.length}',
+                                        style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.primaryAccent),
+                                      ),
+                                    ),
+                                  const Icon(Icons.chevron_right_rounded, color: AppTheme.textMuted, size: 20),
+                                ],
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          if (_otherSkills.isEmpty)
+                            Text(
+                              'Tap to add other skills...',
+                              style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textMuted, fontStyle: FontStyle.italic),
+                            )
+                          else
+                            Wrap(
+                              spacing: 6,
+                              runSpacing: 6,
+                              children: _otherSkills.map((skill) {
+                                return InputChip(
+                                  label: Text(skill),
+                                  selected: false,
+                                  onDeleted: () => setState(() => _otherSkills.remove(skill)),
+                                  deleteIcon: const Icon(Icons.close_rounded, size: 14, color: Colors.white70),
+                                  backgroundColor: const Color(0xFF1B1735),
+                                  labelStyle: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w500, color: Colors.white70),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                                  side: const BorderSide(color: Color(0xFF38325E), width: 1),
+                                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+                                  visualDensity: VisualDensity.compact,
+                                );
+                              }).toList(),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
+              ),
+              const SizedBox(height: 20),
+
+              // ================= GENRES CARD =================
+              AnimatedTapDetector(
+                enableFocus: true,
+                semanticLabel: 'GENRES/BAND TYPES',
+                onTap: _openGenrePicker,
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppTheme.cardBackground,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFF2E2A4E), width: 1.2),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.music_note_rounded, color: AppTheme.primaryAccent, size: 18),
+                              const SizedBox(width: 8),
+                              Text(
+                                'GENRES/BAND TYPES',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                  letterSpacing: 1.2,
+                                ),
+                              ),
+                            ],
+                          ),
+                          Row(
+                            children: [
+                              if (_selectedGenres.isNotEmpty)
+                                Container(
+                                  margin: const EdgeInsets.only(right: 6),
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.primaryAccent.withOpacity(0.2),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Text(
+                                    '${_selectedGenres.length}',
+                                    style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.primaryAccent),
+                                  ),
+                                ),
+                              const Icon(Icons.chevron_right_rounded, color: AppTheme.textMuted, size: 20),
+                            ],
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      if (_selectedGenres.isEmpty)
+                        Text(
+                          'Tap to select Genres/Band Types',
+                          style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textMuted, fontStyle: FontStyle.italic),
+                        )
+                      else
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: _selectedGenres.map((genre) {
+                            return InputChip(
+                              label: Text(genre),
+                              selected: false,
+                              onDeleted: () => _toggleGenre(genre),
+                              deleteIcon: const Icon(Icons.close_rounded, size: 14, color: Colors.white70),
+                              backgroundColor: const Color(0xFF1B1735),
+                              labelStyle: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.white),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                              side: const BorderSide(color: AppTheme.primaryAccent, width: 1),
+                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+                              visualDensity: VisualDensity.compact,
+                            );
+                          }).toList(),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // 4. Level
+              Text(
+                'Level',
+                style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+              ),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppTheme.inputBackground,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButtonFormField<String>(
+                    value: _level,
+                    dropdownColor: AppTheme.cardBackground,
+                    style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
+                    icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppTheme.textSecondary),
+                    decoration: const InputDecoration(
+                      border: InputBorder.none,
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                    items: _levels.map((String val) {
+                      return DropdownMenuItem<String>(
+                        value: val,
+                        child: Text(val),
+                      );
+                    }).toList(),
+                    onChanged: (newValue) {
+                      if (newValue != null) {
+                        setState(() {
+                          _level = newValue;
+                        });
+                      }
+                    },
+                  ),
+                ),
+              ),
               const SizedBox(height: 24),
 
               // 8. About

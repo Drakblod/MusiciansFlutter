@@ -61,6 +61,10 @@ class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
                   Expanded(
                     child: _buildFavorites(context, appState),
                   ),
+                  if (FeatureToggles.showMapInTopBar)
+                    Expanded(
+                      child: _buildMapIcon(context, appState),
+                    ),
                   // Column 2: Home Logo
                   Expanded(
                     child: _buildHomeLogo(context, appState),
@@ -77,6 +81,21 @@ class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMapIcon(BuildContext context, AppState appState) {
+    return AnimatedTapDetector(
+      onTap: () {
+        Navigator.pushNamed(context, '/gig-map');
+      },
+      child: const Center(
+        child: Icon(
+          Icons.map_outlined,
+          color: Colors.white,
+          size: 22,
         ),
       ),
     );
@@ -115,7 +134,7 @@ class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
                     (userProfile?.displayName != null && userProfile!.displayName!.isNotEmpty)
                         ? userProfile.displayName!.substring(0, 1).toUpperCase()
                         : 'U',
-                    style: const TextStyle(
+                    style: GoogleFonts.inter(
                       color: Colors.white,
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
@@ -274,7 +293,7 @@ class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
                 _buildMenuItem(
                   context,
                   icon: Icons.grid_view_rounded,
-                  title: 'Choose Bubbles',
+                  title: 'Home View Shortcuts',
                   color: Colors.purpleAccent,
                   onTap: () {
                     Navigator.pop(context); // Close settings menu
@@ -340,7 +359,7 @@ class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Text(
-                      'HOME BUBBLES',
+                      'HOME VIEW SHORTCUTS',
                       textAlign: TextAlign.center,
                       style: GoogleFonts.outfit(
                         fontSize: 18,
@@ -351,7 +370,7 @@ class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Choose exactly 3 shortcuts to show as bubbles at the top of your Home screen.',
+                      'Choose exactly 3 shortcuts to show at the top of your Home screen.',
                       textAlign: TextAlign.center,
                       style: GoogleFonts.inter(
                         fontSize: 13,
@@ -393,7 +412,7 @@ class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
                                       } else {
                                         ScaffoldMessenger.of(context).showSnackBar(
                                           const SnackBar(
-                                            content: Text('You can select exactly 3 bubbles.'),
+                                            content: Text('You can select exactly 3 shortcuts.'),
                                             duration: Duration(seconds: 1),
                                             backgroundColor: AppTheme.warning,
                                           ),
@@ -440,7 +459,7 @@ class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
                                       Navigator.pop(context);
                                       ScaffoldMessenger.of(context).showSnackBar(
                                         const SnackBar(
-                                          content: Text('Home bubbles updated successfully!'),
+                                          content: Text('Home View shortcuts updated successfully!'),
                                           backgroundColor: AppTheme.success,
                                         ),
                                       );

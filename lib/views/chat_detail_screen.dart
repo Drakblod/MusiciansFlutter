@@ -45,7 +45,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
 
     final appState = Provider.of<AppState>(context, listen: false);
     final userProfile = appState.currentUserProfile;
-    final senderName = userProfile?.displayName ?? userProfile?.nickname ?? 'Alex';
+    final senderName =
+        userProfile?.displayName ?? userProfile?.nickname ?? 'Alex';
 
     // Clear input first for responsive feel
     _messageController.clear();
@@ -87,16 +88,17 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     final appState = Provider.of<AppState>(context);
 
     return GradientScaffold(
-      appBar: const CustomTopBar(
-        showBack: true,
-      ),
+      appBar: const CustomTopBar(showBack: true),
       body: Column(
         children: [
           ClipRect(
             child: BackdropFilter(
               filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
                 decoration: const BoxDecoration(
                   color: Color(0xCC0F0C22), // 80% opacity dark-violet
                   border: Border(
@@ -112,7 +114,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                         widget.receiverName.isNotEmpty
                             ? widget.receiverName.substring(0, 1).toUpperCase()
                             : 'U',
-                        style: const TextStyle(
+                        style: GoogleFonts.inter(
                           color: Colors.white,
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
@@ -162,10 +164,12 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
               ),
             ),
           ),
-          
+
           // Confirmed Gig Agreement Banner
           StreamBuilder<Map<String, dynamic>?>(
-            stream: appState.firebaseService.subscribeToConversationMetadata(widget.conversationId),
+            stream: appState.firebaseService.subscribeToConversationMetadata(
+              widget.conversationId,
+            ),
             builder: (context, snapshot) {
               if (!snapshot.hasData || snapshot.data == null) {
                 return const SizedBox.shrink();
@@ -187,7 +191,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                   ),
                 ),
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16.0,
+                    vertical: 12.0,
+                  ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -198,9 +205,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                           Row(
                             children: [
                               const Icon(
-                                Icons.handshake_rounded, 
-                                color: Colors.greenAccent, 
-                                size: 20
+                                Icons.handshake_rounded,
+                                color: Colors.greenAccent,
+                                size: 20,
                               ),
                               const SizedBox(width: 8),
                               Text(
@@ -223,7 +230,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                             child: Row(
                               children: [
                                 Text(
-                                  _isAgreementExpanded ? 'Hide Details' : 'Show Details',
+                                  _isAgreementExpanded
+                                      ? 'Hide Details'
+                                      : 'Show Details',
                                   style: GoogleFonts.inter(
                                     fontSize: 12,
                                     color: Colors.greenAccent.withOpacity(0.8),
@@ -232,8 +241,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                                 ),
                                 const SizedBox(width: 4),
                                 Icon(
-                                  _isAgreementExpanded 
-                                      ? Icons.keyboard_arrow_up_rounded 
+                                  _isAgreementExpanded
+                                      ? Icons.keyboard_arrow_up_rounded
                                       : Icons.keyboard_arrow_down_rounded,
                                   color: Colors.greenAccent,
                                   size: 18,
@@ -243,11 +252,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                           ),
                         ],
                       ),
-                      
+
                       // Details Area
                       if (_isAgreementExpanded) ...[
                         const SizedBox(height: 12),
-                        
+
                         // Details block
                         Container(
                           padding: const EdgeInsets.all(12),
@@ -255,8 +264,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                             color: Colors.black.withOpacity(0.25),
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(
-                              color: const Color(0xFF0F4D25).withOpacity(0.4), 
-                              width: 1
+                              color: const Color(0xFF0F4D25).withOpacity(0.4),
+                              width: 1,
                             ),
                           ),
                           child: Column(
@@ -264,35 +273,37 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                               _buildAgreementRow(
                                 Icons.music_note_rounded,
                                 'Band / Project',
-                                agreement.bandName ?? 'N/A'
+                                agreement.bandName ?? 'N/A',
                               ),
                               const SizedBox(height: 8),
                               _buildAgreementRow(
                                 Icons.person_search_rounded,
                                 'Vocalist Role / Part',
-                                agreement.voicePart ?? 'N/A'
+                                agreement.voicePart ?? 'N/A',
                               ),
                               const SizedBox(height: 8),
                               _buildAgreementRow(
                                 Icons.calendar_today_rounded,
                                 'Date & Time',
-                                '${agreement.date ?? "N/A"} (${agreement.startTime ?? "—"} to ${agreement.endTime ?? "—"})'
+                                '${agreement.date ?? "N/A"} (${agreement.startTime ?? "—"} to ${agreement.endTime ?? "—"})',
                               ),
                               const SizedBox(height: 8),
                               _buildAgreementRow(
                                 Icons.location_on_rounded,
                                 'Location',
-                                agreement.location ?? 'N/A'
+                                agreement.location ?? 'N/A',
                               ),
-                              if (agreement.additionalTerms != null && 
-                                  agreement.additionalTerms!.trim().isNotEmpty) ...[
+                              if (agreement.additionalTerms != null &&
+                                  agreement.additionalTerms!
+                                      .trim()
+                                      .isNotEmpty) ...[
                                 const SizedBox(height: 8),
                                 _buildAgreementRow(
                                   Icons.description_rounded,
                                   'Additional Terms',
-                                  agreement.additionalTerms!
+                                  agreement.additionalTerms!,
                                 ),
-                              ]
+                              ],
                             ],
                           ),
                         ),
@@ -320,10 +331,16 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
           // Message Thread List
           Expanded(
             child: StreamBuilder<List<Message>>(
-              stream: appState.firebaseService.subscribeToMessages(widget.conversationId),
+              stream: appState.firebaseService.subscribeToMessages(
+                widget.conversationId,
+              ),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator(color: AppTheme.primaryAccent));
+                  return const Center(
+                    child: CircularProgressIndicator(
+                      color: AppTheme.primaryAccent,
+                    ),
+                  );
                 }
 
                 if (snapshot.hasError) {
@@ -336,14 +353,18 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                 }
 
                 final messages = snapshot.data ?? [];
-                
+
                 // Mark conversation as read upon receiving messages
                 if (messages.isNotEmpty) {
-                  appState.firebaseService.markConversationAsRead(widget.conversationId);
+                  appState.firebaseService.markConversationAsRead(
+                    widget.conversationId,
+                  );
                 }
 
                 // Scroll to bottom on load/new message
-                WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+                WidgetsBinding.instance.addPostFrameCallback(
+                  (_) => _scrollToBottom(),
+                );
 
                 if (messages.isEmpty) {
                   return Center(
@@ -358,12 +379,17 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                         const SizedBox(height: 12),
                         Text(
                           'No messages yet.',
-                          style: GoogleFonts.inter(color: AppTheme.textSecondary),
+                          style: GoogleFonts.inter(
+                            color: AppTheme.textSecondary,
+                          ),
                         ),
                         const SizedBox(height: 4),
                         Text(
                           'Say hello to ${widget.receiverName}!',
-                          style: GoogleFonts.inter(color: AppTheme.textMuted, fontSize: 12),
+                          style: GoogleFonts.inter(
+                            color: AppTheme.textMuted,
+                            fontSize: 12,
+                          ),
                         ),
                       ],
                     ),
@@ -381,34 +407,57 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 14),
                       child: Row(
-                        mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+                        mainAxisAlignment: isMe
+                            ? MainAxisAlignment.end
+                            : MainAxisAlignment.start,
                         children: [
                           if (!isMe) ...[
                             CircleAvatar(
                               radius: 15,
-                              backgroundColor: AppTheme.primaryAccent.withOpacity(0.12),
+                              backgroundColor: AppTheme.primaryAccent
+                                  .withOpacity(0.12),
                               child: Text(
-                                widget.receiverName.isNotEmpty ? widget.receiverName.substring(0, 1).toUpperCase() : 'U',
-                                style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold),
+                                widget.receiverName.isNotEmpty
+                                    ? widget.receiverName
+                                          .substring(0, 1)
+                                          .toUpperCase()
+                                    : 'U',
+                                style: GoogleFonts.inter(
+                                  fontSize: 10,
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                             ),
                             const SizedBox(width: 8),
                           ],
                           Flexible(
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 10,
+                              ),
                               decoration: BoxDecoration(
-                                color: isMe ? AppTheme.primaryAccent : const Color(0xFF1E1A3A),
+                                color: isMe
+                                    ? AppTheme.primaryAccent
+                                    : const Color(0xFF1E1A3A),
                                 borderRadius: BorderRadius.only(
                                   topLeft: const Radius.circular(16),
                                   topRight: const Radius.circular(16),
                                   bottomLeft: Radius.circular(isMe ? 16 : 4),
                                   bottomRight: Radius.circular(isMe ? 4 : 16),
                                 ),
-                                border: isMe ? null : Border.all(color: const Color(0xFF2E2A4E), width: 1),
+                                border: isMe
+                                    ? null
+                                    : Border.all(
+                                        color: const Color(0xFF2E2A4E),
+                                        width: 1,
+                                      ),
                               ),
                               child: Column(
-                                crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                                crossAxisAlignment: isMe
+                                    ? CrossAxisAlignment.end
+                                    : CrossAxisAlignment.start,
                                 children: [
                                   Text(
                                     msg.text ?? '',
@@ -421,11 +470,15 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                                   const SizedBox(height: 4),
                                   Text(
                                     msg.timestamp != null
-                                        ? DateFormat('HH:mm').format(msg.timestamp!.toLocal())
+                                        ? DateFormat(
+                                            'HH:mm',
+                                          ).format(msg.timestamp!.toLocal())
                                         : '',
-                                    style: TextStyle(
+                                    style: GoogleFonts.inter(
                                       fontSize: 9,
-                                      color: isMe ? Colors.white70 : AppTheme.textMuted,
+                                      color: isMe
+                                          ? Colors.white70
+                                          : AppTheme.textMuted,
                                     ),
                                   ),
                                 ],
@@ -457,11 +510,20 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                   Expanded(
                     child: TextField(
                       controller: _messageController,
-                      style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
+                      style: GoogleFonts.inter(
+                        color: Colors.white,
+                        fontSize: 14,
+                      ),
                       decoration: InputDecoration(
                         hintText: 'Type your message...',
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                        hintStyle: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 14),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 10,
+                        ),
+                        hintStyle: GoogleFonts.inter(
+                          color: AppTheme.textSecondary,
+                          fontSize: 14,
+                        ),
                         fillColor: const Color(0xFF141029),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(24),
@@ -482,7 +544,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                         color: AppTheme.primaryAccent,
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(Icons.send_rounded, color: Colors.white, size: 18),
+                      child: const Icon(
+                        Icons.send_rounded,
+                        color: Colors.white,
+                        size: 18,
+                      ),
                     ),
                   ),
                 ],

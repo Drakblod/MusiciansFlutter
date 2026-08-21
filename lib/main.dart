@@ -1,3 +1,4 @@
+import 'package:google_fonts/google_fonts.dart';
 import 'dart:ui' show PlatformDispatcher;
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -288,17 +289,17 @@ class ErrorApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       home: Scaffold(
-        backgroundColor: const Color(0xFF1E0B36),
+        backgroundColor: Color(0xFF1E0B36),
         body: SafeArea(
           child: Padding(
-            padding: const EdgeInsets.all(24.0),
+            padding: EdgeInsets.all(24.0),
             child: SingleChildScrollView(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                  Text(
                     "Initialization/Runtime Error Details:",
-                    style: TextStyle(
+                    style: GoogleFonts.inter(
                       color: Colors.redAccent,
                       fontSize: 22,
                       fontWeight: FontWeight.bold,
@@ -314,10 +315,10 @@ class ErrorApp extends StatelessWidget {
                     ),
                     child: Text(
                       error,
-                      style: const TextStyle(
+                      style: GoogleFonts.inter(
                         color: Colors.white70,
                         fontSize: 14,
-                        fontFamily: 'monospace',
+                        
                       ),
                     ),
                   ),

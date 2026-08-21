@@ -1,5 +1,6 @@
 class EventResponse {
-  final String status; // 'YES', 'NO', 'UNCERTAIN' (legacy: 'attending', 'declined', 'maybe')
+  final String
+  status; // 'YES', 'NO', 'UNCERTAIN' (legacy: 'attending', 'declined', 'maybe')
   final DateTime timestamp;
   final String? comment;
   final String? uncertainReason;
@@ -60,7 +61,8 @@ class ExternalInvitee {
       instrument: json['instrument']?.toString(),
       invitedAt: json['invitedAt'] is int
           ? json['invitedAt'] as int
-          : int.tryParse(json['invitedAt']?.toString() ?? '') ?? DateTime.now().millisecondsSinceEpoch,
+          : int.tryParse(json['invitedAt']?.toString() ?? '') ??
+                DateTime.now().millisecondsSinceEpoch,
       source: json['source']?.toString(),
       subRequestId: json['subRequestId']?.toString(),
       displayName: json['displayName']?.toString(),
@@ -85,7 +87,8 @@ class BandEvent {
   final String? id;
   final String title;
   final String description;
-  final String eventType; // 'Rehearsal', 'Concert', 'Gig', 'Recording Session', 'Meeting', 'Other'
+  final String
+  eventType; // 'Rehearsal', 'Concert', 'Gig', 'Recording Session', 'Meeting', 'Other'
   final String location;
   final String startDateTime; // ISO 8601 string
   final String endDateTime; // ISO 8601 string
@@ -99,6 +102,7 @@ class BandEvent {
   final int? lockedAt;
   final String? lockedBy;
   final bool creatorThresholdNotified;
+  final bool sentReminder24h;
   final bool sentReminder48h;
   final bool sentReminder72h;
   final bool sentReminder84h;
@@ -127,6 +131,7 @@ class BandEvent {
     this.lockedAt,
     this.lockedBy,
     this.creatorThresholdNotified = false,
+    this.sentReminder24h = false,
     this.sentReminder48h = false,
     this.sentReminder72h = false,
     this.sentReminder84h = false,
@@ -154,7 +159,10 @@ class BandEvent {
     if (externalInviteesRaw is Map) {
       externalInviteesRaw.forEach((k, v) {
         if (v is Map) {
-          parsedExternalInvitees[k.toString()] = ExternalInvitee.fromJson(v, k.toString());
+          parsedExternalInvitees[k.toString()] = ExternalInvitee.fromJson(
+            v,
+            k.toString(),
+          );
         }
       });
     }
@@ -183,6 +191,7 @@ class BandEvent {
           : int.tryParse(json['lockedAt']?.toString() ?? ''),
       lockedBy: json['lockedBy']?.toString(),
       creatorThresholdNotified: json['creatorThresholdNotified'] == true,
+      sentReminder24h: json['sentReminder24h'] == true,
       sentReminder48h: json['sentReminder48h'] == true,
       sentReminder72h: json['sentReminder72h'] == true,
       sentReminder84h: json['sentReminder84h'] == true,
@@ -229,12 +238,14 @@ class BandEvent {
       'lockedAt': lockedAt,
       'lockedBy': lockedBy,
       'creatorThresholdNotified': creatorThresholdNotified,
+      'sentReminder24h': sentReminder24h,
       'sentReminder48h': sentReminder48h,
       'sentReminder72h': sentReminder72h,
       'sentReminder84h': sentReminder84h,
       'externalInvitees': externalInviteesMap,
       if (rsvpDeadline != null) 'rsvpDeadline': rsvpDeadline,
-      if (reminderIntervalHours != null) 'reminderIntervalHours': reminderIntervalHours,
+      if (reminderIntervalHours != null)
+        'reminderIntervalHours': reminderIntervalHours,
       if (temporaryRoomId != null) 'temporaryRoomId': temporaryRoomId,
       if (parentEventId != null) 'parentEventId': parentEventId,
       if (subEventSequence != null) 'subEventSequence': subEventSequence,
