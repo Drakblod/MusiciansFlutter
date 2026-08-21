@@ -84,7 +84,7 @@ void main() {
 
       expect(find.byType(SearchableCategoryMultiSelectSheet), findsOneWidget);
 
-      await tester.tap(find.text('Cancel'));
+      await tester.tap(find.text('Done'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
       expect(find.byType(SearchableCategoryMultiSelectSheet), findsNothing);
