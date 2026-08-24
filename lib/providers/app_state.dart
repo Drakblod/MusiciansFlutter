@@ -22,10 +22,38 @@ class AppState extends ChangeNotifier {
   Map<String, int> _buttonClicks = {};
   Map<String, dynamic>? _pendingNotificationPayload;
 
-  List<String> _selectedBubbles = [
+  static const List<String> validBubbleIds = [
+    'find_musicians',
     'browse_musicians',
     'find_gigs',
+    'create_event',
+    'collabs',
+    'event_calendar',
+    'band_room',
+    'marketplace',
+  ];
+
+  static List<String> validateAndSanitizeBubbles(List<String>? raw) {
+    const defaultBubbles = ['find_musicians', 'band_room', 'create_event'];
+    if (raw == null) return List.from(defaultBubbles);
+
+    final sanitized = <String>[];
+    for (final id in raw) {
+      if (validBubbleIds.contains(id) && !sanitized.contains(id)) {
+        sanitized.add(id);
+      }
+    }
+
+    if (sanitized.length == 3) {
+      return sanitized;
+    }
+    return List.from(defaultBubbles);
+  }
+
+  List<String> _selectedBubbles = [
     'find_musicians',
+    'band_room',
+    'create_event',
   ];
   List<String> get selectedBubbles => _selectedBubbles;
 
@@ -41,16 +69,15 @@ class AppState extends ChangeNotifier {
 
   Future<void> loadSelectedBubbles() async {
     final prefs = await SharedPreferences.getInstance();
-    _selectedBubbles =
-        prefs.getStringList('home_selected_bubbles') ??
-        ['browse_musicians', 'find_gigs', 'find_musicians'];
+    final raw = prefs.getStringList('home_selected_bubbles');
+    _selectedBubbles = validateAndSanitizeBubbles(raw);
     notifyListeners();
   }
 
   Future<void> updateSelectedBubbles(List<String> bubbleIds) async {
-    _selectedBubbles = List.from(bubbleIds);
+    _selectedBubbles = validateAndSanitizeBubbles(bubbleIds);
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setStringList('home_selected_bubbles', bubbleIds);
+    await prefs.setStringList('home_selected_bubbles', _selectedBubbles);
     notifyListeners();
   }
 

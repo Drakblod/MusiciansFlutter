@@ -132,9 +132,10 @@ class _CreateEventPageState extends State<CreateEventPage> {
     }
     try {
       final role = await appState.firebaseService.getUserBandRoleAsync(widget.bandId, userId);
-      final r = (role ?? '').toLowerCase();
+      final r = (role ?? '').trim().toLowerCase();
+      final isAuthorized = r == 'leader' || r == 'admin' || r == 'mod';
       if (mounted) {
-        if (!r.contains('leader') && !r.contains('admin') && !r.contains('mod')) {
+        if (!isAuthorized) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Access Denied: Only band Leaders, Admins, and MODs can create events.'),
@@ -154,6 +155,13 @@ class _CreateEventPageState extends State<CreateEventPage> {
         setState(() {
           _isLoadingRole = false;
         });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Permission check failed: $e'),
+            backgroundColor: AppTheme.danger,
+          ),
+        );
+        Navigator.pop(context);
       }
     }
   }

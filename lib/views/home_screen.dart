@@ -7,6 +7,7 @@ import '../theme/app_theme.dart';
 import '../widgets/animated_tap_detector.dart';
 import '../widgets/custom_top_bar.dart';
 import '../config/feature_toggles.dart';
+import '../controllers/global_create_event_launcher.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -261,6 +262,16 @@ class HomeScreen extends StatelessWidget {
         },
       ),
       HomeActionItem(
+        id: 'create_event',
+        icon: Icons.event_available_rounded,
+        title: 'Create Event',
+        subtitle: 'Create a band event or collaboration session',
+        onTap: () {
+          appState.trackButtonClick('create_event');
+          GlobalCreateEventLauncher.showLauncherSheet(context, appState);
+        },
+      ),
+      HomeActionItem(
         id: 'marketplace',
         icon: Icons.storefront_outlined,
         title: 'Marketplace',
@@ -276,10 +287,11 @@ class HomeScreen extends StatelessWidget {
     final clicks = appState.buttonClicks;
     final Map<String, int> defaultOrder = {
       'find_musicians': 0,
-      'browse_musicians': 1,
-      'find_gigs': 2,
-      'band_room': 3,
-      'marketplace': 4,
+      'band_room': 1,
+      'create_event': 2,
+      'browse_musicians': 3,
+      'find_gigs': 4,
+      'marketplace': 5,
     };
 
     actionItems.sort((a, b) {
@@ -365,7 +377,7 @@ class HomeScreen extends StatelessWidget {
               child: Padding(
                 padding: const EdgeInsets.only(bottom: 10, right: 10),
                 child: Text(
-                  '2.15',
+                  '2.16',
                   style: GoogleFonts.inter(
                     color: AppTheme.textSecondary.withOpacity(0.5),
                     fontSize: 12,
@@ -695,6 +707,8 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
         return 'Gigs list';
       case 'band_room':
         return 'Band Room';
+      case 'create_event':
+        return 'Create Event';
       case 'marketplace':
         return 'Market';
       case 'collabs':
@@ -925,6 +939,19 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
         },
       ),
       HomeActionItem(
+        id: 'create_event',
+        icon: Icons.event_available_rounded,
+        title: 'Create Event',
+        subtitle: 'Create a band event or collaboration session',
+        onTap: () async {
+          await HomeUsageTracker.incrementClick('create_event');
+          if (context.mounted) {
+            await GlobalCreateEventLauncher.showLauncherSheet(context, appState);
+          }
+          _loadUsageData();
+        },
+      ),
+      HomeActionItem(
         id: 'marketplace',
         icon: Icons.storefront_outlined,
         title: 'Marketplace',
@@ -939,12 +966,13 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
 
     final Map<String, int> defaultOrder = {
       'find_musicians': 0,
-      'browse_musicians': 1,
-      'find_gigs': 2,
-      'collabs': 3,
-      'event_calendar': 4,
-      'band_room': 5,
-      'marketplace': 6,
+      'band_room': 1,
+      'create_event': 2,
+      'browse_musicians': 3,
+      'find_gigs': 4,
+      'collabs': 5,
+      'event_calendar': 6,
+      'marketplace': 7,
     };
 
     allActions.sort((a, b) {
@@ -957,14 +985,24 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
       return (defaultOrder[a.id] ?? 0).compareTo(defaultOrder[b.id] ?? 0);
     });
 
-    final selectedIds = appState.selectedBubbles;
-    final List<String> bubbleIds = selectedIds.length == 3 ? selectedIds : [
-      'browse_musicians',
-      'find_gigs',
-      'find_musicians',
-    ];
+    final bubbleIds = AppState.validateAndSanitizeBubbles(appState.selectedBubbles);
 
-    final topBubbleActions = bubbleIds.map((id) => allActions.firstWhere((item) => item.id == id)).toList();
+    final topBubbleActions = <HomeActionItem>[];
+    for (final id in bubbleIds) {
+      final found = allActions.firstWhere(
+        (item) => item.id == id,
+        orElse: () => allActions.firstWhere((item) => item.id == 'create_event', orElse: () => allActions.first),
+      );
+      if (!topBubbleActions.contains(found)) {
+        topBubbleActions.add(found);
+      }
+    }
+    for (final item in allActions) {
+      if (topBubbleActions.length >= 3) break;
+      if (!topBubbleActions.contains(item)) {
+        topBubbleActions.add(item);
+      }
+    }
     final remainingCardActions = allActions.where((item) => !topBubbleActions.contains(item)).toList();
 
     return Stack(
@@ -1120,7 +1158,7 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
                               }
                             },
                             child: Text(
-                              '2.15',
+                              '2.16',
                               style: GoogleFonts.inter(
                                 color: AppTheme.textSecondary.withOpacity(0.5),
                                 fontSize: 12,
@@ -1159,7 +1197,7 @@ class HomeUsageTracker {
   static Future<Map<String, int>> getClicks() async {
     final prefs = await SharedPreferences.getInstance();
     final Map<String, int> counts = {};
-    for (final id in ['find_musicians', 'browse_musicians', 'find_gigs', 'band_room', 'marketplace']) {
+    for (final id in ['find_musicians', 'browse_musicians', 'find_gigs', 'create_event', 'collabs', 'band_room', 'marketplace']) {
       counts[id] = prefs.getInt('$_prefix$id') ?? 0;
     }
     return counts;
@@ -1173,7 +1211,7 @@ class HomeUsageTracker {
 
   static Future<void> resetClicks() async {
     final prefs = await SharedPreferences.getInstance();
-    for (final id in ['find_musicians', 'browse_musicians', 'find_gigs', 'band_room', 'marketplace']) {
+    for (final id in ['find_musicians', 'browse_musicians', 'find_gigs', 'create_event', 'collabs', 'band_room', 'marketplace']) {
       await prefs.remove('$_prefix$id');
     }
   }

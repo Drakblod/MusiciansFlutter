@@ -324,11 +324,12 @@ class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
 
     final List<Map<String, String>> options = [
       {'id': 'find_musicians', 'name': 'Find Musicians'},
+      {'id': 'band_room', 'name': 'Band Room'},
+      {'id': 'create_event', 'name': 'Create Event'},
       {'id': 'browse_musicians', 'name': 'Profiles'},
       {'id': 'find_gigs', 'name': 'Gigs list'},
       {'id': 'collabs', 'name': 'Collabs'},
       {'id': 'event_calendar', 'name': 'Event Calendar'},
-      {'id': 'band_room', 'name': 'Band Room'},
       {'id': 'marketplace', 'name': 'Marketplace'},
     ];
 
