@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../providers/app_state.dart';
 import '../theme/app_theme.dart';
 import '../models/listing.dart';
+import '../models/marketplace_taxonomy.dart';
 import '../widgets/custom_top_bar.dart';
 import '../widgets/gradient_scaffold.dart';
 import '../widgets/animated_tap_detector.dart';
@@ -52,20 +53,6 @@ class _ListingDetailsPageState extends State<ListingDetailsPage> {
     }
   }
 
-  String _getTypeDisplay(String? type) {
-    switch (type) {
-      case 'sell':
-        return 'For Sale';
-      case 'buy':
-        return 'Wanted';
-      case 'rent':
-        return 'Rent';
-      case 'service':
-        return 'Service';
-      default:
-        return 'Listing';
-    }
-  }
 
   Color _getTypeColor(String? type) {
     switch (type) {
@@ -387,7 +374,14 @@ class _ListingDetailsPageState extends State<ListingDetailsPage> {
                             border: Border.all(color: _getTypeColor(widget.listing.listingType).withOpacity(0.5)),
                           ),
                           child: Text(
-                            _getTypeDisplay(widget.listing.listingType).toUpperCase(),
+                            (widget.listing.effectiveIntent == MarketplaceTaxonomy.intentLookingFor
+                                    ? 'WANTED / LOOKING FOR'
+                                    : (widget.listing.listingType == 'rent'
+                                        ? 'RENT'
+                                        : (widget.listing.listingType == 'service'
+                                            ? 'SERVICE'
+                                            : 'FOR SALE / OFFERING')))
+                                .toUpperCase(),
                             style: GoogleFonts.inter(
                               fontSize: 10,
                               fontWeight: FontWeight.bold,
@@ -404,7 +398,10 @@ class _ListingDetailsPageState extends State<ListingDetailsPage> {
                             border: Border.all(color: const Color(0xFF2E2A4E)),
                           ),
                           child: Text(
-                            widget.listing.category ?? 'Other',
+                            MarketplaceTaxonomy.getCategoryLabel(
+                              widget.listing.effectiveIntent,
+                              widget.listing.effectiveCategory,
+                            ),
                             style: GoogleFonts.inter(
                               fontSize: 10,
                               fontWeight: FontWeight.bold,

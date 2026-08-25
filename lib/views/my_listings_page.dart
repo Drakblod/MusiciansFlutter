@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../providers/app_state.dart';
 import '../theme/app_theme.dart';
 import '../models/listing.dart';
+import '../models/marketplace_taxonomy.dart';
 import '../widgets/custom_top_bar.dart';
 import '../widgets/gradient_scaffold.dart';
 
@@ -353,12 +354,18 @@ class _MyListingsPageState extends State<MyListingsPage> {
                             ),
                           ),
                           const SizedBox(width: 6),
-                          Text(
-                            _getTypeDisplay(listing.listingType),
-                            style: GoogleFonts.inter(
-                              fontSize: 11,
-                              color: AppTheme.textSecondary,
-                              fontWeight: FontWeight.w500,
+                          Expanded(
+                            child: Text(
+                              (listing.effectiveIntent == MarketplaceTaxonomy.intentLookingFor
+                                      ? 'WANTED • ${MarketplaceTaxonomy.getCategoryLabel('looking_for', listing.effectiveCategory)}'
+                                      : '${_getTypeDisplay(listing.listingType).toUpperCase()} • ${MarketplaceTaxonomy.getCategoryLabel('offering', listing.effectiveCategory)}'),
+                              style: GoogleFonts.inter(
+                                fontSize: 11,
+                                color: AppTheme.textSecondary,
+                                fontWeight: FontWeight.w500,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                         ],

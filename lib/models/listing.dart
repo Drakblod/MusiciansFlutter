@@ -5,6 +5,8 @@ class Listing {
   final String? description;
   final String? category;
   final String? listingType; // sell, buy, rent, service
+  final String? marketplaceIntent; // looking_for, offering
+  final String? marketplaceCategory; // stable internal category ID
   final double price;
   final String? city;
   final List<String> imageUrls;
@@ -19,6 +21,8 @@ class Listing {
     this.description,
     this.category,
     this.listingType,
+    this.marketplaceIntent,
+    this.marketplaceCategory,
     this.price = 0.0,
     this.city,
     this.imageUrls = const [],
@@ -26,6 +30,37 @@ class Listing {
     required this.createdAt,
     required this.updatedAt,
   });
+
+  String get effectiveIntent {
+    if (marketplaceIntent != null && marketplaceIntent!.isNotEmpty) {
+      return marketplaceIntent!;
+    }
+    if (listingType == 'buy') {
+      return 'looking_for';
+    }
+    return 'offering';
+  }
+
+  String get effectiveCategory {
+    if (marketplaceCategory != null && marketplaceCategory!.isNotEmpty) {
+      return marketplaceCategory!;
+    }
+    // Fallback from legacy category
+    switch (category) {
+      case 'Instruments':
+      case 'Amps & Effects':
+        return 'instrument_gear';
+      case 'Studio & Recording':
+        return effectiveIntent == 'looking_for' ? 'studio' : 'recording_production';
+      case 'Rehearsal Spaces':
+        return 'rehearsal_space';
+      case 'Music Services':
+        return 'music_services';
+      case 'Other':
+      default:
+        return 'other_services';
+    }
+  }
 
   factory Listing.fromJson(Map<dynamic, dynamic> json, String keyId) {
     final rawUrls = json['imageUrls'] ?? json['ImageUrls'];
@@ -49,6 +84,8 @@ class Listing {
       description: (json['description'] ?? json['Description'])?.toString(),
       category: (json['category'] ?? json['Category'])?.toString(),
       listingType: (json['listingType'] ?? json['ListingType'])?.toString(),
+      marketplaceIntent: (json['marketplaceIntent'] ?? json['MarketplaceIntent'])?.toString(),
+      marketplaceCategory: (json['marketplaceCategory'] ?? json['MarketplaceCategory'])?.toString(),
       price: parsedPrice,
       city: (json['city'] ?? json['City'])?.toString(),
       imageUrls: urls,
@@ -66,6 +103,8 @@ class Listing {
       'description': description,
       'category': category,
       'listingType': listingType,
+      'marketplaceIntent': marketplaceIntent,
+      'marketplaceCategory': marketplaceCategory,
       'price': price,
       'city': city,
       'imageUrls': imageUrls,

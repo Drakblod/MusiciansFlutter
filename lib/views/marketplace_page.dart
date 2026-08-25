@@ -4,9 +4,11 @@ import 'package:google_fonts/google_fonts.dart';
 import '../providers/app_state.dart';
 import '../theme/app_theme.dart';
 import '../models/listing.dart';
+import '../models/marketplace_taxonomy.dart';
 import '../widgets/custom_top_bar.dart';
 import '../widgets/gradient_scaffold.dart';
 import '../widgets/animated_tap_detector.dart';
+import '../widgets/marketplace_filter_selector.dart';
 
 class MarketplacePage extends StatefulWidget {
   const MarketplacePage({super.key});
@@ -17,31 +19,13 @@ class MarketplacePage extends StatefulWidget {
 
 class _MarketplacePageState extends State<MarketplacePage> {
   final TextEditingController _searchController = TextEditingController();
-  String _selectedCategory = 'All';
-  String _selectedTypeLabel = 'All';
+  String? _selectedIntent;
+  String? _selectedCategoryId;
   List<Listing> _allListings = [];
   List<Listing> _filteredListings = [];
   bool _isLoading = true;
 
   final Map<String, String> _sellerNamesCache = {};
-
-  final List<String> _categories = [
-    'All',
-    'Instruments',
-    'Amps & Effects',
-    'Studio & Recording',
-    'Rehearsal Spaces',
-    'Music Services',
-    'Other'
-  ];
-
-  final Map<String, String?> _typeMap = {
-    'All': null,
-    'For Sale': 'sell',
-    'Wanted': 'buy',
-    'Rent': 'rent',
-    'Service': 'service',
-  };
 
   @override
   void initState() {
@@ -83,21 +67,22 @@ class _MarketplacePageState extends State<MarketplacePage> {
   }
 
   void _applyFilters() {
-    final query = _searchController.text.toLowerCase();
-    final targetType = _typeMap[_selectedTypeLabel];
+    final query = _searchController.text.toLowerCase().trim();
 
     setState(() {
       _filteredListings = _allListings.where((listing) {
-        final matchesSearch = (listing.title?.toLowerCase().contains(query) ?? false) ||
+        final matchesSearch = query.isEmpty ||
+            (listing.title?.toLowerCase().contains(query) ?? false) ||
             (listing.description?.toLowerCase().contains(query) ?? false) ||
             (listing.city?.toLowerCase().contains(query) ?? false);
 
-        final matchesCategory = _selectedCategory == 'All' ||
-            listing.category == _selectedCategory;
+        final matchesCategoryFilter = MarketplaceTaxonomy.matchesBrowsingFilter(
+          listing: listing,
+          browsingIntent: _selectedIntent,
+          browsingCategoryId: _selectedCategoryId,
+        );
 
-        final matchesType = targetType == null || listing.listingType == targetType;
-
-        return matchesSearch && matchesCategory && matchesType;
+        return matchesSearch && matchesCategoryFilter;
       }).toList();
     });
   }
@@ -117,34 +102,26 @@ class _MarketplacePageState extends State<MarketplacePage> {
     }
   }
 
-  String _getTypeDisplay(String? type) {
-    switch (type) {
-      case 'sell':
-        return 'For Sale';
-      case 'buy':
-        return 'Wanted';
-      case 'rent':
-        return 'Rent';
-      case 'service':
-        return 'Service';
-      default:
-        return 'Listing';
+  String _getBadgeLabel(Listing listing) {
+    final intent = listing.effectiveIntent;
+    final categoryLabel = MarketplaceTaxonomy.getCategoryLabel(intent, listing.effectiveCategory);
+    if (intent == MarketplaceTaxonomy.intentLookingFor) {
+      return 'WANTED • $categoryLabel';
+    } else {
+      final typeDisplay = listing.listingType == 'rent'
+          ? 'RENT'
+          : (listing.listingType == 'service' ? 'SERVICE' : 'OFFER');
+      return '$typeDisplay • $categoryLabel';
     }
   }
 
-  Color _getTypeColor(String? type) {
-    switch (type) {
-      case 'sell':
-        return AppTheme.primaryAccent;
-      case 'buy':
-        return AppTheme.success;
-      case 'rent':
-        return Colors.orangeAccent;
-      case 'service':
-        return Colors.cyanAccent;
-      default:
-        return AppTheme.textSecondary;
+  Color _getBadgeColor(Listing listing) {
+    if (listing.effectiveIntent == MarketplaceTaxonomy.intentLookingFor) {
+      return AppTheme.success;
     }
+    if (listing.listingType == 'rent') return Colors.orangeAccent;
+    if (listing.listingType == 'service') return Colors.cyanAccent;
+    return AppTheme.primaryAccent;
   }
 
   @override
@@ -163,7 +140,7 @@ class _MarketplacePageState extends State<MarketplacePage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -209,7 +186,7 @@ class _MarketplacePageState extends State<MarketplacePage> {
 
               // Search Bar
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                 child: TextField(
                   controller: _searchController,
                   decoration: InputDecoration(
@@ -228,86 +205,20 @@ class _MarketplacePageState extends State<MarketplacePage> {
                 ),
               ),
 
-              // Listing Type Filter Row
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: Row(
-                  children: _typeMap.keys.map((typeLabel) {
-                    final isSelected = _selectedTypeLabel == typeLabel;
-                    return Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: ChoiceChip(
-                        label: Text(typeLabel),
-                        selected: isSelected,
-                        onSelected: (selected) {
-                          if (selected) {
-                            setState(() {
-                              _selectedTypeLabel = typeLabel;
-                              _applyFilters();
-                            });
-                          }
-                        },
-                        selectedColor: AppTheme.primaryAccent,
-                        backgroundColor: AppTheme.cardBackground,
-                        labelStyle: GoogleFonts.inter(
-                          color: isSelected ? Colors.white : AppTheme.textSecondary,
-                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                          fontSize: 13,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(20),
-                          side: BorderSide(
-                            color: isSelected ? AppTheme.primaryAccent : const Color(0xFF2E2A4E),
-                          ),
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                ),
+              // Dual-Entry Marketplace Selector Cards
+              MarketplaceFilterSelector(
+                selectedIntent: _selectedIntent,
+                selectedCategoryId: _selectedCategoryId,
+                onFilterChanged: (filter) {
+                  setState(() {
+                    _selectedIntent = filter.intent;
+                    _selectedCategoryId = filter.categoryId;
+                    _applyFilters();
+                  });
+                },
               ),
 
-              // Categories Horizontal List
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                child: Row(
-                  children: _categories.map((category) {
-                    final isSelected = _selectedCategory == category;
-                    return Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: ChoiceChip(
-                        label: Text(category),
-                        selected: isSelected,
-                        onSelected: (selected) {
-                          if (selected) {
-                            setState(() {
-                              _selectedCategory = category;
-                              _applyFilters();
-                            });
-                          }
-                        },
-                        selectedColor: AppTheme.primaryAccent.withOpacity(0.25),
-                        backgroundColor: Colors.transparent,
-                        labelStyle: GoogleFonts.inter(
-                          color: isSelected ? Colors.white : AppTheme.textSecondary,
-                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                          fontSize: 13,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(20),
-                          side: BorderSide(
-                            color: isSelected ? AppTheme.primaryAccent : const Color(0xFF2E2A4E),
-                            width: 1,
-                          ),
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                ),
-              ),
-
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
 
               // Listings List/Grid
               Expanded(
@@ -338,8 +249,14 @@ class _MarketplacePageState extends State<MarketplacePage> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
-          Navigator.pushNamed(context, '/create-listing').then((value) {
-            // Refresh when returning back
+          Navigator.pushNamed(
+            context,
+            '/create-listing',
+            arguments: {
+              'initialIntent': _selectedIntent,
+              'initialCategory': _selectedCategoryId,
+            },
+          ).then((value) {
             _loadListings();
           });
         },
@@ -351,6 +268,16 @@ class _MarketplacePageState extends State<MarketplacePage> {
   }
 
   Widget _buildEmptyState() {
+    String ctaLabel = 'Post a Listing';
+    String? targetIntent = _selectedIntent;
+    String? targetCategory = _selectedCategoryId;
+
+    if (_selectedIntent == MarketplaceTaxonomy.intentLookingFor) {
+      ctaLabel = 'Create a request';
+    } else if (_selectedIntent == MarketplaceTaxonomy.intentOffering) {
+      ctaLabel = 'Create an offer';
+    }
+
     return Center(
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
@@ -393,13 +320,20 @@ class _MarketplacePageState extends State<MarketplacePage> {
               const SizedBox(height: 24),
               ElevatedButton.icon(
                 onPressed: () {
-                  Navigator.pushNamed(context, '/create-listing').then((value) {
+                  Navigator.pushNamed(
+                    context,
+                    '/create-listing',
+                    arguments: {
+                      'initialIntent': targetIntent,
+                      'initialCategory': targetCategory,
+                    },
+                  ).then((value) {
                     _loadListings();
                   });
                 },
                 icon: const Icon(Icons.add, color: Colors.white),
                 label: Text(
-                  'Post a Listing',
+                  ctaLabel,
                   style: GoogleFonts.inter(fontWeight: FontWeight.bold),
                 ),
                 style: ElevatedButton.styleFrom(
@@ -407,7 +341,7 @@ class _MarketplacePageState extends State<MarketplacePage> {
                   padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
-              )
+              ),
             ],
           ),
         ),
@@ -418,6 +352,8 @@ class _MarketplacePageState extends State<MarketplacePage> {
   Widget _buildListingCard(Listing listing) {
     final hasImages = listing.imageUrls.isNotEmpty;
     final priceStr = listing.price == 0 ? 'Free' : '${listing.price.toInt()} kr';
+    final badgeLabel = _getBadgeLabel(listing);
+    final badgeColor = _getBadgeColor(listing);
 
     return AnimatedTapDetector(
       onTap: () {
@@ -460,25 +396,31 @@ class _MarketplacePageState extends State<MarketplacePage> {
                           )
                         : _buildPlaceholderImage(),
                   ),
-                  // Listing Type Badge
+                  // Listing Badge
                   Positioned(
                     top: 8,
                     left: 8,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.black87,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: _getTypeColor(listing.listingType).withOpacity(0.5),
+                    right: 8,
+                    child: Align(
+                      alignment: Alignment.topLeft,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.black87,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: badgeColor.withOpacity(0.6),
+                          ),
                         ),
-                      ),
-                      child: Text(
-                        _getTypeDisplay(listing.listingType).toUpperCase(),
-                        style: GoogleFonts.inter(
-                          fontSize: 9,
-                          fontWeight: FontWeight.bold,
-                          color: _getTypeColor(listing.listingType),
+                        child: Text(
+                          badgeLabel.toUpperCase(),
+                          style: GoogleFonts.inter(
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
+                            color: badgeColor,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ),

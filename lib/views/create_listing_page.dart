@@ -7,12 +7,20 @@ import 'package:image_picker/image_picker.dart';
 import '../providers/app_state.dart';
 import '../theme/app_theme.dart';
 import '../models/listing.dart';
+import '../models/marketplace_taxonomy.dart';
 import '../widgets/custom_top_bar.dart';
 import '../widgets/gradient_scaffold.dart';
 import '../widgets/animated_tap_detector.dart';
 
 class CreateListingPage extends StatefulWidget {
-  const CreateListingPage({super.key});
+  final String? initialIntent;
+  final String? initialCategory;
+
+  const CreateListingPage({
+    super.key,
+    this.initialIntent,
+    this.initialCategory,
+  });
 
   @override
   State<CreateListingPage> createState() => _CreateListingPageState();
@@ -25,28 +33,55 @@ class _CreateListingPageState extends State<CreateListingPage> {
   final _priceController = TextEditingController();
   final _cityController = TextEditingController();
 
-  String _selectedCategory = 'Instruments';
+  late String _selectedIntent;
+  String? _selectedCategory;
   String _selectedType = 'sell';
   final List<XFile> _selectedImages = [];
   bool _isSubmitting = false;
+  bool _initializedArgs = false;
 
-  final List<String> _categories = [
-    'Instruments',
-    'Amps & Effects',
-    'Studio & Recording',
-    'Rehearsal Spaces',
-    'Music Services',
-    'Other'
-  ];
-
-  final Map<String, String> _types = {
+  final Map<String, String> _offeringTypes = {
     'sell': 'For Sale',
-    'buy': 'Wanted',
-    'rent': 'Rent',
+    'rent': 'For Rent',
     'service': 'Service',
   };
 
   final ImagePicker _picker = ImagePicker();
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedIntent = widget.initialIntent ?? MarketplaceTaxonomy.intentOffering;
+    _selectedCategory = widget.initialCategory;
+    _ensureValidCategory();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_initializedArgs) {
+      _initializedArgs = true;
+      final args = ModalRoute.of(context)?.settings.arguments;
+      if (args is Map) {
+        if (args['initialIntent'] != null && args['initialIntent'] is String) {
+          _selectedIntent = args['initialIntent'] as String;
+        }
+        if (args['initialCategory'] != null && args['initialCategory'] is String) {
+          _selectedCategory = args['initialCategory'] as String;
+        }
+        _ensureValidCategory();
+      }
+    }
+  }
+
+  void _ensureValidCategory() {
+    final available = MarketplaceTaxonomy.getCategoriesForIntent(_selectedIntent);
+    if (_selectedCategory == null || !available.any((c) => c.id == _selectedCategory)) {
+      if (available.isNotEmpty) {
+        _selectedCategory = available.first.id;
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -145,6 +180,16 @@ class _CreateListingPageState extends State<CreateListingPage> {
   Future<void> _submitForm() async {
     if (!_formKey.currentState!.validate()) return;
 
+    if (_selectedCategory == null || _selectedCategory!.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select a category'),
+          backgroundColor: AppTheme.danger,
+        ),
+      );
+      return;
+    }
+
     setState(() => _isSubmitting = true);
 
     try {
@@ -157,17 +202,23 @@ class _CreateListingPageState extends State<CreateListingPage> {
 
       List<String> imageUrls = [];
       if (_selectedImages.isNotEmpty) {
-        // Upload images first
         imageUrls = await appState.firebaseService.uploadListingImagesAsync(listingId, _selectedImages);
       }
+
+      final legacyListingType = _selectedIntent == MarketplaceTaxonomy.intentLookingFor
+          ? 'buy'
+          : _selectedType;
+      final categoryLabel = MarketplaceTaxonomy.getCategoryLabel(_selectedIntent, _selectedCategory);
 
       final listing = Listing(
         id: listingId,
         userId: userId,
         title: _titleController.text.trim(),
         description: _descriptionController.text.trim(),
-        category: _selectedCategory,
-        listingType: _selectedType,
+        category: categoryLabel,
+        listingType: legacyListingType,
+        marketplaceIntent: _selectedIntent,
+        marketplaceCategory: _selectedCategory,
         price: double.tryParse(_priceController.text) ?? 0.0,
         city: _cityController.text.trim(),
         imageUrls: imageUrls,
@@ -206,6 +257,8 @@ class _CreateListingPageState extends State<CreateListingPage> {
 
   @override
   Widget build(BuildContext context) {
+    final categories = MarketplaceTaxonomy.getCategoriesForIntent(_selectedIntent);
+
     return GradientScaffold(
       appBar: const CustomTopBar(
         title: 'Post Listing',
@@ -217,8 +270,8 @@ class _CreateListingPageState extends State<CreateListingPage> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    CircularProgressIndicator(color: AppTheme.primaryAccent),
-                    SizedBox(height: 16),
+                    const CircularProgressIndicator(color: AppTheme.primaryAccent),
+                    const SizedBox(height: 16),
                     Text(
                       'Creating listing and uploading images...',
                       style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
@@ -243,6 +296,109 @@ class _CreateListingPageState extends State<CreateListingPage> {
                         ),
                       ),
                       const SizedBox(height: 20),
+
+                      // Listing Intent Selector (Looking For vs Offering)
+                      Text(
+                        'LISTING INTENT',
+                        style: GoogleFonts.outfit(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.textSecondary,
+                          letterSpacing: 1.5,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildIntentChip(
+                              intent: MarketplaceTaxonomy.intentLookingFor,
+                              label: MarketplaceTaxonomy.labelLookingFor,
+                              icon: Icons.search_rounded,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _buildIntentChip(
+                              intent: MarketplaceTaxonomy.intentOffering,
+                              label: MarketplaceTaxonomy.labelOffering,
+                              icon: Icons.storefront_rounded,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+
+                      // Category Dropdown (displays only the 8 categories for chosen intent)
+                      Text(
+                        'CATEGORY',
+                        style: GoogleFonts.outfit(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.textSecondary,
+                          letterSpacing: 1.5,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      DropdownButtonFormField<String>(
+                        isExpanded: true,
+                        value: _selectedCategory,
+                        dropdownColor: AppTheme.cardBackground,
+                        style: GoogleFonts.inter(color: Colors.white),
+                        decoration: const InputDecoration(
+                          contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        ),
+                        items: categories.map((cat) {
+                          return DropdownMenuItem<String>(
+                            value: cat.id,
+                            child: Text(cat.label),
+                          );
+                        }).toList(),
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Please select a category';
+                          }
+                          return null;
+                        },
+                        onChanged: (value) {
+                          if (value != null) {
+                            setState(() => _selectedCategory = value);
+                          }
+                        },
+                      ),
+                      const SizedBox(height: 20),
+
+                      // Offering Transaction Type (if offering)
+                      if (_selectedIntent == MarketplaceTaxonomy.intentOffering) ...[
+                        Text(
+                          'OFFERING TYPE',
+                          style: GoogleFonts.outfit(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: AppTheme.textSecondary,
+                            letterSpacing: 1.5,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        DropdownButtonFormField<String>(
+                          isExpanded: true,
+                          value: _selectedType,
+                          dropdownColor: AppTheme.cardBackground,
+                          style: GoogleFonts.inter(color: Colors.white),
+                          decoration: const InputDecoration(
+                            contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          ),
+                          items: _offeringTypes.entries.map((entry) {
+                            return DropdownMenuItem(value: entry.key, child: Text(entry.value));
+                          }).toList(),
+                          onChanged: (value) {
+                            if (value != null) {
+                              setState(() => _selectedType = value);
+                            }
+                          },
+                        ),
+                        const SizedBox(height: 20),
+                      ],
 
                       // Image Selector Section
                       Text(
@@ -281,82 +437,6 @@ class _CreateListingPageState extends State<CreateListingPage> {
                           }
                           return null;
                         },
-                      ),
-                      const SizedBox(height: 20),
-
-                      // Category & Listing Type Row
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'CATEGORY',
-                                  style: GoogleFonts.outfit(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                    color: AppTheme.textSecondary,
-                                    letterSpacing: 1.5,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                DropdownButtonFormField<String>(
-                                  isExpanded: true,
-                                  value: _selectedCategory,
-                                  dropdownColor: AppTheme.cardBackground,
-                                  style: GoogleFonts.inter(color: Colors.white),
-                                  decoration: const InputDecoration(
-                                    contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                                  ),
-                                  items: _categories.map((cat) {
-                                    return DropdownMenuItem(value: cat, child: Text(cat));
-                                  }).toList(),
-                                  onChanged: (value) {
-                                    if (value != null) {
-                                      setState(() => _selectedCategory = value);
-                                    }
-                                  },
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'LISTING TYPE',
-                                  style: GoogleFonts.outfit(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                    color: AppTheme.textSecondary,
-                                    letterSpacing: 1.5,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                DropdownButtonFormField<String>(
-                                  isExpanded: true,
-                                  value: _selectedType,
-                                  dropdownColor: AppTheme.cardBackground,
-                                  style: GoogleFonts.inter(color: Colors.white),
-                                  decoration: const InputDecoration(
-                                    contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                                  ),
-                                  items: _types.entries.map((entry) {
-                                    return DropdownMenuItem(value: entry.key, child: Text(entry.value));
-                                  }).toList(),
-                                  onChanged: (value) {
-                                    if (value != null) {
-                                      setState(() => _selectedType = value);
-                                    }
-                                  },
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
                       ),
                       const SizedBox(height: 20),
 
@@ -494,6 +574,60 @@ class _CreateListingPageState extends State<CreateListingPage> {
                   ),
                 ),
               ),
+      ),
+    );
+  }
+
+  Widget _buildIntentChip({
+    required String intent,
+    required String label,
+    required IconData icon,
+  }) {
+    final isSelected = _selectedIntent == intent;
+    return InkWell(
+      onTap: () {
+        if (_selectedIntent != intent) {
+          setState(() {
+            _selectedIntent = intent;
+            _ensureValidCategory();
+          });
+        }
+      },
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? AppTheme.primaryAccent.withOpacity(0.15)
+              : AppTheme.cardBackground,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isSelected ? AppTheme.primaryAccent : const Color(0xFF2E2A4E),
+            width: isSelected ? 1.5 : 1.0,
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 18,
+              color: isSelected ? AppTheme.primaryAccent : AppTheme.textSecondary,
+            ),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                label,
+                style: GoogleFonts.outfit(
+                  color: isSelected ? Colors.white : AppTheme.textSecondary,
+                  fontSize: 13,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

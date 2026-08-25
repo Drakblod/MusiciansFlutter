@@ -1261,6 +1261,8 @@ class FirebaseService {
         description: listing.description,
         category: listing.category,
         listingType: listing.listingType,
+        marketplaceIntent: listing.marketplaceIntent,
+        marketplaceCategory: listing.marketplaceCategory,
         price: listing.price,
         city: listing.city,
         imageUrls: listing.imageUrls,
