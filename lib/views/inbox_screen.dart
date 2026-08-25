@@ -8,6 +8,7 @@ import '../widgets/gradient_scaffold.dart';
 import '../widgets/custom_top_bar.dart';
 import '../models/agreement.dart';
 import '../utils/date_parser.dart';
+import '../widgets/create_band_section_sheet.dart';
 
 class InboxScreen extends StatefulWidget {
   const InboxScreen({super.key});
@@ -151,6 +152,58 @@ class _InboxScreenState extends State<InboxScreen> {
             ),
           ),
 
+          if (_activeTab == 0)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: Semantics(
+                  button: true,
+                  label: 'New group',
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: () async {
+                      final result = await CreateBandSectionSheet.show(context);
+                      if (result != null && mounted) {
+                        _loadThreads();
+                        Navigator.pushNamed(
+                          context,
+                          '/band-section-chat',
+                          arguments: result,
+                        );
+                      }
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryAccent.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: AppTheme.primaryAccent.withOpacity(0.4),
+                          width: 1.0,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.group_add_rounded, size: 16, color: AppTheme.primaryAccent),
+                          const SizedBox(width: 6),
+                          Text(
+                            'New group',
+                            style: GoogleFonts.inter(
+                              color: AppTheme.primaryAccent,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
           Expanded(
             child: RefreshIndicator(
               onRefresh: _loadThreads,
@@ -192,7 +245,7 @@ class _InboxScreenState extends State<InboxScreen> {
                                   const SizedBox(height: 16),
                                   Text(
                                     _activeTab == 0
-                                        ? 'No direct conversations.'
+                                        ? 'No messages yet.'
                                         : 'No active gig agreements.',
                                     style: GoogleFonts.outfit(
                                       fontSize: 18,
@@ -207,7 +260,7 @@ class _InboxScreenState extends State<InboxScreen> {
                                     ),
                                     child: Text(
                                       _activeTab == 0
-                                          ? 'Start a chat by tapping Message on a musician\'s profile.'
+                                          ? 'Start a chat by tapping Message on a profile, or create a band section group.'
                                           : 'Agreements are started when a sub request is accepted.',
                                       style: GoogleFonts.inter(
                                         fontSize: 14,
@@ -229,18 +282,16 @@ class _InboxScreenState extends State<InboxScreen> {
                         itemCount: filteredThreads.length,
                         itemBuilder: (context, index) {
                           final thread = filteredThreads[index];
+                          final isGroup = thread['isGroup'] == true || thread['conversationType'] == 'band_section';
                           final hasUnread = thread['hasUnread'] == true;
                           final timestamp = parseDateTime(
                             thread['timestamp'] ??
                                 thread['lastMessageTimestamp'],
                           );
-                          final otherUserId = thread['otherUserId'] as String;
-                          final otherUserName =
-                              thread['otherUserName'] as String;
-                          final lastMessage =
-                              thread['lastMessageText'] as String;
-                          final conversationId =
-                              thread['conversationId'] as String;
+                          final otherUserId = (thread['otherUserId'] as String?) ?? '';
+                          final otherUserName = (thread['otherUserName'] as String?) ?? (isGroup ? 'Section Chat' : 'Musician');
+                          final lastMessage = (thread['lastMessageText'] as String?) ?? '';
+                          final conversationId = (thread['conversationId'] as String?) ?? '';
                           final agreement = thread['agreement'] as Agreement?;
 
                           final isAgreement = agreement != null;
@@ -248,6 +299,8 @@ class _InboxScreenState extends State<InboxScreen> {
                               ? AppTheme.primaryAccent.withOpacity(0.5)
                               : isAgreement
                               ? const Color(0xFF0F4D25).withOpacity(0.6)
+                              : isGroup
+                              ? const Color(0xFF3B336B).withOpacity(0.6)
                               : const Color(0xFF231F45);
                           final cardBgColor = isAgreement
                               ? const Color(
@@ -270,25 +323,44 @@ class _InboxScreenState extends State<InboxScreen> {
                               child: InkWell(
                                 borderRadius: BorderRadius.circular(16),
                                 onTap: () async {
-                                  // Mark conversation as read
-                                  await appState.firebaseService
-                                      .markConversationAsRead(conversationId);
+                                  if (isGroup) {
+                                    await appState.firebaseService
+                                        .markBandSectionConversationReadAsync(conversationId);
+                                    appState.refreshProfile();
 
-                                  // Trigger state update
-                                  appState.refreshProfile();
+                                    if (context.mounted) {
+                                      await Navigator.pushNamed(
+                                        context,
+                                        '/band-section-chat',
+                                        arguments: {
+                                          'conversationId': conversationId,
+                                          'bandId': thread['bandId'],
+                                          'groupName': thread['groupName'] ?? otherUserName,
+                                        },
+                                      );
+                                      _loadThreads();
+                                    }
+                                  } else {
+                                    // Mark conversation as read
+                                    await appState.firebaseService
+                                        .markConversationAsRead(conversationId);
 
-                                  if (context.mounted) {
-                                    await Navigator.pushNamed(
-                                      context,
-                                      '/chat-detail',
-                                      arguments: {
-                                        'conversationId': conversationId,
-                                        'receiverId': otherUserId,
-                                        'receiverName': otherUserName,
-                                      },
-                                    );
-                                    // Reload thread list on pop back
-                                    _loadThreads();
+                                    // Trigger state update
+                                    appState.refreshProfile();
+
+                                    if (context.mounted) {
+                                      await Navigator.pushNamed(
+                                        context,
+                                        '/chat-detail',
+                                        arguments: {
+                                          'conversationId': conversationId,
+                                          'receiverId': otherUserId,
+                                          'receiverName': otherUserName,
+                                        },
+                                      );
+                                      // Reload thread list on pop back
+                                      _loadThreads();
+                                    }
                                   }
                                 },
                                 child: Padding(
@@ -305,22 +377,30 @@ class _InboxScreenState extends State<InboxScreen> {
                                             ? const Color(
                                                 0xFF0D3A20,
                                               ).withOpacity(0.3)
+                                            : isGroup
+                                            ? AppTheme.primaryAccent.withOpacity(0.2)
                                             : AppTheme.primaryAccent
                                                   .withOpacity(0.15),
-                                        child: Text(
-                                          otherUserName.isNotEmpty
-                                              ? otherUserName
-                                                    .substring(0, 1)
-                                                    .toUpperCase()
-                                              : 'U',
-                                          style: GoogleFonts.inter(
-                                            color: isAgreement
-                                                ? Colors.greenAccent
-                                                : Colors.white,
-                                            fontSize: 18,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
+                                        child: isGroup
+                                            ? const Icon(
+                                                Icons.groups_rounded,
+                                                color: AppTheme.primaryAccent,
+                                                size: 24,
+                                              )
+                                            : Text(
+                                                otherUserName.isNotEmpty
+                                                    ? otherUserName
+                                                          .substring(0, 1)
+                                                          .toUpperCase()
+                                                    : 'U',
+                                                style: GoogleFonts.inter(
+                                                  color: isAgreement
+                                                      ? Colors.greenAccent
+                                                      : Colors.white,
+                                                  fontSize: 18,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
                                       ),
                                       const SizedBox(width: 14),
 
@@ -394,6 +474,39 @@ class _InboxScreenState extends State<InboxScreen> {
                                                           ),
                                                         ),
                                                       ],
+                                                      if (isGroup) ...[
+                                                        const SizedBox(
+                                                          width: 6,
+                                                        ),
+                                                        Container(
+                                                          padding:
+                                                              const EdgeInsets.symmetric(
+                                                            horizontal: 6,
+                                                            vertical: 2,
+                                                          ),
+                                                          decoration: BoxDecoration(
+                                                            color: AppTheme.primaryAccent.withOpacity(0.2),
+                                                            borderRadius:
+                                                                BorderRadius.circular(
+                                                              6,
+                                                            ),
+                                                            border: Border.all(
+                                                              color: AppTheme.primaryAccent.withOpacity(0.4),
+                                                              width: 0.8,
+                                                            ),
+                                                          ),
+                                                          child: Text(
+                                                            'Group',
+                                                            style: GoogleFonts.inter(
+                                                              color: AppTheme.primaryAccent,
+                                                              fontSize: 9,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .bold,
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      ],
                                                     ],
                                                   ),
                                                 ),
@@ -411,9 +524,9 @@ class _InboxScreenState extends State<InboxScreen> {
                                                 ),
                                               ],
                                             ),
-                                            const SizedBox(height: 6),
+                                            const SizedBox(height: 4),
 
-                                            // Context info for agreements
+                                            // Context info for agreements & groups
                                             if (isAgreement) ...[
                                               Row(
                                                 children: [
@@ -437,6 +550,30 @@ class _InboxScreenState extends State<InboxScreen> {
                                                       maxLines: 1,
                                                       overflow:
                                                           TextOverflow.ellipsis,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                              const SizedBox(height: 4),
+                                            ] else if (isGroup) ...[
+                                              Row(
+                                                children: [
+                                                  const Icon(
+                                                    Icons.groups_outlined,
+                                                    size: 13,
+                                                    color: AppTheme.primaryAccent,
+                                                  ),
+                                                  const SizedBox(width: 4),
+                                                  Expanded(
+                                                    child: Text(
+                                                      '${thread['bandName'] ?? "Band"} • ${thread['participantCount'] ?? 0} members',
+                                                      style: GoogleFonts.inter(
+                                                        color: AppTheme.textSecondary,
+                                                        fontSize: 12,
+                                                        fontWeight: FontWeight.w500,
+                                                      ),
+                                                      maxLines: 1,
+                                                      overflow: TextOverflow.ellipsis,
                                                     ),
                                                   ),
                                                 ],

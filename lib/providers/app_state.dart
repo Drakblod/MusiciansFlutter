@@ -146,6 +146,17 @@ class AppState extends ChangeNotifier {
           );
         }
       }
+    } else if (type == 'band_section_chat') {
+      final conversationId = data['conversationId']?.toString();
+      if (conversationId != null && conversationId.isNotEmpty) {
+        MyApp.navigatorKey.currentState?.pushNamed(
+          '/band-section-chat',
+          arguments: {
+            'conversationId': conversationId,
+            'bandId': data['bandId']?.toString() ?? '',
+          },
+        );
+      }
     }
   }
 

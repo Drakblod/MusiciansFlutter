@@ -278,4 +278,101 @@ describe('Real Cloud Functions Emulator Integration Tests (JS Client SDK + Emula
     assert.strictEqual(res2.data.status, 'no_valid_tokens');
     assert.notStrictEqual(res2.data.status, 'already_sent');
   });
+
+  it('11. createBandSectionConversation allows ordinary member to create group with band members', async () => {
+    await adminDb.ref('Bands/band_sec/Name').set('Horn Power');
+    await adminDb.ref('Bands/band_sec/Members_band/user_a').set({ Role: 'Member' });
+    await adminDb.ref('Bands/band_sec/Members_band/user_b').set({ Role: 'Member' });
+
+    const createFn = httpsCallable(functionsUserA, 'createBandSectionConversation');
+    const res = await createFn({
+      bandId: 'band_sec',
+      groupName: 'Horns',
+      participantIds: ['user_b'],
+    });
+
+    assert(res.data.conversationId);
+    const convSnap = await adminDb.ref(`conversations/${res.data.conversationId}`).get();
+    assert.strictEqual(convSnap.val().groupName, 'Horns');
+    assert.strictEqual(convSnap.val().bandName, 'Horn Power');
+    assert.strictEqual(convSnap.val().participantCount, 2);
+  });
+
+  it('12. sendBandSectionMessage updates all participants inboxes', async () => {
+    await adminDb.ref('Bands/band_sec/Members_band/user_a').set({ Role: 'Member' });
+    await adminDb.ref('Bands/band_sec/Members_band/user_b').set({ Role: 'Member' });
+
+    const createFn = httpsCallable(functionsUserA, 'createBandSectionConversation');
+    const createRes = await createFn({
+      bandId: 'band_sec',
+      groupName: 'Horns',
+      participantIds: ['user_b'],
+    });
+    const convId = createRes.data.conversationId;
+
+    const sendFn = httpsCallable(functionsUserA, 'sendBandSectionMessage');
+    const sendRes = await sendFn({
+      conversationId: convId,
+      text: 'Section rehearsal tomorrow',
+    });
+    assert(sendRes.data.messageId);
+
+    const inboxSnapB = await adminDb.ref(`userConversations/user_b/${convId}`).get();
+    assert.strictEqual(inboxSnapB.val().hasUnread, true);
+    assert.strictEqual(inboxSnapB.val().lastMessageText, 'Section rehearsal tomorrow');
+
+    const inboxSnapA = await adminDb.ref(`userConversations/user_a/${convId}`).get();
+    assert.strictEqual(inboxSnapA.val().hasUnread, false);
+  });
+
+  it('13. markBandSectionConversationRead sets caller unread flag to false', async () => {
+    await adminDb.ref('Bands/band_sec/Members_band/user_a').set({ Role: 'Member' });
+    await adminDb.ref('Bands/band_sec/Members_band/user_b').set({ Role: 'Member' });
+
+    const createFn = httpsCallable(functionsUserA, 'createBandSectionConversation');
+    const createRes = await createFn({
+      bandId: 'band_sec',
+      groupName: 'Horns',
+      participantIds: ['user_b'],
+    });
+    const convId = createRes.data.conversationId;
+
+    const sendFn = httpsCallable(functionsUserA, 'sendBandSectionMessage');
+    await sendFn({ conversationId: convId, text: 'Hello!' });
+
+    const markFnB = httpsCallable(functionsUserB, 'markBandSectionConversationRead');
+    await markFnB({ conversationId: convId });
+
+    const inboxSnapB = await adminDb.ref(`userConversations/user_b/${convId}`).get();
+    assert.strictEqual(inboxSnapB.val().hasUnread, false);
+  });
+
+  it('14. manageBandSectionConversation rename and leave actions', async () => {
+    await adminDb.ref('Bands/band_sec/Members_band/user_a').set({ Role: 'Member' });
+    await adminDb.ref('Bands/band_sec/Members_band/user_b').set({ Role: 'Member' });
+    await adminDb.ref('Bands/band_sec/Members_band/user_c').set({ Role: 'Member' });
+
+    const createFn = httpsCallable(functionsUserA, 'createBandSectionConversation');
+    const createRes = await createFn({
+      bandId: 'band_sec',
+      groupName: 'Horns',
+      participantIds: ['user_b', 'user_c'],
+    });
+    const convId = createRes.data.conversationId;
+
+    // Creator renames
+    const manageFnA = httpsCallable(functionsUserA, 'manageBandSectionConversation');
+    await manageFnA({ conversationId: convId, action: 'rename', groupName: 'Super Horns' });
+
+    const convSnap = await adminDb.ref(`conversations/${convId}`).get();
+    assert.strictEqual(convSnap.val().groupName, 'Super Horns');
+
+    // Participant leaves
+    const manageFnC = httpsCallable(functionsUserC, 'manageBandSectionConversation');
+    await manageFnC({ conversationId: convId, action: 'leave' });
+
+    const convSnapAfterLeave = await adminDb.ref(`conversations/${convId}`).get();
+    assert.strictEqual(convSnapAfterLeave.val().participantCount, 2);
+    assert.strictEqual(convSnapAfterLeave.val().participants.user_c, undefined);
+  });
 });

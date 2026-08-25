@@ -1339,3 +1339,539 @@ exports.triggerEventReminder = onCall({ region: 'europe-west1' }, async (request
     attemptedCount: totalAttempted,
   };
 });
+
+/**
+ * 6. createBandSectionConversation
+ */
+exports.createBandSectionConversation = onCall({ region: 'europe-west1' }, async (request) => {
+  const callerUid = request.auth?.uid;
+  if (!callerUid) {
+    throw new HttpsError('unauthenticated', 'User must be authenticated.');
+  }
+
+  const { bandId, groupName, participantIds, sectionKey, sourceInstrument } = request.data || {};
+
+  if (!bandId || typeof bandId !== 'string' || bandId.trim().length === 0) {
+    throw new HttpsError('invalid-argument', 'bandId is required.');
+  }
+  if (!groupName || typeof groupName !== 'string' || groupName.trim().length === 0) {
+    throw new HttpsError('invalid-argument', 'groupName cannot be empty.');
+  }
+  const trimmedGroupName = groupName.trim();
+  if (trimmedGroupName.length > 80) {
+    throw new HttpsError('invalid-argument', 'groupName cannot exceed 80 characters.');
+  }
+
+  // Authoritative band membership check
+  const membersSnap = await admin.database().ref(`/Bands/${bandId}/Members_band`).once('value');
+  if (!membersSnap.exists() || !membersSnap.val()) {
+    throw new HttpsError('not-found', `Band ${bandId} does not exist or has no members.`);
+  }
+  const bandMembers = membersSnap.val();
+
+  // Verify caller is a current band member (any valid role including Member)
+  if (!bandMembers[callerUid]) {
+    throw new HttpsError('permission-denied', 'You are not a member of this band.');
+  }
+
+  // Get authoritative band name snapshot
+  let bandName = bandId;
+  const bandNameSnap = await admin.database().ref(`/Bands/${bandId}/Name`).once('value');
+  if (bandNameSnap.exists() && bandNameSnap.val()) {
+    bandName = bandNameSnap.val().toString();
+  }
+
+  // Validate and deduplicate participants
+  const rawParticipants = Array.isArray(participantIds) ? participantIds : [];
+  const validParticipantSet = new Set();
+  validParticipantSet.add(callerUid);
+
+  for (const pid of rawParticipants) {
+    if (pid && typeof pid === 'string' && pid.trim().length > 0) {
+      const cleanPid = pid.trim();
+      if (bandMembers[cleanPid]) {
+        validParticipantSet.add(cleanPid);
+      }
+    }
+  }
+
+  if (validParticipantSet.size < 2) {
+    throw new HttpsError('invalid-argument', 'A section group chat requires at least 2 current band members.');
+  }
+
+  const participantsMap = {};
+  const participantsList = Array.from(validParticipantSet);
+  participantsList.forEach((uid) => {
+    participantsMap[uid] = true;
+  });
+
+  const conversationId = admin.database().ref('/conversations').push().key;
+  const timestampIso = new Date().toISOString();
+
+  const conversationData = {
+    conversationType: 'band_section',
+    bandId: bandId,
+    bandName: bandName,
+    groupName: trimmedGroupName,
+    sectionKey: (sectionKey && typeof sectionKey === 'string') ? sectionKey.trim().toLowerCase() : null,
+    sourceInstrument: (sourceInstrument && typeof sourceInstrument === 'string') ? sourceInstrument.trim() : null,
+    createdBy: callerUid,
+    createdTimestamp: timestampIso,
+    updatedTimestamp: timestampIso,
+    participants: participantsMap,
+    admins: { [callerUid]: true },
+    participantCount: participantsList.length,
+  };
+
+  const updates = {};
+  updates[`/conversations/${conversationId}`] = conversationData;
+  updates[`/bandSectionConversations/${bandId}/${conversationId}`] = true;
+
+  // Multi-location atomic index updates for each participant
+  participantsList.forEach((uid) => {
+    updates[`/userConversations/${uid}/${conversationId}`] = {
+      conversationType: 'band_section',
+      bandId: bandId,
+      bandName: bandName,
+      groupName: trimmedGroupName,
+      sectionKey: conversationData.sectionKey,
+      sourceInstrument: conversationData.sourceInstrument,
+      lastMessageText: '',
+      lastMessageTimestamp: timestampIso,
+      lastMessageSenderId: null,
+      lastMessageSenderName: null,
+      hasUnread: false,
+      participantCount: participantsList.length,
+    };
+  });
+
+  await admin.database().ref().update(updates);
+
+  return { conversationId };
+});
+
+/**
+ * 7. sendBandSectionMessage
+ */
+exports.sendBandSectionMessage = onCall({ region: 'europe-west1' }, async (request) => {
+  const senderUid = request.auth?.uid;
+  if (!senderUid) {
+    throw new HttpsError('unauthenticated', 'User must be authenticated.');
+  }
+
+  const { conversationId, text, replyToText, replyToSenderName } = request.data || {};
+
+  if (!conversationId || typeof conversationId !== 'string' || conversationId.trim().length === 0) {
+    throw new HttpsError('invalid-argument', 'conversationId is required.');
+  }
+  if (!text || typeof text !== 'string' || text.trim().length === 0) {
+    throw new HttpsError('invalid-argument', 'Message text cannot be empty.');
+  }
+  if (text.length > 4000) {
+    throw new HttpsError('invalid-argument', 'Message exceeds maximum length of 4000 characters.');
+  }
+
+  const convRef = admin.database().ref(`/conversations/${conversationId}`);
+  const convSnap = await convRef.once('value');
+  if (!convSnap.exists()) {
+    throw new HttpsError('not-found', 'Conversation does not exist.');
+  }
+  const convVal = convSnap.val() || {};
+
+  if (convVal.conversationType !== 'band_section') {
+    throw new HttpsError('invalid-argument', 'Conversation is not a band section group.');
+  }
+
+  const pMap = convVal.participants || {};
+  if (!pMap[senderUid]) {
+    throw new HttpsError('permission-denied', 'You are not a participant in this conversation.');
+  }
+
+  // Authoritative band membership check
+  const bandId = convVal.bandId;
+  const memberSnap = await admin.database().ref(`/Bands/${bandId}/Members_band/${senderUid}`).once('value');
+  if (!memberSnap.exists()) {
+    throw new HttpsError('permission-denied', 'You are no longer a member of this band.');
+  }
+
+  // Resolve sender name snapshot
+  let senderName = 'Musician';
+  const userProfileSnap = await admin.database().ref(`/users/${senderUid}/info`).once('value');
+  if (userProfileSnap.exists()) {
+    const info = userProfileSnap.val();
+    senderName = info.DisplayName || info.displayName || info.Nickname || info.nickname || 'Musician';
+  }
+
+  const msgRef = admin.database().ref(`/conversations/${conversationId}/messages`).push();
+  const msgId = msgRef.key;
+  const timestampIso = new Date().toISOString();
+
+  const messageData = {
+    id: msgId,
+    senderId: senderUid,
+    SenderId: senderUid,
+    senderName: senderName,
+    SenderName: senderName,
+    text: text.trim(),
+    Text: text.trim(),
+    timestamp: timestampIso,
+    Timestamp: timestampIso,
+    isRead: false,
+    IsRead: false,
+  };
+  if (replyToText) messageData.replyToText = String(replyToText);
+  if (replyToSenderName) messageData.replyToSenderName = String(replyToSenderName);
+
+  await msgRef.set(messageData);
+
+  const updates = {};
+  updates[`/conversations/${conversationId}/updatedTimestamp`] = timestampIso;
+
+  const participantsList = Object.keys(pMap).filter(uid => pMap[uid] === true);
+
+  participantsList.forEach((uid) => {
+    updates[`/userConversations/${uid}/${conversationId}/lastMessageText`] = text.trim();
+    updates[`/userConversations/${uid}/${conversationId}/lastMessageTimestamp`] = timestampIso;
+    updates[`/userConversations/${uid}/${conversationId}/lastMessageSenderId`] = senderUid;
+    updates[`/userConversations/${uid}/${conversationId}/lastMessageSenderName`] = senderName;
+    if (uid === senderUid) {
+      updates[`/userConversations/${uid}/${conversationId}/hasUnread`] = false;
+    } else {
+      updates[`/userConversations/${uid}/${conversationId}/hasUnread`] = true;
+    }
+  });
+
+  await admin.database().ref().update(updates);
+
+  // Push notifications to all other current participants
+  const otherParticipants = participantsList.filter(uid => uid !== senderUid);
+  if (otherParticipants.length > 0) {
+    try {
+      const groupName = convVal.groupName || 'Section Chat';
+      const tokenPromises = otherParticipants.map(async (uid) => {
+        const tokenSnap = await admin.database().ref(`/users/${uid}/info/PushToken`).once('value');
+        const token = tokenSnap.val();
+        if (token && typeof token === 'string' && token.trim().length > 0) {
+          return { userId: uid, token: token.trim() };
+        }
+        return null;
+      });
+
+      const recipientsWithTokens = (await Promise.all(tokenPromises)).filter(Boolean);
+
+      if (recipientsWithTokens.length > 0) {
+        const messages = recipientsWithTokens.map(r => ({
+          token: r.token,
+          notification: {
+            title: `💬 ${groupName}`,
+            body: `${senderName}: ${text.trim()}`,
+          },
+          data: {
+            click_action: 'FLUTTER_NOTIFICATION_CLICK',
+            conversationId: conversationId,
+            bandId: bandId,
+            type: 'band_section_chat',
+          },
+          android: {
+            notification: {
+              sound: 'default',
+              channelId: 'chat_notifications',
+            },
+          },
+          apns: {
+            payload: {
+              aps: {
+                sound: 'default',
+              },
+            },
+          },
+        }));
+
+        let fcmResponse;
+        if (process.env.FUNCTIONS_EMULATOR === 'true' || process.env.IS_EMULATOR_TEST === 'true') {
+          fcmResponse = {
+            responses: messages.map(() => ({ success: true, messageId: 'emulator_mock_fcm_id' })),
+          };
+        } else {
+          fcmResponse = await admin.messaging().sendEach(messages);
+        }
+
+        fcmResponse.responses.forEach((res, index) => {
+          if (!res.success && res.error) {
+            const recipient = recipientsWithTokens[index];
+            if (recipient && (res.error.code === 'messaging/invalid-registration-token' || res.error.code === 'messaging/registration-token-not-registered')) {
+              admin.database().ref(`/users/${recipient.userId}/info/PushToken`).remove();
+            }
+          }
+        });
+      }
+    } catch (pushErr) {
+      console.error('Error dispatching band section push notifications:', pushErr);
+    }
+  }
+
+  return { messageId: msgId };
+});
+
+/**
+ * 8. markBandSectionConversationRead
+ */
+exports.markBandSectionConversationRead = onCall({ region: 'europe-west1' }, async (request) => {
+  const callerUid = request.auth?.uid;
+  if (!callerUid) {
+    throw new HttpsError('unauthenticated', 'User must be authenticated.');
+  }
+
+  const conversationId = request.data?.conversationId;
+  if (!conversationId || typeof conversationId !== 'string' || conversationId.trim().length === 0) {
+    throw new HttpsError('invalid-argument', 'conversationId is required.');
+  }
+
+  const convRef = admin.database().ref(`/conversations/${conversationId}`);
+  const convSnap = await convRef.once('value');
+  if (!convSnap.exists()) {
+    throw new HttpsError('not-found', 'Conversation does not exist.');
+  }
+  const convVal = convSnap.val() || {};
+
+  const pMap = convVal.participants || {};
+  if (!pMap[callerUid]) {
+    throw new HttpsError('permission-denied', 'You are not a participant in this conversation.');
+  }
+
+  // Verify band membership
+  const bandId = convVal.bandId;
+  if (bandId) {
+    const memberSnap = await admin.database().ref(`/Bands/${bandId}/Members_band/${callerUid}`).once('value');
+    if (!memberSnap.exists()) {
+      throw new HttpsError('permission-denied', 'You are no longer a member of this band.');
+    }
+  }
+
+  // Update only caller's per-user read state under userConversations
+  await admin.database().ref(`/userConversations/${callerUid}/${conversationId}/hasUnread`).set(false);
+
+  return { success: true };
+});
+
+/**
+ * 9. manageBandSectionConversation
+ */
+exports.manageBandSectionConversation = onCall({ region: 'europe-west1' }, async (request) => {
+  const callerUid = request.auth?.uid;
+  if (!callerUid) {
+    throw new HttpsError('unauthenticated', 'User must be authenticated.');
+  }
+
+  const { conversationId, action, groupName, participantIds } = request.data || {};
+  if (!conversationId || typeof conversationId !== 'string' || conversationId.trim().length === 0) {
+    throw new HttpsError('invalid-argument', 'conversationId is required.');
+  }
+
+  const allowedActions = ['rename', 'addParticipants', 'removeParticipants', 'leave'];
+  if (!action || !allowedActions.includes(action)) {
+    throw new HttpsError('invalid-argument', `action must be one of: ${allowedActions.join(', ')}`);
+  }
+
+  const convRef = admin.database().ref(`/conversations/${conversationId}`);
+  const convSnap = await convRef.once('value');
+  if (!convSnap.exists()) {
+    throw new HttpsError('not-found', 'Conversation does not exist.');
+  }
+  const convVal = convSnap.val() || {};
+
+  if (convVal.conversationType !== 'band_section') {
+    throw new HttpsError('invalid-argument', 'Conversation is not a band section group.');
+  }
+
+  const bandId = convVal.bandId;
+  const pMap = convVal.participants || {};
+  const adminsMap = convVal.admins || {};
+
+  // Check band membership and role
+  const bandMembersSnap = await admin.database().ref(`/Bands/${bandId}/Members_band`).once('value');
+  const bandMembers = bandMembersSnap.val() || {};
+
+  if (!bandMembers[callerUid]) {
+    throw new HttpsError('permission-denied', 'You are not a member of this band.');
+  }
+
+  const callerBandRole = bandMembers[callerUid]?.Role || bandMembers[callerUid]?.role;
+  const isBandAdminOrLeader = (callerBandRole === 'Leader' || callerBandRole === 'Admin' || callerBandRole === 'MOD');
+  const isGroupAdmin = adminsMap[callerUid] === true || convVal.createdBy === callerUid;
+
+  const updates = {};
+  const timestampIso = new Date().toISOString();
+  updates[`/conversations/${conversationId}/updatedTimestamp`] = timestampIso;
+
+  if (action === 'rename') {
+    if (!isGroupAdmin && !isBandAdminOrLeader) {
+      throw new HttpsError('permission-denied', 'Only group admins or Band Leaders/Admins can rename the group.');
+    }
+    if (!groupName || typeof groupName !== 'string' || groupName.trim().length === 0) {
+      throw new HttpsError('invalid-argument', 'groupName cannot be empty.');
+    }
+    const trimmed = groupName.trim();
+    if (trimmed.length > 80) {
+      throw new HttpsError('invalid-argument', 'groupName cannot exceed 80 characters.');
+    }
+
+    updates[`/conversations/${conversationId}/groupName`] = trimmed;
+    Object.keys(pMap).forEach((uid) => {
+      if (pMap[uid]) {
+        updates[`/userConversations/${uid}/${conversationId}/groupName`] = trimmed;
+      }
+    });
+  } else if (action === 'addParticipants') {
+    if (!isGroupAdmin && !isBandAdminOrLeader) {
+      throw new HttpsError('permission-denied', 'Only group admins or Band Leaders/Admins can add members.');
+    }
+    const toAdd = Array.isArray(participantIds) ? participantIds : [];
+    if (toAdd.length === 0) {
+      throw new HttpsError('invalid-argument', 'participantIds list is empty.');
+    }
+
+    const currentParticipants = Object.keys(pMap).filter(uid => pMap[uid]);
+    const newParticipantSet = new Set(currentParticipants);
+
+    toAdd.forEach((uid) => {
+      if (uid && typeof uid === 'string' && bandMembers[uid]) {
+        newParticipantSet.add(uid);
+      }
+    });
+
+    const updatedList = Array.from(newParticipantSet);
+    const newCount = updatedList.length;
+
+    updatedList.forEach((uid) => {
+      updates[`/conversations/${conversationId}/participants/${uid}`] = true;
+      updates[`/userConversations/${uid}/${conversationId}/conversationType`] = 'band_section';
+      updates[`/userConversations/${uid}/${conversationId}/bandId`] = bandId;
+      updates[`/userConversations/${uid}/${conversationId}/bandName`] = convVal.bandName || bandId;
+      updates[`/userConversations/${uid}/${conversationId}/groupName`] = convVal.groupName;
+      updates[`/userConversations/${uid}/${conversationId}/participantCount`] = newCount;
+    });
+
+    updates[`/conversations/${conversationId}/participantCount`] = newCount;
+  } else if (action === 'removeParticipants') {
+    if (!isGroupAdmin && !isBandAdminOrLeader) {
+      throw new HttpsError('permission-denied', 'Only group admins or Band Leaders/Admins can remove members.');
+    }
+    const toRemove = Array.isArray(participantIds) ? participantIds : [];
+    if (toRemove.length === 0) {
+      throw new HttpsError('invalid-argument', 'participantIds list is empty.');
+    }
+
+    const currentParticipants = Object.keys(pMap).filter(uid => pMap[uid]);
+    const updatedParticipants = currentParticipants.filter(uid => !toRemove.includes(uid));
+
+    if (updatedParticipants.length < 2) {
+      throw new HttpsError('failed-precondition', 'Cannot reduce group to fewer than 2 participants.');
+    }
+
+    toRemove.forEach((uid) => {
+      updates[`/conversations/${conversationId}/participants/${uid}`] = null;
+      updates[`/conversations/${conversationId}/admins/${uid}`] = null;
+      updates[`/userConversations/${uid}/${conversationId}`] = null;
+    });
+
+    // Ensure at least one admin remains
+    const remainingAdmins = Object.keys(adminsMap).filter(uid => !toRemove.includes(uid) && adminsMap[uid]);
+    if (remainingAdmins.length === 0 && updatedParticipants.length > 0) {
+      updates[`/conversations/${conversationId}/admins/${updatedParticipants[0]}`] = true;
+    }
+
+    const newCount = updatedParticipants.length;
+    updates[`/conversations/${conversationId}/participantCount`] = newCount;
+    updatedParticipants.forEach((uid) => {
+      updates[`/userConversations/${uid}/${conversationId}/participantCount`] = newCount;
+    });
+  } else if (action === 'leave') {
+    if (!pMap[callerUid]) {
+      throw new HttpsError('failed-precondition', 'You are not a participant in this conversation.');
+    }
+
+    const currentParticipants = Object.keys(pMap).filter(uid => pMap[uid]);
+    const updatedParticipants = currentParticipants.filter(uid => uid !== callerUid);
+
+    updates[`/conversations/${conversationId}/participants/${callerUid}`] = null;
+    updates[`/conversations/${conversationId}/admins/${callerUid}`] = null;
+    updates[`/userConversations/${callerUid}/${conversationId}`] = null;
+
+    if (updatedParticipants.length > 0) {
+      // If leaving user was the only admin, appoint first remaining participant
+      const remainingAdmins = Object.keys(adminsMap).filter(uid => uid !== callerUid && adminsMap[uid]);
+      if (remainingAdmins.length === 0) {
+        updates[`/conversations/${conversationId}/admins/${updatedParticipants[0]}`] = true;
+      }
+
+      const newCount = updatedParticipants.length;
+      updates[`/conversations/${conversationId}/participantCount`] = newCount;
+      updatedParticipants.forEach((uid) => {
+        updates[`/userConversations/${uid}/${conversationId}/participantCount`] = newCount;
+      });
+    }
+  }
+
+  await admin.database().ref().update(updates);
+  return { success: true };
+});
+
+/**
+ * 10. onBandMemberRemoved
+ * Cleanup trigger when a member is removed from /Bands/{bandId}/Members_band/{memberId}
+ */
+exports.onBandMemberRemoved = onValueWritten({
+  ref: '/Bands/{bandId}/Members_band/{memberId}',
+  region: 'europe-west1'
+}, async (event) => {
+  // Only trigger on deletion
+  if (event.data.after.exists()) return null;
+
+  const bandId = event.params.bandId;
+  const memberId = event.params.memberId;
+
+  try {
+    const bandSectionSnap = await admin.database().ref(`/bandSectionConversations/${bandId}`).once('value');
+    if (!bandSectionSnap.exists() || !bandSectionSnap.val()) return null;
+
+    const convIds = Object.keys(bandSectionSnap.val());
+    const updates = {};
+
+    for (const convId of convIds) {
+      const convSnap = await admin.database().ref(`/conversations/${convId}`).once('value');
+      if (convSnap.exists()) {
+        const convVal = convSnap.val();
+        if (convVal && convVal.participants && convVal.participants[memberId]) {
+          updates[`/conversations/${convId}/participants/${memberId}`] = null;
+          updates[`/conversations/${convId}/admins/${memberId}`] = null;
+          updates[`/userConversations/${memberId}/${convId}`] = null;
+
+          const remainingParticipants = Object.keys(convVal.participants).filter(uid => uid !== memberId && convVal.participants[uid]);
+          const newCount = remainingParticipants.length;
+          updates[`/conversations/${convId}/participantCount`] = newCount;
+
+          remainingParticipants.forEach((uid) => {
+            updates[`/userConversations/${uid}/${convId}/participantCount`] = newCount;
+          });
+
+          // Ensure group still has an admin if the removed member was the only admin
+          const remainingAdmins = Object.keys(convVal.admins || {}).filter(uid => uid !== memberId && convVal.admins[uid]);
+          if (remainingAdmins.length === 0 && remainingParticipants.length > 0) {
+            updates[`/conversations/${convId}/admins/${remainingParticipants[0]}`] = true;
+          }
+        }
+      }
+    }
+
+    if (Object.keys(updates).length > 0) {
+      await admin.database().ref().update(updates);
+      console.log(`Cleaned up section conversations for removed band member ${memberId} in band ${bandId}`);
+    }
+
+    return null;
+  } catch (error) {
+    console.error('Error in onBandMemberRemoved trigger:', error);
+    return null;
+  }
+});

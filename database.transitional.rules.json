@@ -42,6 +42,10 @@
       ".read": false,
       ".write": false
     },
+    "bandSectionConversations": {
+      ".read": false,
+      ".write": false
+    },
     "eventReminderAudit": {
       ".read": "auth != null",
       ".write": false

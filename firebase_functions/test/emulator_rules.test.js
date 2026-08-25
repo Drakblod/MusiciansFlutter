@@ -142,5 +142,41 @@ describe('Real RTDB Emulator Rules Tests', function () {
       await assertFails(unauth.database().ref('conversations/conv_canonical').get());
       await assertFails(unauth.database().ref('userConversations/user_a').get());
     });
+
+    it('Participant who is current band member CAN read band_section conversation', async () => {
+      await testEnvFinal.withSecurityRulesDisabled(async (context) => {
+        const db = context.database();
+        await db.ref('Bands/band_sec_1/Members_band/user_a').set({ Role: 'Member' });
+        await db.ref('conversations/conv_section_1').set({
+          conversationType: 'band_section',
+          bandId: 'band_sec_1',
+          participants: { user_a: true, user_b: true },
+        });
+      });
+
+      const userA = testEnvFinal.authenticatedContext('user_a');
+      await assertSucceeds(userA.database().ref('conversations/conv_section_1').get());
+    });
+
+    it('Participant who is NOT a current band member CANNOT read band_section conversation', async () => {
+      await testEnvFinal.withSecurityRulesDisabled(async (context) => {
+        const db = context.database();
+        // user_b is in participants but NOT in Bands/band_sec_1/Members_band
+        await db.ref('conversations/conv_section_1').set({
+          conversationType: 'band_section',
+          bandId: 'band_sec_1',
+          participants: { user_a: true, user_b: true },
+        });
+      });
+
+      const userB = testEnvFinal.authenticatedContext('user_b');
+      await assertFails(userB.database().ref('conversations/conv_section_1').get());
+    });
+
+    it('Clients CANNOT read or write to bandSectionConversations', async () => {
+      const userA = testEnvFinal.authenticatedContext('user_a');
+      await assertFails(userA.database().ref('bandSectionConversations/band_sec_1').get());
+      await assertFails(userA.database().ref('bandSectionConversations/band_sec_1/conv_1').set(true));
+    });
   });
 });

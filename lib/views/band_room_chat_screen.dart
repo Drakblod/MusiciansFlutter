@@ -22,6 +22,8 @@ import 'create_event_page.dart';
 import 'event_details_page.dart';
 import 'event_room_chat_screen.dart';
 import 'edit_band_info_screen.dart';
+import '../utils/band_section_utils.dart';
+import '../widgets/create_band_section_sheet.dart';
 
 class _EventGroup {
   final BandEvent mainEvent;
@@ -1297,22 +1299,15 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
     return Column(
       children: [
         Expanded(
-          child: _files.isEmpty
-              ? Center(
-                  child: Text(
-                    "No files uploaded yet.",
-                    style: GoogleFonts.inter(color: AppTheme.textSecondary),
-                  ),
-                )
-              : ListView(
-                  padding: const EdgeInsets.all(16),
-                  children: [
-                    _buildFileCategorySection('SHEET MUSIC', Icons.description_outlined, AppTheme.primaryAccent, sheetMusic, bandId, appState),
-                    _buildFileCategorySection('VIDEOS', Icons.videocam_outlined, Colors.purpleAccent, videos, bandId, appState),
-                    _buildFileCategorySection('MP3s', Icons.audiotrack_outlined, Colors.orangeAccent, mp3s, bandId, appState),
-                    _buildFileCategorySection('OTHER (Pdf, Jpeg, Png...)', Icons.insert_drive_file_outlined, Colors.blueAccent, other, bandId, appState),
-                  ],
-                ),
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              _buildFileCategorySection('SHEET MUSIC', Icons.description_outlined, AppTheme.primaryAccent, sheetMusic, bandId, appState),
+              _buildFileCategorySection('VIDEOS', Icons.videocam_outlined, Colors.purpleAccent, videos, bandId, appState),
+              _buildFileCategorySection('MP3s', Icons.audiotrack_outlined, Colors.orangeAccent, mp3s, bandId, appState),
+              _buildFileCategorySection('OTHER (Pdf, Jpeg, Png...)', Icons.insert_drive_file_outlined, Colors.blueAccent, other, bandId, appState),
+            ],
+          ),
         ),
         Padding(
           padding: const EdgeInsets.all(16.0),
@@ -1352,8 +1347,6 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
     String bandId,
     AppState appState,
   ) {
-    if (categoryFiles.isEmpty) return const SizedBox.shrink();
-
     return Theme(
       data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
       child: Container(
@@ -1376,7 +1369,24 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
           ),
           iconColor: Colors.white,
           collapsedIconColor: AppTheme.textSecondary,
-          children: categoryFiles.entries.map((entry) {
+          children: categoryFiles.isEmpty
+              ? [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 14),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'No files in this category',
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          color: AppTheme.textSecondary.withOpacity(0.7),
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ),
+                  ),
+                ]
+              : categoryFiles.entries.map((entry) {
             final fileId = entry.key;
             final fileData = entry.value;
             final fileName = fileData['FileName'] ?? 'Uploaded File';
@@ -1492,6 +1502,111 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
         );
       }
     }
+  }
+
+  Future<void> _showMemberChatActions(BandMember member, String bandId) async {
+    final appState = Provider.of<AppState>(context, listen: false);
+    final memberId = member.userId;
+    if (memberId == null) return;
+    final memberName = member.nickname ?? 'Member';
+
+    UserProfile? profile;
+    try {
+      profile = await appState.firebaseService.getUserProfileAsync(memberId);
+    } catch (_) {}
+
+    final instrument = BandSectionUtils.resolveEffectiveInstrument(profile);
+    int matchingCount = 0;
+
+    if (instrument != null && instrument.isNotEmpty) {
+      final key = BandSectionUtils.normalizeInstrumentKey(instrument);
+      for (final m in _members) {
+        if (m.userId != null) {
+          try {
+            final p = await appState.firebaseService.getUserProfileAsync(m.userId!);
+            final inst = BandSectionUtils.resolveEffectiveInstrument(p);
+            if (inst != null && BandSectionUtils.normalizeInstrumentKey(inst) == key) {
+              matchingCount++;
+            }
+          } catch (_) {}
+        }
+      }
+    }
+
+    if (!mounted) return;
+
+    final canCreateSectionChat = instrument != null && instrument.isNotEmpty && matchingCount >= 2;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF16132D),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        side: BorderSide(color: Color(0xFF2E2452), width: 1.2),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.white24,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              ListTile(
+                leading: const Icon(Icons.chat_bubble_outline_rounded, color: AppTheme.primaryAccent),
+                title: Text('Message $memberName', style: GoogleFonts.inter(color: Colors.white)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _navigateTo1on1Chat(memberId, memberName);
+                },
+              ),
+              if (canCreateSectionChat)
+                ListTile(
+                  leading: const Icon(Icons.group_add_outlined, color: Colors.greenAccent),
+                  title: Text('Create section chat: $instrument', style: GoogleFonts.inter(color: Colors.white)),
+                  subtitle: Text('$matchingCount band members match this instrument', style: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 11)),
+                  onTap: () async {
+                    Navigator.pop(ctx);
+                    final result = await CreateBandSectionSheet.show(
+                      context,
+                      initialBandId: bandId,
+                      initialInstrument: instrument,
+                      initialMemberId: memberId,
+                    );
+                    if (result != null && mounted) {
+                      Navigator.pushNamed(context, '/band-section-chat', arguments: result);
+                    }
+                  },
+                ),
+              ListTile(
+                leading: const Icon(Icons.groups_rounded, color: Colors.purpleAccent),
+                title: const Text('Create custom group', style: TextStyle(color: Colors.white)),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  final result = await CreateBandSectionSheet.show(
+                    context,
+                    initialBandId: bandId,
+                    initialMemberId: memberId,
+                  );
+                  if (result != null && mounted) {
+                    Navigator.pushNamed(context, '/band-section-chat', arguments: result);
+                  }
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _viewMemberProfile(String userId) async {
@@ -1689,7 +1804,11 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                       if (member.userId != null && member.userId != selfId) ...[
                         GestureDetector(
                           onTap: () {
-                            _navigateTo1on1Chat(member.userId!, member.nickname ?? 'Member');
+                            if (bandId != null) {
+                              _showMemberChatActions(member, bandId);
+                            } else {
+                              _navigateTo1on1Chat(member.userId!, member.nickname ?? 'Member');
+                            }
                           },
                           child: Container(
                             padding: const EdgeInsets.all(8),

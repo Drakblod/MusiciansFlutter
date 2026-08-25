@@ -45,6 +45,7 @@ import 'views/edit_studio_screen.dart';
 import 'views/find_sessions_screen.dart';
 import 'views/create_session_screen.dart';
 import 'views/session_details_screen.dart';
+import 'views/band_section_chat_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -173,6 +174,18 @@ class MyApp extends StatelessWidget {
                 conversationId: args['conversationId'] ?? '',
                 receiverId: args['receiverId'] ?? '',
                 receiverName: args['receiverName'] ?? 'Chat',
+              ),
+              settings: settings,
+            );
+          }
+
+          if (settings.name == '/band-section-chat') {
+            final args = settings.arguments as Map<String, dynamic>? ?? {};
+            return MaterialPageRoute(
+              builder: (context) => BandSectionChatScreen(
+                conversationId: args['conversationId'] ?? '',
+                bandId: args['bandId'],
+                initialGroupName: args['groupName'],
               ),
               settings: settings,
             );

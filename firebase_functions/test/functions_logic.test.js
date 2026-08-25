@@ -46,6 +46,14 @@ class MockRef {
 
   async set(val) {
     this.db.data[this.path] = JSON.parse(JSON.stringify(val));
+    const parts = this.path.split('/');
+    if (parts.length > 1) {
+      const parentPath = parts.slice(0, -1).join('/');
+      const leafKey = parts[parts.length - 1];
+      if (this.db.data[parentPath] && typeof this.db.data[parentPath] === 'object') {
+        this.db.data[parentPath][leafKey] = JSON.parse(JSON.stringify(val));
+      }
+    }
   }
 
   async update(val) {
@@ -399,6 +407,216 @@ async function handleTriggerEventReminder(request, db, mockMessaging = { sent: [
   return { status: finalStatus, successCount, failureCount };
 }
 
+async function handleCreateBandSectionConversation(request, db) {
+  const uid = request.auth?.uid;
+  if (!uid) throw new Error('unauthenticated');
+  const { bandId, groupName, participantIds, sectionKey, sourceInstrument } = request.data || {};
+  if (!bandId || !groupName || groupName.trim().length === 0) throw new Error('invalid-argument');
+  if (groupName.trim().length > 80) throw new Error('invalid-argument');
+
+  const membersSnap = await db.ref(`Bands/${bandId}/Members_band`).get();
+  if (!membersSnap.exists()) throw new Error('not-found');
+  const bandMembers = membersSnap.val() || {};
+  if (!bandMembers[uid]) throw new Error('permission-denied');
+
+  const nameSnap = await db.ref(`Bands/${bandId}/Name`).get();
+  const bandName = nameSnap.exists() ? nameSnap.val() : bandId;
+
+  const validParticipants = new Set([uid]);
+  if (Array.isArray(participantIds)) {
+    participantIds.forEach(p => {
+      if (bandMembers[p]) validParticipants.add(p);
+    });
+  }
+
+  if (validParticipants.size < 2) throw new Error('invalid-argument');
+
+  const conversationId = `sec_conv_${Date.now()}`;
+  const timestampIso = new Date().toISOString();
+  const pList = Array.from(validParticipants);
+  const pMap = {};
+  pList.forEach(p => { pMap[p] = true; });
+
+  const convData = {
+    conversationType: 'band_section',
+    bandId,
+    bandName,
+    groupName: groupName.trim(),
+    sectionKey: sectionKey ? sectionKey.trim().toLowerCase() : null,
+    sourceInstrument: sourceInstrument ? sourceInstrument.trim() : null,
+    createdBy: uid,
+    admins: { [uid]: true },
+    participants: pMap,
+    participantCount: pList.length,
+    createdTimestamp: timestampIso,
+    updatedTimestamp: timestampIso,
+  };
+
+  const updates = {};
+  updates[`conversations/${conversationId}`] = convData;
+  updates[`bandSectionConversations/${bandId}/${conversationId}`] = true;
+
+  pList.forEach(p => {
+    updates[`userConversations/${p}/${conversationId}`] = {
+      conversationType: 'band_section',
+      bandId,
+      bandName,
+      groupName: groupName.trim(),
+      hasUnread: false,
+      participantCount: pList.length,
+    };
+  });
+
+  await db.ref('').update(updates);
+  return { conversationId };
+}
+
+async function handleSendBandSectionMessage(request, db) {
+  const uid = request.auth?.uid;
+  if (!uid) throw new Error('unauthenticated');
+  const { conversationId, text } = request.data || {};
+  if (!conversationId || !text || text.trim().length === 0) throw new Error('invalid-argument');
+  if (text.length > 4000) throw new Error('invalid-argument');
+
+  const convSnap = await db.ref(`conversations/${conversationId}`).get();
+  if (!convSnap.exists()) throw new Error('not-found');
+  const conv = convSnap.val();
+  if (conv.conversationType !== 'band_section') throw new Error('invalid-argument');
+
+  const pMap = conv.participants || {};
+  if (!pMap[uid]) throw new Error('permission-denied');
+
+  const memberSnap = await db.ref(`Bands/${conv.bandId}/Members_band/${uid}`).get();
+  if (!memberSnap.exists()) throw new Error('permission-denied');
+
+  const msgId = `msg_${Date.now()}`;
+  const timestamp = new Date().toISOString();
+  const updates = {};
+
+  const participantsList = Object.keys(pMap).filter(k => pMap[k]);
+  participantsList.forEach(p => {
+    updates[`userConversations/${p}/${conversationId}/lastMessageText`] = text.trim();
+    updates[`userConversations/${p}/${conversationId}/lastMessageTimestamp`] = timestamp;
+    updates[`userConversations/${p}/${conversationId}/hasUnread`] = (p !== uid);
+  });
+
+  await db.ref('').update(updates);
+  return { messageId: msgId };
+}
+
+async function handleMarkBandSectionConversationRead(request, db) {
+  const uid = request.auth?.uid;
+  if (!uid) throw new Error('unauthenticated');
+  const { conversationId } = request.data || {};
+  if (!conversationId) throw new Error('invalid-argument');
+
+  const convSnap = await db.ref(`conversations/${conversationId}`).get();
+  if (!convSnap.exists()) throw new Error('not-found');
+  const conv = convSnap.val();
+  if (!conv.participants?.[uid]) throw new Error('permission-denied');
+
+  if (conv.bandId) {
+    const memberSnap = await db.ref(`Bands/${conv.bandId}/Members_band/${uid}`).get();
+    if (!memberSnap.exists()) throw new Error('permission-denied');
+  }
+
+  await db.ref(`userConversations/${uid}/${conversationId}/hasUnread`).set(false);
+  return { success: true };
+}
+
+async function handleManageBandSectionConversation(request, db) {
+  const uid = request.auth?.uid;
+  if (!uid) throw new Error('unauthenticated');
+  const { conversationId, action, groupName, participantIds } = request.data || {};
+  if (!conversationId || !action) throw new Error('invalid-argument');
+
+  const convSnap = await db.ref(`conversations/${conversationId}`).get();
+  if (!convSnap.exists()) throw new Error('not-found');
+  const conv = convSnap.val();
+  if (conv.conversationType !== 'band_section') throw new Error('invalid-argument');
+
+  const bandId = conv.bandId;
+  const pMap = conv.participants || {};
+  const adminsMap = conv.admins || {};
+
+  const bandMembersSnap = await db.ref(`Bands/${bandId}/Members_band`).get();
+  const bandMembers = bandMembersSnap.val() || {};
+  if (!bandMembers[uid]) throw new Error('permission-denied');
+
+  const callerBandRole = bandMembers[uid]?.Role || bandMembers[uid]?.role;
+  const isBandAdmin = (callerBandRole === 'Leader' || callerBandRole === 'Admin' || callerBandRole === 'MOD');
+  const isGroupAdmin = adminsMap[uid] === true || conv.createdBy === uid;
+
+  const updates = {};
+
+  if (action === 'rename') {
+    if (!isGroupAdmin && !isBandAdmin) throw new Error('permission-denied');
+    if (!groupName || groupName.trim().length === 0 || groupName.trim().length > 80) throw new Error('invalid-argument');
+
+    updates[`conversations/${conversationId}/groupName`] = groupName.trim();
+    Object.keys(pMap).forEach(p => {
+      if (pMap[p]) updates[`userConversations/${p}/${conversationId}/groupName`] = groupName.trim();
+    });
+  } else if (action === 'leave') {
+    if (!pMap[uid]) throw new Error('failed-precondition');
+    const remaining = Object.keys(pMap).filter(k => k !== uid && pMap[k]);
+    updates[`conversations/${conversationId}/participants/${uid}`] = null;
+    updates[`conversations/${conversationId}/admins/${uid}`] = null;
+    updates[`userConversations/${uid}/${conversationId}`] = null;
+
+    if (remaining.length > 0) {
+      const remainingAdmins = Object.keys(adminsMap).filter(k => k !== uid && adminsMap[k]);
+      if (remainingAdmins.length === 0) {
+        updates[`conversations/${conversationId}/admins/${remaining[0]}`] = true;
+      }
+      updates[`conversations/${conversationId}/participantCount`] = remaining.length;
+      remaining.forEach(p => {
+        updates[`userConversations/${p}/${conversationId}/participantCount`] = remaining.length;
+      });
+    }
+  }
+
+  await db.ref('').update(updates);
+  return { success: true };
+}
+
+async function handleOnBandMemberRemoved(bandId, memberId, db) {
+  const bandSectionSnap = await db.ref(`bandSectionConversations/${bandId}`).get();
+  if (!bandSectionSnap.exists() || !bandSectionSnap.val()) return null;
+
+  const convIds = Object.keys(bandSectionSnap.val());
+  const updates = {};
+
+  for (const convId of convIds) {
+    const convSnap = await db.ref(`conversations/${convId}`).get();
+    if (convSnap.exists()) {
+      const convVal = convSnap.val();
+      if (convVal && convVal.participants && convVal.participants[memberId]) {
+        updates[`conversations/${convId}/participants/${memberId}`] = null;
+        updates[`conversations/${convId}/admins/${memberId}`] = null;
+        updates[`userConversations/${memberId}/${convId}`] = null;
+
+        const remainingParticipants = Object.keys(convVal.participants).filter(uid => uid !== memberId && convVal.participants[uid]);
+        const newCount = remainingParticipants.length;
+        updates[`conversations/${convId}/participantCount`] = newCount;
+
+        remainingParticipants.forEach((uid) => {
+          updates[`userConversations/${uid}/${convId}/participantCount`] = newCount;
+        });
+
+        const remainingAdmins = Object.keys(convVal.admins || {}).filter(uid => uid !== memberId && convVal.admins[uid]);
+        if (remainingAdmins.length === 0 && remainingParticipants.length > 0) {
+          updates[`conversations/${convId}/admins/${remainingParticipants[0]}`] = true;
+        }
+      }
+    }
+  }
+
+  if (Object.keys(updates).length > 0) {
+    await db.ref('').update(updates);
+  }
+}
+
 describe('v2 Callable Cloud Functions Logic Tests', () => {
   let db;
 
@@ -676,5 +894,206 @@ describe('v2 Callable Cloud Functions Logic Tests', () => {
     assert.strictEqual(res.status, 'partial_success');
     assert.strictEqual(res.successCount, 1);
     assert.strictEqual(res.failureCount, 1);
+  });
+
+  describe('Band Section Group Chat Callable Logic Tests', () => {
+    it('11. createBandSectionConversation requires authenticated caller', async () => {
+      await assert.rejects(
+        handleCreateBandSectionConversation({ auth: null, data: { bandId: 'b1', groupName: 'Brass' } }, db),
+        /unauthenticated/
+      );
+    });
+
+    it('12. createBandSectionConversation rejects caller who is not a band member', async () => {
+      db.data['Bands/b1/Members_band'] = { m1: { Role: 'Member' } };
+      await assert.rejects(
+        handleCreateBandSectionConversation(
+          { auth: { uid: 'stranger' }, data: { bandId: 'b1', groupName: 'Brass', participantIds: ['m1'] } },
+          db
+        ),
+        /permission-denied/
+      );
+    });
+
+    it('13. createBandSectionConversation rejects if fewer than 2 valid band members', async () => {
+      db.data['Bands/b1/Members_band'] = { m1: { Role: 'Member' } };
+      await assert.rejects(
+        handleCreateBandSectionConversation(
+          { auth: { uid: 'm1' }, data: { bandId: 'b1', groupName: 'Solo', participantIds: ['invalid_user'] } },
+          db
+        ),
+        /invalid-argument/
+      );
+    });
+
+    it('14. createBandSectionConversation succeeds, writes atomic conversation and inboxes', async () => {
+      db.data['Bands/b1/Name'] = 'Big Band';
+      db.data['Bands/b1/Members_band'] = {
+        m1: { Role: 'Member' },
+        m2: { Role: 'Member' },
+        m3: { Role: 'Member' },
+      };
+
+      const res = await handleCreateBandSectionConversation(
+        {
+          auth: { uid: 'm1' },
+          data: {
+            bandId: 'b1',
+            groupName: 'Trumpets',
+            sectionKey: 'trumpet',
+            sourceInstrument: 'Trumpet',
+            participantIds: ['m2', 'm3'],
+          },
+        },
+        db
+      );
+
+      assert(res.conversationId);
+      const conv = db.data[`conversations/${res.conversationId}`];
+      assert.strictEqual(conv.conversationType, 'band_section');
+      assert.strictEqual(conv.bandName, 'Big Band');
+      assert.strictEqual(conv.groupName, 'Trumpets');
+      assert.strictEqual(conv.participantCount, 3);
+      assert.strictEqual(conv.participants['m1'], true);
+      assert.strictEqual(conv.participants['m2'], true);
+      assert.strictEqual(conv.admins['m1'], true);
+
+      assert.strictEqual(db.data[`bandSectionConversations/b1/${res.conversationId}`], true);
+      assert.strictEqual(db.data[`userConversations/m1/${res.conversationId}`].hasUnread, false);
+      assert.strictEqual(db.data[`userConversations/m2/${res.conversationId}`].groupName, 'Trumpets');
+    });
+
+    it('15. sendBandSectionMessage updates all participants inboxes and sets hasUnread correctly', async () => {
+      const convId = 'sec_conv_1';
+      db.data['Bands/b1/Members_band'] = {
+        m1: { Role: 'Member' },
+        m2: { Role: 'Member' },
+      };
+      db.data[`conversations/${convId}`] = {
+        conversationType: 'band_section',
+        bandId: 'b1',
+        groupName: 'Trumpets',
+        participants: { m1: true, m2: true },
+      };
+
+      const res = await handleSendBandSectionMessage(
+        {
+          auth: { uid: 'm1' },
+          data: { conversationId: convId, text: 'Hello trumpets!' },
+        },
+        db
+      );
+
+      assert(res.messageId);
+      assert.strictEqual(db.data[`userConversations/m1/${convId}`].hasUnread, false);
+      assert.strictEqual(db.data[`userConversations/m2/${convId}`].hasUnread, true);
+      assert.strictEqual(db.data[`userConversations/m2/${convId}`].lastMessageText, 'Hello trumpets!');
+    });
+
+    it('16. markBandSectionConversationRead updates caller unread flag to false', async () => {
+      const convId = 'sec_conv_2';
+      db.data['Bands/b1/Members_band/m2'] = { Role: 'Member' };
+      db.data[`conversations/${convId}`] = {
+        conversationType: 'band_section',
+        bandId: 'b1',
+        participants: { m1: true, m2: true },
+      };
+      db.data[`userConversations/m2/${convId}`] = { hasUnread: true };
+
+      const res = await handleMarkBandSectionConversationRead(
+        { auth: { uid: 'm2' }, data: { conversationId: convId } },
+        db
+      );
+
+      assert.strictEqual(res.success, true);
+      assert.strictEqual(db.data[`userConversations/m2/${convId}`].hasUnread, false);
+    });
+
+    it('17. manageBandSectionConversation rename permission check', async () => {
+      const convId = 'sec_conv_3';
+      db.data['Bands/b1/Members_band'] = {
+        creator_1: { Role: 'Member' },
+        ordinary_1: { Role: 'Member' },
+        leader_1: { Role: 'Leader' },
+      };
+      db.data[`conversations/${convId}`] = {
+        conversationType: 'band_section',
+        bandId: 'b1',
+        groupName: 'Old Name',
+        createdBy: 'creator_1',
+        admins: { creator_1: true },
+        participants: { creator_1: true, ordinary_1: true },
+      };
+
+      // Ordinary member denied
+      await assert.rejects(
+        handleManageBandSectionConversation(
+          { auth: { uid: 'ordinary_1' }, data: { conversationId: convId, action: 'rename', groupName: 'New Name' } },
+          db
+        ),
+        /permission-denied/
+      );
+
+      // Creator succeeds
+      await handleManageBandSectionConversation(
+        { auth: { uid: 'creator_1' }, data: { conversationId: convId, action: 'rename', groupName: 'Creator Renamed' } },
+        db
+      );
+      assert.strictEqual(db.data[`conversations/${convId}`].groupName, 'Creator Renamed');
+
+      // Band Leader succeeds
+      await handleManageBandSectionConversation(
+        { auth: { uid: 'leader_1' }, data: { conversationId: convId, action: 'rename', groupName: 'Leader Renamed' } },
+        db
+      );
+      assert.strictEqual(db.data[`conversations/${convId}`].groupName, 'Leader Renamed');
+    });
+
+    it('18. manageBandSectionConversation leave action appoints remaining admin if last admin leaves', async () => {
+      const convId = 'sec_conv_4';
+      db.data['Bands/b1/Members_band'] = {
+        admin_1: { Role: 'Member' },
+        member_2: { Role: 'Member' },
+      };
+      db.data[`conversations/${convId}`] = {
+        conversationType: 'band_section',
+        bandId: 'b1',
+        admins: { admin_1: true },
+        participants: { admin_1: true, member_2: true },
+        participantCount: 2,
+      };
+
+      await handleManageBandSectionConversation(
+        { auth: { uid: 'admin_1' }, data: { conversationId: convId, action: 'leave' } },
+        db
+      );
+
+      const conv = db.data[`conversations/${convId}`];
+      assert.strictEqual(conv.participants['admin_1'], null);
+      assert.strictEqual(conv.admins['member_2'], true);
+      assert.strictEqual(conv.participantCount, 1);
+    });
+
+    it('19. onBandMemberRemoved cleans up group access when member leaves band', async () => {
+      const convId = 'sec_conv_5';
+      db.data['bandSectionConversations/b1'] = { [convId]: true };
+      db.data[`conversations/${convId}`] = {
+        conversationType: 'band_section',
+        bandId: 'b1',
+        admins: { m_leaving: true, m_staying: true },
+        participants: { m_leaving: true, m_staying: true },
+        participantCount: 2,
+      };
+      db.data[`userConversations/m_leaving/${convId}`] = { groupName: 'Trombones' };
+      db.data[`userConversations/m_staying/${convId}`] = { groupName: 'Trombones' };
+
+      await handleOnBandMemberRemoved('b1', 'm_leaving', db);
+
+      const conv = db.data[`conversations/${convId}`];
+      assert.strictEqual(conv.participants['m_leaving'], null);
+      assert.strictEqual(conv.participantCount, 1);
+      assert.strictEqual(db.data[`userConversations/m_leaving/${convId}`], null);
+      assert.strictEqual(db.data[`userConversations/m_staying/${convId}`].participantCount, 1);
+    });
   });
 });

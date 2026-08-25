@@ -825,6 +825,92 @@ class FirebaseService {
     }
   }
 
+  Future<void> markBandSectionConversationReadAsync(String conversationId) async {
+    try {
+      await _functions.httpsCallable('markBandSectionConversationRead').call({
+        'conversationId': conversationId,
+      });
+    } catch (e) {
+      print("[FirebaseService] Error marking band section conversation as read: $e");
+    }
+  }
+
+  Future<String> createBandSectionConversationAsync({
+    required String bandId,
+    required String groupName,
+    required List<String> participantIds,
+    String? sectionKey,
+    String? sourceInstrument,
+  }) async {
+    final result = await _functions.httpsCallable('createBandSectionConversation').call({
+      'bandId': bandId,
+      'groupName': groupName,
+      'participantIds': participantIds,
+      if (sectionKey != null) 'sectionKey': sectionKey,
+      if (sourceInstrument != null) 'sourceInstrument': sourceInstrument,
+    });
+    return result.data['conversationId']?.toString() ?? '';
+  }
+
+  Future<String> sendBandSectionMessageAsync({
+    required String conversationId,
+    required String text,
+    String? replyToText,
+    String? replyToSenderName,
+  }) async {
+    final result = await _functions.httpsCallable('sendBandSectionMessage').call({
+      'conversationId': conversationId,
+      'text': text,
+      if (replyToText != null) 'replyToText': replyToText,
+      if (replyToSenderName != null) 'replyToSenderName': replyToSenderName,
+    });
+    return result.data['messageId']?.toString() ?? '';
+  }
+
+  Future<void> manageBandSectionConversationAsync({
+    required String conversationId,
+    required String action,
+    String? groupName,
+    List<String>? participantIds,
+  }) async {
+    await _functions.httpsCallable('manageBandSectionConversation').call({
+      'conversationId': conversationId,
+      'action': action,
+      if (groupName != null) 'groupName': groupName,
+      if (participantIds != null) 'participantIds': participantIds,
+    });
+  }
+
+  Stream<Map<String, dynamic>?> subscribeToBandSectionMetadata(String conversationId) {
+    return _dbRef('conversations/$conversationId').onValue.map((event) {
+      final data = event.snapshot.value;
+      if (data is Map) {
+        return {
+          'conversationId': conversationId,
+          'conversationType': data['conversationType']?.toString() ?? 'band_section',
+          'bandId': data['bandId']?.toString(),
+          'bandName': data['bandName']?.toString() ?? 'Band',
+          'groupName': data['groupName']?.toString() ?? 'Section Chat',
+          'createdBy': data['createdBy']?.toString(),
+          'participantCount': data['participantCount'] is int
+              ? data['participantCount'] as int
+              : int.tryParse(data['participantCount']?.toString() ?? '0') ?? 0,
+          'participants': (data['participants'] is Map)
+              ? Map<String, dynamic>.from(data['participants'] as Map)
+              : <String, dynamic>{},
+          'admins': (data['admins'] is Map)
+              ? Map<String, dynamic>.from(data['admins'] as Map)
+              : <String, dynamic>{},
+          'sectionKey': data['sectionKey']?.toString(),
+          'sourceInstrument': data['sourceInstrument']?.toString(),
+          'createdTimestamp': data['createdTimestamp']?.toString(),
+          'updatedTimestamp': data['updatedTimestamp']?.toString(),
+        };
+      }
+      return null;
+    });
+  }
+
   Stream<bool> subscribeToUnreadNotifications() {
     final selfId = currentUserId;
     if (selfId == null) return Stream.value(false);
@@ -873,6 +959,47 @@ class FirebaseService {
         final convId = entry.key.toString();
         final item = entry.value;
         if (item is Map) {
+          final convType = item['conversationType']?.toString() ?? 'direct';
+          final isGroup = convType == 'band_section';
+
+          if (isGroup) {
+            final groupName = item['groupName']?.toString() ?? 'Section Chat';
+            final bandName = item['bandName']?.toString() ?? 'Band';
+            final bandId = item['bandId']?.toString();
+            final participantCount = item['participantCount'] is int
+                ? item['participantCount'] as int
+                : int.tryParse(item['participantCount']?.toString() ?? '0') ?? 0;
+            final sectionKey = item['sectionKey']?.toString();
+            final sourceInstrument = item['sourceInstrument']?.toString();
+
+            final rawTs = item['lastMessageTimestamp'] ??
+                item['lastMessageTime'] ??
+                item['createdTimestamp'] ??
+                item['CreatedTimestamp'];
+            final parsedDt = parseDateTime(rawTs);
+
+            conversations.add({
+              'conversationId': convId,
+              'isGroup': true,
+              'conversationType': 'band_section',
+              'groupName': groupName,
+              'bandName': bandName,
+              'bandId': bandId,
+              'participantCount': participantCount,
+              'sectionKey': sectionKey,
+              'sourceInstrument': sourceInstrument,
+              'otherUserName': groupName,
+              'otherUserId': '',
+              'lastMessageSenderName': item['lastMessageSenderName']?.toString(),
+              'lastMessageSenderId': item['lastMessageSenderId']?.toString(),
+              'lastMessageText': item['lastMessageText']?.toString() ?? 'No messages yet',
+              'lastMessageTimestamp': item['lastMessageTimestamp']?.toString() ?? '',
+              'timestamp': parsedDt,
+              'hasUnread': item['hasUnread'] == true,
+            });
+            continue;
+          }
+
           final otherUserId = item['otherUserId']?.toString();
           if (otherUserId == null || otherUserId.isEmpty) continue;
 
@@ -894,6 +1021,7 @@ class FirebaseService {
 
           conversations.add({
             'conversationId': convId,
+            'isGroup': false,
             'otherUserId': otherUserId,
             'otherUserName': otherUserName,
             'otherUserProfilePicture': profilePic,
@@ -903,8 +1031,7 @@ class FirebaseService {
                 item['lastMessageTimestamp']?.toString() ?? '',
             'timestamp': parsedDt,
             'hasUnread': item['hasUnread'] == true,
-            'conversationType':
-                item['conversationType']?.toString() ?? 'direct',
+            'conversationType': convType,
           });
         }
       }

@@ -30,7 +30,7 @@
     },
     "conversations": {
       "$conversationId": {
-        ".read": "auth != null && data.child('participants').child(auth.uid).val() == true",
+        ".read": "auth != null && data.child('participants').child(auth.uid).val() == true && (data.child('conversationType').val() != 'band_section' || root.child('Bands').child(data.child('bandId').val()).child('Members_band').child(auth.uid).exists())",
         ".write": false
       }
     },
@@ -41,6 +41,10 @@
       }
     },
     "directConversationKeys": {
+      ".read": false,
+      ".write": false
+    },
+    "bandSectionConversations": {
       ".read": false,
       ".write": false
     },
