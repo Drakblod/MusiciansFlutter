@@ -272,6 +272,26 @@ class HomeScreen extends StatelessWidget {
         },
       ),
       HomeActionItem(
+        id: 'collabs',
+        icon: Icons.handshake_outlined,
+        title: 'Collabs',
+        subtitle: 'Collaborate with other musicians on projects',
+        onTap: () {
+          appState.trackButtonClick('collabs');
+          Navigator.pushNamed(context, '/collabs');
+        },
+      ),
+      HomeActionItem(
+        id: 'event_calendar',
+        icon: Icons.calendar_today_outlined,
+        title: 'Event Calendar',
+        subtitle: 'Discover live music, open sessions, workshops and music events',
+        onTap: () {
+          appState.trackButtonClick('event_calendar');
+          Navigator.pushNamed(context, '/event-calendar');
+        },
+      ),
+      HomeActionItem(
         id: 'marketplace',
         icon: Icons.storefront_outlined,
         title: 'Marketplace',
@@ -291,7 +311,9 @@ class HomeScreen extends StatelessWidget {
       'create_event': 2,
       'browse_musicians': 3,
       'find_gigs': 4,
-      'marketplace': 5,
+      'collabs': 5,
+      'event_calendar': 6,
+      'marketplace': 7,
     };
 
     actionItems.sort((a, b) {
@@ -377,7 +399,7 @@ class HomeScreen extends StatelessWidget {
               child: Padding(
                 padding: const EdgeInsets.only(bottom: 10, right: 10),
                 child: Text(
-                  '2.18',
+                  '2.20',
                   style: GoogleFonts.inter(
                     color: AppTheme.textSecondary.withOpacity(0.5),
                     fontSize: 12,
@@ -921,8 +943,12 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
         id: 'event_calendar',
         icon: Icons.calendar_today_outlined,
         title: 'Event Calendar',
-        subtitle: 'View your upcoming events and schedule',
-        onTap: () {},
+        subtitle: 'Discover live music, open sessions, workshops and music events',
+        onTap: () async {
+          await HomeUsageTracker.incrementClick('event_calendar');
+          await Navigator.pushNamed(context, '/event-calendar');
+          _loadUsageData();
+        },
       ),
       HomeActionItem(
         id: 'band_room',
@@ -1155,7 +1181,7 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
                               }
                             },
                             child: Text(
-                              '2.18',
+                              '2.20',
                               style: GoogleFonts.inter(
                                 color: AppTheme.textSecondary.withOpacity(0.5),
                                 fontSize: 12,

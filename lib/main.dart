@@ -46,6 +46,9 @@ import 'views/find_sessions_screen.dart';
 import 'views/create_session_screen.dart';
 import 'views/session_details_screen.dart';
 import 'views/band_section_chat_screen.dart';
+import 'views/public_event_calendar_screen.dart';
+import 'views/public_event_details_screen.dart';
+import 'models/public_calendar_event.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -186,6 +189,25 @@ class MyApp extends StatelessWidget {
                 conversationId: args['conversationId'] ?? '',
                 bandId: args['bandId'],
                 initialGroupName: args['groupName'],
+              ),
+              settings: settings,
+            );
+          }
+
+          if (settings.name == '/event-calendar') {
+            return MaterialPageRoute(
+              builder: (context) => const PublicEventCalendarScreen(),
+              settings: settings,
+            );
+          }
+
+          if (settings.name == '/public-event-details') {
+            final event = settings.arguments is PublicCalendarEvent
+                ? settings.arguments as PublicCalendarEvent
+                : null;
+            return MaterialPageRoute(
+              builder: (context) => PublicEventDetailsScreen(
+                event: event,
               ),
               settings: settings,
             );
