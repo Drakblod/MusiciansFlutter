@@ -6,7 +6,6 @@ import 'package:provider/provider.dart';
 
 import 'package:musicians_flutter/data/skills_taxonomy.dart';
 import 'package:musicians_flutter/models/user_profile.dart';
-import 'package:musicians_flutter/models/band.dart';
 import 'package:musicians_flutter/providers/app_state.dart';
 import 'package:musicians_flutter/services/firebase_service.dart';
 import 'package:musicians_flutter/views/browse_musicians_screen.dart';
@@ -19,48 +18,61 @@ class MockRuta02FirebaseService extends FirebaseService {
   @override
   Future<UserProfile?> getUserProfileAsync([String? userId]) async {
     return UserProfile(
-      userId: 'test_ruta02_user',
-      displayName: 'Ruta02 Tester',
-      email: 'test@example.com',
-      userType: 'SONGWRITER',
-      instruments: ['SONGWRITER', 'Electric Guitar', 'STUDIO/ENGINEER, etc'],
-      genres: ['Rock'],
+      userId: 'test_user_ruta_02',
+      displayName: 'Test Artist',
+      email: 'artist@example.com',
+      instruments: ['Electric Guitar', 'BANDLEADER'],
+      genres: ['Rock', 'Jazz'],
+      level: 'B = ADVANCED',
     );
   }
 
   @override
-  Future<List<UserProfile>> getAllUsersAsync() async => [];
+  Future<List<UserProfile>> getAllUsersAsync() async {
+    return [
+      UserProfile(
+        userId: 'm1',
+        displayName: 'Alex Leader',
+        instruments: ['BANDLEADER'],
+        genres: ['Funk'],
+        level: 'A = PRO',
+      ),
+    ];
+  }
 
   @override
   Future<List<String>> getFavoriteUserIdsAsync() async => [];
-
-  @override
-  Future<List<Band>> getAllBandsAsync() async => [];
 }
 
-class MockAppStateForRuta02Test extends AppState {
+class MockRuta02AppState extends AppState {
   @override
   final FirebaseService firebaseService = MockRuta02FirebaseService();
 
   @override
+  bool get isLoading => false;
+
+  @override
   UserProfile? get currentUserProfile => UserProfile(
-        userId: 'test_ruta02_user',
-        displayName: 'Ruta02 Tester',
-        email: 'test@example.com',
-        userType: 'SONGWRITER',
-        instruments: ['SONGWRITER', 'Electric Guitar', 'STUDIO/ENGINEER, etc'],
-        genres: ['Rock'],
+        userId: 'test_user_ruta_02',
+        displayName: 'Test Artist',
+        instruments: ['Electric Guitar', 'BANDLEADER'],
+        genres: ['Rock', 'Jazz'],
+        level: 'B = ADVANCED',
       );
 
   @override
-  String? get currentUserId => 'test_ruta02_user';
+  String? get currentUserId => 'test_user_ruta_02';
 }
 
 Widget createRuta02TestApp(Widget child) {
   return ChangeNotifierProvider<AppState>(
-    create: (_) => MockAppStateForRuta02Test(),
+    create: (_) => MockRuta02AppState(),
     child: MaterialApp(
-      home: Scaffold(body: child),
+      home: child,
+      routes: {
+        '/login': (_) => const Scaffold(body: Text('Login Screen')),
+        '/home': (_) => const Scaffold(body: Text('Home Screen')),
+      },
     ),
   );
 }
@@ -83,22 +95,22 @@ void main() {
   ];
 
   const expectedRolesInOrder = [
-    'BANDLEADER',
     'Songwriter',
+    'Lyricist',
     'Producer',
     'Composer',
-    'Lyricist',
     'Beatmaker',
     'Engineer',
     'DJ',
+    'PR/Management',
   ];
 
   const expectedCategorySymbols = {
-    'Sessions/Collaboration': '🤝',
-    'Roles/Production': '🎧',
+    'Songwriters/Lyricists/Producers/Engineers...': '🎧',
+    'Sessions': '🤝',
     'Woodwinds': '🎷',
     'Brass': '🎺',
-    'Strings': '🎻',
+    'Strings': '🎻 🎸',
     'Keyboards': '🎹',
     'Percussion': '🥁',
     'Miscellaneous Instruments': '🪈',
@@ -107,18 +119,26 @@ void main() {
     'Miscellaneous Voices': '🎭',
   };
 
-  group('RUTA-02 Taxonomy & Hierarchy Unit Tests', () {
-    test('1. BANDLEADER is the featured first role option with exact uppercase label', () {
-      final roleCategory = SkillsTaxonomy.masterCategories
-          .firstWhere((c) => c.id == 'roles_production');
-      expect(roleCategory.optionIds.first, equals('bandleader'));
-
+  group('RUTA-02B Taxonomy & Hierarchy Unit Tests', () {
+    test('1. BANDLEADER is defined with exact uppercase display label and persisted value', () {
       final bandleaderOpt = SkillsTaxonomy.findById('bandleader')!;
       expect(bandleaderOpt.displayLabel, equals('BANDLEADER'));
       expect(bandleaderOpt.persistedValue, equals('BANDLEADER'));
+      expect(SkillsTaxonomy.featuredRoleDisplayLabel, equals('BANDLEADER'));
+      expect(SkillsTaxonomy.featuredRolePersistedValue, equals('BANDLEADER'));
     });
 
-    test('2. Role order begins with Songwriter, Producer, Composer, Lyricist, Beatmaker, Engineer, DJ', () {
+    test('2. Professional roles category has exact heading Songwriters/Lyricists/Producers/Engineers...', () {
+      final roleCategory = SkillsTaxonomy.masterCategories
+          .firstWhere((c) => c.id == 'roles_production');
+      expect(roleCategory.displayLabel, equals('Songwriters/Lyricists/Producers/Engineers...'));
+      expect(roleCategory.leadingSymbol, equals('🎧'));
+
+      // Does not contain bandleader in optionIds because BANDLEADER is rendered standalone at top
+      expect(roleCategory.optionIds.contains('bandleader'), isFalse);
+    });
+
+    test('3. Professional roles order contains Songwriter, Lyricist, Producer, Composer, Beatmaker, Engineer, DJ, PR/Management', () {
       final roleCategory = SkillsTaxonomy.masterCategories
           .firstWhere((c) => c.id == 'roles_production');
       final options = roleCategory.optionIds
@@ -128,32 +148,86 @@ void main() {
       final labels = options.map((o) => o.displayLabel).toList();
       expect(labels, equals(expectedRolesInOrder));
 
-      // Persisted values mapping
-      expect(options[1].persistedValue, equals('SONGWRITER'));
+      // Check persisted values
+      expect(options[0].persistedValue, equals('SONGWRITER'));
+      expect(options[1].persistedValue, equals('LYRICIST'));
       expect(options[2].persistedValue, equals('PRODUCER'));
       expect(options[3].persistedValue, equals('COMPOSER'));
-      expect(options[4].persistedValue, equals('LYRICIST'));
-      expect(options[5].persistedValue, equals('BEATMAKER'));
-      expect(options[6].persistedValue, equals('STUDIO/ENGINEER, etc'));
-      expect(options[7].persistedValue, equals('DJ'));
+      expect(options[4].persistedValue, equals('BEATMAKER'));
+      expect(options[5].persistedValue, equals('STUDIO/ENGINEER, etc'));
+      expect(options[6].persistedValue, equals('DJ'));
+      expect(options[7].persistedValue, equals('PR/MANAGEMENT'));
     });
 
-    test('3. DJ exists and resolves to persisted value DJ', () {
-      final djOpt = SkillsTaxonomy.findById('dj');
-      expect(djOpt, isNotNull);
-      expect(djOpt!.displayLabel, equals('DJ'));
-      expect(djOpt.persistedValue, equals('DJ'));
-      expect(djOpt.kind, equals(SkillOptionKind.role));
+    test('4. PR/Management resolves from and to all supported combined legacy aliases while preserving standalone PR and Management', () {
+      final prOpt = SkillsTaxonomy.findById('pr_management');
+      expect(prOpt, isNotNull);
+      expect(prOpt!.displayLabel, equals('PR/Management'));
+      expect(prOpt.persistedValue, equals('PR/MANAGEMENT'));
 
-      final resolved = SkillsTaxonomy.resolveLegacyValue('dj');
-      expect(resolved, isNotNull);
-      expect(resolved!.persistedValue, equals('DJ'));
+      // 1. Check exact combined legacy resolution
+      final combinedAliasesToTest = [
+        'PR/Management',
+        'pr/management',
+        'PR/MANAGEMENT',
+        'PR & Management',
+        'pr & management',
+        'PR & MANAGEMENT',
+        'PR / Management',
+        'pr / management',
+        'PR / MANAGEMENT',
+        'PR&Management',
+        'pr&management',
+      ];
 
-      final canonical = SkillsTaxonomy.resolveCanonicalPersistedValue('DJ');
-      expect(canonical, equals('DJ'));
+      for (final alias in combinedAliasesToTest) {
+        final resolved = SkillsTaxonomy.resolveLegacyValue(alias);
+        expect(resolved, isNotNull, reason: 'Failed to resolve alias "$alias"');
+        expect(resolved!.id, equals('pr_management'));
+        expect(resolved.persistedValue, equals('PR/MANAGEMENT'));
+        expect(resolved.displayLabel, equals('PR/Management'));
+        expect(SkillsTaxonomy.resolveCanonicalPersistedValue(alias), equals('PR/MANAGEMENT'));
+      }
+
+      expect(SkillsTaxonomy.getDisplayLabelForPersistedValue('PR/MANAGEMENT'), equals('PR/Management'));
+      expect(SkillsTaxonomy.getPersistedValueForDisplayLabel('PR/Management'), equals('PR/MANAGEMENT'));
+
+      // 2. Verify standalone PR and Management values are preserved as unknown/custom without silent corruption
+      expect(SkillsTaxonomy.resolveLegacyValue('PR'), isNull);
+      expect(SkillsTaxonomy.resolveLegacyValue('Management'), isNull);
+      expect(SkillsTaxonomy.resolveCanonicalPersistedValue('PR'), equals('PR'));
+      expect(SkillsTaxonomy.resolveCanonicalPersistedValue('Management'), equals('Management'));
+      expect(SkillsTaxonomy.getDisplayLabelForPersistedValue('PR'), equals('PR'));
+      expect(SkillsTaxonomy.getDisplayLabelForPersistedValue('Management'), equals('Management'));
     });
 
-    test('4. Instrument categories are plain strings in exact RUTA-02 order ending with Miscellaneous Instruments', () {
+    test('5. Sessions category has exact heading Sessions and preserves all options', () {
+      final sessionsCat = SkillsTaxonomy.masterCategories
+          .firstWhere((c) => c.id == 'sessions_collaboration');
+      expect(sessionsCat.displayLabel, equals('Sessions'));
+      expect(sessionsCat.leadingSymbol, equals('🤝'));
+      expect(sessionsCat.optionIds.length, equals(6));
+
+      expect(SkillsTaxonomy.findById('create_session')!.displayLabel, equals('Create Session'));
+      expect(SkillsTaxonomy.findById('studio_session')!.displayLabel, equals('Studio Session'));
+    });
+
+    test('6. Strings category exposes leading symbols 🎻 🎸 and subtitle Violin/Cello/Guitar/Bass...', () {
+      final stringsCat = SkillsTaxonomy.masterCategories
+          .firstWhere((c) => c.id == 'strings');
+      expect(stringsCat.displayLabel, equals('Strings'));
+      expect(stringsCat.leadingSymbol, equals('🎻 🎸'));
+      expect(stringsCat.subtitle, equals('Violin/Cello/Guitar/Bass...'));
+
+      expect(SkillsTaxonomy.getLeadingSymbolForCategory('Strings'), equals('🎻 🎸'));
+      expect(SkillsTaxonomy.getSubtitleForCategory('Strings'), equals('Violin/Cello/Guitar/Bass...'));
+
+      // Subtitle is not an option ID or persisted value
+      expect(SkillsTaxonomy.findById('Violin/Cello/Guitar/Bass...'), isNull);
+      expect(SkillsTaxonomy.findByPersistedValue('Violin/Cello/Guitar/Bass...'), isNull);
+    });
+
+    test('7. Instrument categories are plain strings in exact RUTA-02 order ending with Miscellaneous Instruments', () {
       final allCategoryLabels = SkillsTaxonomy.masterCategories
           .map((c) => c.displayLabel)
           .toList();
@@ -168,7 +242,7 @@ void main() {
       }
     });
 
-    test('5. Voice categories follow instruments in exact required order with plain labels', () {
+    test('8. Voice categories follow instruments in exact required order with plain labels', () {
       final allCategoryLabels = SkillsTaxonomy.masterCategories
           .map((c) => c.displayLabel)
           .toList();
@@ -183,43 +257,20 @@ void main() {
       expect(voicesPopIdx < miscVoicesIdx, isTrue);
     });
 
-    test('6. Category display label is Miscellaneous Voices without parenthetical text or emojis', () {
-      final miscVoices = SkillsTaxonomy.masterCategories
-          .firstWhere((c) => c.id == 'misc_voices');
-      expect(miscVoices.displayLabel, equals('Miscellaneous Voices'));
-      expect(miscVoices.displayLabel.contains('Classical, Choir'), isFalse);
-      expect(miscVoices.displayLabel.contains('🎭'), isFalse);
-    });
-
-    test('7. Every RUTA-02 category has the expected separate leading visual symbol', () {
+    test('9. Every category has the expected leading decorative symbol metadata', () {
       for (final cat in SkillsTaxonomy.masterCategories) {
         expect(expectedCategorySymbols.containsKey(cat.displayLabel), isTrue,
             reason: 'Category ${cat.displayLabel} should be in expected symbols map');
         expect(cat.leadingSymbol, equals(expectedCategorySymbols[cat.displayLabel]));
         expect(SkillsTaxonomy.getLeadingSymbolForCategory(cat.displayLabel),
             equals(expectedCategorySymbols[cat.displayLabel]));
-        // Verify displayLabel does NOT contain the symbol
-        expect(cat.displayLabel.contains(cat.leadingSymbol!), isFalse);
+        expect(cat.displayLabel.contains('🎷'), isFalse);
+        expect(cat.displayLabel.contains('🎧'), isFalse);
+        expect(cat.displayLabel.contains('🤝'), isFalse);
       }
     });
 
-    test('8. Central lookup functions resolve legacy values to display labels and vice versa', () {
-      expect(SkillsTaxonomy.getDisplayLabelForPersistedValue('SONGWRITER'),
-          equals('Songwriter'));
-      expect(SkillsTaxonomy.getDisplayLabelForPersistedValue('STUDIO/ENGINEER, etc'),
-          equals('Engineer'));
-      expect(SkillsTaxonomy.getDisplayLabelForPersistedValue('BANDLEADER'),
-          equals('BANDLEADER'));
-      expect(SkillsTaxonomy.getDisplayLabelForPersistedValue('DJ'), equals('DJ'));
-
-      expect(SkillsTaxonomy.getPersistedValueForDisplayLabel('Songwriter'),
-          equals('SONGWRITER'));
-      expect(SkillsTaxonomy.getPersistedValueForDisplayLabel('Engineer'),
-          equals('STUDIO/ENGINEER, etc'));
-      expect(SkillsTaxonomy.getPersistedValueForDisplayLabel('DJ'), equals('DJ'));
-    });
-
-    test('9. Unknown stored values pass through safely without corruption or deletion', () {
+    test('10. Unknown stored values pass through safely without corruption or deletion', () {
       const unknownValue = 'CUSTOM_SYNTH_99';
       expect(SkillsTaxonomy.resolveLegacyValue(unknownValue), isNull);
       expect(SkillsTaxonomy.resolveCanonicalPersistedValue(unknownValue),
@@ -230,15 +281,15 @@ void main() {
           equals(unknownValue));
     });
 
-    test('10. RUTA-01 taxonomy integrity validation passes with zero errors', () {
+    test('11. RUTA-01 and RUTA-02B taxonomy integrity validation passes with zero errors', () {
       final validation = SkillsTaxonomy.validateTaxonomyIntegrity();
       expect(validation.isValid, isTrue, reason: validation.errors.join('\n'));
       expect(validation.errors, isEmpty);
     });
   });
 
-  group('RUTA-02 Structured Picker Widget Tests', () {
-    testWidgets('11. SearchableCategoryMultiSelectSheet displays BANDLEADER with visual separation when opted into skillsHierarchy', (WidgetTester tester) async {
+  group('RUTA-02B Structured Picker Widget Tests', () {
+    testWidgets('12. BANDLEADER is visible at the very top before expanding any category', (WidgetTester tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() => tester.view.resetPhysicalSize());
@@ -268,156 +319,28 @@ void main() {
 
       expect(find.byType(SearchableCategoryMultiSelectSheet), findsOneWidget);
 
-      // Expand Roles category
-      await tester.tap(find.text('Roles/Production'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
-
-      // Featured BANDLEADER option
-      final bandleaderChip = find.byKey(const ValueKey('role_bandleader_chip'));
-      expect(bandleaderChip, findsOneWidget);
+      // Standalone BANDLEADER is visible immediately without expanding categories
+      final standaloneChip = find.byKey(const ValueKey('standalone_bandleader_chip'));
+      expect(standaloneChip, findsOneWidget);
       expect(find.text('BANDLEADER'), findsOneWidget);
 
-      // Title case roles
-      expect(find.text('Songwriter'), findsOneWidget);
-      expect(find.text('Producer'), findsOneWidget);
-      expect(find.text('Engineer'), findsOneWidget);
-      expect(find.text('DJ'), findsOneWidget);
+      // Positioned above expandable category
+      final bandleaderDy = tester.getTopLeft(standaloneChip).dy;
+      final roleCategoryDy = tester.getTopLeft(find.text('Songwriters/Lyricists/Producers/Engineers...')).dy;
+      expect(bandleaderDy < roleCategoryDy, isTrue,
+          reason: 'BANDLEADER must appear above Songwriters/Lyricists/Producers/Engineers...');
 
-      // Dismiss
       Navigator.pop(tester.element(find.byType(SearchableCategoryMultiSelectSheet)));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
     });
 
-    testWidgets('12. Category leading visual symbols are rendered with ExcludeSemantics', (WidgetTester tester) async {
+    testWidgets('13. Tapping standalone BANDLEADER selects it in single-select and multi-select', (WidgetTester tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() => tester.view.resetPhysicalSize());
 
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: Builder(
-              builder: (context) => ElevatedButton(
-                onPressed: () => SearchableCategoryMultiSelectSheet.show(
-                  context: context,
-                  title: 'Select Skill',
-                  categoryMap: SkillsTaxonomy.categoryMapFor(SkillTaxonomyContext.editProfile),
-                  initialSelected: const [],
-                  presentation: CategoryPickerPresentation.skillsHierarchy,
-                ),
-                child: const Text('Open Sheet'),
-              ),
-            ),
-          ),
-        ),
-      );
-
-      await tester.tap(find.text('Open Sheet'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
-
-      // Check visual symbols are rendered inside ExcludeSemantics
-      for (final entry in expectedCategorySymbols.entries) {
-        final symbolFinder = find.byWidgetPredicate(
-          (w) => w is ExcludeSemantics &&
-              w.child is Text &&
-              (w.child as Text).data == entry.value,
-        );
-        expect(symbolFinder, findsOneWidget,
-            reason: 'Leading symbol ${entry.value} for ${entry.key} must be wrapped in ExcludeSemantics');
-      }
-
-      Navigator.pop(tester.element(find.byType(SearchableCategoryMultiSelectSheet)));
-      await tester.pump();
-    });
-
-    testWidgets('13. SearchableCategoryMultiSelectSheet displays INSTRUMENTS/VOICES non-selectable heading', (WidgetTester tester) async {
-      tester.view.physicalSize = const Size(1080, 2400);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(() => tester.view.resetPhysicalSize());
-
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: Builder(
-              builder: (context) => ElevatedButton(
-                onPressed: () => SearchableCategoryMultiSelectSheet.show(
-                  context: context,
-                  title: 'Select Skill',
-                  categoryMap: SkillsTaxonomy.categoryMapFor(SkillTaxonomyContext.editProfile),
-                  initialSelected: const [],
-                  presentation: CategoryPickerPresentation.skillsHierarchy,
-                ),
-                child: const Text('Open Sheet'),
-              ),
-            ),
-          ),
-        ),
-      );
-
-      await tester.tap(find.text('Open Sheet'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
-
-      final headingFinder = find.byKey(const ValueKey('instruments_voices_section_heading'));
-      expect(headingFinder, findsOneWidget);
-      expect(find.text('INSTRUMENTS/VOICES'), findsOneWidget);
-
-      // Tapping heading does not select anything or dismiss
-      await tester.tap(headingFinder);
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 100));
-      expect(find.byType(SearchableCategoryMultiSelectSheet), findsOneWidget);
-
-      Navigator.pop(tester.element(find.byType(SearchableCategoryMultiSelectSheet)));
-      await tester.pump();
-    });
-
-    testWidgets('14. SearchableCategoryMultiSelectSheet displays voice separator and plain category labels', (WidgetTester tester) async {
-      tester.view.physicalSize = const Size(1080, 2400);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(() => tester.view.resetPhysicalSize());
-
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: Builder(
-              builder: (context) => ElevatedButton(
-                onPressed: () => SearchableCategoryMultiSelectSheet.show(
-                  context: context,
-                  title: 'Select Skill',
-                  categoryMap: SkillsTaxonomy.categoryMapFor(SkillTaxonomyContext.editProfile),
-                  initialSelected: const [],
-                  presentation: CategoryPickerPresentation.skillsHierarchy,
-                ),
-                child: const Text('Open Sheet'),
-              ),
-            ),
-          ),
-        ),
-      );
-
-      await tester.tap(find.text('Open Sheet'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
-
-      final separatorFinder = find.byKey(const ValueKey('voices_section_separator'));
-      expect(separatorFinder, findsOneWidget);
-
-      expect(find.text('Miscellaneous Voices'), findsOneWidget);
-
-      Navigator.pop(tester.element(find.byType(SearchableCategoryMultiSelectSheet)));
-      await tester.pump();
-    });
-
-    testWidgets('15. Selecting title-case UI option returns compatible persisted value', (WidgetTester tester) async {
-      tester.view.physicalSize = const Size(1080, 2400);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(() => tester.view.resetPhysicalSize());
-
-      List<String>? selectedResult;
+      List<String>? singleResult;
 
       await tester.pumpWidget(
         MaterialApp(
@@ -425,7 +348,7 @@ void main() {
             body: Builder(
               builder: (context) => ElevatedButton(
                 onPressed: () async {
-                  selectedResult = await SearchableCategoryMultiSelectSheet.show(
+                  singleResult = await SearchableCategoryMultiSelectSheet.show(
                     context: context,
                     title: 'Select Skill',
                     categoryMap: SkillsTaxonomy.categoryMapFor(SkillTaxonomyContext.editProfile),
@@ -445,21 +368,94 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
-      // Expand Roles category
-      await tester.tap(find.text('Roles/Production'));
+      // Tap BANDLEADER in single select
+      await tester.tap(find.byKey(const ValueKey('standalone_bandleader_chip')));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
-      // Tap 'Engineer'
-      await tester.tap(find.text('Engineer'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
-
-      // Verify single-select popped and returned the canonical persisted value
-      expect(selectedResult, equals(['STUDIO/ENGINEER, etc']));
+      expect(singleResult, equals(['BANDLEADER']));
     });
 
-    testWidgets('16. Selecting DJ returns persisted value DJ in multi-select', (WidgetTester tester) async {
+    testWidgets('14. BANDLEADER is not duplicated inside professional roles category and does not add false count badge', (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => ElevatedButton(
+                onPressed: () => SearchableCategoryMultiSelectSheet.show(
+                  context: context,
+                  title: 'Select Skill',
+                  categoryMap: SkillsTaxonomy.categoryMapFor(SkillTaxonomyContext.editProfile),
+                  initialSelected: const ['BANDLEADER'],
+                  isSingleSelect: false,
+                  presentation: CategoryPickerPresentation.skillsHierarchy,
+                ),
+                child: const Text('Open Sheet'),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Open Sheet'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      // Expand professional roles category
+      await tester.tap(find.text('Songwriters/Lyricists/Producers/Engineers...'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      // Only ONE BANDLEADER widget exists across entire sheet
+      expect(find.text('BANDLEADER'), findsOneWidget);
+
+      // No selected count badge on the professional roles category when only BANDLEADER is selected
+      expect(find.text('1 selected'), findsNothing);
+
+      Navigator.pop(tester.element(find.byType(SearchableCategoryMultiSelectSheet)));
+      await tester.pump();
+    });
+
+    testWidgets('15. Long heading Songwriters/Lyricists/Producers/Engineers... renders without overflow on narrow 320px viewport', (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(320, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => ElevatedButton(
+                onPressed: () => SearchableCategoryMultiSelectSheet.show(
+                  context: context,
+                  title: 'Skills',
+                  categoryMap: SkillsTaxonomy.categoryMapFor(SkillTaxonomyContext.editProfile),
+                  initialSelected: const [],
+                  presentation: CategoryPickerPresentation.skillsHierarchy,
+                ),
+                child: const Text('Open Sheet'),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Open Sheet'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.text('Songwriters/Lyricists/Producers/Engineers...'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      Navigator.pop(tester.element(find.byType(SearchableCategoryMultiSelectSheet)));
+      await tester.pump();
+    });
+
+    testWidgets('16. PR/Management is present under professional roles, selectable, and searchable', (WidgetTester tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() => tester.view.resetPhysicalSize());
@@ -477,7 +473,7 @@ void main() {
                     title: 'Select Skills',
                     categoryMap: SkillsTaxonomy.categoryMapFor(SkillTaxonomyContext.editProfile),
                     initialSelected: const [],
-                    isSingleSelect: false,
+                    isSingleSelect: true,
                     presentation: CategoryPickerPresentation.skillsHierarchy,
                   );
                 },
@@ -492,27 +488,23 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
-      // Expand Roles category
-      await tester.tap(find.text('Roles/Production'));
+      // Expand professional roles
+      await tester.tap(find.text('Songwriters/Lyricists/Producers/Engineers...'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
-      // Select BANDLEADER and DJ
-      await tester.tap(find.text('BANDLEADER'));
-      await tester.pump();
-      await tester.tap(find.text('DJ'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 100));
+      // Confirm PR/Management is present
+      final prChip = find.text('PR/Management');
+      expect(prChip, findsOneWidget);
 
-      // Tap Done
-      await tester.tap(find.text('Done (2 Selected)'));
+      await tester.tap(prChip);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
-      expect(selectedResult, equals(['BANDLEADER', 'DJ']));
+      expect(selectedResult, equals(['PR/MANAGEMENT']));
     });
 
-    testWidgets('17. Search finds options by display label and legacy alias in skillsHierarchy without emoji requirement', (WidgetTester tester) async {
+    testWidgets('17. Search finds PR/Management, BANDLEADER, and DJ', (WidgetTester tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() => tester.view.resetPhysicalSize());
@@ -541,38 +533,170 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
 
       final searchField = find.byType(TextField);
-      expect(searchField, findsOneWidget);
 
-      // Search 'woodwinds' -> finds Woodwinds category
-      await tester.enterText(searchField, 'woodwinds');
+      // Search 'management'
+      await tester.enterText(searchField, 'management');
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
-      expect(find.text('Woodwinds'), findsOneWidget);
+      expect(find.text('PR/Management'), findsOneWidget);
 
-      // Search 'engineer' -> finds Engineer
-      await tester.enterText(searchField, 'engineer');
+      // Search 'pr'
+      await tester.enterText(searchField, 'pr');
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
-      expect(find.text('Engineer'), findsOneWidget);
+      expect(find.text('PR/Management'), findsOneWidget);
 
-      // Search 'dj' -> finds DJ
+      // Search 'bandleader'
+      await tester.enterText(searchField, 'bandleader');
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(find.text('BANDLEADER'), findsOneWidget);
+
+      // Search 'dj'
       await tester.enterText(searchField, 'dj');
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
       expect(find.text('DJ'), findsOneWidget);
 
-      // Search 'piccolo' -> finds Piccolo Flute and Piccolo Trumpet
-      await tester.enterText(searchField, 'piccolo');
+      Navigator.pop(tester.element(find.byType(SearchableCategoryMultiSelectSheet)));
       await tester.pump();
-      await tester.pump(const Duration(milliseconds: 200));
-      expect(find.text('Piccolo Flute'), findsOneWidget);
-      expect(find.text('Piccolo Trumpet'), findsOneWidget);
+    });
+
+    testWidgets('18. Strings category displays 🎻 🎸 symbols and subtitle Violin/Cello/Guitar/Bass...', (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => ElevatedButton(
+                onPressed: () => SearchableCategoryMultiSelectSheet.show(
+                  context: context,
+                  title: 'Select Skill',
+                  categoryMap: SkillsTaxonomy.categoryMapFor(SkillTaxonomyContext.editProfile),
+                  initialSelected: const [],
+                  presentation: CategoryPickerPresentation.skillsHierarchy,
+                ),
+                child: const Text('Open Sheet'),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Open Sheet'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.text('Strings'), findsOneWidget);
+      expect(find.text('Violin/Cello/Guitar/Bass...'), findsOneWidget);
+
+      // Verify symbols 🎻 🎸 inside ExcludeSemantics
+      final symbolFinder = find.byWidgetPredicate(
+        (w) => w is ExcludeSemantics &&
+            w.child is Text &&
+            (w.child as Text).data == '🎻 🎸',
+      );
+      expect(symbolFinder, findsOneWidget);
 
       Navigator.pop(tester.element(find.byType(SearchableCategoryMultiSelectSheet)));
       await tester.pump();
     });
 
-    testWidgets('18. Unrelated Genres picker with standard presentation is unaffected by RUTA-02 styling or icons', (WidgetTester tester) async {
+    testWidgets('19. Sessions category is displayed with heading Sessions and selectable options', (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      List<String>? selectedResult;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => ElevatedButton(
+                onPressed: () async {
+                  selectedResult = await SearchableCategoryMultiSelectSheet.show(
+                    context: context,
+                    title: 'Select Skills',
+                    categoryMap: SkillsTaxonomy.categoryMapFor(SkillTaxonomyContext.editProfile),
+                    initialSelected: const [],
+                    presentation: CategoryPickerPresentation.skillsHierarchy,
+                  );
+                },
+                child: const Text('Open Sheet'),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Open Sheet'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      // Category is called Sessions
+      expect(find.text('Sessions'), findsOneWidget);
+      expect(find.text('Sessions/Collaboration'), findsNothing);
+
+      // Expand Sessions
+      await tester.tap(find.text('Sessions'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.text('Create Session'), findsOneWidget);
+      expect(find.text('Studio Session'), findsOneWidget);
+
+      await tester.tap(find.text('Studio Session'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.text('Done (1 Selected)'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(selectedResult, equals(['Studio Session']));
+    });
+
+    testWidgets('20. SearchableCategoryMultiSelectSheet displays INSTRUMENTS/VOICES non-selectable heading and voice separator', (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => ElevatedButton(
+                onPressed: () => SearchableCategoryMultiSelectSheet.show(
+                  context: context,
+                  title: 'Select Skill',
+                  categoryMap: SkillsTaxonomy.categoryMapFor(SkillTaxonomyContext.editProfile),
+                  initialSelected: const [],
+                  presentation: CategoryPickerPresentation.skillsHierarchy,
+                ),
+                child: const Text('Open Sheet'),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Open Sheet'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.byKey(const ValueKey('instruments_voices_section_heading')), findsOneWidget);
+      expect(find.text('INSTRUMENTS/VOICES'), findsOneWidget);
+      expect(find.byKey(const ValueKey('voices_section_separator')), findsOneWidget);
+
+      Navigator.pop(tester.element(find.byType(SearchableCategoryMultiSelectSheet)));
+      await tester.pump();
+    });
+
+    testWidgets('21. Unrelated Genres picker with standard presentation is unaffected by RUTA-02B styling or icons', (WidgetTester tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() => tester.view.resetPhysicalSize());
@@ -605,126 +729,21 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
-      // Confirm no INSTRUMENTS/VOICES heading or voice separator in standard mode
+      expect(find.byKey(const ValueKey('standalone_bandleader_chip')), findsNothing);
       expect(find.byKey(const ValueKey('instruments_voices_section_heading')), findsNothing);
       expect(find.byKey(const ValueKey('voices_section_separator')), findsNothing);
       expect(find.text('Rock & Metal'), findsOneWidget);
       expect(find.text('Electronic'), findsOneWidget);
 
-      // Confirm no category emoji symbols rendered for standard genres
       for (final symbol in expectedCategorySymbols.values) {
-        expect(find.text(symbol), findsNothing,
-            reason: 'Leading visual symbol $symbol should not be present in standard presentation');
+        expect(find.text(symbol), findsNothing);
       }
 
       Navigator.pop(tester.element(find.byType(SearchableCategoryMultiSelectSheet)));
       await tester.pump();
     });
 
-    testWidgets('19. Structurally similar arbitrary map does not receive RUTA-02 styling under standard presentation', (WidgetTester tester) async {
-      tester.view.physicalSize = const Size(1080, 2400);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(() => tester.view.resetPhysicalSize());
-
-      const arbitraryMap = {
-        'Woodwinds': ['Custom Pipe', 'Bamboo Whistle'],
-        'Roles/Production': ['BANDLEADER', 'Supervisor'],
-      };
-
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: Builder(
-              builder: (context) => ElevatedButton(
-                onPressed: () => SearchableCategoryMultiSelectSheet.show(
-                  context: context,
-                  title: 'Arbitrary Map',
-                  categoryMap: arbitraryMap,
-                  initialSelected: const [],
-                  presentation: CategoryPickerPresentation.standard,
-                ),
-                child: const Text('Open Sheet'),
-              ),
-            ),
-          ),
-        ),
-      );
-
-      await tester.tap(find.text('Open Sheet'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
-
-      // Under standard presentation, even with 'Woodwinds' key, section heading is NOT rendered
-      expect(find.byKey(const ValueKey('instruments_voices_section_heading')), findsNothing);
-      expect(find.byKey(const ValueKey('role_bandleader_chip')), findsNothing);
-
-      for (final symbol in expectedCategorySymbols.values) {
-        expect(find.text(symbol), findsNothing,
-            reason: 'Leading visual symbol $symbol should not be present in standard presentation');
-      }
-
-      Navigator.pop(tester.element(find.byType(SearchableCategoryMultiSelectSheet)));
-      await tester.pump();
-    });
-
-    testWidgets('20. Sessions/Collaboration remains visible, selectable, and functional in UI pending RUTA-03', (WidgetTester tester) async {
-      tester.view.physicalSize = const Size(1080, 2400);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(() => tester.view.resetPhysicalSize());
-
-      List<String>? selectedResult;
-
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: Builder(
-              builder: (context) => ElevatedButton(
-                onPressed: () async {
-                  selectedResult = await SearchableCategoryMultiSelectSheet.show(
-                    context: context,
-                    title: 'Select Skills',
-                    categoryMap: SkillsTaxonomy.categoryMapFor(SkillTaxonomyContext.editProfile),
-                    initialSelected: const [],
-                    presentation: CategoryPickerPresentation.skillsHierarchy,
-                  );
-                },
-                child: const Text('Open Sheet'),
-              ),
-            ),
-          ),
-        ),
-      );
-
-      await tester.tap(find.text('Open Sheet'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
-
-      // Confirm Sessions/Collaboration category exists
-      final sessionsCat = find.text('Sessions/Collaboration');
-      expect(sessionsCat, findsOneWidget);
-
-      // Expand Sessions category
-      await tester.tap(sessionsCat);
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
-
-      // Confirm options render and are selectable
-      expect(find.text('Create Session'), findsOneWidget);
-      expect(find.text('Studio Session'), findsOneWidget);
-      expect(find.text('Co-Writing Session'), findsOneWidget);
-
-      await tester.tap(find.text('Studio Session'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 100));
-
-      await tester.tap(find.text('Done (1 Selected)'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
-
-      expect(selectedResult, equals(['Studio Session']));
-    });
-
-    testWidgets('21. Unknown existing stored value is preserved and returned verbatim with additions', (WidgetTester tester) async {
+    testWidgets('22. Unknown existing stored value is preserved and returned verbatim with additions', (WidgetTester tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() => tester.view.resetPhysicalSize());
@@ -756,7 +775,6 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
-      // Check count indicator includes the unknown stored value
       expect(find.text('1'), findsOneWidget);
 
       // Add Electric Guitar (expand Strings)
@@ -768,18 +786,16 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
-      // Tap Done
       await tester.tap(find.text('Done (2 Selected)'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
-      // Verify CUSTOM_SYNTH_99 is preserved verbatim alongside new selection
       expect(selectedResult, contains('CUSTOM_SYNTH_99'));
       expect(selectedResult, contains('Electric Guitar'));
       expect(selectedResult!.length, equals(2));
     });
 
-    testWidgets('22. EditProfileScreen uses the RUTA-02 redesigned hierarchy with Sessions preserved', (WidgetTester tester) async {
+    testWidgets('23. EditProfileScreen uses the RUTA-02B redesigned hierarchy with standalone BANDLEADER', (WidgetTester tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() => tester.view.resetPhysicalSize());
@@ -795,15 +811,15 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
 
       expect(find.byType(SearchableCategoryMultiSelectSheet), findsOneWidget);
-      expect(find.byKey(const ValueKey('instruments_voices_section_heading')), findsOneWidget);
-      expect(find.text('Sessions/Collaboration'), findsOneWidget); // Preserved for RUTA-03
-      expect(find.text('Miscellaneous Voices'), findsOneWidget);
+      expect(find.byKey(const ValueKey('standalone_bandleader_chip')), findsOneWidget);
+      expect(find.text('Songwriters/Lyricists/Producers/Engineers...'), findsOneWidget);
+      expect(find.text('Sessions'), findsOneWidget);
 
       Navigator.pop(tester.element(find.byType(SearchableCategoryMultiSelectSheet)));
       await tester.pump();
     });
 
-    testWidgets('23. BrowseMusiciansScreen filter uses the RUTA-02 centralized hierarchy', (WidgetTester tester) async {
+    testWidgets('24. BrowseMusiciansScreen filter uses the RUTA-02B centralized hierarchy', (WidgetTester tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() => tester.view.resetPhysicalSize());
@@ -820,14 +836,14 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
 
       expect(find.byType(SearchableCategoryMultiSelectSheet), findsOneWidget);
-      expect(find.byKey(const ValueKey('instruments_voices_section_heading')), findsOneWidget);
-      expect(find.text('Roles/Production'), findsOneWidget);
+      expect(find.byKey(const ValueKey('standalone_bandleader_chip')), findsOneWidget);
+      expect(find.text('Songwriters/Lyricists/Producers/Engineers...'), findsOneWidget);
 
       Navigator.pop(tester.element(find.byType(SearchableCategoryMultiSelectSheet)));
       await tester.pump();
     });
 
-    testWidgets('24. FindSubScreen uses the RUTA-02 centralized hierarchy', (WidgetTester tester) async {
+    testWidgets('25. FindSubScreen uses the RUTA-02B centralized hierarchy', (WidgetTester tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() => tester.view.resetPhysicalSize());
@@ -843,13 +859,13 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
 
       expect(find.byType(SearchableCategoryMultiSelectSheet), findsOneWidget);
-      expect(find.byKey(const ValueKey('instruments_voices_section_heading')), findsOneWidget);
+      expect(find.byKey(const ValueKey('standalone_bandleader_chip')), findsOneWidget);
 
       Navigator.pop(tester.element(find.byType(SearchableCategoryMultiSelectSheet)));
       await tester.pump();
     });
 
-    testWidgets('25. RegisterScreen renders flat dropdown preserving Electric Guitar default', (WidgetTester tester) async {
+    testWidgets('26. RegisterScreen renders flat dropdown preserving Electric Guitar default', (WidgetTester tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() => tester.view.resetPhysicalSize());

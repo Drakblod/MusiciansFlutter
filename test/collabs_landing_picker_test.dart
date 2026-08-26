@@ -50,7 +50,7 @@ void main() {
   });
 
   group('Collabs Landing Screen & Master Category Verification Tests', () {
-    testWidgets('CollabsLandingScreen opens popup sheet with Sessions/Collaboration category', (WidgetTester tester) async {
+    testWidgets('CollabsLandingScreen opens popup sheet with Sessions category', (WidgetTester tester) async {
       await tester.pumpWidget(createTestWidget(const CollabsLandingScreen()));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
@@ -63,7 +63,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
 
       expect(find.byType(SearchableCategoryMultiSelectSheet), findsOneWidget);
-      expect(find.text('Sessions/Collaboration'), findsOneWidget);
+      expect(find.text('Sessions'), findsOneWidget);
 
       await tester.tap(find.text('Done'));
       await tester.pump();

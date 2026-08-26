@@ -58,12 +58,14 @@ class SkillTaxonomyCategory {
   final String id;
   final String displayLabel;
   final String? leadingSymbol;
+  final String? subtitle;
   final List<String> optionIds;
 
   const SkillTaxonomyCategory({
     required this.id,
     required this.displayLabel,
     this.leadingSymbol,
+    this.subtitle,
     required this.optionIds,
   });
 
@@ -205,6 +207,25 @@ class SkillsTaxonomy {
       displayLabel: 'DJ',
       kind: SkillOptionKind.role,
       aliases: ['dj', 'Dj', 'Disc Jockey', 'disc jockey'],
+    ),
+    'pr_management': SkillTaxonomyOption(
+      id: 'pr_management',
+      persistedValue: 'PR/MANAGEMENT',
+      displayLabel: 'PR/Management',
+      kind: SkillOptionKind.role,
+      aliases: [
+        'PR/Management',
+        'pr/management',
+        'PR/MANAGEMENT',
+        'PR & Management',
+        'pr & management',
+        'PR & MANAGEMENT',
+        'PR / Management',
+        'pr / management',
+        'PR / MANAGEMENT',
+        'PR&Management',
+        'pr&management',
+      ],
     ),
 
     // --- Woodwinds ---
@@ -673,8 +694,23 @@ class SkillsTaxonomy {
   // ---------------------------------------------------------------------------
   static const List<SkillTaxonomyCategory> _masterCategories = [
     SkillTaxonomyCategory(
+      id: 'roles_production',
+      displayLabel: 'Songwriters/Lyricists/Producers/Engineers...',
+      leadingSymbol: '🎧',
+      optionIds: [
+        'songwriter',
+        'lyricist',
+        'producer',
+        'composer',
+        'beatmaker',
+        'studio_engineer_etc',
+        'dj',
+        'pr_management',
+      ],
+    ),
+    SkillTaxonomyCategory(
       id: 'sessions_collaboration',
-      displayLabel: 'Sessions/Collaboration',
+      displayLabel: 'Sessions',
       leadingSymbol: '🤝',
       optionIds: [
         'create_session',
@@ -683,21 +719,6 @@ class SkillsTaxonomy {
         'studio_session',
         'rehearsal_jam',
         'cowriting_session',
-      ],
-    ),
-    SkillTaxonomyCategory(
-      id: 'roles_production',
-      displayLabel: 'Roles/Production',
-      leadingSymbol: '🎧',
-      optionIds: [
-        'bandleader',
-        'songwriter',
-        'producer',
-        'composer',
-        'lyricist',
-        'beatmaker',
-        'studio_engineer_etc',
-        'dj',
       ],
     ),
     SkillTaxonomyCategory(
@@ -732,7 +753,8 @@ class SkillsTaxonomy {
     SkillTaxonomyCategory(
       id: 'strings',
       displayLabel: 'Strings',
-      leadingSymbol: '🎻',
+      leadingSymbol: '🎻 🎸',
+      subtitle: 'Violin/Cello/Guitar/Bass...',
       optionIds: [
         'violin',
         'viola',
@@ -917,6 +939,30 @@ class SkillsTaxonomy {
     return null;
   }
 
+  /// Returns the explanatory subtitle for the category if available.
+  static String? getSubtitleForCategory(String categoryLabelOrId) {
+    for (final cat in _masterCategories) {
+      if (cat.id == categoryLabelOrId ||
+          cat.displayLabel == categoryLabelOrId ||
+          cat.displayLabel.replaceAll(' ', '') == categoryLabelOrId.replaceAll(' ', '')) {
+        return cat.subtitle;
+      }
+    }
+    return null;
+  }
+
+  /// Finds a master category definition by its display label or ID.
+  static SkillTaxonomyCategory? findCategoryByDisplayLabel(String categoryLabelOrId) {
+    for (final cat in _masterCategories) {
+      if (cat.id == categoryLabelOrId ||
+          cat.displayLabel == categoryLabelOrId ||
+          cat.displayLabel.replaceAll(' ', '') == categoryLabelOrId.replaceAll(' ', '')) {
+        return cat;
+      }
+    }
+    return null;
+  }
+
   // ---------------------------------------------------------------------------
   // Public Accessors & Context APIs
   // ---------------------------------------------------------------------------
@@ -955,6 +1001,10 @@ class SkillsTaxonomy {
       case SkillTaxonomyContext.collabs:
       case SkillTaxonomyContext.findCollabs:
         final options = <SkillTaxonomyOption>[];
+        final bandleaderOpt = _allOptions['bandleader'];
+        if (bandleaderOpt != null) {
+          options.add(bandleaderOpt);
+        }
         for (final cat in _masterCategories) {
           for (final optId in cat.optionIds) {
             final opt = _allOptions[optId];

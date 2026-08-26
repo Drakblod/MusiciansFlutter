@@ -86,10 +86,10 @@ void main() {
     await Firebase.initializeApp();
   });
 
-  // Explicit RUTA-02 golden categories fixture
+  // Explicit RUTA-02B golden categories fixture
   const expectedMasterCategoryLabels = [
-    'Sessions/Collaboration',
-    'Roles/Production',
+    'Songwriters/Lyricists/Producers/Engineers...',
+    'Sessions',
     'Woodwinds',
     'Brass',
     'Strings',
@@ -322,8 +322,8 @@ void main() {
 
       final categoryMap = SkillsTaxonomy.categoryMapFor(SkillTaxonomyContext.editProfile);
       expect(categoryMap.keys.toList(), equals(expectedMasterCategoryLabels));
-      expect(categoryMap['Sessions/Collaboration']!.length, equals(6));
-      expect(categoryMap['Roles/Production']!.length, equals(8));
+      expect(categoryMap['Songwriters/Lyricists/Producers/Engineers...']!.length, equals(8));
+      expect(categoryMap['Sessions']!.length, equals(6));
       expect(categoryMap['Woodwinds']!.length, equals(9));
       expect(categoryMap['Brass']!.length, equals(6));
       expect(categoryMap['Strings']!.length, equals(8));
@@ -463,7 +463,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
 
       expect(find.byType(SearchableCategoryMultiSelectSheet), findsOneWidget);
-      expect(find.text('Sessions/Collaboration'), findsOneWidget);
+      expect(find.text('Sessions'), findsOneWidget);
 
       await tester.tap(find.text('Done'));
       await tester.pump();
@@ -487,7 +487,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
 
       expect(find.byType(SearchableCategoryMultiSelectSheet), findsOneWidget);
-      expect(find.text('Roles/Production'), findsOneWidget);
+      expect(find.text('Songwriters/Lyricists/Producers/Engineers...'), findsOneWidget);
       expect(find.text('Woodwinds'), findsOneWidget);
 
       await tester.tap(find.text('Done'));

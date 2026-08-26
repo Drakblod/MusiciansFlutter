@@ -60,8 +60,8 @@ void main() {
 
   group('Master Instrument and Skills List Verification Tests', () {
     final expectedCategories = [
-      'Sessions/Collaboration',
-      'Roles/Production',
+      'Songwriters/Lyricists/Producers/Engineers...',
+      'Sessions',
       'Woodwinds',
       'Brass',
       'Strings',
@@ -124,7 +124,7 @@ void main() {
 
       expect(find.byType(SearchableCategoryMultiSelectSheet), findsOneWidget);
 
-      expect(find.text('Roles/Production'), findsOneWidget);
+      expect(find.text('Songwriters/Lyricists/Producers/Engineers...'), findsOneWidget);
       expect(
         find.byWidgetPredicate((w) =>
             (w is Text && w.data == 'Voices (Choir)') ||
