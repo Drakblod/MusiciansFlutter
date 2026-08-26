@@ -8,6 +8,7 @@ import '../models/sub_request.dart';
 import '../widgets/custom_top_bar.dart';
 import '../widgets/gradient_scaffold.dart';
 import '../widgets/animated_tap_detector.dart';
+import '../data/skills_taxonomy.dart';
 
 class ProducerSearchScreen extends StatefulWidget {
   const ProducerSearchScreen({super.key});
@@ -41,34 +42,10 @@ class _ProducerSearchScreenState extends State<ProducerSearchScreen> {
     'E = BEGINNER'
   ];
 
-  final List<String> _instruments = [
-    'All Instruments',
-    'Vocalist',
-    'Guitar',
-    'Bass',
-    'Drums',
-    'Piano',
-    'Keyboard',
-    'Saxophone',
-    'Trumpet',
-    'Violin',
-    'Cello',
-    'Other'
-  ];
+  List<String> get _instruments =>
+      SkillsTaxonomy.persistedValuesFor(SkillTaxonomyContext.producerSearch);
 
-  final List<String> _targetInstruments = [
-    'Vocalist',
-    'Guitar',
-    'Bass',
-    'Drums',
-    'Piano',
-    'Keyboard',
-    'Saxophone',
-    'Trumpet',
-    'Violin',
-    'Cello',
-    'Other'
-  ];
+  List<String> get _targetInstruments => SkillsTaxonomy.producerTargetInstruments;
 
   final List<String> _genres = [
     'All Styles',

@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:musicians_flutter/providers/app_state.dart';
 import 'package:musicians_flutter/services/firebase_service.dart';
 import 'package:musicians_flutter/models/user_profile.dart';
+import 'package:musicians_flutter/models/band.dart';
 import 'package:musicians_flutter/views/browse_musicians_screen.dart';
 import 'package:musicians_flutter/widgets/searchable_category_multi_select_sheet.dart';
 
@@ -35,6 +36,11 @@ class MockProfilesFirebaseService extends FirebaseService {
 
   @override
   Future<List<String>> getFavoriteUserIdsAsync() async {
+    return [];
+  }
+
+  @override
+  Future<List<Band>> getAllBandsAsync() async {
     return [];
   }
 }
@@ -73,8 +79,14 @@ void main() {
 
   group('Profiles Page Free-Text Search & Skills Picker Tests', () {
     testWidgets('Free-text search filters profiles by member name / username', (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
       await tester.pumpWidget(createTestWidget(const BrowseMusiciansScreen()));
-      await tester.pumpAndSettle();
+      for (int i = 0; i < 6; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
 
       expect(find.text('Alice Sax'), findsOneWidget);
       expect(find.text('Bob Drummer'), findsOneWidget);
@@ -83,26 +95,36 @@ void main() {
       expect(searchInput, findsOneWidget);
 
       await tester.enterText(searchInput, 'alicesax99');
-      await tester.pumpAndSettle();
+      for (int i = 0; i < 6; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
 
       expect(find.text('Alice Sax'), findsOneWidget);
       expect(find.text('Bob Drummer'), findsNothing);
     });
 
     testWidgets('Tapping skills selection card on PROFILES page opens popup window sheet', (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
       await tester.pumpWidget(createTestWidget(const BrowseMusiciansScreen()));
-      await tester.pumpAndSettle();
+      for (int i = 0; i < 6; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
 
       final cardFinder = find.text('Filter by Skills & Instruments...');
       expect(cardFinder, findsOneWidget);
 
       await tester.tap(cardFinder);
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
 
       expect(find.byType(SearchableCategoryMultiSelectSheet), findsOneWidget);
 
       await tester.tap(find.text('Done'));
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
       expect(find.byType(SearchableCategoryMultiSelectSheet), findsNothing);
     });
   });

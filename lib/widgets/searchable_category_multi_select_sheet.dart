@@ -1,7 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_theme.dart';
+import '../data/skills_taxonomy.dart';
 import 'animated_tap_detector.dart';
+
+/// Presentation mode for category multi-select sheets.
+enum CategoryPickerPresentation {
+  standard,
+  skillsHierarchy,
+}
 
 class SearchableCategoryMultiSelectSheet extends StatefulWidget {
   final String title;
@@ -9,6 +16,7 @@ class SearchableCategoryMultiSelectSheet extends StatefulWidget {
   final List<String> initialSelected;
   final bool isSingleSelect;
   final int? maxSelection;
+  final CategoryPickerPresentation presentation;
 
   const SearchableCategoryMultiSelectSheet({
     super.key,
@@ -17,6 +25,7 @@ class SearchableCategoryMultiSelectSheet extends StatefulWidget {
     required this.initialSelected,
     this.isSingleSelect = false,
     this.maxSelection,
+    this.presentation = CategoryPickerPresentation.standard,
   });
 
   static Future<List<String>?> show({
@@ -26,6 +35,8 @@ class SearchableCategoryMultiSelectSheet extends StatefulWidget {
     required List<String> initialSelected,
     bool isSingleSelect = false,
     int? maxSelection,
+    CategoryPickerPresentation presentation =
+        CategoryPickerPresentation.standard,
   }) {
     return showModalBottomSheet<List<String>>(
       context: context,
@@ -37,6 +48,7 @@ class SearchableCategoryMultiSelectSheet extends StatefulWidget {
         initialSelected: initialSelected,
         isSingleSelect: isSingleSelect,
         maxSelection: maxSelection,
+        presentation: presentation,
       ),
     );
   }
@@ -48,14 +60,23 @@ class SearchableCategoryMultiSelectSheet extends StatefulWidget {
 
 class _SearchableCategoryMultiSelectSheetState
     extends State<SearchableCategoryMultiSelectSheet> {
-  late Set<String> _tempSelected;
+  late Set<String> _tempSelectedPersistedValues;
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
+
+  bool get _isSkillsHierarchy =>
+      widget.presentation == CategoryPickerPresentation.skillsHierarchy;
 
   @override
   void initState() {
     super.initState();
-    _tempSelected = Set<String>.from(widget.initialSelected);
+    if (_isSkillsHierarchy) {
+      _tempSelectedPersistedValues = widget.initialSelected
+          .map((s) => SkillsTaxonomy.resolveCanonicalPersistedValue(s))
+          .toSet();
+    } else {
+      _tempSelectedPersistedValues = widget.initialSelected.toSet();
+    }
   }
 
   @override
@@ -64,28 +85,185 @@ class _SearchableCategoryMultiSelectSheetState
     super.dispose();
   }
 
-  void _toggleItem(String item) {
+  void _toggleItem(String displayOrPersistedItem) {
+    final persistedValue = _isSkillsHierarchy
+        ? SkillsTaxonomy.getPersistedValueForDisplayLabel(
+            displayOrPersistedItem)
+        : displayOrPersistedItem;
+
     if (widget.isSingleSelect) {
-      Navigator.pop(context, [item]);
+      Navigator.pop(context, [persistedValue]);
       return;
     }
+
     setState(() {
-      if (_tempSelected.contains(item)) {
-        _tempSelected.remove(item);
+      if (_tempSelectedPersistedValues.contains(persistedValue)) {
+        _tempSelectedPersistedValues.remove(persistedValue);
       } else {
-        if (widget.maxSelection != null && _tempSelected.length >= widget.maxSelection!) {
+        if (widget.maxSelection != null &&
+            _tempSelectedPersistedValues.length >= widget.maxSelection!) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('You can select a maximum of ${widget.maxSelection} items.'),
+              content: Text(
+                  'You can select a maximum of ${widget.maxSelection} items.'),
               backgroundColor: AppTheme.warning,
               duration: const Duration(seconds: 2),
             ),
           );
           return;
         }
-        _tempSelected.add(item);
+        _tempSelectedPersistedValues.add(persistedValue);
       }
     });
+  }
+
+  bool _isItemSelected(String displayOrPersistedItem) {
+    if (_isSkillsHierarchy) {
+      final persistedValue =
+          SkillsTaxonomy.getPersistedValueForDisplayLabel(
+              displayOrPersistedItem);
+      return _tempSelectedPersistedValues.contains(persistedValue) ||
+          _tempSelectedPersistedValues.contains(displayOrPersistedItem);
+    }
+    return _tempSelectedPersistedValues.contains(displayOrPersistedItem);
+  }
+
+  Widget _buildCategoryTitleWidget(String categoryName) {
+    final leadingSymbol = _isSkillsHierarchy
+        ? SkillsTaxonomy.getLeadingSymbolForCategory(categoryName)
+        : null;
+
+    final Widget textWidget;
+    if (_isSkillsHierarchy &&
+        categoryName.contains('(') &&
+        categoryName.contains('Voices')) {
+      final parts = categoryName.split('(');
+      final mainTitle = parts.first.trim();
+      final suffix = '(${parts.last}';
+
+      textWidget = RichText(
+        text: TextSpan(
+          style: GoogleFonts.outfit(
+            fontSize: 15,
+            color: Colors.white,
+          ),
+          children: [
+            TextSpan(
+              text: mainTitle,
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const TextSpan(text: ' '),
+            TextSpan(
+              text: suffix,
+              style: const TextStyle(fontWeight: FontWeight.normal),
+            ),
+          ],
+        ),
+      );
+    } else {
+      textWidget = Text(
+        categoryName,
+        style: GoogleFonts.outfit(
+          fontSize: 15,
+          fontWeight: FontWeight.bold,
+          color: Colors.white,
+        ),
+      );
+    }
+
+    if (leadingSymbol != null && leadingSymbol.isNotEmpty) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ExcludeSemantics(
+            child: Text(
+              leadingSymbol,
+              style: const TextStyle(fontSize: 16),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Flexible(child: textWidget),
+        ],
+      );
+    }
+
+    return textWidget;
+  }
+
+  Widget _buildRoleOptions(List<String> items) {
+    final featuredLabel = SkillsTaxonomy.featuredRoleDisplayLabel;
+    final hasFeatured = items.contains(featuredLabel);
+    final otherItems = items.where((item) => item != featuredLabel).toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (hasFeatured) ...[
+          ChoiceChip(
+            key: const ValueKey('role_bandleader_chip'),
+            label: Text(
+              featuredLabel,
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 0.8,
+                color: Colors.white,
+              ),
+            ),
+            selected: _isItemSelected(featuredLabel),
+            onSelected: (_) => _toggleItem(featuredLabel),
+            selectedColor: AppTheme.primaryAccent,
+            backgroundColor: AppTheme.inputBackground,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+            side: BorderSide(
+              color: _isItemSelected(featuredLabel)
+                  ? AppTheme.primaryAccent
+                  : const Color(0xFF3F396B),
+              width: 1.5,
+            ),
+          ),
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 8),
+            child: Divider(
+              color: Color(0xFF2E2A4E),
+              height: 12,
+              thickness: 1,
+            ),
+          ),
+        ],
+        if (otherItems.isNotEmpty)
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: otherItems.map((item) {
+              final isSelected = _isItemSelected(item);
+              return ChoiceChip(
+                label: Text(item),
+                selected: isSelected,
+                onSelected: (_) => _toggleItem(item),
+                selectedColor: AppTheme.primaryAccent,
+                backgroundColor: AppTheme.inputBackground,
+                labelStyle: GoogleFonts.inter(
+                  fontSize: 12,
+                  fontWeight:
+                      isSelected ? FontWeight.bold : FontWeight.normal,
+                  color: Colors.white,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                side: BorderSide(
+                  color: isSelected
+                      ? AppTheme.primaryAccent
+                      : const Color(0xFF2E2A4E),
+                ),
+              );
+            }).toList(),
+          ),
+      ],
+    );
   }
 
   @override
@@ -93,6 +271,7 @@ class _SearchableCategoryMultiSelectSheetState
     final mediaQuery = MediaQuery.of(context);
     final bottomInset = mediaQuery.viewInsets.bottom;
     final maxSheetHeight = mediaQuery.size.height * 0.85;
+    final isSkillsMode = _isSkillsHierarchy;
 
     // Filter categories based on search query
     final Map<String, List<String>> filteredCategories = {};
@@ -100,10 +279,24 @@ class _SearchableCategoryMultiSelectSheetState
       if (_searchQuery.isEmpty) {
         filteredCategories[category] = items;
       } else {
-        final categoryMatches =
-            category.toLowerCase().contains(_searchQuery.toLowerCase());
+        final queryLower = _searchQuery.toLowerCase();
+        final categoryMatches = category.toLowerCase().contains(queryLower);
         final matchingItems = items.where((item) {
-          return item.toLowerCase().contains(_searchQuery.toLowerCase());
+          if (item.toLowerCase().contains(queryLower)) return true;
+          final opt = SkillsTaxonomy.findByDisplayLabel(item) ??
+              SkillsTaxonomy.findByPersistedValue(item) ??
+              SkillsTaxonomy.resolveLegacyValue(item);
+          if (opt != null) {
+            if (opt.persistedValue.toLowerCase().contains(queryLower)) {
+              return true;
+            }
+            for (final alias in opt.aliases) {
+              if (alias.toLowerCase().contains(queryLower)) {
+                return true;
+              }
+            }
+          }
+          return false;
         }).toList();
 
         if (categoryMatches || matchingItems.isNotEmpty) {
@@ -161,7 +354,7 @@ class _SearchableCategoryMultiSelectSheetState
                           ),
                         ),
                       ),
-                      if (_tempSelected.isNotEmpty) ...[
+                      if (_tempSelectedPersistedValues.isNotEmpty) ...[
                         const SizedBox(width: 8),
                         Container(
                           padding: const EdgeInsets.symmetric(
@@ -173,7 +366,7 @@ class _SearchableCategoryMultiSelectSheetState
                                 color: AppTheme.primaryAccent.withOpacity(0.5)),
                           ),
                           child: Text(
-                            '${_tempSelected.length}',
+                            '${_tempSelectedPersistedValues.length}',
                             style: GoogleFonts.inter(
                               fontSize: 12,
                               fontWeight: FontWeight.bold,
@@ -244,7 +437,7 @@ class _SearchableCategoryMultiSelectSheetState
           ),
           const SizedBox(height: 8),
 
-          // Expandable Accordion List
+          // Expandable Accordion List with RUTA-02 Structured Hierarchy
           Expanded(
             child: filteredCategories.isEmpty
                 ? Center(
@@ -261,109 +454,179 @@ class _SearchableCategoryMultiSelectSheetState
                     padding: const EdgeInsets.symmetric(
                         horizontal: 16, vertical: 4),
                     physics: const BouncingScrollPhysics(),
-                    children: filteredCategories.entries.map((entry) {
-                      final categoryName = entry.key;
-                      final items = entry.value;
-                      final selectedInCategoryCount = items
-                          .where((item) => _tempSelected.contains(item))
-                          .length;
+                    children: () {
+                      final widgets = <Widget>[];
+                      final categoryEntries = filteredCategories.entries.toList();
 
-                      final isSearching = _searchQuery.isNotEmpty;
+                      for (int i = 0; i < categoryEntries.length; i++) {
+                        final entry = categoryEntries[i];
+                        final categoryName = entry.key;
+                        final items = entry.value;
+                        final selectedInCategoryCount = items
+                            .where((item) => _isItemSelected(item))
+                            .length;
+                        final isSearching = _searchQuery.isNotEmpty;
 
-                      return Theme(
-                        data: Theme.of(context)
-                            .copyWith(dividerColor: Colors.transparent),
-                        child: Container(
-                          margin: const EdgeInsets.only(bottom: 10),
-                          decoration: BoxDecoration(
-                            color: AppTheme.cardBackground,
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(
-                              color: selectedInCategoryCount > 0
-                                  ? AppTheme.primaryAccent.withOpacity(0.4)
-                                  : const Color(0xFF231F45),
-                              width: 1,
-                            ),
-                          ),
-                          child: ExpansionTile(
-                            key: PageStorageKey<String>(categoryName),
-                            initiallyExpanded: isSearching ||
-                                selectedInCategoryCount > 0,
-                            iconColor: AppTheme.primaryAccent,
-                            collapsedIconColor: AppTheme.textSecondary,
-                            title: Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    categoryName,
-                                    style: GoogleFonts.outfit(
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.white,
-                                    ),
-                                  ),
-                                ),
-                                if (selectedInCategoryCount > 0)
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 8, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: AppTheme.primaryAccent
-                                          .withOpacity(0.2),
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    child: Text(
-                                      '$selectedInCategoryCount selected',
-                                      style: GoogleFonts.inter(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.bold,
-                                        color: AppTheme.primaryAccent,
-                                      ),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                            children: [
-                              Padding(
-                                padding: const EdgeInsets.only(
-                                    left: 12, right: 12, bottom: 12),
-                                child: Wrap(
-                                  spacing: 8,
-                                  runSpacing: 8,
-                                  children: items.map((item) {
-                                    final isSelected =
-                                        _tempSelected.contains(item);
-                                    return ChoiceChip(
-                                      label: Text(item),
-                                      selected: isSelected,
-                                      onSelected: (_) => _toggleItem(item),
-                                      selectedColor: AppTheme.primaryAccent,
-                                      backgroundColor: AppTheme.inputBackground,
-                                      labelStyle: GoogleFonts.inter(
-                                        fontSize: 12,
-                                        fontWeight: isSelected
-                                            ? FontWeight.bold
-                                            : FontWeight.normal,
-                                        color: Colors.white,
-                                      ),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius:
-                                            BorderRadius.circular(8),
-                                      ),
-                                      side: BorderSide(
-                                        color: isSelected
-                                            ? AppTheme.primaryAccent
-                                            : const Color(0xFF2E2A4E),
-                                      ),
-                                    );
-                                  }).toList(),
+                        // RUTA-02: Non-selectable INSTRUMENTS/VOICES Section Heading
+                        if (isSkillsMode && categoryName == 'Woodwinds') {
+                          widgets.add(
+                            Container(
+                              key: const ValueKey(
+                                  'instruments_voices_section_heading'),
+                              margin: const EdgeInsets.only(
+                                  top: 14, bottom: 10, left: 4, right: 4),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 14, vertical: 10),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF1E1A3C),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                  color: AppTheme.primaryAccent.withOpacity(0.35),
+                                  width: 1.2,
                                 ),
                               ),
-                            ],
+                              child: Row(
+                                children: [
+                                  const Icon(
+                                    Icons.music_note_rounded,
+                                    color: AppTheme.primaryAccent,
+                                    size: 18,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    SkillsTaxonomy.instrumentsVoicesSectionHeader,
+                                    style: GoogleFonts.outfit(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                      letterSpacing: 1.5,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        }
+
+                        // RUTA-02: Visual Separator before Voice Categories
+                        if (isSkillsMode && categoryName == 'Voices (Choir)') {
+                          widgets.add(
+                            const Padding(
+                              key: ValueKey('voices_section_separator'),
+                              padding: EdgeInsets.symmetric(
+                                  vertical: 6, horizontal: 8),
+                              child: Divider(
+                                color: Color(0xFF2E2A4E),
+                                thickness: 1.2,
+                              ),
+                            ),
+                          );
+                        }
+
+                        // Category Expansion Card
+                        widgets.add(
+                          Theme(
+                            data: Theme.of(context)
+                                .copyWith(dividerColor: Colors.transparent),
+                            child: Container(
+                              margin: const EdgeInsets.only(bottom: 10),
+                              decoration: BoxDecoration(
+                                color: AppTheme.cardBackground,
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(
+                                  color: selectedInCategoryCount > 0
+                                      ? AppTheme.primaryAccent.withOpacity(0.4)
+                                      : const Color(0xFF231F45),
+                                  width: 1,
+                                ),
+                              ),
+                              child: ExpansionTile(
+                                key: PageStorageKey<String>(categoryName),
+                                initiallyExpanded: isSearching ||
+                                    selectedInCategoryCount > 0,
+                                iconColor: AppTheme.primaryAccent,
+                                collapsedIconColor: AppTheme.textSecondary,
+                                title: Row(
+                                  children: [
+                                    Expanded(
+                                      child: _buildCategoryTitleWidget(
+                                          categoryName),
+                                    ),
+                                    if (selectedInCategoryCount > 0)
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 8, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: AppTheme.primaryAccent
+                                              .withOpacity(0.2),
+                                          borderRadius:
+                                              BorderRadius.circular(10),
+                                        ),
+                                        child: Text(
+                                          '$selectedInCategoryCount selected',
+                                          style: GoogleFonts.inter(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.bold,
+                                            color: AppTheme.primaryAccent,
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                                children: [
+                                  Padding(
+                                    padding: const EdgeInsets.only(
+                                        left: 12, right: 12, bottom: 12),
+                                    child: isSkillsMode &&
+                                            (categoryName == 'Roles/Production' ||
+                                                categoryName ==
+                                                    'Roles / Production')
+                                        ? _buildRoleOptions(items)
+                                        : Wrap(
+                                            spacing: 8,
+                                            runSpacing: 8,
+                                            children: items.map((item) {
+                                              final isSelected =
+                                                  _isItemSelected(item);
+                                              return ChoiceChip(
+                                                label: Text(item),
+                                                selected: isSelected,
+                                                onSelected: (_) =>
+                                                    _toggleItem(item),
+                                                selectedColor:
+                                                    AppTheme.primaryAccent,
+                                                backgroundColor:
+                                                    AppTheme.inputBackground,
+                                                labelStyle: GoogleFonts.inter(
+                                                  fontSize: 12,
+                                                  fontWeight: isSelected
+                                                      ? FontWeight.bold
+                                                      : FontWeight.normal,
+                                                  color: Colors.white,
+                                                ),
+                                                shape: RoundedRectangleBorder(
+                                                  borderRadius:
+                                                      BorderRadius.circular(8),
+                                                ),
+                                                side: BorderSide(
+                                                  color: isSelected
+                                                      ? AppTheme.primaryAccent
+                                                      : const Color(
+                                                          0xFF2E2A4E),
+                                                ),
+                                              );
+                                            }).toList(),
+                                          ),
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
-                        ),
-                      );
-                    }).toList(),
+                        );
+                      }
+
+                      return widgets;
+                    }(),
                   ),
           ),
 
@@ -383,11 +646,11 @@ class _SearchableCategoryMultiSelectSheetState
             ),
             child: Row(
               children: [
-                if (_tempSelected.isNotEmpty)
+                if (_tempSelectedPersistedValues.isNotEmpty)
                   TextButton(
                     onPressed: () {
                       setState(() {
-                        _tempSelected.clear();
+                        _tempSelectedPersistedValues.clear();
                       });
                     },
                     child: Text(
@@ -399,11 +662,13 @@ class _SearchableCategoryMultiSelectSheetState
                       ),
                     ),
                   ),
-                if (_tempSelected.isNotEmpty) const SizedBox(width: 12),
+                if (_tempSelectedPersistedValues.isNotEmpty)
+                  const SizedBox(width: 12),
                 Expanded(
                   child: AnimatedTapDetector(
                     onTap: () {
-                      Navigator.pop(context, _tempSelected.toList());
+                      Navigator.pop(
+                          context, _tempSelectedPersistedValues.toList());
                     },
                     child: Container(
                       height: 50,
@@ -420,9 +685,9 @@ class _SearchableCategoryMultiSelectSheetState
                       ),
                       child: Center(
                         child: Text(
-                          _tempSelected.isEmpty
+                          _tempSelectedPersistedValues.isEmpty
                               ? 'Done'
-                              : 'Done (${_tempSelected.length} Selected)',
+                              : 'Done (${_tempSelectedPersistedValues.length} Selected)',
                           style: GoogleFonts.inter(
                             color: Colors.white,
                             fontWeight: FontWeight.bold,

@@ -11,6 +11,7 @@ import '../widgets/custom_top_bar.dart';
 import '../widgets/gradient_scaffold.dart';
 import '../widgets/animated_tap_detector.dart';
 import '../widgets/searchable_category_multi_select_sheet.dart';
+import '../data/skills_taxonomy.dart';
 
 class CollabsLandingScreen extends StatefulWidget {
   const CollabsLandingScreen({super.key});
@@ -42,102 +43,8 @@ class _CollabsLandingScreenState extends State<CollabsLandingScreen> {
   bool _isLoadingFavorites = false;
 
   // Master Skills & Talents Category Map
-  static final Map<String, List<String>> _allSkillsCategoryMap = {
-    '🎛️ Sessions / Collaboration': [
-      'Create Session',
-      'Create Jam',
-      'Find Session',
-      'Studio Session',
-      'Rehearsal Jam',
-      'Co-Writing Session',
-    ],
-    '🎧 Roles / Production': [
-      'BANDLEADER',
-      'SONGWRITER',
-      'PRODUCER',
-      'COMPOSER',
-      'LYRICIST',
-      'BEATMAKER',
-      'STUDIO/ENGINEER, etc',
-    ],
-    '🎷 Woodwinds': [
-      'Recorder',
-      'Flute',
-      'Oboe',
-      'Clarinet',
-      'Bassoon',
-      'Soprano Sax',
-      'Alto Sax',
-      'Tenor Sax',
-      'Bari Sax',
-    ],
-    '🎺 Brass': [
-      'Trumpet',
-      'Cornet',
-      'Trombone',
-      'French Horn',
-      'Euphonium',
-      'Tuba',
-    ],
-    '🎻 Strings': [
-      'Violin',
-      'Viola',
-      'Cello',
-      'Contrabass',
-      'Acoustic Guitar',
-      'Electric Guitar',
-      'Electric Bass',
-      'Harp',
-    ],
-    '🎹 Keyboards': [
-      'Piano',
-      'Keyboard/Synth',
-      'Harpsichord',
-      'Organ (Hammond)',
-    ],
-    '🥁 Percussion': [
-      'Drums',
-      'Latin Percussion (congas, timbales, etc)',
-      'Classical Percussion (timpani, cymbals, etc)',
-    ],
-    '🗣️ Voices (Choir)': [
-      'Soprano',
-      'Alto',
-      'Tenor',
-      'Baritone',
-      'Bass',
-    ],
-    '🎭 Miscellaneous Voices (Classical, Choir)': [
-      'Mezzo Soprano',
-      'Contralto',
-      'Counter Tenor',
-    ],
-    '🎤 Voices (Popular Music)': [
-      'Male Lead Vocals',
-      'Female Lead vocals',
-      'Male Backing vocals',
-      'Female Backing vocals',
-    ],
-    '🪈 Miscellaneous Instruments': [
-      'Soprano Recorder',
-      'Alto Recorder',
-      'Tenor Recorder',
-      'Bass Recorder',
-      'Piccolo Flute',
-      'Alto Flute',
-      'Bass Flute',
-      'English Horn',
-      'Eb Clarinet',
-      'Alto Clarinet',
-      'Bass Clarinet',
-      'Contra Bassoon',
-      'Piccolo Trumpet',
-      'Alto Trombone',
-      'Viola da Gamba',
-      'Steel Guitar',
-      'Steel Pan',
-    ],
-  };
+  static Map<String, List<String>> get _allSkillsCategoryMap =>
+      SkillsTaxonomy.categoryMapFor(SkillTaxonomyContext.collabs);
 
   @override
   void initState() {
@@ -234,6 +141,7 @@ class _CollabsLandingScreenState extends State<CollabsLandingScreen> {
       title: 'Collaboration Area',
       categoryMap: _allSkillsCategoryMap,
       initialSelected: _selectedCollabAreas,
+      presentation: CategoryPickerPresentation.skillsHierarchy,
     );
     if (result != null) {
       if (result.contains('Create Session')) {

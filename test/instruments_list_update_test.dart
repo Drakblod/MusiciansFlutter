@@ -60,19 +60,24 @@ void main() {
 
   group('Master Instrument and Skills List Verification Tests', () {
     final expectedCategories = [
-      '🎧 Roles / Production',
-      '🎷 Woodwinds',
-      '🎺 Brass',
-      '🎻 Strings',
-      '🎹 Keyboards',
-      '🥁 Percussion',
-      '🗣️ Voices (Choir)',
-      '🎭 Miscellaneous Voices (Classical, Choir)',
-      '🎤 Voices (Popular Music)',
-      '🪈 Miscellaneous Instruments',
+      'Sessions/Collaboration',
+      'Roles/Production',
+      'Woodwinds',
+      'Brass',
+      'Strings',
+      'Keyboards',
+      'Percussion',
+      'Miscellaneous Instruments',
+      'Voices (Choir)',
+      'Voices (Popular Music)',
+      'Miscellaneous Voices',
     ];
 
     testWidgets('EditProfileScreen picker opens and contains updated categories and items', (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
       await tester.pumpWidget(createTestWidget(const EditProfileScreen()));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
@@ -85,15 +90,27 @@ void main() {
       expect(find.byType(SearchableCategoryMultiSelectSheet), findsOneWidget);
 
       for (final cat in expectedCategories) {
-        expect(find.text(cat), findsOneWidget);
+        if (cat.contains('(') && cat.contains('Voices')) {
+          expect(
+            find.byWidgetPredicate(
+                (w) => w is RichText && w.text.toPlainText() == cat),
+            findsOneWidget,
+          );
+        } else {
+          expect(find.text(cat), findsOneWidget);
+        }
       }
 
-      await tester.tap(find.text('Done'));
+      Navigator.pop(tester.element(find.byType(SearchableCategoryMultiSelectSheet)));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
     });
 
     testWidgets('FindSubScreen picker opens and displays updated master category structure', (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
       await tester.pumpWidget(createTestWidget(const FindSubScreen()));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
@@ -107,11 +124,16 @@ void main() {
 
       expect(find.byType(SearchableCategoryMultiSelectSheet), findsOneWidget);
 
-      expect(find.text('🎧 Roles / Production'), findsOneWidget);
-      expect(find.text('🗣️ Voices (Choir)'), findsOneWidget);
-      expect(find.text('🎭 Miscellaneous Voices (Classical, Choir)'), findsOneWidget);
+      expect(find.text('Roles/Production'), findsOneWidget);
+      expect(
+        find.byWidgetPredicate((w) =>
+            (w is Text && w.data == 'Voices (Choir)') ||
+            (w is RichText && w.text.toPlainText() == 'Voices (Choir)')),
+        findsOneWidget,
+      );
+      expect(find.text('Miscellaneous Voices'), findsOneWidget);
 
-      await tester.tap(find.text('Done'));
+      Navigator.pop(tester.element(find.byType(SearchableCategoryMultiSelectSheet)));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
     });

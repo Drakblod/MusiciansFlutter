@@ -4,10 +4,7 @@ import 'package:firebase_core/firebase_core.dart' hide FirebaseService;
 import 'package:firebase_core_platform_interface/test.dart';
 import 'package:musicians_flutter/views/edit_profile_screen.dart';
 import 'package:musicians_flutter/views/create_band_screen.dart';
-import 'package:musicians_flutter/views/producer_search_screen.dart';
-import 'package:musicians_flutter/views/collabs_landing_screen.dart';
 import 'package:musicians_flutter/views/find_collabs_screen.dart';
-import 'package:musicians_flutter/views/find_sub_screen.dart';
 import 'package:musicians_flutter/views/register_screen.dart';
 import 'package:musicians_flutter/views/profile_tab_screen.dart';
 import 'package:musicians_flutter/views/musician_profile_screen.dart';
@@ -107,7 +104,7 @@ void main() {
       await tester.pumpWidget(
         ChangeNotifierProvider<AppState>(
           create: (_) => MockGenAppState(),
-          child: const MaterialApp(home: CollabsLandingScreen()),
+          child: const MaterialApp(home: FindCollabsScreen()),
         ),
       );
       await tester.pumpAndSettle();

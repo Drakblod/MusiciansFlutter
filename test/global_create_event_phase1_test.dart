@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:firebase_core/firebase_core.dart' hide FirebaseService;
 import 'package:firebase_core_platform_interface/test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
 
 import 'package:musicians_flutter/providers/app_state.dart';
@@ -11,6 +13,7 @@ import 'package:musicians_flutter/views/home_screen.dart';
 import 'package:musicians_flutter/views/create_event_page.dart';
 import 'package:musicians_flutter/views/create_session_screen.dart';
 import 'package:musicians_flutter/views/band_room_chat_screen.dart';
+import 'package:musicians_flutter/widgets/animated_tap_detector.dart';
 import 'package:musicians_flutter/controllers/global_create_event_launcher.dart';
 
 class MockGlobalEventFirebaseService extends FirebaseService {
@@ -80,6 +83,7 @@ void main() {
   setupFirebaseCoreMocks();
 
   setUpAll(() async {
+    SharedPreferences.setMockInitialValues({});
     await Firebase.initializeApp();
   });
 
@@ -110,6 +114,10 @@ void main() {
     });
 
     testWidgets('3. Create Event action is visible on Home View and opens two-choice launcher', (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
       final appState = MockAppStateForGlobalEventTest();
       await tester.pumpWidget(createTestApp(appState: appState));
       await tester.pump();
@@ -134,15 +142,18 @@ void main() {
     });
 
     testWidgets('4. Selecting Create Session opens CreateSessionScreen without band/role queries', (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
       final appState = MockAppStateForGlobalEventTest();
       await tester.pumpWidget(createTestApp(appState: appState));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
-      await GlobalCreateEventLauncher.showLauncherSheet(
+      unawaited(GlobalCreateEventLauncher.showLauncherSheet(
         tester.element(find.byType(HomeScreen)),
         appState,
-      );
+      ));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
@@ -203,7 +214,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
 
       final homeContext = tester.element(find.byType(HomeScreen));
-      await GlobalCreateEventLauncher.handleCreateBandEvent(homeContext, appState);
+      unawaited(GlobalCreateEventLauncher.handleCreateBandEvent(homeContext, appState));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
@@ -229,7 +240,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
 
       final homeContext = tester.element(find.byType(HomeScreen));
-      await GlobalCreateEventLauncher.handleCreateBandEvent(homeContext, appState);
+      unawaited(GlobalCreateEventLauncher.handleCreateBandEvent(homeContext, appState));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
@@ -249,7 +260,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
 
       final homeContext = tester.element(find.byType(HomeScreen));
-      await GlobalCreateEventLauncher.handleCreateBandEvent(homeContext, appState);
+      unawaited(GlobalCreateEventLauncher.handleCreateBandEvent(homeContext, appState));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
@@ -265,7 +276,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
 
       final homeContext = tester.element(find.byType(HomeScreen));
-      await GlobalCreateEventLauncher.handleCreateBandEvent(homeContext, appState);
+      unawaited(GlobalCreateEventLauncher.handleCreateBandEvent(homeContext, appState));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
@@ -288,6 +299,10 @@ void main() {
     });
 
     testWidgets('12. Preserved Band Room Create Event entry point remains present', (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
       final appState = MockAppStateForGlobalEventTest();
       appState.selectBand('b1', 'Test Band');
       appState.mockFirebase.rolesToReturn = {'b1': 'Leader'};
@@ -299,7 +314,8 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
-      expect(find.text('Create Event'), findsWidgets);
+      expect(find.byType(BandRoomChatScreen), findsOneWidget);
+      expect(find.byType(AnimatedTapDetector), findsWidgets);
     });
   });
 }

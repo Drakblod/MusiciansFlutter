@@ -5,6 +5,7 @@ import '../providers/app_state.dart';
 import '../theme/app_theme.dart';
 import '../widgets/gradient_scaffold.dart';
 import '../widgets/animated_tap_detector.dart';
+import '../data/skills_taxonomy.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -31,75 +32,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
     'E = BEGINNER',
   ];
 
-  final List<String> _userTypes = [
-    "BANDLEADER",
-    "SONGWRITER",
-    "PRODUCER",
-    "COMPOSER",
-    "LYRICIST",
-    "BEATMAKER",
-    "STUDIO/ENGINEER, etc",
-    "INSTRUMENTS/VOICES",
-    "Recorder",
-    "Flute",
-    "Oboe",
-    "Clarinet",
-    "Bassoon",
-    "Soprano Sax",
-    "Alto Sax",
-    "Tenor Sax",
-    "Bari Sax",
-    "Trumpet",
-    "Cornet",
-    "Trombone",
-    "French Horn",
-    "Euphonium",
-    "Tuba",
-    "Violin",
-    "Viola",
-    "Cello",
-    "Contrabass",
-    "Acoustic Guitar",
-    "Electric Guitar",
-    "Electric Bass",
-    "Harp",
-    "Piano",
-    "Keyboard/Synth",
-    "Harpsichord",
-    "Organ (Hammond)",
-    "Drums",
-    "Latin Percussion (congas, timbales, etc)",
-    "Classical Percussion (timpani, cymbals, etc)",
-    "Soprano",
-    "Alto",
-    "Tenor",
-    "Baritone",
-    "Bass",
-    "Mezzo Soprano",
-    "Contralto",
-    "Counter Tenor",
-    "Male Lead Vocals",
-    "Female Lead vocals",
-    "Male Backing vocals",
-    "Female Backing vocals",
-    "Soprano Recorder",
-    "Alto Recorder",
-    "Tenor Recorder",
-    "Bass Recorder",
-    "Piccolo Flute",
-    "Alto Flute",
-    "Bass Flute",
-    "English Horn",
-    "Eb Clarinet",
-    "Alto Clarinet",
-    "Bass Clarinet",
-    "Contra Bassoon",
-    "Piccolo Trumpet",
-    "Alto Trombone",
-    "Viola da Gamba",
-    "Steel Guitar",
-    "Steel Pan",
-  ];
+  List<String> get _userTypes =>
+      SkillsTaxonomy.persistedValuesFor(SkillTaxonomyContext.register);
 
   @override
   void dispose() {

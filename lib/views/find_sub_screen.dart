@@ -11,6 +11,7 @@ import '../widgets/custom_top_bar.dart';
 import '../widgets/gradient_scaffold.dart';
 import '../widgets/animated_tap_detector.dart';
 import '../widgets/searchable_category_multi_select_sheet.dart';
+import '../data/skills_taxonomy.dart';
 
 class FindSubScreen extends StatefulWidget {
   final String? eventId;
@@ -193,172 +194,11 @@ class _FindSubScreenState extends State<FindSubScreen> {
     return null;
   }
 
-  final List<String> _instruments = [
-    "BANDLEADER",
-    "SONGWRITER",
-    "PRODUCER",
-    "COMPOSER",
-    "LYRICIST",
-    "BEATMAKER",
-    "STUDIO/ENGINEER, etc",
-    "INSTRUMENTS/VOICES",
-    "Recorder",
-    "Flute",
-    "Oboe",
-    "Clarinet",
-    "Bassoon",
-    "Soprano Sax",
-    "Alto Sax",
-    "Tenor Sax",
-    "Bari Sax",
-    "Trumpet",
-    "Cornet",
-    "Trombone",
-    "French Horn",
-    "Euphonium",
-    "Tuba",
-    "Violin",
-    "Viola",
-    "Cello",
-    "Contrabass",
-    "Acoustic Guitar",
-    "Electric Guitar",
-    "Electric Bass",
-    "Harp",
-    "Piano",
-    "Keyboard/Synth",
-    "Harpsichord",
-    "Organ (Hammond)",
-    "Drums",
-    "Latin Percussion (congas, timbales, etc)",
-    "Classical Percussion (timpani, cymbals, etc)",
-    "Soprano",
-    "Alto",
-    "Tenor",
-    "Baritone",
-    "Bass",
-    "Mezzo Soprano",
-    "Contralto",
-    "Counter Tenor",
-    "Male Lead Vocals",
-    "Female Lead vocals",
-    "Male Backing vocals",
-    "Female Backing vocals",
-    "Soprano Recorder",
-    "Alto Recorder",
-    "Tenor Recorder",
-    "Bass Recorder",
-    "Piccolo Flute",
-    "Alto Flute",
-    "Bass Flute",
-    "English Horn",
-    "Eb Clarinet",
-    "Alto Clarinet",
-    "Bass Clarinet",
-    "Contra Bassoon",
-    "Piccolo Trumpet",
-    "Alto Trombone",
-    "Viola da Gamba",
-    "Steel Guitar",
-    "Steel Pan"
-  ];
+  List<String> get _instruments =>
+      SkillsTaxonomy.persistedValuesFor(SkillTaxonomyContext.findSub);
 
-  static final Map<String, List<String>> _allSkillsCategoryMap = {
-    '🎛️ Sessions / Collaboration': [
-      'Create Session',
-      'Create Jam',
-      'Find Session',
-      'Studio Session',
-      'Rehearsal Jam',
-      'Co-Writing Session',
-    ],
-    '🎧 Roles / Production': [
-      'BANDLEADER',
-      'SONGWRITER',
-      'PRODUCER',
-      'COMPOSER',
-      'LYRICIST',
-      'BEATMAKER',
-      'STUDIO/ENGINEER, etc',
-    ],
-    '🎷 Woodwinds': [
-      'Recorder',
-      'Flute',
-      'Oboe',
-      'Clarinet',
-      'Bassoon',
-      'Soprano Sax',
-      'Alto Sax',
-      'Tenor Sax',
-      'Bari Sax',
-    ],
-    '🎺 Brass': [
-      'Trumpet',
-      'Cornet',
-      'Trombone',
-      'French Horn',
-      'Euphonium',
-      'Tuba',
-    ],
-    '🎻 Strings': [
-      'Violin',
-      'Viola',
-      'Cello',
-      'Contrabass',
-      'Acoustic Guitar',
-      'Electric Guitar',
-      'Electric Bass',
-      'Harp',
-    ],
-    '🎹 Keyboards': [
-      'Piano',
-      'Keyboard/Synth',
-      'Harpsichord',
-      'Organ (Hammond)',
-    ],
-    '🥁 Percussion': [
-      'Drums',
-      'Latin Percussion (congas, timbales, etc)',
-      'Classical Percussion (timpani, cymbals, etc)',
-    ],
-    '🗣️ Voices (Choir)': [
-      'Soprano',
-      'Alto',
-      'Tenor',
-      'Baritone',
-      'Bass',
-    ],
-    '🎭 Miscellaneous Voices (Classical, Choir)': [
-      'Mezzo Soprano',
-      'Contralto',
-      'Counter Tenor',
-    ],
-    '🎤 Voices (Popular Music)': [
-      'Male Lead Vocals',
-      'Female Lead vocals',
-      'Male Backing vocals',
-      'Female Backing vocals',
-    ],
-    '🪈 Miscellaneous Instruments': [
-      'Soprano Recorder',
-      'Alto Recorder',
-      'Tenor Recorder',
-      'Bass Recorder',
-      'Piccolo Flute',
-      'Alto Flute',
-      'Bass Flute',
-      'English Horn',
-      'Eb Clarinet',
-      'Alto Clarinet',
-      'Bass Clarinet',
-      'Contra Bassoon',
-      'Piccolo Trumpet',
-      'Alto Trombone',
-      'Viola da Gamba',
-      'Steel Guitar',
-      'Steel Pan',
-    ],
-  };
+  static Map<String, List<String>> get _allSkillsCategoryMap =>
+      SkillsTaxonomy.categoryMapFor(SkillTaxonomyContext.findSub);
 
   Future<void> _openInstrumentPicker() async {
     final result = await SearchableCategoryMultiSelectSheet.show(
@@ -367,6 +207,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
       categoryMap: _allSkillsCategoryMap,
       initialSelected: [_selectedInstrument],
       maxSelection: 1,
+      presentation: CategoryPickerPresentation.skillsHierarchy,
     );
     if (result != null && result.isNotEmpty) {
       setState(() {

@@ -7,6 +7,7 @@ import '../models/collab_session.dart';
 import '../widgets/custom_top_bar.dart';
 import '../widgets/gradient_scaffold.dart';
 import '../widgets/animated_tap_detector.dart';
+import '../data/skills_taxonomy.dart';
 
 class CreateSessionScreen extends StatefulWidget {
   const CreateSessionScreen({super.key});
@@ -43,13 +44,10 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
     "Electronic", "Country", "Classical", "Soul", "Reggae", "Alternative"
   ];
 
-  final List<String> _rolesList = [
-    "songwriter", "producer", "engineer", "vocalist", "musician"
-  ];
+  List<String> get _rolesList => SkillsTaxonomy.sessionRoles;
 
-  final List<String> _instrumentsList = [
-    "Electric Guitar", "Electric Bass", "Drums", "Keyboard/Synth", "Piano", "Acoustic Guitar", "Vocalist"
-  ];
+  List<String> get _instrumentsList =>
+      SkillsTaxonomy.persistedValuesFor(SkillTaxonomyContext.createSession);
 
   @override
   void didChangeDependencies() {
