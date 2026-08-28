@@ -84,11 +84,23 @@ class ExternalInvitee {
 }
 
 class BandEvent {
+  /// Standard active creation choices for newly created events in owner-approved order.
+  static const List<String> standardEventTypes = [
+    'Rehearsal',
+    'Concert',
+    'Club gig',
+    'Private Event',
+    'Tour',
+    'Show',
+    'Other',
+  ];
+
   final String? id;
   final String title;
   final String description;
-  final String
-  eventType; // 'Rehearsal', 'Concert', 'Gig', 'Recording Session', 'Meeting', 'Other'
+  /// Active creation choices: 'Rehearsal', 'Concert', 'Club gig', 'Private Event', 'Tour', 'Show', 'Other'.
+  /// Legacy values: 'Recording Session', 'Meeting', 'Gig'.
+  final String eventType;
   final String location;
   final String startDateTime; // ISO 8601 string
   final String endDateTime; // ISO 8601 string

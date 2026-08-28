@@ -137,8 +137,8 @@ void main() {
       expect(find.text('WHAT WOULD YOU LIKE TO CREATE?'), findsOneWidget);
       expect(find.text('Create Event'), findsWidgets);
       expect(find.text('Create Session'), findsOneWidget);
-      expect(find.text('Create a rehearsal, concert, tour, meeting or other event for a band.'), findsOneWidget);
-      expect(find.text('Create a co-writing session, production session, workshop, jam or other collaboration.'), findsOneWidget);
+      expect(find.text('Create rehearsal, gig, tour, show...'), findsOneWidget);
+      expect(find.text('Create songwriting session, jam, recording, workshop...'), findsOneWidget);
     });
 
     testWidgets('4. Selecting Create Session opens CreateSessionScreen without band/role queries', (WidgetTester tester) async {

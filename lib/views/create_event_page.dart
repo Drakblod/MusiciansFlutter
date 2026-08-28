@@ -58,8 +58,8 @@ class _CreateEventPageState extends State<CreateEventPage> {
   TimeOfDay _endTime = const TimeOfDay(hour: 21, minute: 0);
   bool _requireResponse = true;
   bool _createEventRoom = true;
-  int _reminderIntervalHours = 48;
-  bool _isCustomReminderHours = false;
+  int _reminderIntervalHours = 0;
+  bool _isCustomReminderHours = true;
   bool _isSaving = false;
   bool _isLoadingRole = true;
 
@@ -67,9 +67,17 @@ class _CreateEventPageState extends State<CreateEventPage> {
   bool _isMultipleEvents = false;
   final List<_EventDraft> _additionalEvents = [];
 
+  List<String> get _availableEventTypes {
+    if (BandEvent.standardEventTypes.contains(_eventType)) {
+      return BandEvent.standardEventTypes;
+    }
+    return [...BandEvent.standardEventTypes, _eventType];
+  }
+
   @override
   void initState() {
     super.initState();
+    _customReminderController.text = '';
     _initFromExisting();
     _checkPermission();
   }
@@ -84,6 +92,29 @@ class _CreateEventPageState extends State<CreateEventPage> {
       _notesController.text = first.additionalNotes;
       _eventType = first.eventType;
       _requireResponse = first.requireResponse;
+
+      // Existing event RSVP compatibility
+      final existingInterval = first.reminderIntervalHours;
+      if (existingInterval == 0) {
+        // Explicit 0 means No automatic Reminders
+        _isCustomReminderHours = false;
+        _reminderIntervalHours = 0;
+        _customReminderController.text = '';
+      } else if (existingInterval == 48 || existingInterval == 24 || existingInterval == 12) {
+        _isCustomReminderHours = false;
+        _reminderIntervalHours = existingInterval!;
+        _customReminderController.text = '';
+      } else if (existingInterval != null && existingInterval > 0) {
+        // Other positive integer (e.g. 36) -> Custom mode
+        _isCustomReminderHours = true;
+        _reminderIntervalHours = existingInterval;
+        _customReminderController.text = '$existingInterval';
+      } else {
+        // null or missing key -> Verified historical default fallback (48 hours)
+        _isCustomReminderHours = false;
+        _reminderIntervalHours = 48;
+        _customReminderController.text = '';
+      }
 
       final startLocal = DateTime.tryParse(first.startDateTime)?.toLocal() ?? DateTime.now();
       final endLocal = DateTime.tryParse(first.endDateTime)?.toLocal() ?? startLocal;
@@ -165,18 +196,6 @@ class _CreateEventPageState extends State<CreateEventPage> {
       }
     }
   }
-
-  final List<String> _eventTypes = [
-    'Rehearsal',
-    'Concert',
-    'Club gig',
-    'Private Event',
-    'Show',
-    'Recording Session',
-    'Tour',
-    'Meeting',
-    'Other',
-  ];
 
   Future<void> _selectDate() async {
     final picked = await showDatePicker(
@@ -295,6 +314,10 @@ class _CreateEventPageState extends State<CreateEventPage> {
       builder: (ctx) {
         return StatefulBuilder(
           builder: (ctx, setModalState) {
+            final draftAvailableTypes = BandEvent.standardEventTypes.contains(draftType)
+                ? BandEvent.standardEventTypes
+                : [...BandEvent.standardEventTypes, draftType];
+
             return Padding(
               padding: EdgeInsets.only(
                 left: 20,
@@ -332,7 +355,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                       dropdownColor: const Color(0xFF16132D),
                       style: GoogleFonts.inter(color: Colors.white),
                       decoration: const InputDecoration(labelText: 'Event Type'),
-                      items: _eventTypes.map((type) => DropdownMenuItem(value: type, child: Text(type))).toList(),
+                      items: draftAvailableTypes.map((type) => DropdownMenuItem(value: type, child: Text(type))).toList(),
                       onChanged: (val) {
                         if (val != null) setModalState(() => draftType = val);
                       },
@@ -515,16 +538,29 @@ class _CreateEventPageState extends State<CreateEventPage> {
     try {
       final appState = Provider.of<AppState>(context, listen: false);
       if (_isCustomReminderHours) {
-        final parsed = int.tryParse(_customReminderController.text.trim());
-        if (parsed != null && parsed >= 0) {
-          _reminderIntervalHours = parsed;
+        final customText = _customReminderController.text.trim();
+        final parsed = int.tryParse(customText);
+        if (parsed == null || parsed <= 0) {
+          return;
+        }
+        _reminderIntervalHours = parsed;
+      }
+
+      if (_eventType == 'Other') {
+        final customType = _otherEventTypeController.text.trim();
+        if (customType.isEmpty) {
+          return;
         }
       }
+
+      final resolvedPrimaryType = _eventType == 'Other'
+          ? _otherEventTypeController.text.trim()
+          : _eventType;
 
       final allEventsToSave = <_EventDraft>[
         _EventDraft(
           title: _titleController.text.trim(),
-          eventType: _eventType,
+          eventType: resolvedPrimaryType,
           date: _selectedDate,
           startTime: _startTime,
           endTime: _endTime,
@@ -635,7 +671,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
   Widget build(BuildContext context) {
     return GradientScaffold(
       appBar: const CustomTopBar(
-        title: 'Create New Event',
+        title: 'Create Event',
         showBack: true,
       ),
       body: SafeArea(
@@ -649,7 +685,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                   padding: const EdgeInsets.all(20),
                   children: [
                     Text(
-                      'CREATE NEW EVENT',
+                      'CREATE EVENT',
                       style: GoogleFonts.outfit(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
@@ -684,7 +720,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                       decoration: const InputDecoration(
                         labelText: 'Event Type',
                       ),
-                      items: _eventTypes.map((type) {
+                      items: _availableEventTypes.map((type) {
                         return DropdownMenuItem<String>(
                           value: type,
                           child: Text(type),
@@ -898,7 +934,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                                     ),
                                     const SizedBox(height: 4),
                                     Text(
-                                      'Example: 1 rehearsal and 2 concerts, 2 shows, 3 days of Recording Session, etc',
+                                      'Example: 1 rehearsal and 2 concerts, 2 shows, 3 days on Tour, etc',
                                       style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary, height: 1.3),
                                     ),
                                   ],
@@ -1155,7 +1191,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                               border: OutlineInputBorder(),
                             ),
                             items: const [
-                              DropdownMenuItem(value: -1, child: Text('Set your own hours')),
+                              DropdownMenuItem(value: -1, child: Text('Set your own')),
                               DropdownMenuItem(value: 48, child: Text('48 hours (From event is published)')),
                               DropdownMenuItem(value: 24, child: Text('24 hours (From event is published)')),
                               DropdownMenuItem(value: 12, child: Text('12 hours (From event is published)')),
@@ -1181,7 +1217,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                               keyboardType: TextInputType.number,
                               style: GoogleFonts.inter(color: Colors.white),
                               decoration: InputDecoration(
-                                labelText: 'Input chosen hours here',
+                                labelText: 'Set hours here',
                                 hintText: 'e.g. 48, 24, 12',
                                 prefixIcon: Icon(Icons.timer_outlined, color: AppTheme.textSecondary),
                                 suffixText: 'hours',
@@ -1193,7 +1229,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                                     return 'Please enter response window in hours';
                                   }
                                   final parsed = int.tryParse(value.trim());
-                                  if (parsed == null || parsed < 0) {
+                                  if (parsed == null || parsed <= 0) {
                                     return 'Please enter a valid positive number';
                                   }
                                 }
@@ -1201,7 +1237,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                               },
                               onChanged: (val) {
                                 final parsed = int.tryParse(val.trim());
-                                if (parsed != null && parsed >= 0) {
+                                if (parsed != null && parsed > 0) {
                                   setState(() {
                                     _reminderIntervalHours = parsed;
                                   });

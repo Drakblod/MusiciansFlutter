@@ -3445,7 +3445,7 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                       Icon(Icons.add_circle_outline, color: Colors.white),
                       SizedBox(width: 8),
                       Text(
-                        "Create New Event",
+                        "Create Event",
                         style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold),
                       ),
                     ],

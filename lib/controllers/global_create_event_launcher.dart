@@ -108,7 +108,7 @@ class GlobalCreateEventLauncher {
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                'Create a rehearsal, concert, tour, meeting or other event for a band.',
+                                'Create rehearsal, gig, tour, show...',
                                 style: GoogleFonts.inter(
                                   fontSize: 12,
                                   color: AppTheme.textSecondary,
@@ -175,7 +175,7 @@ class GlobalCreateEventLauncher {
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                'Create a co-writing session, production session, workshop, jam or other collaboration.',
+                                'Create songwriting session, jam, recording, workshop...',
                                 style: GoogleFonts.inter(
                                   fontSize: 12,
                                   color: AppTheme.textSecondary,
