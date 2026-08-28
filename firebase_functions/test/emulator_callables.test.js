@@ -2,10 +2,10 @@ const assert = require('assert');
 const admin = require('firebase-admin');
 
 // Firebase Client SDK Imports
-const { initializeApp } = require('firebase/app');
+const { initializeApp, deleteApp } = require('firebase/app');
 const { getAuth, connectAuthEmulator, signInWithCustomToken } = require('firebase/auth');
 const { getFunctions, connectFunctionsEmulator, httpsCallable } = require('firebase/functions');
-const { getDatabase, connectDatabaseEmulator } = require('firebase/database');
+const { getDatabase, connectDatabaseEmulator, goOffline } = require('firebase/database');
 
 const PROJECT_ID = 'demo-musicians-test';
 const DB_HOST = '127.0.0.1';
@@ -74,6 +74,19 @@ describe('Real Cloud Functions Emulator Integration Tests (JS Client SDK + Emula
 
     const ctxUnauth = await createClientContext(null);
     appUnauth = ctxUnauth.app; functionsUnauth = ctxUnauth.functions;
+  });
+
+  after(async () => {
+    if (dbUserA) goOffline(dbUserA);
+    if (dbUserB) goOffline(dbUserB);
+    if (dbUserC) goOffline(dbUserC);
+    if (appUserA) await deleteApp(appUserA).catch(() => {});
+    if (appUserB) await deleteApp(appUserB).catch(() => {});
+    if (appUserC) await deleteApp(appUserC).catch(() => {});
+    if (appUnauth) await deleteApp(appUnauth).catch(() => {});
+    if (admin.apps.length) {
+      await Promise.all(admin.apps.map(app => app.delete().catch(() => {})));
+    }
   });
 
   beforeEach(async () => {
@@ -374,5 +387,207 @@ describe('Real Cloud Functions Emulator Integration Tests (JS Client SDK + Emula
     const convSnapAfterLeave = await adminDb.ref(`conversations/${convId}`).get();
     assert.strictEqual(convSnapAfterLeave.val().participantCount, 2);
     assert.strictEqual(convSnapAfterLeave.val().participants.user_c, undefined);
+  });
+
+  it('15. createSessionConversation authorization, creation, and idempotency', async () => {
+    // Setup session created by user_a
+    await adminDb.ref('Collabs/Sessions/sess_100').set({
+      CreatorId: 'user_a',
+      Title: 'Pop Workshop',
+      Description: 'Writing hooks',
+      SessionType: 'Remote',
+      SessionCategory: 'Workshop',
+      IsDateFlexible: false,
+      Status: 'active',
+    });
+
+    // Unauthenticated caller is rejected
+    const unauthFn = httpsCallable(functionsUnauth, 'createSessionConversation');
+    await assert.rejects(
+      unauthFn({ sessionId: 'sess_100', sessionTitle: 'Pop Workshop' }),
+      (err) => isAuthError(err)
+    );
+
+    // Non-creator (user_b) is rejected with permission-denied
+    const userBFn = httpsCallable(functionsUserB, 'createSessionConversation');
+    await assert.rejects(
+      userBFn({ sessionId: 'sess_100', sessionTitle: 'Pop Workshop' }),
+      (err) => isPermissionError(err)
+    );
+
+    // Creator (user_a) creates session chat
+    const userAFn = httpsCallable(functionsUserA, 'createSessionConversation');
+    const res = await userAFn({ sessionId: 'sess_100', sessionTitle: 'Pop Workshop' });
+    assert(res.data && res.data.conversationId);
+    const convId = res.data.conversationId;
+
+    // Verify canonical conversation in RTDB emulator
+    const convSnap = await adminDb.ref(`conversations/${convId}`).get();
+    assert.strictEqual(convSnap.val().conversationType, 'session_chat');
+    assert.strictEqual(convSnap.val().sessionId, 'sess_100');
+    assert.strictEqual(convSnap.val().participants.user_a, true);
+
+    // Verify user_a conversation index
+    const userSnap = await adminDb.ref(`userConversations/user_a/${convId}`).get();
+    assert.strictEqual(userSnap.val().conversationType, 'session_chat');
+    assert.strictEqual(userSnap.val().sessionId, 'sess_100');
+
+    // Idempotent: repeating creation returns same conversationId
+    const resRepeat = await userAFn({ sessionId: 'sess_100', sessionTitle: 'Pop Workshop' });
+    assert.strictEqual(resRepeat.data.conversationId, convId);
+  });
+
+  it('16. updateSessionApplicationStatus authorization and atomic chat provisioning', async () => {
+    // Setup session with chat
+    await adminDb.ref('Collabs/Sessions/sess_200').set({
+      CreatorId: 'user_a',
+      Title: 'Jazz Jam',
+      SessionChatId: 'conv_sess_200',
+      Status: 'active',
+    });
+    await adminDb.ref('conversations/conv_sess_200').set({
+      conversationType: 'session_chat',
+      sessionId: 'sess_200',
+      participants: { user_a: true },
+    });
+
+    // Applicant user_b applies
+    await adminDb.ref('Collabs/Applications/sess_200/user_b').set({
+      SessionId: 'sess_200',
+      CreatorId: 'user_a',
+      Status: 'pending',
+    });
+
+    // Applicant (user_b) cannot accept themselves
+    const userBFn = httpsCallable(functionsUserB, 'updateSessionApplicationStatus');
+    await assert.rejects(
+      userBFn({ sessionId: 'sess_200', applicantId: 'user_b', status: 'accepted' }),
+      (err) => isPermissionError(err)
+    );
+
+    // Unrelated user (user_c) cannot accept application
+    const userCFn = httpsCallable(functionsUserC, 'updateSessionApplicationStatus');
+    await assert.rejects(
+      userCFn({ sessionId: 'sess_200', applicantId: 'user_b', status: 'accepted' }),
+      (err) => isPermissionError(err)
+    );
+
+    // Creator (user_a) accepts application
+    const userAFn = httpsCallable(functionsUserA, 'updateSessionApplicationStatus');
+    const acceptRes = await userAFn({ sessionId: 'sess_200', applicantId: 'user_b', status: 'accepted' });
+    assert.strictEqual(acceptRes.data.status, 'accepted');
+
+    // Verify application status is accepted
+    const appSnap = await adminDb.ref('Collabs/Applications/sess_200/user_b/Status').get();
+    assert.strictEqual(appSnap.val(), 'accepted');
+
+    // Verify user_b was atomically added to canonical conversation participants
+    const convSnap = await adminDb.ref('conversations/conv_sess_200/participants/user_b').get();
+    assert.strictEqual(convSnap.val(), true);
+
+    // Verify user_b received conversation index entry
+    const userBConvSnap = await adminDb.ref('userConversations/user_b/conv_sess_200').get();
+    assert.strictEqual(userBConvSnap.val().conversationType, 'session_chat');
+    assert.strictEqual(userBConvSnap.val().sessionId, 'sess_200');
+  });
+
+  it('17. Declined applicant is not added to conversation or user index', async () => {
+    await adminDb.ref('Collabs/Sessions/sess_300').set({
+      CreatorId: 'user_a',
+      Title: 'Rock Audition',
+      SessionChatId: 'conv_sess_300',
+      Status: 'active',
+    });
+    await adminDb.ref('conversations/conv_sess_300').set({
+      conversationType: 'session_chat',
+      sessionId: 'sess_300',
+      participants: { user_a: true },
+    });
+
+    await adminDb.ref('Collabs/Applications/sess_300/user_c').set({
+      SessionId: 'sess_300',
+      CreatorId: 'user_a',
+      Status: 'pending',
+    });
+
+    const userAFn = httpsCallable(functionsUserA, 'updateSessionApplicationStatus');
+    await userAFn({ sessionId: 'sess_300', applicantId: 'user_c', status: 'declined' });
+
+    const appSnap = await adminDb.ref('Collabs/Applications/sess_300/user_c/Status').get();
+    assert.strictEqual(appSnap.val(), 'declined');
+
+    // user_c must NOT be added to participants
+    const partSnap = await adminDb.ref('conversations/conv_sess_300/participants/user_c').get();
+    assert.strictEqual(partSnap.exists(), false);
+
+    // user_c must NOT have conversation index entry
+    const userCConvSnap = await adminDb.ref('userConversations/user_c/conv_sess_300').get();
+    assert.strictEqual(userCConvSnap.exists(), false);
+  });
+
+  it('18. sendDirectMessage in session chat broadcasts to participants and blocks non-participants', async () => {
+    await adminDb.ref('Collabs/Sessions/sess_msg').set({
+      CreatorId: 'user_a',
+      Title: 'Broadcast Jam',
+      SessionChatId: 'conv_sess_msg',
+      Status: 'active',
+    });
+    await adminDb.ref('conversations/conv_sess_msg').set({
+      conversationType: 'session_chat',
+      sessionId: 'sess_msg',
+      participants: { user_a: true, user_b: true },
+    });
+    await adminDb.ref('userConversations/user_a/conv_sess_msg').set({
+      conversationType: 'session_chat',
+      sessionId: 'sess_msg',
+      lastMessageText: '',
+      hasUnread: false,
+    });
+    await adminDb.ref('userConversations/user_b/conv_sess_msg').set({
+      conversationType: 'session_chat',
+      sessionId: 'sess_msg',
+      lastMessageText: '',
+      hasUnread: false,
+    });
+
+    // Participant user_a sends message
+    const sendFnA = httpsCallable(functionsUserA, 'sendDirectMessage');
+    const msgRes = await sendFnA({ conversationId: 'conv_sess_msg', text: 'Welcome to the session!' });
+    assert(msgRes.data && msgRes.data.messageId);
+
+    // Verify inbox updates
+    const inboxSnapB = await adminDb.ref('userConversations/user_b/conv_sess_msg').get();
+    assert.strictEqual(inboxSnapB.val().lastMessageText, 'Welcome to the session!');
+    assert.strictEqual(inboxSnapB.val().hasUnread, true);
+
+    const inboxSnapA = await adminDb.ref('userConversations/user_a/conv_sess_msg').get();
+    assert.strictEqual(inboxSnapA.val().hasUnread, false);
+
+    // Non-participant user_c is blocked
+    const sendFnC = httpsCallable(functionsUserC, 'sendDirectMessage');
+    await assert.rejects(
+      sendFnC({ conversationId: 'conv_sess_msg', text: 'Intruder message' }),
+      (err) => isPermissionError(err)
+    );
+  });
+
+  it('19. updateSessionApplicationStatus rejects nonexistent session or application', async () => {
+    const userAFn = httpsCallable(functionsUserA, 'updateSessionApplicationStatus');
+    // Nonexistent session
+    await assert.rejects(
+      userAFn({ sessionId: 'sess_ghost', applicantId: 'user_b', status: 'accepted' }),
+      (err) => err && (err.code === 'functions/not-found' || err.code === 'not-found')
+    );
+
+    // Existing session but nonexistent application
+    await adminDb.ref('Collabs/Sessions/sess_real').set({
+      CreatorId: 'user_a',
+      Title: 'Real Session',
+      Status: 'active',
+    });
+    await assert.rejects(
+      userAFn({ sessionId: 'sess_real', applicantId: 'user_ghost', status: 'accepted' }),
+      (err) => err && (err.code === 'functions/not-found' || err.code === 'not-found')
+    );
   });
 });

@@ -8,6 +8,7 @@ import '../widgets/gradient_scaffold.dart';
 import '../widgets/custom_top_bar.dart';
 import '../widgets/animated_tap_detector.dart';
 import '../widgets/searchable_category_multi_select_sheet.dart';
+import '../data/genres_taxonomy.dart';
 
 class EditBandInfoScreen extends StatefulWidget {
   final Band band;
@@ -53,89 +54,7 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
     'Sunday'
   ];
 
-  static final Map<String, List<String>> _genreCategoryMap = {
-    '🎸 Rock, Pop, R&B, Hip Hop, etc': [
-      'Rock',
-      'Pop',
-      'R&B',
-      'Hip Hop',
-      'Electronic Dance Music (EDM)',
-      'Soul',
-      'Funk',
-      'Country',
-      'Reggae',
-      'Latin',
-      'Indie / Alternative',
-    ],
-    '🗣️ Choir': [
-      'Choir',
-      'Medieval',
-      'Renaissance',
-      'Baroque',
-      'Classical',
-      'Romanticism',
-      'Impressionism',
-      'Modernism',
-      'Contemporary',
-      'Barbershop',
-      'Gospel',
-      'Pop',
-    ],
-    '🎼 Classical': [
-      'Classical',
-      'Medieval',
-      'Renaissance',
-      'Baroque',
-      'Romanticism',
-      'Impressionism',
-      'Modernism',
-      'Contemporary',
-    ],
-    '🎺 Wind, Concert & Brass Band': [
-      'Wind Band',
-      'Concert Band',
-      'Brass Band',
-      'Classical',
-      'March & Ceremonial',
-      'Contemporary',
-      'Film & Popular',
-      'Crossover',
-    ],
-    '🎷 Jazz': [
-      'Jazz',
-      'New Orleans/Dixieland',
-      'Swing',
-      'Bebop',
-      'Cool',
-      'Hardbop',
-      'Free Jazz/Avantgarde',
-      'Fusion',
-      'Latin',
-      'Modern/Contemporary',
-    ],
-    '🥁 Big Band': [
-      'Big Band',
-      'Mainstream (Basie, Miller, Sinatra, etc)',
-      'New Orleans/Dixieland',
-      'Swing',
-      'Bebop',
-      'Latin',
-      'Fusion',
-      'Modern/Contemporary',
-      'Free Jazz/Avantgarde',
-    ],
-    '🌍 World Music': [
-      'African',
-      'Latin',
-      'Caribbean',
-      'Middle Eastern & Arabic',
-      'South Asian',
-      'East Asian',
-      'Celtic & European',
-      'Indigenous',
-      'Global Fusion',
-    ],
-  };
+  static final Map<String, List<String>> _genreCategoryMap = GenresTaxonomy.categoryMap;
 
   String _formatTime(TimeOfDay t) {
     return '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';

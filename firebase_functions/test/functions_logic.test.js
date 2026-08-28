@@ -617,6 +617,94 @@ async function handleOnBandMemberRemoved(bandId, memberId, db) {
   }
 }
 
+async function handleCreateSessionConversation(request, db) {
+  const uid = request.auth?.uid;
+  if (!uid) throw new Error('unauthenticated');
+  const { sessionId, sessionTitle } = request.data || {};
+  if (!sessionId) throw new Error('invalid-argument');
+
+  const sessionSnap = await db.ref(`Collabs/Sessions/${sessionId}`).get();
+  if (!sessionSnap.exists()) throw new Error('not-found');
+  const session = sessionSnap.val();
+  if (session.CreatorId !== uid && session.creatorId !== uid) throw new Error('permission-denied');
+
+  const existingChatId = session.SessionChatId || session.sessionChatId;
+  if (existingChatId) {
+    const convSnap = await db.ref(`conversations/${existingChatId}`).get();
+    if (convSnap.exists()) {
+      return { conversationId: existingChatId };
+    }
+  }
+
+  const convId = `conv_${sessionId}`;
+  const nowIso = new Date().toISOString();
+  const title = sessionTitle || session.Title || 'Session Chat';
+
+  const updates = {};
+  updates[`conversations/${convId}`] = {
+    conversationType: 'session_chat',
+    sessionId: sessionId,
+    sessionTitle: title,
+    createdBy: uid,
+    participants: { [uid]: true },
+    Participants: [uid],
+    createdTimestamp: nowIso,
+  };
+  updates[`userConversations/${uid}/${convId}`] = {
+    conversationType: 'session_chat',
+    sessionId: sessionId,
+    otherUserId: '',
+    otherUserName: title,
+    lastMessageText: '',
+    lastMessageTimestamp: nowIso,
+    hasUnread: false,
+  };
+  updates[`Collabs/Sessions/${sessionId}/SessionChatId`] = convId;
+
+  await db.ref('').update(updates);
+  return { conversationId: convId };
+}
+
+async function handleUpdateSessionApplicationStatus(request, db) {
+  const uid = request.auth?.uid;
+  if (!uid) throw new Error('unauthenticated');
+  const { sessionId, applicantId, status } = request.data || {};
+  if (!sessionId || !applicantId || (status !== 'accepted' && status !== 'declined')) {
+    throw new Error('invalid-argument');
+  }
+  if (uid === applicantId) throw new Error('permission-denied');
+
+  const sessionSnap = await db.ref(`Collabs/Sessions/${sessionId}`).get();
+  if (!sessionSnap.exists()) throw new Error('not-found');
+  const session = sessionSnap.val();
+  if (session.CreatorId !== uid && session.creatorId !== uid) throw new Error('permission-denied');
+
+  const appSnap = await db.ref(`Collabs/Applications/${sessionId}/${applicantId}`).get();
+  if (!appSnap.exists()) throw new Error('not-found');
+
+  const updates = {};
+  updates[`Collabs/Applications/${sessionId}/${applicantId}/Status`] = status;
+
+  if (status === 'accepted') {
+    const chatId = session.SessionChatId || session.sessionChatId;
+    if (chatId) {
+      updates[`conversations/${chatId}/participants/${applicantId}`] = true;
+      updates[`userConversations/${applicantId}/${chatId}`] = {
+        conversationType: 'session_chat',
+        sessionId: sessionId,
+        otherUserId: '',
+        otherUserName: session.Title || 'Session Chat',
+        lastMessageText: 'You joined the session chat',
+        lastMessageTimestamp: new Date().toISOString(),
+        hasUnread: true,
+      };
+    }
+  }
+
+  await db.ref('').update(updates);
+  return { success: true, status };
+}
+
 describe('v2 Callable Cloud Functions Logic Tests', () => {
   let db;
 
@@ -1094,6 +1182,106 @@ describe('v2 Callable Cloud Functions Logic Tests', () => {
       assert.strictEqual(conv.participantCount, 1);
       assert.strictEqual(db.data[`userConversations/m_leaving/${convId}`], null);
       assert.strictEqual(db.data[`userConversations/m_staying/${convId}`].participantCount, 1);
+    });
+
+    it('20. createSessionConversation permission check, creation and idempotency', async () => {
+      db.data['Collabs/Sessions/sess_logic_1'] = {
+        CreatorId: 'creator_1',
+        Title: 'Pop Jam',
+      };
+
+      // Unauthenticated rejected
+      await assert.rejects(
+        handleCreateSessionConversation({ auth: null, data: { sessionId: 'sess_logic_1' } }, db),
+        /unauthenticated/
+      );
+
+      // Non-creator rejected
+      await assert.rejects(
+        handleCreateSessionConversation({ auth: { uid: 'other_user' }, data: { sessionId: 'sess_logic_1' } }, db),
+        /permission-denied/
+      );
+
+      // Creator succeeds
+      const res = await handleCreateSessionConversation(
+        { auth: { uid: 'creator_1' }, data: { sessionId: 'sess_logic_1', sessionTitle: 'Pop Jam' } },
+        db
+      );
+      assert(res.conversationId);
+      const convId = res.conversationId;
+
+      assert.strictEqual(db.data[`conversations/${convId}`].conversationType, 'session_chat');
+      assert.strictEqual(db.data[`conversations/${convId}`].sessionId, 'sess_logic_1');
+      assert.strictEqual(db.data[`conversations/${convId}`].participants['creator_1'], true);
+      assert.strictEqual(db.data[`userConversations/creator_1/${convId}`].conversationType, 'session_chat');
+
+      // Idempotency: repeating returns same convId
+      const resRepeat = await handleCreateSessionConversation(
+        { auth: { uid: 'creator_1' }, data: { sessionId: 'sess_logic_1', sessionTitle: 'Pop Jam' } },
+        db
+      );
+      assert.strictEqual(resRepeat.conversationId, convId);
+    });
+
+    it('21. updateSessionApplicationStatus creator authorization and atomic chat provisioning', async () => {
+      db.data['Collabs/Sessions/sess_logic_2'] = {
+        CreatorId: 'creator_2',
+        Title: 'Jazz Session',
+        SessionChatId: 'conv_sess_logic_2',
+      };
+      db.data['conversations/conv_sess_logic_2'] = {
+        conversationType: 'session_chat',
+        sessionId: 'sess_logic_2',
+        participants: { creator_2: true },
+      };
+      db.data['Collabs/Applications/sess_logic_2/applicant_1'] = {
+        Status: 'pending',
+      };
+
+      // Applicant cannot accept themselves
+      await assert.rejects(
+        handleUpdateSessionApplicationStatus(
+          { auth: { uid: 'applicant_1' }, data: { sessionId: 'sess_logic_2', applicantId: 'applicant_1', status: 'accepted' } },
+          db
+        ),
+        /permission-denied/
+      );
+
+      // Creator accepts applicant
+      const res = await handleUpdateSessionApplicationStatus(
+        { auth: { uid: 'creator_2' }, data: { sessionId: 'sess_logic_2', applicantId: 'applicant_1', status: 'accepted' } },
+        db
+      );
+      assert.strictEqual(res.status, 'accepted');
+      assert.strictEqual(db.data['Collabs/Applications/sess_logic_2/applicant_1/Status'], 'accepted');
+      assert.strictEqual(db.data['conversations/conv_sess_logic_2/participants/applicant_1'], true);
+      assert.strictEqual(db.data['userConversations/applicant_1/conv_sess_logic_2'].conversationType, 'session_chat');
+      assert.strictEqual(db.data['userConversations/applicant_1/conv_sess_logic_2'].hasUnread, true);
+    });
+
+    it('22. updateSessionApplicationStatus declined status does not add to chat', async () => {
+      db.data['Collabs/Sessions/sess_logic_3'] = {
+        CreatorId: 'creator_3',
+        Title: 'Rock Jam',
+        SessionChatId: 'conv_sess_logic_3',
+      };
+      db.data['conversations/conv_sess_logic_3'] = {
+        conversationType: 'session_chat',
+        sessionId: 'sess_logic_3',
+        participants: { creator_3: true },
+      };
+      db.data['Collabs/Applications/sess_logic_3/applicant_declined'] = {
+        Status: 'pending',
+      };
+
+      await handleUpdateSessionApplicationStatus(
+        { auth: { uid: 'creator_3' }, data: { sessionId: 'sess_logic_3', applicantId: 'applicant_declined', status: 'declined' } },
+        db
+      );
+
+      assert.strictEqual(db.data['Collabs/Applications/sess_logic_3/applicant_declined/Status'], 'declined');
+      assert.strictEqual(db.data['conversations/conv_sess_logic_3/participants/applicant_declined'], undefined);
+      assert.strictEqual(db.data['userConversations/applicant_declined/conv_sess_logic_3'], undefined);
     });
   });
 });

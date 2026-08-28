@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:io' show File;
 import 'dart:typed_data' show Uint8List;
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -1000,6 +1000,32 @@ class FirebaseService {
             continue;
           }
 
+          if (convType == 'session_chat') {
+            final sessionTitle = item['otherUserName']?.toString() ??
+                item['title']?.toString() ??
+                'Session Chat';
+            final sessionId = item['sessionId']?.toString() ?? '';
+            final rawTs = item['lastMessageTimestamp'] ??
+                item['lastMessageTime'] ??
+                item['createdTimestamp'] ??
+                item['CreatedTimestamp'];
+            final parsedDt = parseDateTime(rawTs);
+
+            conversations.add({
+              'conversationId': convId,
+              'isGroup': false,
+              'isSessionChat': true,
+              'sessionId': sessionId,
+              'otherUserId': '',
+              'otherUserName': sessionTitle,
+              'lastMessageText': item['lastMessageText']?.toString() ?? 'No messages yet',
+              'lastMessageTimestamp': item['lastMessageTimestamp']?.toString() ?? '',
+              'timestamp': parsedDt,
+              'hasUnread': item['hasUnread'] == true,
+              'conversationType': 'session_chat',
+            });
+          }
+
           final otherUserId = item['otherUserId']?.toString();
           if (otherUserId == null || otherUserId.isEmpty) continue;
 
@@ -1869,10 +1895,11 @@ class FirebaseService {
   }
 
   // Sessions
-  Future<void> saveCollabSessionAsync(CollabSession session) async {
+  Future<String> createCollabSessionAsync(CollabSession session) async {
     final id = session.id ?? _dbRef('Collabs/Sessions').push().key;
-    if (id == null) return;
-    final updatedSession = CollabSession(
+    if (id == null) throw Exception('Failed to generate session ID');
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final newSession = CollabSession(
       id: id,
       title: session.title,
       description: session.description,
@@ -1880,18 +1907,113 @@ class FirebaseService {
       sessionCategory: session.sessionCategory,
       isDateFlexible: session.isDateFlexible,
       startDateTime: session.startDateTime,
+      endDateTime: session.endDateTime,
       location: session.location,
       genres: session.genres,
       lookingForRoles: session.lookingForRoles,
       lookingForInstruments: session.lookingForInstruments,
       creatorId: session.creatorId,
-      createdAt: session.createdAt == 0
-          ? DateTime.now().millisecondsSinceEpoch
-          : session.createdAt,
-      updatedAt: DateTime.now().millisecondsSinceEpoch,
+      createdAt: session.createdAt == 0 ? now : session.createdAt,
+      updatedAt: now,
       status: session.status,
+      requireResponse: session.requireResponse,
+      rsvpDeadline: session.rsvpDeadline,
+      reminderIntervalHours: session.reminderIntervalHours,
+      responses: session.responses,
+      parentSessionId: session.parentSessionId,
+      subSessionSequence: session.subSessionSequence,
+      sessionChatId: session.sessionChatId,
     );
-    await _dbRef('Collabs/Sessions/$id').set(updatedSession.toJson());
+    await _dbRef('Collabs/Sessions/$id').set(newSession.toJson());
+    return id;
+  }
+
+  Future<void> updateCollabSessionAsync(
+    String sessionId,
+    CollabSession updatedSession,
+  ) async {
+    final ref = _dbRef('Collabs/Sessions/$sessionId');
+
+    final Map<String, dynamic> updates = {
+      'Title': updatedSession.title,
+      'Description': updatedSession.description,
+      'SessionType': updatedSession.sessionType,
+      'SessionCategory': updatedSession.sessionCategory,
+      'IsDateFlexible': updatedSession.isDateFlexible,
+      'StartDateTime': updatedSession.startDateTime,
+      'EndDateTime': updatedSession.endDateTime,
+      'Location': updatedSession.location,
+      'Genres': updatedSession.genres,
+      'RequireResponse': updatedSession.requireResponse,
+      'RsvpDeadline': updatedSession.rsvpDeadline,
+      'ReminderIntervalHours': updatedSession.reminderIntervalHours,
+      'UpdatedAt': DateTime.now().millisecondsSinceEpoch,
+      'Status': updatedSession.status,
+    };
+
+    if (updatedSession.lookingForRoles.isNotEmpty) {
+      updates['LookingForRoles'] = updatedSession.lookingForRoles;
+    }
+    if (updatedSession.lookingForInstruments.isNotEmpty) {
+      updates['LookingForInstruments'] = updatedSession.lookingForInstruments;
+    }
+
+    await ref.update(updates);
+  }
+
+  Future<void> saveCollabSessionAsync(CollabSession session) async {
+    if (session.id == null || session.id!.isEmpty) {
+      await createCollabSessionAsync(session);
+    } else {
+      await updateCollabSessionAsync(session.id!, session);
+    }
+  }
+
+  Future<List<String>> createCollabSessionGroupAsync(
+    List<CollabSession> sessions,
+  ) async {
+    if (sessions.isEmpty) return [];
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final parentId = sessions.first.id ?? _dbRef('Collabs/Sessions').push().key!;
+    final List<String> sessionIds = [];
+    final Map<String, dynamic> multiLocationMap = {};
+
+    for (int i = 0; i < sessions.length; i++) {
+      final s = sessions[i];
+      final id = (i == 0) ? parentId : (_dbRef('Collabs/Sessions').push().key!);
+      sessionIds.add(id);
+
+      final fullSession = CollabSession(
+        id: id,
+        title: s.title,
+        description: s.description,
+        sessionType: s.sessionType,
+        sessionCategory: s.sessionCategory,
+        isDateFlexible: s.isDateFlexible,
+        startDateTime: s.startDateTime,
+        endDateTime: s.endDateTime,
+        location: s.location,
+        genres: s.genres,
+        lookingForRoles: s.lookingForRoles,
+        lookingForInstruments: s.lookingForInstruments,
+        creatorId: s.creatorId,
+        createdAt: s.createdAt == 0 ? now : s.createdAt,
+        updatedAt: now,
+        status: s.status,
+        requireResponse: s.requireResponse,
+        rsvpDeadline: s.rsvpDeadline,
+        reminderIntervalHours: s.reminderIntervalHours,
+        responses: s.responses,
+        parentSessionId: (sessions.length > 1) ? parentId : null,
+        subSessionSequence: (sessions.length > 1) ? i + 1 : null,
+        sessionChatId: s.sessionChatId,
+      );
+
+      multiLocationMap['$id'] = fullSession.toJson();
+    }
+
+    await _dbRef('Collabs/Sessions').update(multiLocationMap);
+    return sessionIds;
   }
 
   Future<void> deleteCollabSessionAsync(String sessionId) async {
@@ -1961,9 +2083,38 @@ class FirebaseService {
     String applicantId,
     String status,
   ) async {
-    await _dbRef(
-      'Collabs/Applications/$sessionId/$applicantId/Status',
-    ).set(status);
+    try {
+      await _functions.httpsCallable('updateSessionApplicationStatus').call({
+        'sessionId': sessionId,
+        'applicantId': applicantId,
+        'status': status,
+      });
+    } catch (e) {
+      debugPrint('updateSessionApplicationStatus error, using direct DB update: $e');
+      await _dbRef(
+        'Collabs/Applications/$sessionId/$applicantId/Status',
+      ).set(status);
+
+      if (status == 'accepted') {
+        final sessionSnapshot = await _dbRef('Collabs/Sessions/$sessionId').get();
+        if (sessionSnapshot.exists && sessionSnapshot.value is Map) {
+          final sessionData = sessionSnapshot.value as Map;
+          final chatId = sessionData['SessionChatId']?.toString() ??
+              sessionData['sessionChatId']?.toString();
+          if (chatId != null && chatId.isNotEmpty) {
+            try {
+              await addParticipantToSessionChatAsync(
+                sessionId: sessionId,
+                chatId: chatId,
+                participantId: applicantId,
+              );
+            } catch (err) {
+              debugPrint('Error adding accepted participant to session chat: $err');
+            }
+          }
+        }
+      }
+    }
   }
 
   Future<void> cancelCollabSessionApplicationAsync(
@@ -1974,6 +2125,101 @@ class FirebaseService {
     if (app != null && app.status == 'pending') {
       await _dbRef('Collabs/Applications/$sessionId/$applicantId').remove();
     }
+  }
+
+  // Session RSVP Responses
+  Future<void> submitSessionRsvpResponseAsync({
+    required String sessionId,
+    required String userId,
+    required String status,
+    String? comment,
+    String? uncertainReason,
+  }) async {
+    final response = EventResponse(
+      status: status,
+      timestamp: DateTime.now(),
+      comment: comment,
+      uncertainReason: uncertainReason,
+    );
+
+    // Direct write to /Collabs/Sessions/$sessionId/Responses/$userId governed by RTDB security rules
+    await _dbRef('Collabs/Sessions/$sessionId/Responses/$userId')
+        .set(response.toJson());
+  }
+
+  // Session Chat
+  Future<String> createSessionChatRoomAsync({
+    required String sessionId,
+    required String sessionTitle,
+    required String createdBy,
+  }) async {
+    try {
+      final result = await _functions.httpsCallable('createSessionConversation').call({
+        'sessionId': sessionId,
+        'sessionTitle': sessionTitle,
+      });
+      final convId = result.data['conversationId']?.toString() ?? '';
+      if (convId.isNotEmpty) {
+        return convId;
+      }
+    } catch (e) {
+      debugPrint('createSessionConversation error, fallback to direct DB: $e');
+    }
+
+    final ref = _dbRef('conversations').push();
+    final chatId = ref.key!;
+    final nowIso = DateTime.now().toIso8601String();
+
+    final convData = {
+      'conversationType': 'session_chat',
+      'sessionId': sessionId,
+      'sessionTitle': sessionTitle,
+      'createdBy': createdBy,
+      'participants': {
+        createdBy: true,
+      },
+      'Participants': [createdBy],
+      'createdTimestamp': nowIso,
+    };
+
+    await ref.set(convData);
+    await _dbRef('Collabs/Sessions/$sessionId/SessionChatId').set(chatId);
+    await _dbRef('userConversations/$createdBy/$chatId').set({
+      'conversationType': 'session_chat',
+      'sessionId': sessionId,
+      'otherUserId': '',
+      'otherUserName': sessionTitle,
+      'lastMessageText': '',
+      'lastMessageTimestamp': nowIso,
+      'hasUnread': false,
+    });
+
+    return chatId;
+  }
+
+  Future<void> addParticipantToSessionChatAsync({
+    required String sessionId,
+    required String chatId,
+    required String participantId,
+  }) async {
+    final sessionSnapshot = await _dbRef('Collabs/Sessions/$sessionId').get();
+    String sessionTitle = 'Session Chat';
+    if (sessionSnapshot.exists && sessionSnapshot.value is Map) {
+      final sData = sessionSnapshot.value as Map;
+      sessionTitle = sData['Title']?.toString() ?? sData['title']?.toString() ?? 'Session Chat';
+    }
+
+    final nowIso = DateTime.now().toIso8601String();
+    await _dbRef('conversations/$chatId/participants/$participantId').set(true);
+    await _dbRef('userConversations/$participantId/$chatId').set({
+      'conversationType': 'session_chat',
+      'sessionId': sessionId,
+      'otherUserId': '',
+      'otherUserName': sessionTitle,
+      'lastMessageText': 'You joined the session chat',
+      'lastMessageTimestamp': nowIso,
+      'hasUnread': true,
+    });
   }
 
   // ==========================================

@@ -951,10 +951,12 @@ exports.sendDirectMessage = onCall({ region: 'europe-west1' }, async (request) =
     throw new HttpsError('permission-denied', 'You are not a participant in this conversation.');
   }
 
-  if (!receiverUid) {
+  const isSessionChat = convVal.conversationType === 'session_chat';
+
+  if (!isSessionChat && !receiverUid) {
     receiverUid = request.data?.receiverUserId;
   }
-  if (!receiverUid) {
+  if (!isSessionChat && !receiverUid) {
     throw new HttpsError('failed-precondition', 'Could not determine receiver for this message.');
   }
 
@@ -966,8 +968,8 @@ exports.sendDirectMessage = onCall({ region: 'europe-west1' }, async (request) =
     id: msgId,
     senderId: senderUid,
     SenderId: senderUid,
-    receiverId: receiverUid,
-    ReceiverId: receiverUid,
+    receiverId: receiverUid || '',
+    ReceiverId: receiverUid || '',
     text: text.trim(),
     Text: text.trim(),
     timestamp: timestampIso,
@@ -979,15 +981,27 @@ exports.sendDirectMessage = onCall({ region: 'europe-west1' }, async (request) =
   await msgRef.set(messageData);
 
   const updates = {};
-  updates[`/userConversations/${senderUid}/${conversationId}/lastMessageText`] = text.trim();
-  updates[`/userConversations/${senderUid}/${conversationId}/lastMessageTimestamp`] = timestampIso;
-  updates[`/userConversations/${senderUid}/${conversationId}/otherUserId`] = receiverUid;
-  updates[`/userConversations/${senderUid}/${conversationId}/hasUnread`] = false;
+  if (isSessionChat) {
+    const participantList = (pMap && typeof pMap === 'object')
+      ? Object.keys(pMap).filter(id => isParticipantMember(pMap, id))
+      : (Array.isArray(pMap) ? pMap.map(String) : [senderUid]);
 
-  updates[`/userConversations/${receiverUid}/${conversationId}/lastMessageText`] = text.trim();
-  updates[`/userConversations/${receiverUid}/${conversationId}/lastMessageTimestamp`] = timestampIso;
-  updates[`/userConversations/${receiverUid}/${conversationId}/otherUserId`] = senderUid;
-  updates[`/userConversations/${receiverUid}/${conversationId}/hasUnread`] = true;
+    for (const pUid of participantList) {
+      updates[`/userConversations/${pUid}/${conversationId}/lastMessageText`] = text.trim();
+      updates[`/userConversations/${pUid}/${conversationId}/lastMessageTimestamp`] = timestampIso;
+      updates[`/userConversations/${pUid}/${conversationId}/hasUnread`] = (pUid !== senderUid);
+    }
+  } else {
+    updates[`/userConversations/${senderUid}/${conversationId}/lastMessageText`] = text.trim();
+    updates[`/userConversations/${senderUid}/${conversationId}/lastMessageTimestamp`] = timestampIso;
+    updates[`/userConversations/${senderUid}/${conversationId}/otherUserId`] = receiverUid;
+    updates[`/userConversations/${senderUid}/${conversationId}/hasUnread`] = false;
+
+    updates[`/userConversations/${receiverUid}/${conversationId}/lastMessageText`] = text.trim();
+    updates[`/userConversations/${receiverUid}/${conversationId}/lastMessageTimestamp`] = timestampIso;
+    updates[`/userConversations/${receiverUid}/${conversationId}/otherUserId`] = senderUid;
+    updates[`/userConversations/${receiverUid}/${conversationId}/hasUnread`] = true;
+  }
 
   await admin.database().ref().update(updates);
 
@@ -1874,4 +1888,137 @@ exports.onBandMemberRemoved = onValueWritten({
     console.error('Error in onBandMemberRemoved trigger:', error);
     return null;
   }
+});
+
+/**
+ * 10. createSessionConversation
+ * Creates or retrieves a canonical conversation for a Session.
+ * Only the authenticated creator of the Session may create its chat room.
+ */
+exports.createSessionConversation = onCall({ region: 'europe-west1' }, async (request) => {
+  const callerUid = request.auth?.uid;
+  if (!callerUid) {
+    throw new HttpsError('unauthenticated', 'User must be authenticated.');
+  }
+
+  const { sessionId, sessionTitle } = request.data || {};
+  if (!sessionId || typeof sessionId !== 'string' || sessionId.trim().length === 0) {
+    throw new HttpsError('invalid-argument', 'sessionId is required.');
+  }
+
+  const sessionSnap = await admin.database().ref(`/Collabs/Sessions/${sessionId}`).once('value');
+  if (!sessionSnap.exists()) {
+    throw new HttpsError('not-found', `Session ${sessionId} not found.`);
+  }
+
+  const sessionData = sessionSnap.val() || {};
+  const creatorId = sessionData.CreatorId || sessionData.creatorId;
+
+  if (creatorId !== callerUid) {
+    throw new HttpsError('permission-denied', 'Only the session creator can initialize the session chat.');
+  }
+
+  const existingChatId = sessionData.SessionChatId || sessionData.sessionChatId;
+  if (existingChatId) {
+    // Idempotent: return existing conversation
+    const convSnap = await admin.database().ref(`/conversations/${existingChatId}`).once('value');
+    if (convSnap.exists()) {
+      return { conversationId: existingChatId };
+    }
+  }
+
+  const conversationId = admin.database().ref('/conversations').push().key;
+  const nowIso = new Date().toISOString();
+  const title = (sessionTitle && typeof sessionTitle === 'string' && sessionTitle.trim().length > 0)
+    ? sessionTitle.trim()
+    : (sessionData.Title || sessionData.title || 'Session Chat');
+
+  const updates = {};
+  updates[`/conversations/${conversationId}`] = {
+    conversationType: 'session_chat',
+    sessionId: sessionId,
+    sessionTitle: title,
+    createdBy: callerUid,
+    participants: { [callerUid]: true },
+    Participants: [callerUid],
+    createdTimestamp: nowIso,
+  };
+  updates[`/userConversations/${callerUid}/${conversationId}`] = {
+    conversationType: 'session_chat',
+    sessionId: sessionId,
+    otherUserId: '',
+    otherUserName: title,
+    lastMessageText: '',
+    lastMessageTimestamp: nowIso,
+    hasUnread: false,
+  };
+  updates[`/Collabs/Sessions/${sessionId}/SessionChatId`] = conversationId;
+
+  await admin.database().ref().update(updates);
+  return { conversationId };
+});
+
+/**
+ * 11. updateSessionApplicationStatus
+ * Allows session creator to accept or decline applications.
+ * Automatically and securely adds accepted applicants to session chat.
+ */
+exports.updateSessionApplicationStatus = onCall({ region: 'europe-west1' }, async (request) => {
+  const callerUid = request.auth?.uid;
+  if (!callerUid) {
+    throw new HttpsError('unauthenticated', 'User must be authenticated.');
+  }
+
+  const { sessionId, applicantId, status } = request.data || {};
+  if (!sessionId || typeof sessionId !== 'string' || sessionId.trim().length === 0) {
+    throw new HttpsError('invalid-argument', 'sessionId is required.');
+  }
+  if (!applicantId || typeof applicantId !== 'string' || applicantId.trim().length === 0) {
+    throw new HttpsError('invalid-argument', 'applicantId is required.');
+  }
+  if (status !== 'accepted' && status !== 'declined') {
+    throw new HttpsError('invalid-argument', 'status must be either accepted or declined.');
+  }
+  if (callerUid === applicantId) {
+    throw new HttpsError('permission-denied', 'An applicant cannot accept or decline their own application.');
+  }
+
+  const sessionSnap = await admin.database().ref(`/Collabs/Sessions/${sessionId}`).once('value');
+  if (!sessionSnap.exists()) {
+    throw new HttpsError('not-found', `Session ${sessionId} not found.`);
+  }
+
+  const sessionData = sessionSnap.val() || {};
+  const creatorId = sessionData.CreatorId || sessionData.creatorId;
+
+  if (creatorId !== callerUid) {
+    throw new HttpsError('permission-denied', 'Only the session creator can update application status.');
+  }
+
+  const appSnap = await admin.database().ref(`/Collabs/Applications/${sessionId}/${applicantId}`).once('value');
+  if (!appSnap.exists()) {
+    throw new HttpsError('not-found', `Application for applicant ${applicantId} not found.`);
+  }
+
+  const updates = {};
+  updates[`/Collabs/Applications/${sessionId}/${applicantId}/Status`] = status;
+
+  if (status === 'accepted') {
+    const chatId = sessionData.SessionChatId || sessionData.sessionChatId;
+    if (chatId) {
+      updates[`/conversations/${chatId}/participants/${applicantId}`] = true;
+      updates[`/userConversations/${applicantId}/${chatId}`] = {
+        conversationType: 'session_chat',
+        sessionId: sessionId,
+        otherUserId: '',
+        otherUserName: sessionData.Title || sessionData.title || 'Session Chat',
+        lastMessageText: 'You joined the session chat',
+        lastMessageTimestamp: new Date().toISOString(),
+        hasUnread: true,
+      };
+    }
+  }
+
+  await admin.database().ref().update(updates);
+  return { success: true, status };
 });

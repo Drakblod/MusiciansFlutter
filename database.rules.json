@@ -76,8 +76,56 @@
       "Sessions": {
         ".read": "auth != null",
         "$sessionId": {
-          ".write": "auth != null && (!data.exists() || data.child('CreatorId').val() == auth.uid)",
-          ".validate": "newData.hasChildren(['CreatorId', 'Title', 'Description', 'SessionType', 'IsDateFlexible', 'Status']) && (!data.exists() || data.child('CreatorId').val() == newData.child('CreatorId').val())"
+          ".write": "auth != null && ( (!data.exists() && newData.child('CreatorId').val() == auth.uid) || (!newData.exists() && data.child('CreatorId').val() == auth.uid) )",
+          ".validate": "!newData.exists() || (newData.hasChildren(['CreatorId', 'Title', 'Description', 'SessionType', 'Status']) && (!data.exists() || data.child('CreatorId').val() == newData.child('CreatorId').val()))",
+          "Title": {
+            ".write": "auth != null && data.parent().child('CreatorId').val() == auth.uid"
+          },
+          "Description": {
+            ".write": "auth != null && data.parent().child('CreatorId').val() == auth.uid"
+          },
+          "SessionType": {
+            ".write": "auth != null && data.parent().child('CreatorId').val() == auth.uid"
+          },
+          "SessionCategory": {
+            ".write": "auth != null && data.parent().child('CreatorId').val() == auth.uid"
+          },
+          "IsDateFlexible": {
+            ".write": "auth != null && data.parent().child('CreatorId').val() == auth.uid"
+          },
+          "StartDateTime": {
+            ".write": "auth != null && data.parent().child('CreatorId').val() == auth.uid"
+          },
+          "EndDateTime": {
+            ".write": "auth != null && data.parent().child('CreatorId').val() == auth.uid"
+          },
+          "Location": {
+            ".write": "auth != null && data.parent().child('CreatorId').val() == auth.uid"
+          },
+          "Genres": {
+            ".write": "auth != null && data.parent().child('CreatorId').val() == auth.uid"
+          },
+          "RequireResponse": {
+            ".write": "auth != null && data.parent().child('CreatorId').val() == auth.uid"
+          },
+          "RsvpDeadline": {
+            ".write": "auth != null && data.parent().child('CreatorId').val() == auth.uid"
+          },
+          "ReminderIntervalHours": {
+            ".write": "auth != null && data.parent().child('CreatorId').val() == auth.uid"
+          },
+          "UpdatedAt": {
+            ".write": "auth != null && data.parent().child('CreatorId').val() == auth.uid"
+          },
+          "Status": {
+            ".write": "auth != null && data.parent().child('CreatorId').val() == auth.uid"
+          },
+          "Responses": {
+            "$userId": {
+              ".write": "auth != null && auth.uid == $userId && root.child('Collabs').child('Applications').child($sessionId).child(auth.uid).child('Status').val() == 'accepted'",
+              ".validate": "newData.hasChildren(['status', 'timestamp']) && (newData.child('status').val() == 'YES' || newData.child('status').val() == 'NO' || newData.child('status').val() == 'UNCERTAIN' || newData.child('status').val() == 'attending' || newData.child('status').val() == 'declined' || newData.child('status').val() == 'maybe')"
+            }
+          }
         }
       },
       "Studios": {
@@ -91,8 +139,8 @@
         "$sessionId": {
           "$applicantId": {
             ".read": "auth != null && (auth.uid == $applicantId || root.child('Collabs').child('Sessions').child($sessionId).child('CreatorId').val() == auth.uid)",
-            ".write": "auth != null && (auth.uid == $applicantId || root.child('Collabs').child('Sessions').child($sessionId).child('CreatorId').val() == auth.uid)",
-            ".validate": "newData.exists() ? ( (!data.exists() ? ( newData.child('Status').val() == 'pending' && newData.child('CreatorId').val() == root.child('Collabs').child('Sessions').child($sessionId).child('CreatorId').val() ) : ( (auth.uid == $applicantId && newData.child('Status').val() == data.child('Status').val() && newData.child('CreatorId').val() == data.child('CreatorId').val()) || (root.child('Collabs').child('Sessions').child($sessionId).child('CreatorId').val() == auth.uid && newData.child('CreatorId').val() == data.child('CreatorId').val() && (newData.child('Status').val() == 'accepted' || newData.child('Status').val() == 'declined' || newData.child('Status').val() == 'pending')) )) ) : true"
+            ".write": "auth != null && ( (!data.exists() && auth.uid == $applicantId && newData.child('Status').val() == 'pending') || (!newData.exists() && (auth.uid == $applicantId || root.child('Collabs').child('Sessions').child($sessionId).child('CreatorId').val() == auth.uid)) )",
+            ".validate": "!newData.exists() || (newData.hasChildren(['Status', 'CreatorId']) && newData.child('Status').val() == 'pending' && newData.child('CreatorId').val() == root.child('Collabs').child('Sessions').child($sessionId).child('CreatorId').val())"
           }
         }
       }

@@ -521,7 +521,7 @@ void main() {
       expect(find.byType(SearchableCategoryMultiSelectSheet), findsNothing);
     });
 
-    testWidgets('23. CreateSessionScreen displays reduced instruments when musician role is selected', (WidgetTester tester) async {
+    testWidgets('23. CreateSessionScreen does not display Looking for Roles or Instruments under SESSION-01 redesign', (WidgetTester tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() => tester.view.resetPhysicalSize());
@@ -530,20 +530,13 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
-      final musicianRoleChip = find.text('Musician');
-      expect(musicianRoleChip, findsOneWidget);
+      expect(find.text('Looking for Roles'), findsNothing);
+      expect(find.text('Looking for Instruments'), findsNothing);
 
-      await tester.tap(musicianRoleChip);
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
-
-      expect(find.text('Electric Guitar'), findsOneWidget);
-      expect(find.text('Electric Bass'), findsOneWidget);
-      expect(find.text('Drums'), findsOneWidget);
-      expect(find.text('Keyboard/Synth'), findsOneWidget);
-      expect(find.text('Piano'), findsOneWidget);
-      expect(find.text('Acoustic Guitar'), findsOneWidget);
-      expect(find.text('Vocalist'), findsAtLeastNWidgets(1));
+      // Taxonomy level verification
+      final options = SkillsTaxonomy.optionsFor(SkillTaxonomyContext.createSession);
+      expect(options, isNotEmpty);
+      expect(options.map((o) => o.displayLabel), contains('Electric Guitar'));
     });
 
     testWidgets('24. ProducerSearchScreen displays target instruments after loading', (WidgetTester tester) async {
