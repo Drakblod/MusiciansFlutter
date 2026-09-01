@@ -351,4 +351,153 @@ describe('Real RTDB Emulator Rules Tests', function () {
       await assertSucceeds(ref.remove());
     });
   });
+
+  describe('5. MULTI-SUBS-01: SubRequests & Band Event External Invitees Staffing Authorization Rules Tests', () => {
+    before(async () => {
+      await testEnvFinal.withSecurityRulesDisabled(async (context) => {
+        const db = context.database();
+        // Seed band, members, and event
+        await db.ref('Bands/band_rules_test/Members_band/user_leader').set({
+          Role: 'Leader',
+          Nickname: 'Band Leader',
+        });
+        await db.ref('Bands/band_rules_test/Members_band/user_admin').set({
+          Role: 'Admin',
+          Nickname: 'Band Admin',
+        });
+        await db.ref('Bands/band_rules_test/Members_band/user_member').set({
+          Role: 'Member',
+          Nickname: 'Band Member',
+        });
+        await db.ref('Bands/band_rules_test/Events/event_open').set({
+          title: 'Open Gig',
+          isLocked: false,
+          createdBy: 'user_leader',
+        });
+        await db.ref('Bands/band_rules_test/Events/event_locked').set({
+          title: 'Locked Gig',
+          isLocked: true,
+          createdBy: 'user_leader',
+        });
+      });
+    });
+
+    it('1. Authenticated user can publish and update SubRequests with additive fields', async () => {
+      const leader = testEnvFinal.authenticatedContext('user_leader');
+      const ref = leader.database().ref('SubRequests/sub_slot_1');
+      await assertSucceeds(
+        ref.set({
+          SubRequestId: 'sub_slot_1',
+          SlotId: 'slot_guitar_1',
+          ReplacedMemberId: 'user_member',
+          ReplacedMemberName: 'Band Member',
+          VoicePart: 'Electric Guitar',
+          Status: 'published',
+          SearchSource: 'favorites',
+          CreatorUserId: 'user_leader',
+          BandId: 'band_rules_test',
+          EventId: 'event_open',
+        })
+      );
+    });
+
+    it('2. Unauthenticated user CANNOT read or write SubRequests', async () => {
+      const unauth = testEnvFinal.unauthenticatedContext();
+      await assertFails(unauth.database().ref('SubRequests/sub_slot_1').get());
+      await assertFails(unauth.database().ref('SubRequests/sub_slot_1').set({ Status: 'hacked' }));
+    });
+
+    it('3. Band Leader can write to externalInvitees for any candidate', async () => {
+      const leader = testEnvFinal.authenticatedContext('user_leader');
+      const ref = leader.database().ref('Bands/band_rules_test/Events/event_open/externalInvitees/user_sub_cand_1');
+      await assertSucceeds(
+        ref.set({
+          userId: 'user_sub_cand_1',
+          status: 'attending',
+          instrument: 'Electric Guitar',
+          displayName: 'Candidate One',
+        })
+      );
+    });
+
+    it('4. Band Admin can write to externalInvitees for any candidate', async () => {
+      const admin = testEnvFinal.authenticatedContext('user_admin');
+      const ref = admin.database().ref('Bands/band_rules_test/Events/event_open/externalInvitees/user_sub_cand_2');
+      await assertSucceeds(
+        ref.set({
+          userId: 'user_sub_cand_2',
+          status: 'attending',
+          instrument: 'Drums',
+          displayName: 'Candidate Two',
+        })
+      );
+    });
+
+    it('5. Candidate can write their OWN response under externalInvitees when event is not locked', async () => {
+      const candidate = testEnvFinal.authenticatedContext('user_sub_cand_1');
+      const ref = candidate.database().ref('Bands/band_rules_test/Events/event_open/externalInvitees/user_sub_cand_1');
+      await assertSucceeds(
+        ref.set({
+          userId: 'user_sub_cand_1',
+          status: 'attending',
+          instrument: 'Electric Guitar',
+        })
+      );
+    });
+
+    it('6. Candidate CANNOT modify another candidate’s externalInvitees entry', async () => {
+      const candidate1 = testEnvFinal.authenticatedContext('user_sub_cand_1');
+      const ref = candidate1.database().ref('Bands/band_rules_test/Events/event_open/externalInvitees/user_sub_cand_2');
+      await assertFails(
+        ref.set({
+          userId: 'user_sub_cand_2',
+          status: 'declined',
+        })
+      );
+    });
+
+    it('7. Unrelated user from another band CANNOT write to externalInvitees', async () => {
+      const outsider = testEnvFinal.authenticatedContext('user_outsider_stranger');
+      const ref = outsider.database().ref('Bands/band_rules_test/Events/event_open/externalInvitees/user_sub_cand_1');
+      await assertFails(
+        ref.set({
+          userId: 'user_sub_cand_1',
+          status: 'hacked',
+        })
+      );
+    });
+
+    it('8. Candidate CANNOT modify externalInvitees when event is locked (isLocked: true)', async () => {
+      const candidate = testEnvFinal.authenticatedContext('user_sub_cand_1');
+      const ref = candidate.database().ref('Bands/band_rules_test/Events/event_locked/externalInvitees/user_sub_cand_1');
+      await assertFails(
+        ref.set({
+          userId: 'user_sub_cand_1',
+          status: 'attending',
+        })
+      );
+    });
+
+    it('9. Band Leader CAN still manage externalInvitees when event is locked', async () => {
+      const leader = testEnvFinal.authenticatedContext('user_leader');
+      const ref = leader.database().ref('Bands/band_rules_test/Events/event_locked/externalInvitees/user_sub_cand_1');
+      await assertSucceeds(
+        ref.set({
+          userId: 'user_sub_cand_1',
+          status: 'attending',
+          instrument: 'Electric Guitar',
+        })
+      );
+    });
+
+    it('10. User cannot write to another band member’s regular Responses node', async () => {
+      const candidate = testEnvFinal.authenticatedContext('user_sub_cand_1');
+      const ref = candidate.database().ref('Bands/band_rules_test/Events/event_open/Responses/user_member');
+      await assertFails(
+        ref.set({
+          status: 'YES',
+        })
+      );
+    });
+  });
 });

@@ -618,6 +618,131 @@ class FirebaseService {
     return requests;
   }
 
+  Future<List<SubRequest>> getSubRequestsForEventAsync(
+    String bandId,
+    String eventId,
+  ) async {
+    final all = await getAllSubRequestsAsync();
+    return all.where((r) => r.bandId == bandId && r.eventId == eventId).toList();
+  }
+
+  Future<List<String>> saveSubRequestsBatchAsync(
+    List<SubRequest> requests,
+  ) async {
+    final List<String> createdIds = [];
+    final Map<String, dynamic> multiLocationUpdates = {};
+    final now = DateTime.now().millisecondsSinceEpoch;
+
+    for (final req in requests) {
+      final key = _dbRef('SubRequests').push().key;
+      if (key == null) continue;
+      createdIds.add(key);
+
+      final updated = req.copyWith(
+        id: key,
+        subRequestId: key,
+        slotId: req.slotId ?? key,
+        creatorUserId: currentUserId,
+        userId: currentUserId,
+        createdAt: now,
+        status: 'published',
+      );
+
+      final json = updated.toJson();
+      multiLocationUpdates['SubRequests/$key'] = json;
+      if (currentUserId != null) {
+        multiLocationUpdates['users/$currentUserId/SubRequests/$key'] = json;
+      }
+
+      if (req.bandId != null && req.eventId != null) {
+        final targets = req.targetUserIds;
+        if (targets != null && targets.isNotEmpty) {
+          for (final targetId in targets) {
+            multiLocationUpdates[
+                'Bands/${req.bandId}/Events/${req.eventId}/externalInvitees/$targetId'] = {
+              'userId': targetId,
+              'status': 'pending',
+              'instrument': req.voicePart,
+              'invitedAt': now,
+              'source': 'subRequest',
+              'subRequestId': key,
+            };
+          }
+        }
+      }
+    }
+
+    if (multiLocationUpdates.isNotEmpty) {
+      await _dbRef('').update(multiLocationUpdates);
+    }
+    return createdIds;
+  }
+
+  Future<void> assignSubstituteCandidateAsync({
+    required String subRequestId,
+    required String candidateUserId,
+    required String bandId,
+    required String eventId,
+    required String roleOrInstrument,
+    String? candidateName,
+  }) async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final Map<String, dynamic> updates = {};
+
+    updates['SubRequests/$subRequestId/IsSelected'] = true;
+    updates['SubRequests/$subRequestId/Status'] = 'assigned';
+    updates['SubRequests/$subRequestId/AssignedUserId'] = candidateUserId;
+    if (candidateName != null) {
+      updates['SubRequests/$subRequestId/AssignedUserName'] = candidateName;
+    }
+    updates['SubRequests/$subRequestId/AssignedAt'] = now;
+
+    if (currentUserId != null) {
+      updates['users/$currentUserId/SubRequests/$subRequestId/IsSelected'] = true;
+      updates['users/$currentUserId/SubRequests/$subRequestId/Status'] = 'assigned';
+      updates['users/$currentUserId/SubRequests/$subRequestId/AssignedUserId'] = candidateUserId;
+      if (candidateName != null) {
+        updates['users/$currentUserId/SubRequests/$subRequestId/AssignedUserName'] = candidateName;
+      }
+      updates['users/$currentUserId/SubRequests/$subRequestId/AssignedAt'] = now;
+    }
+
+    updates['Bands/$bandId/Events/$eventId/externalInvitees/$candidateUserId/status'] = 'attending';
+    updates['Bands/$bandId/Events/$eventId/externalInvitees/$candidateUserId/instrument'] = roleOrInstrument;
+    updates['Bands/$bandId/Events/$eventId/updatedAt'] = now;
+
+    await _dbRef('').update(updates);
+  }
+
+  Future<void> revokeSubstituteAssignmentAsync({
+    required String subRequestId,
+    required String candidateUserId,
+    required String bandId,
+    required String eventId,
+  }) async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final Map<String, dynamic> updates = {};
+
+    updates['SubRequests/$subRequestId/IsSelected'] = false;
+    updates['SubRequests/$subRequestId/Status'] = 'published';
+    updates['SubRequests/$subRequestId/AssignedUserId'] = null;
+    updates['SubRequests/$subRequestId/AssignedUserName'] = null;
+    updates['SubRequests/$subRequestId/AssignedAt'] = null;
+
+    if (currentUserId != null) {
+      updates['users/$currentUserId/SubRequests/$subRequestId/IsSelected'] = false;
+      updates['users/$currentUserId/SubRequests/$subRequestId/Status'] = 'published';
+      updates['users/$currentUserId/SubRequests/$subRequestId/AssignedUserId'] = null;
+      updates['users/$currentUserId/SubRequests/$subRequestId/AssignedUserName'] = null;
+      updates['users/$currentUserId/SubRequests/$subRequestId/AssignedAt'] = null;
+    }
+
+    updates['Bands/$bandId/Events/$eventId/externalInvitees/$candidateUserId/status'] = 'pending';
+    updates['Bands/$bandId/Events/$eventId/updatedAt'] = now;
+
+    await _dbRef('').update(updates);
+  }
+
   Future<void> addResponseToSubRequestAsync(
     String subRequestId,
     String userId,
