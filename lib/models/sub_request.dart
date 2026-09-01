@@ -1,3 +1,5 @@
+import 'package:intl/intl.dart';
+
 class SubRequest {
   final String? id;
   final String? subRequestId;
@@ -34,6 +36,13 @@ class SubRequest {
   final int? assignedAt;
   final int? createdAt;
   final String? searchSource; // 'favorites' or 'search_all'
+  final String? requestGroupId;
+  final int? eventSequence;
+  final String? eventTitle;
+  final int? payAmount; // Exact integer whole currency units (e.g. 1500 for SEK 1,500)
+  final int? payAmountMinor; // Exact integer minor currency units (e.g. 150000 öre)
+  final String? currency; // ISO currency code, e.g. 'SEK'
+  final Map<String, dynamic> extraFields;
 
   SubRequest({
     this.id,
@@ -71,7 +80,15 @@ class SubRequest {
     this.assignedAt,
     this.createdAt,
     this.searchSource,
-  });
+    this.requestGroupId,
+    this.eventSequence,
+    this.eventTitle,
+    int? payAmount,
+    int? payAmountMinor,
+    this.currency,
+    this.extraFields = const {},
+  })  : payAmount = payAmount ?? (payAmountMinor != null ? payAmountMinor ~/ 100 : null),
+        payAmountMinor = payAmountMinor ?? (payAmount != null ? payAmount * 100 : null);
 
   factory SubRequest.fromJson(Map<dynamic, dynamic> json, String keyId) {
     final responsesRaw = json['Responses'];
@@ -107,6 +124,77 @@ class SubRequest {
             ? 'favorites'
             : 'search_all');
 
+    const knownKeys = {
+      'id',
+      'SubRequestId',
+      'SlotId',
+      'CreatorUserId',
+      'UserId',
+      'VoicePart',
+      'Location',
+      'StartTime',
+      'EndTime',
+      'Description',
+      'Date',
+      'Role',
+      'IsPaid',
+      'BandName',
+      'RehearsalDayOfWeek',
+      'IsSelected',
+      'ResponseCount',
+      'FormattedTimeRange',
+      'DateLabel',
+      'Level',
+      'Style',
+      'Responses',
+      'Latitude',
+      'Longitude',
+      'TargetUserIds',
+      'eventId',
+      'bandId',
+      'EventId',
+      'BandId',
+      'ReplacedMemberId',
+      'ReplacedMemberName',
+      'Status',
+      'AssignedUserId',
+      'AssignedUserName',
+      'AssignedAt',
+      'CreatedAt',
+      'SearchSource',
+      'RequestGroupId',
+      'requestGroupId',
+      'EventSequence',
+      'eventSequence',
+      'EventTitle',
+      'eventTitle',
+      'PayAmount',
+      'payAmount',
+      'Currency',
+      'currency',
+    };
+
+    final Map<String, dynamic> extra = {};
+    json.forEach((k, v) {
+      final keyStr = k.toString();
+      if (!knownKeys.contains(keyStr)) {
+        extra[keyStr] = v;
+      }
+    });
+
+    final rawPayAmountMinor = json['PayAmountMinor'] ?? json['payAmountMinor'];
+    final parsedPayAmountMinor = rawPayAmountMinor is int
+        ? rawPayAmountMinor
+        : int.tryParse(rawPayAmountMinor?.toString() ?? '');
+
+    final rawPayAmount = json['PayAmount'] ?? json['payAmount'];
+    final parsedLegacyPayAmount = rawPayAmount is int
+        ? rawPayAmount
+        : int.tryParse(rawPayAmount?.toString() ?? '');
+
+    // Canonical PayAmountMinor wins if both exist; fallback to legacy PayAmount * 100
+    final effectiveMinor = parsedPayAmountMinor ?? (parsedLegacyPayAmount != null ? parsedLegacyPayAmount * 100 : null);
+
     return SubRequest(
       id: keyId,
       subRequestId: json['SubRequestId']?.toString() ?? keyId,
@@ -135,8 +223,8 @@ class SubRequest {
       latitude: parsedLat,
       longitude: parsedLng,
       targetUserIds: parsedTargetUserIds,
-      eventId: json['eventId']?.toString(),
-      bandId: json['bandId']?.toString(),
+      eventId: json['eventId']?.toString() ?? json['EventId']?.toString(),
+      bandId: json['bandId']?.toString() ?? json['BandId']?.toString(),
       replacedMemberId: json['ReplacedMemberId']?.toString(),
       replacedMemberName: json['ReplacedMemberName']?.toString(),
       status: derivedStatus,
@@ -149,11 +237,28 @@ class SubRequest {
           ? json['CreatedAt'] as int
           : int.tryParse(json['CreatedAt']?.toString() ?? ''),
       searchSource: derivedSource,
+      requestGroupId: json['RequestGroupId']?.toString() ?? json['requestGroupId']?.toString(),
+      eventSequence: json['EventSequence'] is int
+          ? json['EventSequence'] as int
+          : int.tryParse(json['EventSequence']?.toString() ?? ''),
+      eventTitle: json['EventTitle']?.toString() ?? json['eventTitle']?.toString(),
+      payAmountMinor: effectiveMinor,
+      currency: json['Currency']?.toString() ?? json['currency']?.toString() ?? (json['IsPaid'] == true ? 'SEK' : null),
+      extraFields: extra,
     );
   }
 
+  String get formattedPayAmount {
+    if (!isPaid) return 'Unpaid';
+    if (payAmount == null || payAmount! <= 0) return 'Paid · Amount not specified';
+    final curr = currency ?? 'SEK';
+    final formatted = NumberFormat('#,##0').format(payAmount);
+    return 'Paid · $curr $formatted';
+  }
+
   Map<String, dynamic> toJson() {
-    return {
+    final map = <String, dynamic>{...extraFields};
+    map.addAll({
       'SubRequestId': subRequestId,
       'SlotId': slotId ?? subRequestId,
       'CreatorUserId': creatorUserId,
@@ -166,6 +271,8 @@ class SubRequest {
       'Date': date,
       'Role': role,
       'IsPaid': isPaid,
+      if (payAmountMinor != null) 'PayAmountMinor': payAmountMinor,
+      if (currency != null) 'Currency': currency,
       'BandName': bandName,
       'RehearsalDayOfWeek': rehearsalDayOfWeek,
       'IsSelected': isSelected,
@@ -188,7 +295,13 @@ class SubRequest {
       if (assignedAt != null) 'AssignedAt': assignedAt,
       if (createdAt != null) 'CreatedAt': createdAt,
       if (searchSource != null) 'SearchSource': searchSource,
-    };
+      if (requestGroupId != null) 'RequestGroupId': requestGroupId,
+      if (eventSequence != null) 'EventSequence': eventSequence,
+      if (eventTitle != null) 'EventTitle': eventTitle,
+      if (payAmount != null) 'PayAmount': payAmount,
+      if (currency != null) 'Currency': currency,
+    });
+    return map;
   }
 
   SubRequest copyWith({
@@ -227,6 +340,12 @@ class SubRequest {
     int? assignedAt,
     int? createdAt,
     String? searchSource,
+    String? requestGroupId,
+    int? eventSequence,
+    String? eventTitle,
+    int? payAmount,
+    String? currency,
+    Map<String, dynamic>? extraFields,
   }) {
     return SubRequest(
       id: id ?? this.id,
@@ -264,6 +383,12 @@ class SubRequest {
       assignedAt: assignedAt ?? this.assignedAt,
       createdAt: createdAt ?? this.createdAt,
       searchSource: searchSource ?? this.searchSource,
+      requestGroupId: requestGroupId ?? this.requestGroupId,
+      eventSequence: eventSequence ?? this.eventSequence,
+      eventTitle: eventTitle ?? this.eventTitle,
+      payAmount: payAmount ?? this.payAmount,
+      currency: currency ?? this.currency,
+      extraFields: extraFields ?? this.extraFields,
     );
   }
 }

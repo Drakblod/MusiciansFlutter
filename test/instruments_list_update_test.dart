@@ -22,6 +22,17 @@ class MockInstrumentFirebaseService extends FirebaseService {
       instruments: ['Guitar'],
     );
   }
+
+  @override
+  Future<List<String>> getFavoriteUserIdsAsync() async {
+    return [];
+  }
+
+  @override
+  Future<List<UserProfile>> getAllUsersAsync() async {
+    return [];
+  }
+
 }
 
 class MockAppStateForInstrumentTest extends AppState {

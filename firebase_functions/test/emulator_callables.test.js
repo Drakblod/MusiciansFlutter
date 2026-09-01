@@ -35,6 +35,14 @@ function isPermissionError(err) {
   return err && (err.code === 'functions/permission-denied' || err.code === 'permission-denied' || (err.message && err.message.includes('permission-denied')));
 }
 
+function isAlreadyExistsError(err) {
+  return err && (
+    err.code === 'functions/already-exists' ||
+    err.code === 'already-exists' ||
+    (err.message && (err.message.includes('already-exists') || err.message.includes('already assigned') || err.message.includes('already been assigned')))
+  );
+}
+
 describe('Real Cloud Functions Emulator Integration Tests (JS Client SDK + Emulators)', function () {
   this.timeout(30000);
   const adminDb = admin.database();
@@ -589,5 +597,400 @@ describe('Real Cloud Functions Emulator Integration Tests (JS Client SDK + Emula
       userAFn({ sessionId: 'sess_real', applicantId: 'user_ghost', status: 'accepted' }),
       (err) => err && (err.code === 'functions/not-found' || err.code === 'not-found')
     );
+  });
+
+  async function seedBandAndUsers() {
+    await adminDb.ref('Bands/band_tour_test').set({
+      Name: 'Touring Rockers',
+      Members_band: {
+        user_a: { Role: 'Leader' },
+        user_b: { Role: 'Member' },
+      },
+      Events: {
+        event_day1: { Title: 'Tour Day 1', Date: '2026-09-20' },
+        event_day2: { Title: 'Tour Day 2', Date: '2026-09-21' },
+      },
+    });
+
+    await adminDb.ref('users/user_b/info').set({
+      UserType: 'Electric Guitar',
+      Instruments: ['Electric Guitar'],
+      PushToken: 'token_b',
+    });
+    await adminDb.ref('users/user_c/info').set({
+      UserType: 'Keyboard',
+      Instruments: ['Keyboard'],
+      PushToken: 'token_c',
+    });
+  }
+
+  it('20. publishSubRequestGroup callable: end-to-end group publication, canonical records, audience indexing, and user feeds', async () => {
+    await seedBandAndUsers();
+
+    const publishFn = httpsCallable(functionsUserA, 'publishSubRequestGroup');
+    const res = await publishFn({
+      bandId: 'band_tour_test',
+      requestGroupId: 'group_tour_2026',
+      bandName: 'Touring Rockers',
+      slots: [
+        {
+          subRequestId: 'slot_day1_guitar',
+          slotId: 'slot_day1_guitar',
+          eventId: 'event_day1',
+          voicePart: 'Electric Guitar',
+          searchSource: 'search_all',
+          eventTitle: 'Tour Day 1',
+          eventSequence: 1,
+          date: '2026-09-20',
+          payAmountMinor: 150000,
+        },
+        {
+          subRequestId: 'slot_day2_guitar',
+          slotId: 'slot_day2_guitar',
+          eventId: 'event_day2',
+          voicePart: 'Electric Guitar',
+          searchSource: 'search_all',
+          eventTitle: 'Tour Day 2',
+          eventSequence: 2,
+          date: '2026-09-21',
+          payAmountMinor: 150000,
+        },
+      ],
+    });
+
+    assert.strictEqual(res.data.success, true);
+    assert(res.data.publicationId);
+    assert.strictEqual(res.data.requestGroupId, 'group_tour_2026');
+
+    // 1. Confirm canonical SubRequests are published
+    const req1Snap = await adminDb.ref('SubRequests/slot_day1_guitar').get();
+    assert.strictEqual(req1Snap.val().Status, 'published');
+    assert.strictEqual(req1Snap.val().RequestGroupId, 'group_tour_2026');
+
+    // 2. Confirm publication manifest exists
+    const pubSnap = await adminDb.ref(`subRequestPublications/${res.data.publicationId}`).get();
+    assert.strictEqual(pubSnap.val().requestGroupId, 'group_tour_2026');
+    assert.strictEqual(pubSnap.val().slots.length, 2);
+
+    // 3. Confirm eligible candidate (user_b) receives audience entries & userSubRequestFeed
+    const audienceB1 = await adminDb.ref('subRequestAudience/slot_day1_guitar/user_b').get();
+    assert.strictEqual(audienceB1.val(), true);
+    const feedB1 = await adminDb.ref('userSubRequestFeed/user_b/slot_day1_guitar').get();
+    assert.strictEqual(feedB1.val().voicePart, 'Electric Guitar');
+
+    // 4. Confirm ineligible candidate (user_c) receives neither audience nor feed
+    const audienceC1 = await adminDb.ref('subRequestAudience/slot_day1_guitar/user_c').get();
+    assert.strictEqual(audienceC1.exists(), false);
+    const feedC1 = await adminDb.ref('userSubRequestFeed/user_c/slot_day1_guitar').get();
+    assert.strictEqual(feedC1.exists(), false);
+
+    // 5. Confirm creator management view index is populated
+    const creatorIndex = await adminDb.ref('creatorSubRequestGroups/user_a/group_tour_2026').get();
+    assert.strictEqual(creatorIndex.val(), true);
+  });
+
+  it('21. publishSubRequestGroup idempotency: repeating same operation returns identical publicationId', async () => {
+    await seedBandAndUsers();
+    const publishFn = httpsCallable(functionsUserA, 'publishSubRequestGroup');
+    const payload = {
+      bandId: 'band_tour_test',
+      requestGroupId: 'group_tour_2026',
+      bandName: 'Touring Rockers',
+      slots: [
+        {
+          subRequestId: 'slot_day1_guitar',
+          slotId: 'slot_day1_guitar',
+          eventId: 'event_day1',
+          voicePart: 'Electric Guitar',
+          searchSource: 'search_all',
+        },
+        {
+          subRequestId: 'slot_day2_guitar',
+          slotId: 'slot_day2_guitar',
+          eventId: 'event_day2',
+          voicePart: 'Electric Guitar',
+          searchSource: 'search_all',
+        },
+      ],
+    };
+
+    const res1 = await publishFn(payload);
+    const res2 = await publishFn(payload);
+    assert.strictEqual(res1.data.publicationId, res2.data.publicationId, 'Repeated call must yield identical publicationId');
+  });
+
+  it('22. publishSubRequestGroup update: adding a genuinely new slot creates a distinct update publication', async () => {
+    await seedBandAndUsers();
+    const publishFn = httpsCallable(functionsUserA, 'publishSubRequestGroup');
+    const updateRes = await publishFn({
+      bandId: 'band_tour_test',
+      requestGroupId: 'group_tour_2026',
+      bandName: 'Touring Rockers',
+      slots: [
+        {
+          subRequestId: 'slot_day3_bass',
+          slotId: 'slot_day3_bass',
+          eventId: 'event_day1',
+          voicePart: 'Bass',
+          searchSource: 'search_all',
+        },
+      ],
+    });
+
+    assert(updateRes.data.publicationId);
+    assert.notStrictEqual(updateRes.data.publicationId, 'pub_group_tour_2026_original');
+    const pubSnap = await adminDb.ref(`subRequestPublications/${updateRes.data.publicationId}`).get();
+    assert.strictEqual(pubSnap.val().slots.length, 1);
+  });
+
+  it('23. publishSubRequestGroup rejects unauthenticated caller and non-Leader/Admin caller', async () => {
+    await seedBandAndUsers();
+    const unauthFn = httpsCallable(functionsUnauth, 'publishSubRequestGroup');
+    await assert.rejects(
+      unauthFn({ bandId: 'band_tour_test', requestGroupId: 'grp_unauth', slots: [{ slotId: 's1', eventId: 'event_day1', voicePart: 'Bass' }] }),
+      (err) => isAuthError(err)
+    );
+
+    // user_b is ordinary Member of band_tour_test, not Leader/Admin
+    const memberFn = httpsCallable(functionsUserB, 'publishSubRequestGroup');
+    await assert.rejects(
+      memberFn({ bandId: 'band_tour_test', requestGroupId: 'grp_member', slots: [{ slotId: 's2', eventId: 'event_day1', voicePart: 'Bass' }] }),
+      (err) => isPermissionError(err)
+    );
+  });
+
+  it('24. publishSubRequestGroup rejects mixed-band slots and invalid event ownership', async () => {
+    await seedBandAndUsers();
+    const publishFn = httpsCallable(functionsUserA, 'publishSubRequestGroup');
+    // Mixed band slot
+    await assert.rejects(
+      publishFn({
+        bandId: 'band_tour_test',
+        requestGroupId: 'grp_mixed',
+        slots: [
+          { slotId: 's_ok', eventId: 'event_day1', voicePart: 'Vocals', bandId: 'band_tour_test' },
+          { slotId: 's_alien', eventId: 'event_day1', voicePart: 'Vocals', bandId: 'band_other_alien' },
+        ],
+      }),
+      (err) => err && (err.code === 'functions/invalid-argument' || err.code === 'invalid-argument')
+    );
+
+    // Event not belonging to band
+    await assert.rejects(
+      publishFn({
+        bandId: 'band_tour_test',
+        requestGroupId: 'grp_fake_event',
+        slots: [
+          { slotId: 's_ev_ghost', voicePart: 'Vocals', eventId: 'event_ghost_999' },
+        ],
+      }),
+      (err) => isPermissionError(err)
+    );
+  });
+
+  it('25. publishSubRequestGroup validates Favorites against caller real Favorites and ignores fabricated targets', async () => {
+    await seedBandAndUsers();
+    // Seed user_a Favorites: user_b is starred, user_c is NOT
+    await adminDb.ref('users/user_a/Favorites').set({
+      user_b: true,
+    });
+
+    const publishFn = httpsCallable(functionsUserA, 'publishSubRequestGroup');
+    const favRes = await publishFn({
+      bandId: 'band_tour_test',
+      requestGroupId: 'group_fav_security_test',
+      bandName: 'Touring Rockers',
+      slots: [
+        {
+          subRequestId: 'slot_fav_secured',
+          slotId: 'slot_fav_secured',
+          eventId: 'event_day1',
+          voicePart: 'Vocals',
+          searchSource: 'favorites',
+          targetUserIds: ['user_b', 'user_c'], // user_c is fabricated
+        },
+      ],
+    });
+
+    assert.strictEqual(favRes.data.success, true);
+    // Real favorite (user_b) is in audience and feed
+    const audB = await adminDb.ref('subRequestAudience/slot_fav_secured/user_b').get();
+    assert.strictEqual(audB.val(), true);
+
+    // Fabricated target (user_c) is NOT in audience or feed
+    const audC = await adminDb.ref('subRequestAudience/slot_fav_secured/user_c').get();
+    assert.strictEqual(audC.exists(), false);
+  });
+
+  it('26. publishSubRequestGroup atomic consistency: all audience, feed, creator index, and manifest records are committed atomically', async () => {
+    await seedBandAndUsers();
+    const publishFn = httpsCallable(functionsUserA, 'publishSubRequestGroup');
+    const res = await publishFn({
+      bandId: 'band_tour_test',
+      requestGroupId: 'group_tour_atomic_test',
+      bandName: 'Touring Rockers',
+      slots: [
+        {
+          subRequestId: 'slot_atomic_guitar',
+          slotId: 'slot_atomic_guitar',
+          eventId: 'event_day1',
+          voicePart: 'Electric Guitar',
+          searchSource: 'search_all',
+        },
+      ],
+    });
+
+    assert.strictEqual(res.data.success, true);
+    const pubSnap = await adminDb.ref(`subRequestPublications/${res.data.publicationId}`).get();
+    const audSnap = await adminDb.ref('subRequestAudience/slot_atomic_guitar/user_b').get();
+    const feedSnap = await adminDb.ref('userSubRequestFeed/user_b/slot_atomic_guitar').get();
+    const creatorSnap = await adminDb.ref('creatorSubRequestGroups/user_a/group_tour_atomic_test').get();
+
+    assert.strictEqual(pubSnap.exists(), true);
+    assert.strictEqual(audSnap.val(), true);
+    assert.strictEqual(feedSnap.exists(), true);
+    assert.strictEqual(creatorSnap.val(), true);
+  });
+
+  it('27. Real assignSubstitute callable concurrency race: exactly one caller wins, loser receives already-exists, and retry is idempotent', async () => {
+    await seedBandAndUsers();
+    // Authorize user_b as Band Admin alongside Leader user_a
+    await adminDb.ref('Bands/band_tour_test/Members_band/user_b').set({ Role: 'Admin' });
+
+    // Seed unassigned subrequest slot
+    await adminDb.ref('SubRequests/slot_race_guitar').set({
+      SubRequestId: 'slot_race_guitar',
+      SlotId: 'slot_race_guitar',
+      CreatorUserId: 'user_a',
+      bandId: 'band_tour_test',
+      eventId: 'event_day1',
+      VoicePart: 'Electric Guitar',
+      Status: 'published',
+    });
+
+    const assignLeaderFn = httpsCallable(functionsUserA, 'assignSubstitute');
+    const assignAdminFn = httpsCallable(functionsUserB, 'assignSubstitute');
+
+    const runLeaderAssign = assignLeaderFn({
+      subRequestId: 'slot_race_guitar',
+      candidateUserId: 'user_cand_1',
+      candidateName: 'Candidate 1',
+      bandId: 'band_tour_test',
+      eventId: 'event_day1',
+      roleOrInstrument: 'Electric Guitar',
+    });
+
+    const runAdminAssign = assignAdminFn({
+      subRequestId: 'slot_race_guitar',
+      candidateUserId: 'user_cand_2',
+      candidateName: 'Candidate 2',
+      bandId: 'band_tour_test',
+      eventId: 'event_day1',
+      roleOrInstrument: 'Electric Guitar',
+    });
+
+    const results = await Promise.allSettled([runLeaderAssign, runAdminAssign]);
+    const fulfilled = results.filter(r => r.status === 'fulfilled');
+    const rejected = results.filter(r => r.status === 'rejected');
+
+    assert.strictEqual(fulfilled.length, 1, 'Exactly one concurrent assignSubstitute callable must succeed');
+    assert.strictEqual(rejected.length, 1, 'The competing callable must be rejected with conflict');
+    assert(
+      isAlreadyExistsError(rejected[0].reason),
+      `Expected already-exists or already assigned conflict error but got: ${rejected[0].reason.message}`
+    );
+
+    // Verify canonical state in RTDB
+    const winningUid = fulfilled[0].value.data.assignedUserId;
+    assert(winningUid === 'user_cand_1' || winningUid === 'user_cand_2');
+
+    const subReqSnap = await adminDb.ref('SubRequests/slot_race_guitar').get();
+    assert.strictEqual(subReqSnap.val().AssignedUserId, winningUid);
+    assert.strictEqual(subReqSnap.val().Status, 'assigned');
+    assert.strictEqual(subReqSnap.val().IsSelected, true);
+
+    const eventAssignSnap = await adminDb.ref('Bands/band_tour_test/Events/event_day1/substituteAssignments/slot_race_guitar').get();
+    assert.strictEqual(eventAssignSnap.val().assignedUserId, winningUid);
+    assert.strictEqual(eventAssignSnap.val().status, 'assigned');
+
+    // Winning caller retry is idempotent and succeeds
+    const winningFn = winningUid === 'user_cand_1' ? assignLeaderFn : assignAdminFn;
+    const retryRes = await winningFn({
+      subRequestId: 'slot_race_guitar',
+      candidateUserId: winningUid,
+      bandId: 'band_tour_test',
+      eventId: 'event_day1',
+    });
+    assert.strictEqual(retryRes.data.success, true);
+
+    // Losing caller retry still fails
+    const losingUid = winningUid === 'user_cand_1' ? 'user_cand_2' : 'user_cand_1';
+    const losingFn = winningUid === 'user_cand_1' ? assignAdminFn : assignLeaderFn;
+    await assert.rejects(
+      losingFn({
+        subRequestId: 'slot_race_guitar',
+        candidateUserId: losingUid,
+        bandId: 'band_tour_test',
+        eventId: 'event_day1',
+      }),
+      (err) => isAlreadyExistsError(err)
+    );
+  });
+
+  it('28. assignSubstitute rejects unauthorized caller without Leader/Admin/Creator role', async () => {
+    await seedBandAndUsers();
+    await adminDb.ref('SubRequests/slot_unauth_test').set({
+      SubRequestId: 'slot_unauth_test',
+      CreatorUserId: 'user_a',
+      bandId: 'band_tour_test',
+      eventId: 'event_day1',
+      Status: 'published',
+    });
+
+    const outsiderFn = httpsCallable(functionsUserC, 'assignSubstitute');
+    await assert.rejects(
+      outsiderFn({
+        subRequestId: 'slot_unauth_test',
+        candidateUserId: 'user_cand_1',
+        bandId: 'band_tour_test',
+        eventId: 'event_day1',
+      }),
+      (err) => isPermissionError(err)
+    );
+  });
+
+  it('29. revokeSubstituteAssignment clears assignment fields and resets status to published', async () => {
+    await seedBandAndUsers();
+    await adminDb.ref('SubRequests/slot_revoke_test').set({
+      SubRequestId: 'slot_revoke_test',
+      SlotId: 'slot_revoke_test',
+      CreatorUserId: 'user_a',
+      bandId: 'band_tour_test',
+      eventId: 'event_day1',
+      Status: 'assigned',
+      AssignedUserId: 'user_cand_1',
+      IsSelected: true,
+    });
+    await adminDb.ref('Bands/band_tour_test/Events/event_day1/substituteAssignments/slot_revoke_test').set({
+      assignedUserId: 'user_cand_1',
+      status: 'assigned',
+    });
+
+    const revokeFn = httpsCallable(functionsUserA, 'revokeSubstituteAssignment');
+    const revokeRes = await revokeFn({
+      subRequestId: 'slot_revoke_test',
+      candidateUserId: 'user_cand_1',
+      bandId: 'band_tour_test',
+      eventId: 'event_day1',
+    });
+
+    assert.strictEqual(revokeRes.data.success, true);
+    const subReqSnap = await adminDb.ref('SubRequests/slot_revoke_test').get();
+    assert.strictEqual(subReqSnap.val().Status, 'published');
+    assert.strictEqual(subReqSnap.val().IsSelected, false);
+    assert(!subReqSnap.val().AssignedUserId);
+
+    const eventAssignSnap = await adminDb.ref('Bands/band_tour_test/Events/event_day1/substituteAssignments/slot_revoke_test').get();
+    assert.strictEqual(eventAssignSnap.exists(), false);
   });
 });

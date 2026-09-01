@@ -2,7 +2,16 @@
   "rules": {
     "users": {
       ".read": "auth != null",
-      ".write": "auth != null"
+      "$userId": {
+        ".write": "auth != null && auth.uid == $userId",
+        "Favorites": {
+          ".read": "auth != null && auth.uid == $userId",
+          ".write": "auth != null && auth.uid == $userId",
+          "$targetUserId": {
+            ".write": "auth != null && auth.uid == $userId"
+          }
+        }
+      }
     },
     "Bands": {
       ".read": "auth != null",
@@ -25,8 +34,112 @@
       }
     },
     "SubRequests": {
-      ".read": "auth != null",
-      ".write": "auth != null"
+      ".indexOn": ["eventId", "EventId", "bandId", "BandId", "Status", "CreatorUserId", "RequestGroupId", "requestGroupId"],
+      "$subRequestId": {
+        ".read": "auth != null",
+        ".write": "auth != null && !data.exists() && !newData.child('Responses').exists() && (newData.child('bandId').exists() || newData.child('BandId').exists()) && ( (newData.child('bandId').exists() && (root.child('Bands').child(newData.child('bandId').val()).child('Members_band').child(auth.uid).child('Role').val() == 'Leader' || root.child('Bands').child(newData.child('bandId').val()).child('Members_band').child(auth.uid).child('Role').val() == 'Admin') && root.child('Bands').child(newData.child('bandId').val()).child('Events').child(newData.child('eventId').val()).exists()) || (newData.child('BandId').exists() && (root.child('Bands').child(newData.child('BandId').val()).child('Members_band').child(auth.uid).child('Role').val() == 'Leader' || root.child('Bands').child(newData.child('BandId').val()).child('Members_band').child(auth.uid).child('Role').val() == 'Admin') && root.child('Bands').child(newData.child('BandId').val()).child('Events').child(newData.child('EventId').val()).exists()) )",
+        "Status": {
+          ".write": "auth != null && newData.val() == 'cancelled'"
+        },
+        "PayAmountMinor": {
+          ".write": "auth != null"
+        },
+        "PayAmount": {
+          ".write": "auth != null"
+        },
+        "Currency": {
+          ".write": "auth != null"
+        },
+        "Description": {
+          ".write": "auth != null"
+        },
+        "AssignedUserId": {
+          ".write": false
+        },
+        "AssignedUserName": {
+          ".write": false
+        },
+        "AssignedAt": {
+          ".write": false
+        },
+        "AssignedBy": {
+          ".write": false
+        },
+        "IsSelected": {
+          ".write": false
+        },
+        "SlotId": {
+          ".write": false
+        },
+        "slotId": {
+          ".write": false
+        },
+        "RequestGroupId": {
+          ".write": false
+        },
+        "requestGroupId": {
+          ".write": false
+        },
+        "bandId": {
+          ".write": false
+        },
+        "BandId": {
+          ".write": false
+        },
+        "eventId": {
+          ".write": false
+        },
+        "EventId": {
+          ".write": false
+        },
+        "CreatorUserId": {
+          ".write": false
+        },
+        "UserId": {
+          ".write": false
+        },
+        "PublicationId": {
+          ".write": false
+        },
+        "publicationId": {
+          ".write": false
+        },
+        "NotificationMode": {
+          ".write": false
+        },
+        "notificationMode": {
+          ".write": false
+        },
+        "Responses": {
+          "$userId": {
+            ".write": "auth != null && auth.uid == $userId && data.parent().parent().child('Status').val() == 'published' && root.child('subRequestAudience').child($subRequestId).child(auth.uid).val() == true"
+          }
+        }
+      }
+    },
+    "subRequestAudience": {
+      ".read": false,
+      ".write": false
+    },
+    "userSubRequestFeed": {
+      "$userId": {
+        ".read": "auth != null && auth.uid == $userId",
+        ".write": false
+      }
+    },
+    "subRequestPublications": {
+      ".read": false,
+      ".write": false
+    },
+    "subRequestNotificationAudit": {
+      ".read": false,
+      ".write": false
+    },
+    "creatorSubRequestGroups": {
+      "$creatorId": {
+        ".read": "auth != null && auth.uid == $creatorId",
+        ".write": false
+      }
     },
     "conversations": {
       ".read": "auth != null",

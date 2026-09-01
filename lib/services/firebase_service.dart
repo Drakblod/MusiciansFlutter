@@ -572,6 +572,35 @@ class FirebaseService {
     return null;
   }
 
+  Future<List<SubRequest>> getUserSubRequestFeedAsync() async {
+    final selfId = currentUserId;
+    if (selfId == null) return [];
+
+    try {
+      final feedSnap = await _dbRef('userSubRequestFeed/$selfId').get();
+      if (feedSnap.exists && feedSnap.value is Map) {
+        final List<String> reqIds = [];
+        (feedSnap.value as Map).forEach((k, v) {
+          reqIds.add(k.toString());
+        });
+        if (reqIds.isNotEmpty) {
+          final List<SubRequest> feedRequests = [];
+          for (final id in reqIds) {
+            final reqSnap = await _dbRef('SubRequests/$id').get();
+            if (reqSnap.exists && reqSnap.value is Map) {
+              feedRequests.add(SubRequest.fromJson(reqSnap.value as Map, id));
+            }
+          }
+          return feedRequests;
+        }
+      }
+    } catch (e) {
+      print('[FirebaseService] Error loading userSubRequestFeed, falling back to canonical index: $e');
+    }
+
+    return getAllSubRequestsAsync();
+  }
+
   Future<List<SubRequest>> getAllSubRequestsAsync() async {
     final snapshot = await _dbRef('SubRequests').get();
     final List<SubRequest> requests = [];
@@ -622,20 +651,79 @@ class FirebaseService {
     String bandId,
     String eventId,
   ) async {
-    final all = await getAllSubRequestsAsync();
-    return all.where((r) => r.bandId == bandId && r.eventId == eventId).toList();
+    final List<SubRequest> requests = [];
+    final selfId = currentUserId;
+    try {
+      final snapshot = await _dbRef('SubRequests')
+          .orderByChild('eventId')
+          .equalTo(eventId)
+          .get();
+
+      if (snapshot.exists && snapshot.value is Map) {
+        (snapshot.value as Map).forEach((k, v) {
+          if (v is Map) {
+            final req = SubRequest.fromJson(v, k.toString());
+            if (req.bandId == bandId) {
+              final targets = req.targetUserIds;
+              if (targets == null || targets.isEmpty) {
+                requests.add(req);
+              } else {
+                if (selfId != null &&
+                    (targets.contains(selfId) || req.creatorUserId == selfId)) {
+                  requests.add(req);
+                }
+              }
+            }
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint("Error querying subrequests by eventId: $e");
+    }
+
+    // Fallback query for capitalized EventId if empty
+    if (requests.isEmpty) {
+      try {
+        final legacySnap = await _dbRef('SubRequests')
+            .orderByChild('EventId')
+            .equalTo(eventId)
+            .get();
+        if (legacySnap.exists && legacySnap.value is Map) {
+          (legacySnap.value as Map).forEach((k, v) {
+            if (v is Map) {
+              final req = SubRequest.fromJson(v, k.toString());
+              if ((req.bandId == bandId) && !requests.any((r) => r.id == req.id)) {
+                requests.add(req);
+              }
+            }
+          });
+        }
+      } catch (_) {}
+    }
+    return requests;
   }
 
-  Future<List<String>> saveSubRequestsBatchAsync(
-    List<SubRequest> requests,
-  ) async {
+  String _sanitizeRtdbKey(String input) {
+    return input.replaceAll(RegExp(r'[\.\#\$\[\]\/\s]'), '_');
+  }
+
+  Future<List<String>> saveSubRequestsBatchAsync(List<SubRequest> requests) async {
+    final currentUserId = _auth.currentUser?.uid;
+    final now = DateTime.now().millisecondsSinceEpoch;
     final List<String> createdIds = [];
     final Map<String, dynamic> multiLocationUpdates = {};
-    final now = DateTime.now().millisecondsSinceEpoch;
 
     for (final req in requests) {
-      final key = _dbRef('SubRequests').push().key;
-      if (key == null) continue;
+      final cleanBandId = req.bandId != null ? _sanitizeRtdbKey(req.bandId!) : (currentUserId != null ? _sanitizeRtdbKey(currentUserId) : 'band');
+      final cleanEventId = req.eventId != null ? _sanitizeRtdbKey(req.eventId!) : 'standalone';
+      final cleanSlotId = req.slotId != null ? _sanitizeRtdbKey(req.slotId!) : '${DateTime.now().millisecondsSinceEpoch}';
+
+      final key = (req.subRequestId != null &&
+              req.subRequestId!.isNotEmpty &&
+              !req.subRequestId!.startsWith('slot_'))
+          ? req.subRequestId!
+          : 'sub_${cleanBandId}_${cleanEventId}_$cleanSlotId';
+
       createdIds.add(key);
 
       final updated = req.copyWith(
@@ -644,7 +732,7 @@ class FirebaseService {
         slotId: req.slotId ?? key,
         creatorUserId: currentUserId,
         userId: currentUserId,
-        createdAt: now,
+        createdAt: req.createdAt ?? now,
         status: 'published',
       );
 
@@ -675,7 +763,35 @@ class FirebaseService {
     if (multiLocationUpdates.isNotEmpty) {
       await _dbRef('').update(multiLocationUpdates);
     }
+
     return createdIds;
+  }
+
+  Future<List<String>> publishSubRequestGroupAsync({
+    required String? bandId,
+    required String requestGroupId,
+    required List<SubRequest> requests,
+    String? bandName,
+  }) async {
+    try {
+      final callable = FirebaseFunctions.instanceFor(region: 'europe-west1')
+          .httpsCallable('publishSubRequestGroup');
+      final result = await callable.call<Map<dynamic, dynamic>>({
+        'bandId': bandId,
+        'requestGroupId': requestGroupId,
+        'bandName': bandName,
+        'slots': requests.map((r) => r.toJson()).toList(),
+      });
+      if (result.data != null && result.data['publicationId'] != null) {
+        return requests
+            .map((r) => r.subRequestId ?? r.slotId ?? r.id ?? '')
+            .where((id) => id.isNotEmpty)
+            .toList();
+      }
+    } catch (e) {
+      debugPrint('[FirebaseService] publishSubRequestGroup callable exception: $e');
+    }
+    return saveSubRequestsBatchAsync(requests);
   }
 
   Future<void> assignSubstituteCandidateAsync({
@@ -685,33 +801,126 @@ class FirebaseService {
     required String eventId,
     required String roleOrInstrument,
     String? candidateName,
+    String? slotId,
+    String? replacedMemberId,
+    String? replacedMemberName,
   }) async {
     final now = DateTime.now().millisecondsSinceEpoch;
-    final Map<String, dynamic> updates = {};
+    final actualSlotId = (slotId != null && slotId.isNotEmpty) ? slotId : subRequestId;
 
-    updates['SubRequests/$subRequestId/IsSelected'] = true;
-    updates['SubRequests/$subRequestId/Status'] = 'assigned';
-    updates['SubRequests/$subRequestId/AssignedUserId'] = candidateUserId;
-    if (candidateName != null) {
-      updates['SubRequests/$subRequestId/AssignedUserName'] = candidateName;
-    }
-    updates['SubRequests/$subRequestId/AssignedAt'] = now;
-
-    if (currentUserId != null) {
-      updates['users/$currentUserId/SubRequests/$subRequestId/IsSelected'] = true;
-      updates['users/$currentUserId/SubRequests/$subRequestId/Status'] = 'assigned';
-      updates['users/$currentUserId/SubRequests/$subRequestId/AssignedUserId'] = candidateUserId;
-      if (candidateName != null) {
-        updates['users/$currentUserId/SubRequests/$subRequestId/AssignedUserName'] = candidateName;
+    try {
+      final callable = FirebaseFunctions.instanceFor(region: 'europe-west1')
+          .httpsCallable('assignSubstitute');
+      await callable.call<Map<String, dynamic>>({
+        'subRequestId': subRequestId,
+        'candidateUserId': candidateUserId,
+        'candidateName': candidateName,
+        'bandId': bandId,
+        'eventId': eventId,
+        'roleOrInstrument': roleOrInstrument,
+        'slotId': actualSlotId,
+        'replacedMemberId': replacedMemberId,
+        'replacedMemberName': replacedMemberName,
+      });
+    } catch (e) {
+      if (e is FirebaseFunctionsException) {
+        if (e.code == 'already-exists') {
+          throw StateError('Assignment conflict: Slot $subRequestId has already been assigned to another candidate.');
+        }
+        rethrow;
       }
-      updates['users/$currentUserId/SubRequests/$subRequestId/AssignedAt'] = now;
+      // Direct RTDB fallback for local unit tests / mock environment
+      final canonicalRef = _dbRef('SubRequests/$subRequestId');
+      final txResult = await canonicalRef.runTransaction((currentData) {
+        if (currentData == null) {
+          return Transaction.abort();
+        }
+        final Map<String, dynamic> data = Map<String, dynamic>.from(currentData as Map);
+        final currentAssignedId = data['AssignedUserId']?.toString();
+        final isAlreadySelected = data['IsSelected'] == true || data['Status'] == 'assigned';
+
+        // Idempotent retry for the same candidate
+        if (isAlreadySelected && currentAssignedId == candidateUserId) {
+          return Transaction.success(data);
+        }
+
+        // Conflict if already assigned to another user or closed
+        if (isAlreadySelected &&
+            currentAssignedId != null &&
+            currentAssignedId.isNotEmpty &&
+            currentAssignedId != candidateUserId) {
+          return Transaction.abort();
+        }
+        if (data['Status'] == 'cancelled' || data['Status'] == 'closed') {
+          return Transaction.abort();
+        }
+
+        data['IsSelected'] = true;
+        data['Status'] = 'assigned';
+        data['AssignedUserId'] = candidateUserId;
+        if (candidateName != null) {
+          data['AssignedUserName'] = candidateName;
+        }
+        data['AssignedAt'] = now;
+        if (currentUserId != null) {
+          data['AssignedBy'] = currentUserId;
+        }
+        return Transaction.success(data);
+      });
+
+      if (!txResult.committed) {
+        final snap = await canonicalRef.get();
+        if (snap.exists && snap.value is Map) {
+          final val = snap.value as Map;
+          if (val['AssignedUserId'] == candidateUserId) {
+            // Idempotent pass
+          } else {
+            throw StateError('Assignment conflict: Slot $subRequestId has already been assigned to another candidate.');
+          }
+        } else {
+          throw StateError('Assignment conflict: Slot $subRequestId cannot be assigned.');
+        }
+      }
+
+      // Multi-location idempotent derived index updates
+      final Map<String, dynamic> updates = {};
+
+      if (currentUserId != null) {
+        updates['users/$currentUserId/SubRequests/$subRequestId/IsSelected'] = true;
+        updates['users/$currentUserId/SubRequests/$subRequestId/Status'] = 'assigned';
+        updates['users/$currentUserId/SubRequests/$subRequestId/AssignedUserId'] = candidateUserId;
+        if (candidateName != null) {
+          updates['users/$currentUserId/SubRequests/$subRequestId/AssignedUserName'] = candidateName;
+        }
+        updates['users/$currentUserId/SubRequests/$subRequestId/AssignedAt'] = now;
+        updates['users/$currentUserId/SubRequests/$subRequestId/AssignedBy'] = currentUserId;
+      }
+
+      updates['Bands/$bandId/Events/$eventId/substituteAssignments/$actualSlotId'] = {
+        'slotId': actualSlotId,
+        'subRequestId': subRequestId,
+        'assignedUserId': candidateUserId,
+        if (candidateName != null) 'assignedUserName': candidateName,
+        'instrument': roleOrInstrument,
+        if (replacedMemberId != null) 'replacedMemberId': replacedMemberId,
+        if (replacedMemberName != null) 'replacedMemberName': replacedMemberName,
+        'status': 'assigned',
+        'assignedAt': now,
+        if (currentUserId != null) 'assignedBy': currentUserId,
+      };
+
+      updates['Bands/$bandId/Events/$eventId/externalInvitees/$candidateUserId/userId'] = candidateUserId;
+      updates['Bands/$bandId/Events/$eventId/externalInvitees/$candidateUserId/status'] = 'attending';
+      updates['Bands/$bandId/Events/$eventId/externalInvitees/$candidateUserId/instrument'] = roleOrInstrument;
+      if (candidateName != null) {
+        updates['Bands/$bandId/Events/$eventId/externalInvitees/$candidateUserId/displayName'] = candidateName;
+      }
+      updates['Bands/$bandId/Events/$eventId/externalInvitees/$candidateUserId/source'] = 'subRequest';
+      updates['Bands/$bandId/Events/$eventId/externalInvitees/$candidateUserId/subRequestId'] = subRequestId;
+      updates['Bands/$bandId/Events/$eventId/updatedAt'] = now;
+
+      await _dbRef('').update(updates);
     }
-
-    updates['Bands/$bandId/Events/$eventId/externalInvitees/$candidateUserId/status'] = 'attending';
-    updates['Bands/$bandId/Events/$eventId/externalInvitees/$candidateUserId/instrument'] = roleOrInstrument;
-    updates['Bands/$bandId/Events/$eventId/updatedAt'] = now;
-
-    await _dbRef('').update(updates);
   }
 
   Future<void> revokeSubstituteAssignmentAsync({
@@ -719,28 +928,65 @@ class FirebaseService {
     required String candidateUserId,
     required String bandId,
     required String eventId,
+    String? slotId,
   }) async {
     final now = DateTime.now().millisecondsSinceEpoch;
-    final Map<String, dynamic> updates = {};
+    final actualSlotId = (slotId != null && slotId.isNotEmpty) ? slotId : subRequestId;
 
-    updates['SubRequests/$subRequestId/IsSelected'] = false;
-    updates['SubRequests/$subRequestId/Status'] = 'published';
-    updates['SubRequests/$subRequestId/AssignedUserId'] = null;
-    updates['SubRequests/$subRequestId/AssignedUserName'] = null;
-    updates['SubRequests/$subRequestId/AssignedAt'] = null;
+    try {
+      final callable = FirebaseFunctions.instanceFor(region: 'europe-west1')
+          .httpsCallable('revokeSubstituteAssignment');
+      await callable.call<Map<String, dynamic>>({
+        'subRequestId': subRequestId,
+        'candidateUserId': candidateUserId,
+        'bandId': bandId,
+        'eventId': eventId,
+        'slotId': actualSlotId,
+      });
+    } catch (e) {
+      final Map<String, dynamic> updates = {};
 
-    if (currentUserId != null) {
-      updates['users/$currentUserId/SubRequests/$subRequestId/IsSelected'] = false;
-      updates['users/$currentUserId/SubRequests/$subRequestId/Status'] = 'published';
-      updates['users/$currentUserId/SubRequests/$subRequestId/AssignedUserId'] = null;
-      updates['users/$currentUserId/SubRequests/$subRequestId/AssignedUserName'] = null;
-      updates['users/$currentUserId/SubRequests/$subRequestId/AssignedAt'] = null;
+      updates['SubRequests/$subRequestId/IsSelected'] = false;
+      updates['SubRequests/$subRequestId/Status'] = 'published';
+      updates['SubRequests/$subRequestId/AssignedUserId'] = null;
+      updates['SubRequests/$subRequestId/AssignedUserName'] = null;
+      updates['SubRequests/$subRequestId/AssignedAt'] = null;
+      updates['SubRequests/$subRequestId/AssignedBy'] = null;
+
+      if (currentUserId != null) {
+        updates['users/$currentUserId/SubRequests/$subRequestId/IsSelected'] = false;
+        updates['users/$currentUserId/SubRequests/$subRequestId/Status'] = 'published';
+        updates['users/$currentUserId/SubRequests/$subRequestId/AssignedUserId'] = null;
+        updates['users/$currentUserId/SubRequests/$subRequestId/AssignedUserName'] = null;
+        updates['users/$currentUserId/SubRequests/$subRequestId/AssignedAt'] = null;
+        updates['users/$currentUserId/SubRequests/$subRequestId/AssignedBy'] = null;
+      }
+
+      updates['Bands/$bandId/Events/$eventId/substituteAssignments/$actualSlotId'] = null;
+
+      // Only set externalInvitees status to pending if candidate has NO other active assignments in this event
+      try {
+        final assignSnap = await _dbRef('Bands/$bandId/Events/$eventId/substituteAssignments').get();
+        bool hasOtherAssignment = false;
+        if (assignSnap.exists && assignSnap.value is Map) {
+          (assignSnap.value as Map).forEach((k, v) {
+            if (k.toString() != actualSlotId && v is Map) {
+              if (v['assignedUserId'] == candidateUserId && v['status'] == 'assigned') {
+                hasOtherAssignment = true;
+              }
+            }
+          });
+        }
+        if (!hasOtherAssignment) {
+          updates['Bands/$bandId/Events/$eventId/externalInvitees/$candidateUserId/status'] = 'pending';
+        }
+      } catch (_) {
+        updates['Bands/$bandId/Events/$eventId/externalInvitees/$candidateUserId/status'] = 'pending';
+      }
+
+      updates['Bands/$bandId/Events/$eventId/updatedAt'] = now;
+      await _dbRef('').update(updates);
     }
-
-    updates['Bands/$bandId/Events/$eventId/externalInvitees/$candidateUserId/status'] = 'pending';
-    updates['Bands/$bandId/Events/$eventId/updatedAt'] = now;
-
-    await _dbRef('').update(updates);
   }
 
   Future<void> addResponseToSubRequestAsync(
@@ -806,6 +1052,19 @@ class FirebaseService {
     } catch (e) {
       print("[FirebaseService] Error deleting subrequest: $e");
       return false;
+    }
+  }
+
+  Future<Map<String, dynamic>> getSubRequestResponsesAsync(String subRequestId) async {
+    try {
+      final snapshot = await _dbRef('SubRequests/$subRequestId/Responses').get();
+      if (snapshot.exists && snapshot.value is Map) {
+        return Map<String, dynamic>.from(snapshot.value as Map);
+      }
+      return {};
+    } catch (e) {
+      print("[FirebaseService] Error getting responses: $e");
+      return {};
     }
   }
 
@@ -2459,5 +2718,9 @@ class FirebaseService {
         'successCount': 0,
       };
     }
+  }
+
+  Future<void> saveSubRequestPublicationAsync(String publicationId, Map<String, dynamic> manifest) async {
+    await _dbRef('subRequestPublications/$publicationId').set(manifest);
   }
 }

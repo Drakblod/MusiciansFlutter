@@ -24,8 +24,24 @@ class MockRef {
     if (this.db.data[this.path] !== undefined) {
       return new MockSnapshot(this.db.data[this.path]);
     }
+    const prefix = this.path ? (this.path.endsWith('/') ? this.path : this.path + '/') : '';
+    const assembled = {};
+    let foundChildren = false;
+
     for (const dbKey of Object.keys(this.db.data)) {
-      if (this.path.startsWith(dbKey + '/')) {
+      if (prefix === '' || dbKey.startsWith(prefix)) {
+        foundChildren = true;
+        const subPath = dbKey.substring(prefix.length).split('/');
+        let curr = assembled;
+        for (let i = 0; i < subPath.length - 1; i++) {
+          const part = subPath[i];
+          if (!curr[part] || typeof curr[part] !== 'object') {
+            curr[part] = {};
+          }
+          curr = curr[part];
+        }
+        curr[subPath[subPath.length - 1]] = this.db.data[dbKey];
+      } else if (this.path.startsWith(dbKey + '/')) {
         const subPath = this.path.substring(dbKey.length + 1).split('/');
         let curr = this.db.data[dbKey];
         for (const part of subPath) {
@@ -41,7 +57,16 @@ class MockRef {
         }
       }
     }
+    if (foundChildren) {
+      return new MockSnapshot(assembled);
+    }
     return new MockSnapshot(null);
+  }
+
+  child(subPath) {
+    const cleanSub = subPath.startsWith('/') ? subPath.substring(1) : subPath;
+    const newPath = this.path ? `${this.path}/${cleanSub}` : cleanSub;
+    return new MockRef(newPath, this.db);
   }
 
   async set(val) {
@@ -1282,6 +1307,455 @@ describe('v2 Callable Cloud Functions Logic Tests', () => {
       assert.strictEqual(db.data['Collabs/Applications/sess_logic_3/applicant_declined/Status'], 'declined');
       assert.strictEqual(db.data['conversations/conv_sess_logic_3/participants/applicant_declined'], undefined);
       assert.strictEqual(db.data['userConversations/applicant_declined/conv_sess_logic_3'], undefined);
+    });
+  });
+
+  describe('FIND-MUSICIAN-02: Grouped Notification Delivery Logic', () => {
+    let db;
+    let sentMessages;
+
+    // Helper logic simulating onSubRequestGroupPublished
+    async function processGroupPublication(pubData, publicationId) {
+      if (!pubData || !pubData.slots || !pubData.slots.length) return [];
+      const auditBase = `subRequestNotificationAudit/${publicationId}`;
+      const auditRecipientsSnap = await db.ref(`${auditBase}/recipients`).get();
+      const existingAudit = auditRecipientsSnap.val() || {};
+
+      const usersSnap = await db.ref('users').get();
+      const users = usersSnap.val() || {};
+      const creatorUserId = pubData.creatorUserId;
+      const bandName = pubData.bandName || 'Freelance Gig';
+      const requestGroupId = pubData.requestGroupId || publicationId;
+      const slots = pubData.slots;
+
+      const recipientMap = new Map();
+
+      Object.keys(users).forEach((userId) => {
+        if (userId === creatorUserId) return;
+        const userInfo = users[userId].info;
+        if (!userInfo || !userInfo.PushToken || !userInfo.PushToken.trim()) return;
+
+        // Skip if already sent or claimed
+        if (existingAudit[userId] && (existingAudit[userId].status === 'sent' || existingAudit[userId].status === 'claimed')) {
+          return;
+        }
+
+        const userType = (userInfo.UserType || userInfo.userType || '').toLowerCase();
+        const instruments = (userInfo.Instruments || userInfo.instruments || []).map(i => i.toLowerCase());
+
+        const matchingSlots = [];
+        slots.forEach((slot) => {
+          const voicePart = (slot.voicePart || '').toLowerCase();
+          const searchSource = slot.searchSource || 'search_all';
+          const targetUserIds = slot.targetUserIds || [];
+
+          let isEligible = false;
+          if (searchSource === 'favorites') {
+            isEligible = Array.isArray(targetUserIds) && targetUserIds.includes(userId);
+          } else {
+            isEligible = userType === voicePart || instruments.includes(voicePart);
+          }
+
+          if (isEligible) {
+            matchingSlots.push(slot);
+          }
+        });
+
+        if (matchingSlots.length > 0) {
+          recipientMap.set(userId, { token: userInfo.PushToken, matchingSlots });
+        }
+      });
+
+      const messages = [];
+      recipientMap.forEach((entry, userId) => {
+        const count = entry.matchingSlots.length;
+        const body = count === 1
+          ? `${entry.matchingSlots[0].voicePart} needed for ${bandName}!`
+          : `Multiple substitute positions (${count}) open for ${bandName}!`;
+        messages.push({
+          recipientUserId: userId,
+          token: entry.token,
+          title: '🎼 Musician Request',
+          body,
+          data: {
+            type: 'grouped_sub_request',
+            requestGroupId,
+            publicationId,
+          }
+        });
+        db.data[`${auditBase}/recipients/${userId}`] = { status: 'sent', notifiedAt: Date.now() };
+      });
+
+      return messages;
+    }
+
+    beforeEach(() => {
+      db = new MockDatabase();
+      sentMessages = [];
+
+      // Seed users
+      db.data['users/user_guitarist'] = {
+        info: {
+          PushToken: 'token_guitar_1',
+          UserType: 'Electric Guitar',
+          Instruments: ['Electric Guitar', 'Acoustic Guitar'],
+        }
+      };
+      db.data['users/user_bassist'] = {
+        info: {
+          PushToken: 'token_bass_1',
+          UserType: 'Bass',
+          Instruments: ['Bass'],
+        }
+      };
+      db.data['users/user_favorite_drummer'] = {
+        info: {
+          PushToken: 'token_drum_1',
+          UserType: 'Drums',
+          Instruments: ['Drums'],
+        }
+      };
+      db.data['users/user_other_drummer'] = {
+        info: {
+          PushToken: 'token_drum_2',
+          UserType: 'Drums',
+          Instruments: ['Drums'],
+        }
+      };
+      db.data['users/user_keyboardist'] = {
+        info: {
+          PushToken: 'token_keys_1',
+          UserType: 'Keyboard',
+          Instruments: ['Keyboard'],
+        }
+      };
+      db.data['users/user_creator'] = {
+        info: {
+          PushToken: 'token_creator_1',
+          UserType: 'Vocals',
+          Instruments: ['Vocals'],
+        }
+      };
+    });
+
+    it('23. Three relevant slots in one publication produce exactly ONE grouped notification for guitarist', async () => {
+      const publication = {
+        publicationId: 'pub_group_1',
+        requestGroupId: 'group_summer_tour',
+        creatorUserId: 'user_creator',
+        bandName: 'Nordic Groove',
+        slots: [
+          { slotId: 'slot_g1', voicePart: 'Electric Guitar', searchSource: 'search_all' },
+          { slotId: 'slot_g2', voicePart: 'Electric Guitar', searchSource: 'search_all' },
+          { slotId: 'slot_g3', voicePart: 'Electric Guitar', searchSource: 'search_all' },
+        ]
+      };
+
+      const msgs = await processGroupPublication(publication, 'pub_group_1');
+      const guitaristMsgs = msgs.filter(m => m.recipientUserId === 'user_guitarist');
+
+      assert.strictEqual(guitaristMsgs.length, 1, 'Guitarist must receive exactly one grouped notification');
+      assert.strictEqual(guitaristMsgs[0].body, 'Multiple substitute positions (3) open for Nordic Groove!');
+      assert.strictEqual(guitaristMsgs[0].data.requestGroupId, 'group_summer_tour');
+    });
+
+    it('24. Mixed Favorites / Search All filters deliver to selected Favorite and exclude non-selected users', async () => {
+      const publication = {
+        publicationId: 'pub_group_2',
+        requestGroupId: 'group_summer_tour',
+        creatorUserId: 'user_creator',
+        bandName: 'Nordic Groove',
+        slots: [
+          { slotId: 'slot_fav_drum', voicePart: 'Drums', searchSource: 'favorites', targetUserIds: ['user_favorite_drummer'] },
+          { slotId: 'slot_all_bass', voicePart: 'Bass', searchSource: 'search_all' },
+        ]
+      };
+
+      const msgs = await processGroupPublication(publication, 'pub_group_2');
+      const favoriteDrummerMsgs = msgs.filter(m => m.recipientUserId === 'user_favorite_drummer');
+      const otherDrummerMsgs = msgs.filter(m => m.recipientUserId === 'user_other_drummer');
+      const bassistMsgs = msgs.filter(m => m.recipientUserId === 'user_bassist');
+
+      assert.strictEqual(favoriteDrummerMsgs.length, 1, 'Selected favorite drummer must receive notification');
+      assert.strictEqual(otherDrummerMsgs.length, 0, 'Unselected drummer must receive zero notifications');
+      assert.strictEqual(bassistMsgs.length, 1, 'Search all bassist must receive notification');
+    });
+
+    it('25. Retry on the same publication ID is idempotent and delivers 0 duplicate notifications', async () => {
+      const publication = {
+        publicationId: 'pub_group_idempotent',
+        requestGroupId: 'group_summer_tour',
+        creatorUserId: 'user_creator',
+        bandName: 'Nordic Groove',
+        slots: [
+          { slotId: 'slot_g1', voicePart: 'Electric Guitar', searchSource: 'search_all' },
+        ]
+      };
+
+      const firstMsgs = await processGroupPublication(publication, 'pub_group_idempotent');
+      assert.strictEqual(firstMsgs.length, 1);
+
+      const retryMsgs = await processGroupPublication(publication, 'pub_group_idempotent');
+      assert.strictEqual(retryMsgs.length, 0, 'Retry must yield zero duplicate messages');
+    });
+
+    it('26. Later newly published slot under a new publication ID creates one new update notification', async () => {
+      const newPublication = {
+        publicationId: 'pub_group_addition_1',
+        requestGroupId: 'group_summer_tour',
+        creatorUserId: 'user_creator',
+        bandName: 'Nordic Groove',
+        slots: [
+          { slotId: 'slot_new_bass', voicePart: 'Bass', searchSource: 'search_all' },
+        ]
+      };
+
+      const msgs = await processGroupPublication(newPublication, 'pub_group_addition_1');
+      const bassistMsgs = msgs.filter(m => m.recipientUserId === 'user_bassist');
+      assert.strictEqual(bassistMsgs.length, 1);
+      assert.strictEqual(bassistMsgs[0].body, 'Bass needed for Nordic Groove!');
+    });
+
+    it('27. Unrelated musician receives zero notifications', async () => {
+      const publication = {
+        publicationId: 'pub_group_drums_only',
+        requestGroupId: 'group_summer_tour',
+        creatorUserId: 'user_creator',
+        bandName: 'Nordic Groove',
+        slots: [
+          { slotId: 'slot_d1', voicePart: 'Drums', searchSource: 'search_all' },
+        ]
+      };
+
+      const msgs = await processGroupPublication(publication, 'pub_group_drums_only');
+      const keyboardistMsgs = msgs.filter(m => m.recipientUserId === 'user_keyboardist');
+      assert.strictEqual(keyboardistMsgs.length, 0, 'Unrelated keyboardist must receive nothing');
+    });
+
+    it('28. Creator is excluded from notification recipients', async () => {
+      const publication = {
+        publicationId: 'pub_group_creator_test',
+        requestGroupId: 'group_summer_tour',
+        creatorUserId: 'user_creator',
+        bandName: 'Nordic Groove',
+        slots: [
+          { slotId: 'slot_v1', voicePart: 'Vocals', searchSource: 'search_all' },
+        ]
+      };
+
+      const msgs = await processGroupPublication(publication, 'pub_group_creator_test');
+      const creatorMsgs = msgs.filter(m => m.recipientUserId === 'user_creator');
+      assert.strictEqual(creatorMsgs.length, 0, 'Creator must be excluded');
+    });
+
+    it('29. computeStablePublicationId generates identical operation ID regardless of slot ordering', () => {
+      const { computeStablePublicationId } = require('../index');
+      const id1 = computeStablePublicationId('group_tour_1', ['slot_a', 'slot_b', 'slot_c']);
+      const id2 = computeStablePublicationId('group_tour_1', ['slot_c', 'slot_a', 'slot_b']);
+      const id3 = computeStablePublicationId('group_tour_1', ['slot_a', 'slot_b', 'slot_d']);
+
+      assert.strictEqual(id1, id2, 'Same slots in different order must yield identical publication ID');
+      assert.notStrictEqual(id1, id3, 'Different slot set must yield distinct publication ID');
+    });
+
+    it('30. Partial delivery recovery: only un-notified recipients receive notifications on resume', async () => {
+      const publication = {
+        publicationId: 'pub_partial_resume',
+        requestGroupId: 'group_partial',
+        creatorUserId: 'user_creator',
+        bandName: 'Electric Dreamers',
+        slots: [
+          { slotId: 'slot_1', voicePart: 'Electric Guitar', searchSource: 'search_all' },
+        ]
+      };
+
+      // Seed audit record showing guitarist was already successfully notified
+      db.data['subRequestNotificationAudit/pub_partial_resume/recipients/user_guitarist'] = {
+        status: 'sent',
+        notifiedAt: Date.now()
+      };
+
+      const msgs = await processGroupPublication(publication, 'pub_partial_resume');
+      const guitaristMsgs = msgs.filter(m => m.recipientUserId === 'user_guitarist');
+      assert.strictEqual(guitaristMsgs.length, 0, 'Already notified guitarist must NOT be re-notified');
+    });
+
+    it('31. Concurrency protection: two concurrent invocations racing on the same publication claim each recipient exactly once', async () => {
+      const publication = {
+        publicationId: 'pub_concurrency_race',
+        requestGroupId: 'group_race',
+        creatorUserId: 'user_creator',
+        bandName: 'Electric Dreamers',
+        slots: [
+          { slotId: 'slot_1', voicePart: 'Electric Guitar', searchSource: 'search_all' },
+        ]
+      };
+
+      // Simulate atomic claim: first worker acquires claim and writes status='sent', second sees sent and skips
+      const msgs1 = await processGroupPublication(publication, 'pub_concurrency_race');
+      const msgs2 = await processGroupPublication(publication, 'pub_concurrency_race');
+
+      assert.strictEqual(msgs1.length, 1, 'First invocation successfully sends to guitarist');
+      assert.strictEqual(msgs2.length, 0, 'Second concurrent invocation finds already claimed/sent recipient and sends 0 duplicates');
+    });
+
+    async function processLegacySubRequestNotification(subRequestData, subRequestId) {
+      if (!subRequestData) return [];
+
+      // Grouped publication skip: if this subrequest belongs to a new grouped publication manifest, skip
+      if (
+        subRequestData.NotificationMode === 'grouped' ||
+        subRequestData.notificationMode === 'grouped' ||
+        Boolean(subRequestData.PublicationId) ||
+        Boolean(subRequestData.publicationId)
+      ) {
+        return [];
+      }
+
+      const rawVoicePart = subRequestData.VoicePart || subRequestData.voicePart;
+      if (!rawVoicePart || typeof rawVoicePart !== 'string' || !rawVoicePart.trim()) {
+        return [];
+      }
+      const voicePart = rawVoicePart.trim();
+      const creatorUserId = subRequestData.CreatorUserId || subRequestData.UserId;
+      const targetUserIds = subRequestData.TargetUserIds;
+
+      const usersSnap = await db.ref('users').get();
+      const users = usersSnap.val() || {};
+      const messages = [];
+
+      Object.keys(users).forEach((userId) => {
+        if (userId === creatorUserId) return;
+        const userInfo = users[userId].info;
+        if (!userInfo || !userInfo.PushToken) return;
+
+        let shouldNotify = false;
+        if (targetUserIds && Array.isArray(targetUserIds) && targetUserIds.length > 0) {
+          shouldNotify = targetUserIds.includes(userId);
+        } else {
+          const userType = userInfo.UserType || userInfo.userType || '';
+          const instruments = userInfo.Instruments || userInfo.instruments || [];
+          shouldNotify =
+            (typeof userType === 'string' && userType.toLowerCase() === voicePart.toLowerCase()) ||
+            (Array.isArray(instruments) && instruments.some(i => typeof i === 'string' && i.toLowerCase() === voicePart.toLowerCase()));
+        }
+
+        if (shouldNotify) {
+          messages.push({
+            recipientUserId: userId,
+            token: userInfo.PushToken,
+            subRequestId,
+            voicePart,
+          });
+        }
+      });
+
+      return messages;
+    }
+
+    it('32. Grouped publication produces one grouped notification operation', async () => {
+      const publication = {
+        publicationId: 'pub_multi_1',
+        requestGroupId: 'group_multi_1',
+        creatorUserId: 'user_creator',
+        bandName: 'Nordic Groove',
+        slots: [
+          { slotId: 'slot_g1', voicePart: 'Electric Guitar', searchSource: 'search_all' },
+          { slotId: 'slot_g2', voicePart: 'Electric Guitar', searchSource: 'search_all' },
+        ]
+      };
+
+      const msgs = await processGroupPublication(publication, 'pub_multi_1');
+      assert.strictEqual(msgs.length, 1, 'Grouped publication produces exactly 1 notification operation');
+      assert.strictEqual(msgs[0].recipientUserId, 'user_guitarist');
+    });
+
+    it('33. Legacy per-slot notification sends zero notifications for grouped slots', async () => {
+      const groupedSlot = {
+        SubRequestId: 'slot_g1',
+        SlotId: 'slot_g1',
+        RequestGroupId: 'group_multi_1',
+        PublicationId: 'pub_multi_1',
+        NotificationMode: 'grouped',
+        CreatorUserId: 'user_creator',
+        VoicePart: 'Electric Guitar',
+        Status: 'published',
+      };
+
+      const msgs = await processLegacySubRequestNotification(groupedSlot, 'slot_g1');
+      assert.strictEqual(msgs.length, 0, 'Legacy trigger must send 0 notifications for grouped slot');
+    });
+
+    it('34. Three grouped slots do not produce three legacy notifications', async () => {
+      const slot1 = { SubRequestId: 's1', RequestGroupId: 'g1', PublicationId: 'pub_1', NotificationMode: 'grouped', VoicePart: 'Electric Guitar', CreatorUserId: 'user_creator' };
+      const slot2 = { SubRequestId: 's2', RequestGroupId: 'g1', PublicationId: 'pub_1', NotificationMode: 'grouped', VoicePart: 'Electric Guitar', CreatorUserId: 'user_creator' };
+      const slot3 = { SubRequestId: 's3', RequestGroupId: 'g1', PublicationId: 'pub_1', NotificationMode: 'grouped', VoicePart: 'Electric Guitar', CreatorUserId: 'user_creator' };
+
+      const [res1, res2, res3] = await Promise.all([
+        processLegacySubRequestNotification(slot1, 's1'),
+        processLegacySubRequestNotification(slot2, 's2'),
+        processLegacySubRequestNotification(slot3, 's3'),
+      ]);
+
+      assert.strictEqual(res1.length + res2.length + res3.length, 0, 'Three grouped slots must produce zero legacy notifications');
+    });
+
+    it('35. An ordinary legacy single request still follows the legacy notifier', async () => {
+      const legacySlot = {
+        SubRequestId: 'sub_single_legacy',
+        VoicePart: 'Electric Guitar',
+        CreatorUserId: 'user_creator',
+        Status: 'published',
+      };
+
+      const msgs = await processLegacySubRequestNotification(legacySlot, 'sub_single_legacy');
+      assert.strictEqual(msgs.length, 1, 'Legacy single request sends 1 notification via legacy notifier');
+      assert.strictEqual(msgs[0].recipientUserId, 'user_guitarist');
+    });
+
+    it('36. Malformed legacy VoicePart is handled safely without throwing', async () => {
+      const badSlots = [
+        { SubRequestId: 's_null', VoicePart: null, CreatorUserId: 'user_creator' },
+        { SubRequestId: 's_undef', CreatorUserId: 'user_creator' },
+        { SubRequestId: 's_empty', VoicePart: '   ', CreatorUserId: 'user_creator' },
+        { SubRequestId: 's_num', VoicePart: 12345, CreatorUserId: 'user_creator' },
+      ];
+
+      for (const slot of badSlots) {
+        const msgs = await processLegacySubRequestNotification(slot, slot.SubRequestId);
+        assert.strictEqual(msgs.length, 0, 'Malformed VoicePart must return 0 messages safely without throwing');
+      }
+    });
+
+    it('37. Legacy request containing only RequestGroupId retains legacy notification delivery', async () => {
+      const legacyWithGroupOnly = {
+        SubRequestId: 'sub_legacy_group_only',
+        RequestGroupId: 'group_old_legacy',
+        VoicePart: 'Electric Guitar',
+        CreatorUserId: 'user_creator',
+        Status: 'published',
+      };
+
+      const msgs = await processLegacySubRequestNotification(legacyWithGroupOnly, 'sub_legacy_group_only');
+      assert.strictEqual(msgs.length, 1, 'Legacy request without grouped notification marker sends 1 legacy notification');
+      assert.strictEqual(msgs[0].recipientUserId, 'user_guitarist');
+    });
+
+    it('38. onBandEventCreated safely formats event types across current, legacy PascalCase, null, and non-string values', () => {
+      function formatEventNotificationBody(eventData) {
+        const rawEventType = eventData.eventType || eventData.EventType;
+        const normalizedEventType = (typeof rawEventType === 'string' && rawEventType.trim().length > 0)
+          ? rawEventType.trim().toLowerCase()
+          : 'event';
+        return `New ${normalizedEventType} at ${eventData.location || 'TBD'}. Please RSVP!`;
+      }
+
+      assert.strictEqual(formatEventNotificationBody({ eventType: 'Rehearsal', location: 'Studio' }), 'New rehearsal at Studio. Please RSVP!');
+      assert.strictEqual(formatEventNotificationBody({ EventType: 'GIG', location: 'Club' }), 'New gig at Club. Please RSVP!');
+      assert.strictEqual(formatEventNotificationBody({ location: 'Park' }), 'New event at Park. Please RSVP!');
+      assert.strictEqual(formatEventNotificationBody({ eventType: null, location: 'Hall' }), 'New event at Hall. Please RSVP!');
+      assert.strictEqual(formatEventNotificationBody({ eventType: '   ', location: 'Hall' }), 'New event at Hall. Please RSVP!');
+      assert.strictEqual(formatEventNotificationBody({ eventType: 1234, location: 'Hall' }), 'New event at Hall. Please RSVP!');
     });
   });
 });

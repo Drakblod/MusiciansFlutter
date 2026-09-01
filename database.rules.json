@@ -2,12 +2,21 @@
   "rules": {
     "users": {
       ".read": "auth != null",
-      ".write": "auth != null"
+      "$userId": {
+        ".write": "auth != null && auth.uid == $userId",
+        "Favorites": {
+          ".read": "auth != null && auth.uid == $userId",
+          ".write": "auth != null && auth.uid == $userId",
+          "$targetUserId": {
+            ".write": "auth != null && auth.uid == $userId"
+          }
+        }
+      }
     },
     "Bands": {
       ".read": "auth != null",
-      ".write": "auth != null",
       "$bandId": {
+        ".write": "auth != null && (!data.exists() || data.child('Members_band').child(auth.uid).exists() || root.child('Bands').child($bandId).child('Members_band').child(auth.uid).exists())",
         "Events": {
           "$eventId": {
             "Responses": {
@@ -19,14 +28,124 @@
               "$userId": {
                 ".write": "(auth.uid == $userId && root.child('Bands').child($bandId).child('Events').child($eventId).child('isLocked').val() != true) || root.child('Bands').child($bandId).child('Members_band').child(auth.uid).child('Role').val() == 'Leader' || root.child('Bands').child($bandId).child('Members_band').child(auth.uid).child('Role').val() == 'Admin'"
               }
+            },
+            "substituteAssignments": {
+              ".read": "auth != null",
+              "$slotId": {
+                ".write": "auth != null && (root.child('Bands').child($bandId).child('Members_band').child(auth.uid).child('Role').val() == 'Leader' || root.child('Bands').child($bandId).child('Members_band').child(auth.uid).child('Role').val() == 'Admin' || root.child('Bands').child($bandId).child('Events').child($eventId).child('createdBy').val() == auth.uid)"
+              }
             }
           }
         }
       }
     },
     "SubRequests": {
-      ".read": "auth != null",
-      ".write": "auth != null"
+      ".indexOn": ["eventId", "EventId", "bandId", "BandId", "Status", "CreatorUserId", "RequestGroupId", "requestGroupId"],
+      "$subRequestId": {
+        ".read": "auth != null && (data.child('CreatorUserId').val() == auth.uid || data.child('UserId').val() == auth.uid || root.child('subRequestAudience').child($subRequestId).child(auth.uid).val() == true || (data.child('bandId').exists() && (root.child('Bands').child(data.child('bandId').val()).child('Members_band').child(auth.uid).child('Role').val() == 'Leader' || root.child('Bands').child(data.child('bandId').val()).child('Members_band').child(auth.uid).child('Role').val() == 'Admin')) || (data.child('BandId').exists() && (root.child('Bands').child(data.child('BandId').val()).child('Members_band').child(auth.uid).child('Role').val() == 'Leader' || root.child('Bands').child(data.child('BandId').val()).child('Members_band').child(auth.uid).child('Role').val() == 'Admin')) || data.child('Responses').child(auth.uid).exists())",
+        ".write": false,
+        "Status": {
+          ".write": "auth != null && newData.val() == 'cancelled' && (data.parent().child('CreatorUserId').val() == auth.uid || data.parent().child('UserId').val() == auth.uid || (data.parent().child('bandId').exists() && (root.child('Bands').child(data.parent().child('bandId').val()).child('Members_band').child(auth.uid).child('Role').val() == 'Leader' || root.child('Bands').child(data.parent().child('bandId').val()).child('Members_band').child(auth.uid).child('Role').val() == 'Admin')) || (data.parent().child('BandId').exists() && (root.child('Bands').child(data.parent().child('BandId').val()).child('Members_band').child(auth.uid).child('Role').val() == 'Leader' || root.child('Bands').child(data.parent().child('BandId').val()).child('Members_band').child(auth.uid).child('Role').val() == 'Admin')))"
+        },
+        "PayAmountMinor": {
+          ".write": "auth != null && (data.parent().child('CreatorUserId').val() == auth.uid || data.parent().child('UserId').val() == auth.uid || (data.parent().child('bandId').exists() && (root.child('Bands').child(data.parent().child('bandId').val()).child('Members_band').child(auth.uid).child('Role').val() == 'Leader' || root.child('Bands').child(data.parent().child('bandId').val()).child('Members_band').child(auth.uid).child('Role').val() == 'Admin')) || (data.parent().child('BandId').exists() && (root.child('Bands').child(data.parent().child('BandId').val()).child('Members_band').child(auth.uid).child('Role').val() == 'Leader' || root.child('Bands').child(data.parent().child('BandId').val()).child('Members_band').child(auth.uid).child('Role').val() == 'Admin')))"
+        },
+        "PayAmount": {
+          ".write": "auth != null && (data.parent().child('CreatorUserId').val() == auth.uid || data.parent().child('UserId').val() == auth.uid || (data.parent().child('bandId').exists() && (root.child('Bands').child(data.parent().child('bandId').val()).child('Members_band').child(auth.uid).child('Role').val() == 'Leader' || root.child('Bands').child(data.parent().child('bandId').val()).child('Members_band').child(auth.uid).child('Role').val() == 'Admin')) || (data.parent().child('BandId').exists() && (root.child('Bands').child(data.parent().child('BandId').val()).child('Members_band').child(auth.uid).child('Role').val() == 'Leader' || root.child('Bands').child(data.parent().child('BandId').val()).child('Members_band').child(auth.uid).child('Role').val() == 'Admin')))"
+        },
+        "Currency": {
+          ".write": "auth != null && (data.parent().child('CreatorUserId').val() == auth.uid || data.parent().child('UserId').val() == auth.uid || (data.parent().child('bandId').exists() && (root.child('Bands').child(data.parent().child('bandId').val()).child('Members_band').child(auth.uid).child('Role').val() == 'Leader' || root.child('Bands').child(data.parent().child('bandId').val()).child('Members_band').child(auth.uid).child('Role').val() == 'Admin')) || (data.parent().child('BandId').exists() && (root.child('Bands').child(data.parent().child('BandId').val()).child('Members_band').child(auth.uid).child('Role').val() == 'Leader' || root.child('Bands').child(data.parent().child('BandId').val()).child('Members_band').child(auth.uid).child('Role').val() == 'Admin')))"
+        },
+        "Description": {
+          ".write": "auth != null && (data.parent().child('CreatorUserId').val() == auth.uid || data.parent().child('UserId').val() == auth.uid || (data.parent().child('bandId').exists() && (root.child('Bands').child(data.parent().child('bandId').val()).child('Members_band').child(auth.uid).child('Role').val() == 'Leader' || root.child('Bands').child(data.parent().child('bandId').val()).child('Members_band').child(auth.uid).child('Role').val() == 'Admin')) || (data.parent().child('BandId').exists() && (root.child('Bands').child(data.parent().child('BandId').val()).child('Members_band').child(auth.uid).child('Role').val() == 'Leader' || root.child('Bands').child(data.parent().child('BandId').val()).child('Members_band').child(auth.uid).child('Role').val() == 'Admin')))"
+        },
+        "AssignedUserId": {
+          ".write": false
+        },
+        "AssignedUserName": {
+          ".write": false
+        },
+        "AssignedAt": {
+          ".write": false
+        },
+        "AssignedBy": {
+          ".write": false
+        },
+        "IsSelected": {
+          ".write": false
+        },
+        "SlotId": {
+          ".write": false
+        },
+        "slotId": {
+          ".write": false
+        },
+        "RequestGroupId": {
+          ".write": false
+        },
+        "requestGroupId": {
+          ".write": false
+        },
+        "bandId": {
+          ".write": false
+        },
+        "BandId": {
+          ".write": false
+        },
+        "eventId": {
+          ".write": false
+        },
+        "EventId": {
+          ".write": false
+        },
+        "CreatorUserId": {
+          ".write": false
+        },
+        "UserId": {
+          ".write": false
+        },
+        "PublicationId": {
+          ".write": false
+        },
+        "publicationId": {
+          ".write": false
+        },
+        "NotificationMode": {
+          ".write": false
+        },
+        "notificationMode": {
+          ".write": false
+        },
+        "Responses": {
+          "$userId": {
+            ".write": "auth != null && auth.uid == $userId && data.parent().parent().child('Status').val() == 'published' && root.child('subRequestAudience').child($subRequestId).child(auth.uid).val() == true"
+          }
+        }
+      }
+    },
+    "subRequestAudience": {
+      ".read": false,
+      ".write": false
+    },
+    "userSubRequestFeed": {
+      "$userId": {
+        ".read": "auth != null && auth.uid == $userId",
+        ".write": false
+      }
+    },
+    "subRequestPublications": {
+      ".read": false,
+      ".write": false
+    },
+    "subRequestNotificationAudit": {
+      ".read": false,
+      ".write": false
+    },
+    "creatorSubRequestGroups": {
+      "$creatorId": {
+        ".read": "auth != null && auth.uid == $creatorId",
+        ".write": false
+      }
     },
     "conversations": {
       "$conversationId": {

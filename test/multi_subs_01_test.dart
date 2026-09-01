@@ -35,6 +35,11 @@ class MockMultiSubsFirebaseService extends FirebaseService {
   String? get currentUserId => 'user_leader';
 
   @override
+  Future<List<UserProfile>> getAllUsersAsync() async {
+    return userProfiles.values.toList();
+  }
+
+  @override
   Future<Map<String, String>> getUserBandsAsync(String userId) async {
     return userBands;
   }
@@ -110,6 +115,16 @@ class MockMultiSubsFirebaseService extends FirebaseService {
   }
 
   @override
+  Future<Map<String, dynamic>> getSubRequestResponsesAsync(String subRequestId) async {
+    return storedSubRequests[subRequestId]?.responses ?? {};
+  }
+
+  @override
+  Future<List<SubRequest>> getUserSubRequestFeedAsync() async {
+    return storedSubRequests.values.toList();
+  }
+
+  @override
   Future<List<SubRequest>> getAllSubRequestsAsync() async {
     return storedSubRequests.values.toList();
   }
@@ -124,13 +139,36 @@ class MockMultiSubsFirebaseService extends FirebaseService {
     return id;
   }
 
+  String _sanitizeKey(String input) => input.replaceAll(RegExp(r'[\.\#\$\[\]\/\s]'), '_');
+
+  @override
+  Future<List<String>> publishSubRequestGroupAsync({
+    required String? bandId,
+    required String requestGroupId,
+    required List<SubRequest> requests,
+    String? bandName,
+  }) async {
+    return saveSubRequestsBatchAsync(requests);
+  }
+
+  @override
+  Future<void> saveSubRequestPublicationAsync(String publicationId, Map<String, dynamic> manifest) async {}
+
   @override
   Future<List<String>> saveSubRequestsBatchAsync(List<SubRequest> requests) async {
     writeOperationCount++;
     batchSaveCalls++;
     final List<String> ids = [];
     for (final req in requests) {
-      final id = 'sub_batch_${storedSubRequests.length + 1}';
+      final cleanBandId = req.bandId != null ? _sanitizeKey(req.bandId!) : 'band';
+      final cleanEventId = req.eventId != null ? _sanitizeKey(req.eventId!) : 'standalone';
+      final cleanSlotId = req.slotId != null ? _sanitizeKey(req.slotId!) : '${storedSubRequests.length + 1}';
+
+      final id = (req.subRequestId != null &&
+              req.subRequestId!.isNotEmpty &&
+              !req.subRequestId!.startsWith('slot_'))
+          ? req.subRequestId!
+          : 'sub_${cleanBandId}_${cleanEventId}_$cleanSlotId';
       ids.add(id);
       final saved = req.copyWith(id: id, subRequestId: id, status: 'published');
       storedSubRequests[id] = saved;
@@ -146,6 +184,8 @@ class MockMultiSubsFirebaseService extends FirebaseService {
     return true;
   }
 
+  Map<String, Map<String, dynamic>> substituteAssignments = {};
+
   @override
   Future<void> assignSubstituteCandidateAsync({
     required String subRequestId,
@@ -154,13 +194,17 @@ class MockMultiSubsFirebaseService extends FirebaseService {
     required String eventId,
     required String roleOrInstrument,
     String? candidateName,
+    String? slotId,
+    String? replacedMemberId,
+    String? replacedMemberName,
   }) async {
     writeOperationCount++;
     assignCalls++;
+    final actualSlotId = (slotId != null && slotId.isNotEmpty) ? slotId : subRequestId;
     if (storedSubRequests.containsKey(subRequestId)) {
       final existing = storedSubRequests[subRequestId]!;
       if (existing.isSelected && existing.assignedUserId != null && existing.assignedUserId != candidateUserId) {
-        throw StateError('Slot $subRequestId has already been assigned concurrently.');
+        throw StateError('Assignment conflict: Slot $subRequestId has already been assigned to another candidate.');
       }
       storedSubRequests[subRequestId] = existing.copyWith(
         isSelected: true,
@@ -170,6 +214,15 @@ class MockMultiSubsFirebaseService extends FirebaseService {
         assignedAt: DateTime.now().millisecondsSinceEpoch,
       );
     }
+
+    substituteAssignments.putIfAbsent(eventId, () => {})[actualSlotId] = {
+      'slotId': actualSlotId,
+      'subRequestId': subRequestId,
+      'assignedUserId': candidateUserId,
+      'status': 'assigned',
+      'instrument': roleOrInstrument,
+    };
+
     if (storedBandEvents.containsKey(eventId)) {
       final event = storedBandEvents[eventId]!;
       final updatedInvitees = Map<String, ExternalInvitee>.from(event.externalInvitees);
@@ -205,8 +258,10 @@ class MockMultiSubsFirebaseService extends FirebaseService {
     required String candidateUserId,
     required String bandId,
     required String eventId,
+    String? slotId,
   }) async {
     writeOperationCount++;
+    final actualSlotId = (slotId != null && slotId.isNotEmpty) ? slotId : subRequestId;
     if (storedSubRequests.containsKey(subRequestId)) {
       final existing = storedSubRequests[subRequestId]!;
       storedSubRequests[subRequestId] = existing.copyWith(
@@ -217,7 +272,54 @@ class MockMultiSubsFirebaseService extends FirebaseService {
         assignedAt: null,
       );
     }
+
+    if (substituteAssignments.containsKey(eventId)) {
+      substituteAssignments[eventId]!.remove(actualSlotId);
+    }
+
+    bool hasOtherAssignment = false;
+    if (substituteAssignments.containsKey(eventId)) {
+      for (final a in substituteAssignments[eventId]!.values) {
+        if (a['assignedUserId'] == candidateUserId && a['status'] == 'assigned') {
+          hasOtherAssignment = true;
+          break;
+        }
+      }
+    }
+
+    if (storedBandEvents.containsKey(eventId) && !hasOtherAssignment) {
+      final event = storedBandEvents[eventId]!;
+      final updatedInvitees = Map<String, ExternalInvitee>.from(event.externalInvitees);
+      if (updatedInvitees.containsKey(candidateUserId)) {
+        final inv = updatedInvitees[candidateUserId]!;
+        updatedInvitees[candidateUserId] = ExternalInvitee(
+          userId: inv.userId,
+          status: 'pending',
+          instrument: inv.instrument,
+          invitedAt: inv.invitedAt,
+          displayName: inv.displayName,
+        );
+      }
+      storedBandEvents[eventId] = BandEvent(
+        id: event.id,
+        title: event.title,
+        description: event.description,
+        eventType: event.eventType,
+        location: event.location,
+        startDateTime: event.startDateTime,
+        endDateTime: event.endDateTime,
+        additionalNotes: event.additionalNotes,
+        createdBy: event.createdBy,
+        createdAt: event.createdAt,
+        updatedAt: DateTime.now().millisecondsSinceEpoch,
+        requireResponse: event.requireResponse,
+        responses: event.responses,
+        externalInvitees: updatedInvitees,
+      );
+    }
   }
+
+  bool failAgreementChat = false;
 
   @override
   Future<String> createAgreementChatAsync(
@@ -227,6 +329,9 @@ class MockMultiSubsFirebaseService extends FirebaseService {
     Message message,
   ) async {
     writeOperationCount++;
+    if (failAgreementChat) {
+      throw StateError('Simulated agreement chat transient failure');
+    }
     return 'conv_${senderId}_$receiverId';
   }
 }
@@ -295,7 +400,7 @@ void main() {
       await tester.pumpWidget(createMultiSubsTestApp(mockService: mock, child: const FindSubScreen()));
       await tester.pumpAndSettle();
 
-      expect(find.text('FIND SUBSTITUTE(S)'), findsOneWidget);
+      expect(find.text('FIND MUSICIAN/VOCALIST'), findsOneWidget);
       expect(find.text('Substitute 1'), findsOneWidget);
       expect(find.text('INSTRUMENT/SKILLS'), findsOneWidget);
       expect(find.text('Electric Guitar'), findsOneWidget);
@@ -715,7 +820,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(mock.assignCalls, equals(1));
-      expect(find.text('Confirmed substitute for Electric Guitar'), findsOneWidget);
+      expect(find.text('Jimi Hendrix assigned'), findsOneWidget);
     });
 
     testWidgets('14. Assigning one slot leaves unrelated slots open', (tester) async {
@@ -881,20 +986,32 @@ void main() {
       ));
       await tester.pumpAndSettle();
 
-      expect(find.text('Confirmed substitute for Electric Guitar'), findsOneWidget);
+      expect(find.text('Jimi Hendrix assigned'), findsOneWidget);
     });
 
-    testWidgets('17. Conflicting concurrent assignment is rejected safely', (tester) async {
+    testWidgets('17. Conflicting concurrent assignment is rejected safely and retry is idempotent', (tester) async {
       final mock = MockMultiSubsFirebaseService();
       mock.storedSubRequests['sub_1'] = SubRequest(
         id: 'sub_1',
         subRequestId: 'sub_1',
         voicePart: 'Electric Guitar',
-        isSelected: true,
-        status: 'assigned',
-        assignedUserId: 'user_winner_1',
+        isSelected: false,
+        status: 'published',
       );
 
+      // 1. First writer assigns successfully
+      await mock.assignSubstituteCandidateAsync(
+        subRequestId: 'sub_1',
+        candidateUserId: 'user_winner_1',
+        bandId: 'band_123',
+        eventId: 'event_1',
+        roleOrInstrument: 'Electric Guitar',
+        candidateName: 'Winner Musician',
+      );
+      expect(mock.storedSubRequests['sub_1']!.assignedUserId, equals('user_winner_1'));
+      expect(mock.storedSubRequests['sub_1']!.status, equals('assigned'));
+
+      // 2. Competing concurrent writer is safely rejected with typed conflict error
       expect(
         () async => await mock.assignSubstituteCandidateAsync(
           subRequestId: 'sub_1',
@@ -902,33 +1019,124 @@ void main() {
           bandId: 'band_123',
           eventId: 'event_1',
           roleOrInstrument: 'Electric Guitar',
+          candidateName: 'Late Musician',
         ),
         throwsA(isA<StateError>()),
       );
+
+      // Winner data was NOT corrupted by the rejected late writer
+      expect(mock.storedSubRequests['sub_1']!.assignedUserId, equals('user_winner_1'));
+
+      // 3. Idempotent retry by the winner succeeds without creating duplicate state
+      await mock.assignSubstituteCandidateAsync(
+        subRequestId: 'sub_1',
+        candidateUserId: 'user_winner_1',
+        bandId: 'band_123',
+        eventId: 'event_1',
+        roleOrInstrument: 'Electric Guitar',
+        candidateName: 'Winner Musician',
+      );
+      expect(mock.storedSubRequests['sub_1']!.assignedUserId, equals('user_winner_1'));
     });
 
-    testWidgets('18. Unauthorized candidate write rejection and participant boundaries', (tester) async {
-      final req = SubRequest(
-        id: 'sub_sec_1',
-        subRequestId: 'sub_sec_1',
-        creatorUserId: 'user_leader',
-        userId: 'user_leader',
+    testWidgets('18. Per-slot assignment isolation: candidate assigned to multiple slots preserves status until all are revoked', (tester) async {
+      final mock = MockMultiSubsFirebaseService();
+      mock.storedBandEvents['event_1'] = BandEvent(
+        id: 'event_1',
+        title: 'Festival',
+        description: '',
+        eventType: 'Festival',
+        location: 'Stockholm',
+        startDateTime: DateTime.now().toIso8601String(),
+        endDateTime: DateTime.now().add(const Duration(hours: 3)).toIso8601String(),
+        additionalNotes: '',
+        createdBy: 'user_leader',
+        createdAt: 100,
+        updatedAt: 100,
+        requireResponse: true,
+      );
+
+      mock.storedSubRequests['sub_guitar'] = SubRequest(
+        id: 'sub_guitar',
+        subRequestId: 'sub_guitar',
+        slotId: 'slot_guitar',
+        eventId: 'event_1',
+        bandId: 'band_123',
+        voicePart: 'Electric Guitar',
+        status: 'published',
+      );
+      mock.storedSubRequests['sub_bass'] = SubRequest(
+        id: 'sub_bass',
+        subRequestId: 'sub_bass',
+        slotId: 'slot_bass',
+        eventId: 'event_1',
+        bandId: 'band_123',
         voicePart: 'Bass',
         status: 'published',
       );
 
-      expect(req.creatorUserId, equals('user_leader'));
-      expect(req.userId, equals('user_leader'));
+      // Assign the SAME versatile musician (user_versatile) to both Guitar and Bass slots
+      await mock.assignSubstituteCandidateAsync(
+        subRequestId: 'sub_guitar',
+        candidateUserId: 'user_versatile',
+        bandId: 'band_123',
+        eventId: 'event_1',
+        roleOrInstrument: 'Electric Guitar',
+        candidateName: 'Versatile Player',
+        slotId: 'slot_guitar',
+      );
+
+      await mock.assignSubstituteCandidateAsync(
+        subRequestId: 'sub_bass',
+        candidateUserId: 'user_versatile',
+        bandId: 'band_123',
+        eventId: 'event_1',
+        roleOrInstrument: 'Bass',
+        candidateName: 'Versatile Player',
+        slotId: 'slot_bass',
+      );
+
+      // Both slots exist in substituteAssignments
+      expect(mock.substituteAssignments['event_1']!.length, equals(2));
+      expect(mock.storedBandEvents['event_1']!.externalInvitees['user_versatile']!.status, equals('attending'));
+
+      // Revoking slot 1 (guitar) keeps user_versatile attending because slot 2 (bass) is still assigned!
+      await mock.revokeSubstituteAssignmentAsync(
+        subRequestId: 'sub_guitar',
+        candidateUserId: 'user_versatile',
+        bandId: 'band_123',
+        eventId: 'event_1',
+        slotId: 'slot_guitar',
+      );
+      expect(mock.storedSubRequests['sub_guitar']!.status, equals('published'));
+      expect(mock.storedSubRequests['sub_bass']!.status, equals('assigned'));
+      expect(mock.storedBandEvents['event_1']!.externalInvitees['user_versatile']!.status, equals('attending'));
+
+      // Only revoking the remaining slot transitions user_versatile to pending
+      await mock.revokeSubstituteAssignmentAsync(
+        subRequestId: 'sub_bass',
+        candidateUserId: 'user_versatile',
+        bandId: 'band_123',
+        eventId: 'event_1',
+        slotId: 'slot_bass',
+      );
+      expect(mock.storedBandEvents['event_1']!.externalInvitees['user_versatile']!.status, equals('pending'));
     });
 
-    testWidgets('19. Duplicate callable retry does not duplicate requests or notifications', (tester) async {
+    testWidgets('19. Duplicate callable/batch retry does not duplicate requests or notifications', (tester) async {
       final mock = MockMultiSubsFirebaseService();
-      final draft1 = SubRequest(voicePart: 'Drums', slotId: 'slot_1', status: 'draft');
-      final draft2 = SubRequest(voicePart: 'Bass', slotId: 'slot_2', status: 'draft');
+      final draft1 = SubRequest(voicePart: 'Drums', slotId: 'slot_drums', eventId: 'event_1', status: 'draft');
+      final draft2 = SubRequest(voicePart: 'Bass', slotId: 'slot_bass', eventId: 'event_1', status: 'draft');
 
+      // First batch publish invocation
       final idsFirst = await mock.saveSubRequestsBatchAsync([draft1, draft2]);
       expect(idsFirst.length, equals(2));
       expect(mock.storedSubRequests.length, equals(2));
+
+      // Second invocation (retry of the exact same batch)
+      final idsSecond = await mock.saveSubRequestsBatchAsync([draft1, draft2]);
+      expect(idsSecond, equals(idsFirst)); // Stable idempotent IDs
+      expect(mock.storedSubRequests.length, equals(2)); // Zero duplicate sub-request records created
     });
 
     testWidgets('20. Cancelling one slot preserves other slots and the event', (tester) async {
@@ -996,18 +1204,31 @@ void main() {
       expect(mock.storedSubRequests.containsKey('sub_2'), isTrue);
     });
 
-    testWidgets('21. Unknown legacy data remains preserved in SubRequest serialization', (tester) async {
+    testWidgets('21. Unknown legacy data remains preserved in SubRequest serialization round-trip', (tester) async {
       final json = {
         'SubRequestId': 'sub_123',
         'VoicePart': 'Saxophone',
         'IsSelected': true,
         'CustomLegacyProperty': 'CustomValue',
+        'LegacyNumericFlag': 42,
       };
 
       final parsed = SubRequest.fromJson(json, 'sub_123');
       expect(parsed.voicePart, equals('Saxophone'));
       expect(parsed.status, equals('assigned'));
-      expect(parsed.searchSource, equals('search_all'));
+      expect(parsed.extraFields['CustomLegacyProperty'], equals('CustomValue'));
+      expect(parsed.extraFields['LegacyNumericFlag'], equals(42));
+
+      // Modify a known field via copyWith
+      final updated = parsed.copyWith(voicePart: 'Tenor Saxophone');
+      expect(updated.voicePart, equals('Tenor Saxophone'));
+      expect(updated.extraFields['CustomLegacyProperty'], equals('CustomValue'));
+
+      // Serialize back to JSON and assert unknown fields remain intact
+      final serialized = updated.toJson();
+      expect(serialized['VoicePart'], equals('Tenor Saxophone'));
+      expect(serialized['CustomLegacyProperty'], equals('CustomValue'));
+      expect(serialized['LegacyNumericFlag'], equals(42));
     });
 
     testWidgets('22. The overall selection/status count is correct', (tester) async {
@@ -1063,7 +1284,8 @@ void main() {
       ));
       await tester.pumpAndSettle();
 
-      expect(find.text('1 of 2 substitute positions filled'), findsOneWidget);
+      expect(find.text('Jimi Hendrix assigned'), findsOneWidget);
+      expect(find.text('Waiting for answers'), findsOneWidget);
     });
 
     testWidgets('23. UI works at 320 px width without overflow', (tester) async {
@@ -1075,7 +1297,7 @@ void main() {
       ));
       await tester.pumpAndSettle();
 
-      expect(find.text('FIND SUBSTITUTE(S)'), findsOneWidget);
+      expect(find.text('FIND MUSICIAN/VOCALIST'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 
@@ -1265,7 +1487,7 @@ void main() {
       ));
       await tester.pumpAndSettle();
 
-      expect(find.text('Gig/Event Details'), findsNWidgets(2));
+      expect(find.text('Event Date(s)'), findsOneWidget);
 
       // 1. Edit location
       final locationField = find.widgetWithText(TextField, 'Stockholm, Sweden');
@@ -1275,13 +1497,13 @@ void main() {
       expect(find.text('Gothenburg, Sweden'), findsOneWidget);
 
       // 2. Edit description / notes
-      final notesField = find.byType(TextField).last;
+      final notesField = find.byWidgetPredicate((w) => w is TextField && w.maxLines == 3);
       await tester.enterText(notesField, 'Looking for experienced rock guitarist for Friday gig.');
       await tester.pumpAndSettle();
       expect(find.text('Looking for experienced rock guitarist for Friday gig.'), findsOneWidget);
 
       // 3. Tap date selector opens date picker
-      final dateFinder = find.byIcon(Icons.edit_calendar_rounded);
+      final dateFinder = find.byIcon(Icons.calendar_today_rounded);
       expect(dateFinder, findsOneWidget);
       await tester.tap(dateFinder);
       await tester.pumpAndSettle();
@@ -1290,6 +1512,427 @@ void main() {
       // Close date picker
       await tester.tap(find.text('Cancel'));
       await tester.pumpAndSettle();
+    });
+
+    testWidgets('30. Declined candidate responses (value == false) are excluded from the assignable list', (tester) async {
+      tester.view.physicalSize = const Size(800, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      final mock = MockMultiSubsFirebaseService();
+      mock.userProfiles['cand_yes'] = UserProfile(
+        userId: 'cand_yes',
+        displayName: 'Yes Candidate',
+        instruments: ['Electric Guitar'],
+      );
+      mock.userProfiles['cand_no'] = UserProfile(
+        userId: 'cand_no',
+        displayName: 'Declined Candidate',
+        instruments: ['Electric Guitar'],
+      );
+
+      mock.storedSubRequests['sub_1'] = SubRequest(
+        id: 'sub_1',
+        subRequestId: 'sub_1',
+        eventId: 'event_1',
+        bandId: 'band_123',
+        voicePart: 'Electric Guitar',
+        status: 'published',
+        responses: {
+          'cand_yes': true,  // Affirmative response
+          'cand_no': false,  // Declined response
+        },
+      );
+
+      await tester.pumpWidget(createMultiSubsTestApp(
+        mockService: mock,
+        child: const FindSubScreen(eventId: 'event_1', bandId: 'band_123'),
+      ));
+      await tester.pumpAndSettle();
+
+      // Only cand_yes is displayed in candidates list
+      expect(find.text('Yes Candidate'), findsOneWidget);
+      expect(find.text('Declined Candidate'), findsNothing);
+      expect(find.text('CANDIDATES (1)'), findsOneWidget);
+    });
+
+    testWidgets('31. Event-scoped query retrieves only the targeted event subrequests', (tester) async {
+      final mock = MockMultiSubsFirebaseService();
+      mock.storedSubRequests['sub_ev1'] = SubRequest(
+        id: 'sub_ev1',
+        subRequestId: 'sub_ev1',
+        eventId: 'event_1',
+        bandId: 'band_123',
+        voicePart: 'Electric Guitar',
+      );
+      mock.storedSubRequests['sub_ev2'] = SubRequest(
+        id: 'sub_ev2',
+        subRequestId: 'sub_ev2',
+        eventId: 'event_2',
+        bandId: 'band_123',
+        voicePart: 'Drums',
+      );
+      mock.storedSubRequests['sub_other_band'] = SubRequest(
+        id: 'sub_other_band',
+        subRequestId: 'sub_other_band',
+        eventId: 'event_1',
+        bandId: 'band_other',
+        voicePart: 'Bass',
+      );
+
+      final event1Subs = await mock.getSubRequestsForEventAsync('band_123', 'event_1');
+      expect(event1Subs.length, equals(1));
+      expect(event1Subs.first.id, equals('sub_ev1'));
+    });
+
+    testWidgets('32. Partial agreement chat failure preserves canonical assignment and displays recoverable notice', (tester) async {
+      tester.view.physicalSize = const Size(800, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      final mock = MockMultiSubsFirebaseService();
+      mock.failAgreementChat = true; // Simulate chat failure
+
+      mock.storedSubRequests['sub_1'] = SubRequest(
+        id: 'sub_1',
+        subRequestId: 'sub_1',
+        eventId: 'event_1',
+        bandId: 'band_123',
+        voicePart: 'Electric Guitar',
+        status: 'published',
+        responses: {'candidate_guitar': true},
+      );
+
+      await tester.pumpWidget(createMultiSubsTestApp(
+        mockService: mock,
+        child: const FindSubScreen(eventId: 'event_1', bandId: 'band_123'),
+      ));
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(find.text('Assign'));
+      await tester.tap(find.text('Assign'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Assign Substitute'));
+      await tester.pumpAndSettle();
+
+      // Canonical assignment succeeded
+      expect(mock.storedSubRequests['sub_1']!.status, equals('assigned'));
+      expect(mock.storedSubRequests['sub_1']!.assignedUserId, equals('candidate_guitar'));
+
+      // UI accurately reflects assigned status rather than falsely reporting total failure
+      expect(find.textContaining('assigned successfully (chat notification deferred)'), findsOneWidget);
+    });
+
+    // =========================================================================
+    // FIND MUSICIAN/VOCALIST & NEW BAND MEMBER REGRESSION TESTS (33 - 44)
+    // =========================================================================
+
+    testWidgets('33. Regression: Page title is exactly FIND MUSICIAN/VOCALIST', (tester) async {
+      final mock = MockMultiSubsFirebaseService();
+      await tester.pumpWidget(createMultiSubsTestApp(
+        mockService: mock,
+        child: const FindSubScreen(),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.text('FIND MUSICIAN/VOCALIST'), findsOneWidget);
+    });
+
+    testWidgets('34. Regression: Both mode controls (Find Substitute(s) and Find New Band Member) are visible before interaction', (tester) async {
+      final mock = MockMultiSubsFirebaseService();
+      await tester.pumpWidget(createMultiSubsTestApp(
+        mockService: mock,
+        child: const FindSubScreen(),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Find Substitute(s)'), findsOneWidget);
+      expect(find.text('Find New Band Member'), findsOneWidget);
+    });
+
+    testWidgets('35. Regression: Substitute mode opens the unified multi-slot workflow', (tester) async {
+      tester.view.physicalSize = const Size(800, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      final mock = MockMultiSubsFirebaseService();
+      await tester.pumpWidget(createMultiSubsTestApp(
+        mockService: mock,
+        child: const FindSubScreen(),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Substitute 1'), findsOneWidget);
+      expect(find.text('ADD ANOTHER SUBSTITUTE'), findsOneWidget);
+      expect(find.textContaining('PUBLISH SUBSTITUTE REQUESTS'), findsOneWidget);
+    });
+
+    testWidgets('36. Regression: New Band Member mode does not show event substitute slots', (tester) async {
+      tester.view.physicalSize = const Size(800, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      final mock = MockMultiSubsFirebaseService();
+      await tester.pumpWidget(createMultiSubsTestApp(
+        mockService: mock,
+        child: const FindSubScreen(),
+      ));
+      await tester.pumpAndSettle();
+
+      // Switch to Find New Band Member
+      await tester.tap(find.text('Find New Band Member'));
+      await tester.pumpAndSettle();
+
+      // Substitute slot UI elements must not be present
+      expect(find.text('Substitute 1'), findsNothing);
+      expect(find.text('ADD ANOTHER SUBSTITUTE'), findsNothing);
+      expect(find.textContaining('PUBLISH SUBSTITUTE REQUESTS'), findsNothing);
+
+      // New Band Member UI elements must be present
+      expect(find.text('Permanent Band Recruitment'), findsOneWidget);
+      expect(find.text('PUBLISH NEW MEMBER SEARCH'), findsOneWidget);
+    });
+
+    testWidgets('37. Regression: New Band Member mode does not write externalInvitees', (tester) async {
+      tester.view.physicalSize = const Size(800, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      final mock = MockMultiSubsFirebaseService();
+      final testEvent = BandEvent(
+        id: 'event_1',
+        title: 'Gig',
+        description: '',
+        eventType: 'Gig',
+        location: 'Stockholm',
+        startDateTime: DateTime.now().toIso8601String(),
+        endDateTime: DateTime.now().add(const Duration(hours: 2)).toIso8601String(),
+        additionalNotes: '',
+        createdBy: 'user_leader',
+        createdAt: 100,
+        updatedAt: 100,
+        requireResponse: true,
+      );
+      mock.storedBandEvents['event_1'] = testEvent;
+
+      await tester.pumpWidget(createMultiSubsTestApp(
+        mockService: mock,
+        child: const FindSubScreen(eventId: 'event_1', bandId: 'band_123'),
+      ));
+      await tester.pumpAndSettle();
+
+      // Switch to Find New Band Member and submit
+      await tester.tap(find.text('Find New Band Member'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('PUBLISH NEW MEMBER SEARCH'));
+      await tester.pumpAndSettle();
+
+      // Event externalInvitees must remain empty
+      expect(mock.storedBandEvents['event_1']!.externalInvitees.isEmpty, isTrue);
+      expect(mock.assignCalls, equals(0));
+    });
+
+    testWidgets('38. Regression: New Band Member mode preserves its historical persisted role value (Role: New Member)', (tester) async {
+      tester.view.physicalSize = const Size(800, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      final mock = MockMultiSubsFirebaseService();
+      await tester.pumpWidget(createMultiSubsTestApp(
+        mockService: mock,
+        child: const FindSubScreen(bandId: 'band_123'),
+      ));
+      await tester.pumpAndSettle();
+
+      // Switch to Find New Band Member
+      await tester.tap(find.text('Find New Band Member'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('PUBLISH NEW MEMBER SEARCH'));
+      await tester.pumpAndSettle();
+
+      expect(mock.storedSubRequests.isNotEmpty, isTrue);
+      final published = mock.storedSubRequests.values.first;
+      expect(published.role, equals('New Member'));
+      expect(published.voicePart, equals('Electric Guitar'));
+
+      final json = published.toJson();
+      expect(json['Role'], equals('New Member'));
+      expect(json['VoicePart'], equals('Electric Guitar'));
+    });
+
+    testWidgets('39. Regression: Legacy Substitute request resolves to Substitute mode', (tester) async {
+      final legacySub = SubRequest(
+        id: 'sub_legacy_1',
+        subRequestId: 'sub_legacy_1',
+        role: 'Substitute',
+        voicePart: 'Drums',
+        status: 'published',
+      );
+
+      final mock = MockMultiSubsFirebaseService();
+      await tester.pumpWidget(createMultiSubsTestApp(
+        mockService: mock,
+        child: FindSubScreen(initialRequest: legacySub),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Substitute 1'), findsOneWidget);
+      expect(find.text('Find Substitute(s)'), findsOneWidget);
+    });
+
+    testWidgets('40. Regression: Legacy New Member request resolves to New Band Member mode', (tester) async {
+      final legacyMember = SubRequest(
+        id: 'member_legacy_1',
+        subRequestId: 'member_legacy_1',
+        role: 'New Member',
+        voicePart: 'Bass',
+        status: 'published',
+      );
+
+      final mock = MockMultiSubsFirebaseService();
+      await tester.pumpWidget(createMultiSubsTestApp(
+        mockService: mock,
+        child: FindSubScreen(initialRequest: legacyMember),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Permanent Band Recruitment'), findsOneWidget);
+      expect(find.text('PUBLISH NEW MEMBER SEARCH'), findsOneWidget);
+      expect(find.text('Bass'), findsOneWidget);
+    });
+
+    testWidgets('41. Regression: Switching modes does not leak draft state between them', (tester) async {
+      tester.view.physicalSize = const Size(800, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      final mock = MockMultiSubsFirebaseService();
+      await tester.pumpWidget(createMultiSubsTestApp(
+        mockService: mock,
+        child: const FindSubScreen(),
+      ));
+      await tester.pumpAndSettle();
+
+      // Add second slot in Substitute mode
+      await tester.tap(find.text('ADD ANOTHER SUBSTITUTE'));
+      await tester.pumpAndSettle();
+      expect(find.text('Substitute 2'), findsOneWidget);
+
+      // Switch to New Band Member mode
+      await tester.tap(find.text('Find New Band Member'));
+      await tester.pumpAndSettle();
+      expect(find.text('Permanent Band Recruitment'), findsOneWidget);
+      expect(find.text('Substitute 2'), findsNothing);
+
+      // Switch back to Substitute mode
+      await tester.tap(find.text('Find Substitute(s)'));
+      await tester.pumpAndSettle();
+      expect(find.text('Substitute 2'), findsOneWidget);
+    });
+
+    testWidgets('42. Regression: New Member eligibility and notification behavior remains unchanged from pre-b7e40b2', (tester) async {
+      final newMemberReq = SubRequest(
+        id: 'req_member_test',
+        subRequestId: 'req_member_test',
+        role: 'New Member',
+        voicePart: 'Lead Vocals',
+        searchSource: 'search_all',
+        targetUserIds: null,
+      );
+
+      expect(newMemberReq.role, equals('New Member'));
+      expect(newMemberReq.searchSource, equals('search_all'));
+      expect(newMemberReq.targetUserIds, isNull);
+
+      final json = newMemberReq.toJson();
+      expect(json['Role'], equals('New Member'));
+      expect(json['VoicePart'], equals('Lead Vocals'));
+      expect(json['SearchSource'], equals('search_all'));
+    });
+
+    testWidgets('43. Regression: Mode controls and New Member UI fit at 320 px without overflow', (tester) async {
+      final mock = MockMultiSubsFirebaseService();
+      await tester.pumpWidget(createMultiSubsTestApp(
+        mockService: mock,
+        size: const Size(320, 640),
+        child: const FindSubScreen(),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.text('FIND MUSICIAN/VOCALIST'), findsOneWidget);
+      expect(find.text('Find Substitute(s)'), findsOneWidget);
+      expect(find.text('Find New Band Member'), findsOneWidget);
+
+      // Switch to New Member at 320 px
+      await tester.tap(find.text('Find New Band Member'));
+      await tester.pumpAndSettle();
+      expect(find.text('Permanent Band Recruitment'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('44. Regression: Existing MULTI-SUBS tests continue to pass alongside New Member mode', (tester) async {
+      final mock = MockMultiSubsFirebaseService();
+      final draftSlot = SubRequest(
+        subRequestId: 'sub_multi_test',
+        role: 'Substitute',
+        voicePart: 'Tenor Saxophone',
+        status: 'draft',
+      );
+
+      final ids = await mock.saveSubRequestsBatchAsync([draftSlot]);
+      expect(ids.length, equals(1));
+      expect(mock.storedSubRequests[ids.first]!.voicePart, equals('Tenor Saxophone'));
+    });
+
+    testWidgets('45. Deterministic subrequest IDs sanitize invalid characters and isolate across bands and standalone searches', (tester) async {
+      final mock = MockMultiSubsFirebaseService();
+      final reqWithSpecialChars = SubRequest(
+        bandId: 'band.with#special\$chars[1]',
+        eventId: 'event/with/slashes',
+        slotId: 'slot guitar 1',
+        voicePart: 'Guitar',
+      );
+
+      final ids = await mock.saveSubRequestsBatchAsync([reqWithSpecialChars]);
+      expect(ids.length, equals(1));
+      final generatedId = ids.first;
+
+      // Must not contain any forbidden RTDB characters: . # $ [ ] / or whitespace
+      expect(generatedId.contains('.'), isFalse);
+      expect(generatedId.contains('#'), isFalse);
+      expect(generatedId.contains(r'$'), isFalse);
+      expect(generatedId.contains('['), isFalse);
+      expect(generatedId.contains(']'), isFalse);
+      expect(generatedId.contains('/'), isFalse);
+      expect(generatedId.contains(' '), isFalse);
+      expect(generatedId, equals('sub_band_with_special_chars_1__event_with_slashes_slot_guitar_1'));
+    });
+
+    testWidgets('46. Cross-band isolation prevents collision between distinct bands with identical slot names', (tester) async {
+      final mock = MockMultiSubsFirebaseService();
+      final band1Slot = SubRequest(
+        bandId: 'band_alpha',
+        eventId: 'event_x',
+        slotId: 'slot_lead',
+        voicePart: 'Lead Guitar',
+      );
+      final band2Slot = SubRequest(
+        bandId: 'band_beta',
+        eventId: 'event_x',
+        slotId: 'slot_lead',
+        voicePart: 'Lead Guitar',
+      );
+
+      final ids1 = await mock.saveSubRequestsBatchAsync([band1Slot]);
+      final ids2 = await mock.saveSubRequestsBatchAsync([band2Slot]);
+
+      expect(ids1.first, isNot(equals(ids2.first)));
+      expect(ids1.first, equals('sub_band_alpha_event_x_slot_lead'));
+      expect(ids2.first, equals('sub_band_beta_event_x_slot_lead'));
+      expect(mock.storedSubRequests.length, equals(2));
     });
   });
 }

@@ -8,11 +8,18 @@ if (!admin.apps.length) {
   admin.initializeApp();
 }
 
+// In production, RTDB is located in europe-west1 (musiciansapp-35f70-default-rtdb.europe-west1.firebasedatabase.app).
+// During local emulator execution, RTDB emulator operates under default us-central1 routing.
+const isEmulator = process.env.FUNCTIONS_EMULATOR === 'true' ||
+  process.env.FIREBASE_DATABASE_EMULATOR_HOST !== undefined ||
+  process.env.FIREBASE_EMULATOR_HUB !== undefined;
+const databaseTriggerRegion = isEmulator ? 'us-central1' : 'europe-west1';
+
 /**
  * Triggered when a new event is created under /Bands/{bandId}/Events/{eventId}.
  * Sends a push notification to all band members except the event creator.
  */
-exports.onBandEventCreated = functions.database
+exports.onBandEventCreated = functions.region(databaseTriggerRegion).database
   .ref('/Bands/{bandId}/Events/{eventId}')
   .onCreate(async (snapshot, context) => {
     const eventData = snapshot.val();
@@ -53,7 +60,12 @@ exports.onBandEventCreated = functions.database
         return null;
       }
 
-      // 3. Format Date/Time for display in the notification body
+      // 3. Format Date/Time and Event Type safely
+      const rawEventType = eventData.eventType || eventData.EventType;
+      const normalizedEventType = (typeof rawEventType === 'string' && rawEventType.trim().length > 0)
+        ? rawEventType.trim().toLowerCase()
+        : 'event';
+
       const startLocal = eventData.startDateTime
         ? new Date(eventData.startDateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         : 'TBD';
@@ -62,8 +74,8 @@ exports.onBandEventCreated = functions.database
       const messages = recipients.map(r => ({
         token: r.token,
         notification: {
-          title: `🎼 New Event: ${eventData.title}`,
-          body: `New ${eventData.eventType.toLowerCase()} at ${eventData.location || 'TBD'} starting at ${startLocal}. Please RSVP!`,
+          title: `🎼 New Event: ${eventData.title || 'Band Event'}`,
+          body: `New ${normalizedEventType} at ${eventData.location || 'TBD'} starting at ${startLocal}. Please RSVP!`,
         },
         data: {
           click_action: 'FLUTTER_NOTIFICATION_CLICK',
@@ -120,13 +132,31 @@ exports.onBandEventCreated = functions.database
  */
 exports.sendSubRequestNotification = onValueCreated({
   ref: '/SubRequests/{subRequestId}',
-  region: 'europe-west1'
+  region: databaseTriggerRegion
 }, async (event) => {
   const subRequestData = event.data.val();
   if (!subRequestData) return null;
 
   const subRequestId = event.params.subRequestId;
-  const voicePart = subRequestData.VoicePart;
+
+  // 1. Grouped publication skip: if this subrequest belongs to a new grouped publication manifest,
+  // the onSubRequestGroupPublished handler provides the single combined notification.
+  if (
+    subRequestData.NotificationMode === 'grouped' ||
+    subRequestData.notificationMode === 'grouped' ||
+    Boolean(subRequestData.PublicationId) ||
+    Boolean(subRequestData.publicationId)
+  ) {
+    console.log(`Skipping legacy per-slot notification for grouped subrequest ${subRequestId}`);
+    return null;
+  }
+
+  const rawVoicePart = subRequestData.VoicePart || subRequestData.voicePart;
+  if (!rawVoicePart || typeof rawVoicePart !== 'string' || !rawVoicePart.trim()) {
+    console.log(`Skipping legacy notification for subrequest ${subRequestId} due to missing or invalid VoicePart.`);
+    return null;
+  }
+  const voicePart = rawVoicePart.trim();
   const creatorUserId = subRequestData.CreatorUserId || subRequestData.UserId;
   const location = subRequestData.Location || 'TBD';
   const bandName = subRequestData.BandName || 'Freelance Gig';
@@ -161,12 +191,12 @@ exports.sendSubRequestNotification = onValueCreated({
         shouldNotify = targetUserIds.includes(userId);
       } else {
         // Default mode: matches the requested instrument/voice part
-        const userType = userInfo.UserType || userInfo.userType;
+        const userType = userInfo.UserType || userInfo.userType || '';
         const instruments = userInfo.Instruments || userInfo.instruments || [];
         
         const hasMatchingInstrument = 
-          (userType && userType.toLowerCase() === voicePart.toLowerCase()) ||
-          instruments.some(i => i.toLowerCase() === voicePart.toLowerCase());
+          (typeof userType === 'string' && userType.toLowerCase() === voicePart.toLowerCase()) ||
+          (Array.isArray(instruments) && instruments.some(i => typeof i === 'string' && i.toLowerCase() === voicePart.toLowerCase()));
           
         shouldNotify = hasMatchingInstrument;
       }
@@ -233,6 +263,567 @@ exports.sendSubRequestNotification = onValueCreated({
     console.error('Error sending sub request notifications:', error);
     return null;
   }
+});
+
+/**
+ * Triggered when a grouped substitute request publication manifest is created under /subRequestPublications/{publicationId}.
+ * Sends exactly one combined push notification per recipient for all matching/targeted slots in the publication.
+ */
+/**
+ * Compute stable publication operation ID from group ID and sorted slot IDs.
+ */
+function computeStablePublicationId(groupId, slotIds) {
+  const sorted = [...slotIds].sort();
+  const hash = crypto.createHash('sha256').update(groupId + ':' + sorted.join(',')).digest('hex').substring(0, 16);
+  return `pub_${groupId}_${hash}`;
+}
+exports.computeStablePublicationId = computeStablePublicationId;
+
+/**
+ * Triggered when a grouped substitute request publication manifest is created under /subRequestPublications/{publicationId}.
+ * Maintains server-authorized audience and feed indexes and sends exactly one combined push notification per recipient.
+ */
+exports.onSubRequestGroupPublished = onValueCreated({
+  ref: '/subRequestPublications/{publicationId}',
+  region: databaseTriggerRegion
+}, async (event) => {
+  const pubData = event.data.val();
+  if (!pubData) return null;
+
+  const publicationId = event.params.publicationId;
+  const requestGroupId = pubData.requestGroupId || publicationId;
+  const creatorUserId = pubData.creatorUserId;
+  const bandName = pubData.bandName || 'Freelance Gig';
+  const slots = pubData.slots || [];
+
+  if (!slots.length) return null;
+
+  try {
+    const db = admin.database();
+    const auditRef = db.ref(`/subRequestNotificationAudit/${publicationId}`);
+    const auditRecipientsSnap = await auditRef.child('recipients').once('value');
+    const existingNotifiedRecipients = auditRecipientsSnap.val() || {};
+
+    const usersRef = db.ref('/users');
+    const usersSnapshot = await usersRef.once('value');
+    const users = usersSnapshot.val();
+    if (!users) return null;
+
+    const recipientMap = new Map(); // userId -> { token, matchingSlots: [] }
+    const indexUpdates = {};
+
+    // Creator management index
+    if (creatorUserId) {
+      indexUpdates[`/creatorSubRequestGroups/${creatorUserId}/${requestGroupId}`] = true;
+    }
+
+    Object.keys(users).forEach((userId) => {
+      const userInfo = users[userId].info;
+      const token = userInfo ? userInfo.PushToken : null;
+      const userType = (userInfo ? (userInfo.UserType || userInfo.userType || '') : '').toLowerCase();
+      const instruments = (userInfo ? (userInfo.Instruments || userInfo.instruments || []) : []).map(i => (i || '').toLowerCase());
+
+      const userMatchingSlots = [];
+
+      slots.forEach((slot) => {
+        const slotKey = slot.subRequestId || slot.slotId;
+        const voicePart = (slot.voicePart || '').toLowerCase();
+        const searchSource = slot.searchSource || 'search_all';
+        const targetUserIds = slot.targetUserIds || [];
+
+        let isEligible = false;
+        if (searchSource === 'favorites') {
+          isEligible = Array.isArray(targetUserIds) && targetUserIds.includes(userId);
+        } else {
+          isEligible = userType === voicePart || instruments.includes(voicePart);
+        }
+
+        if (isEligible) {
+          userMatchingSlots.push(slot);
+          if (slotKey) {
+            indexUpdates[`/subRequestAudience/${slotKey}/${userId}`] = true;
+            indexUpdates[`/userSubRequestFeed/${userId}/${slotKey}`] = {
+              slotId: slot.slotId || slotKey,
+              requestGroupId: requestGroupId,
+              bandName: bandName,
+              voicePart: slot.voicePart || '',
+              date: slot.date || '',
+              searchSource: searchSource,
+              publishedAt: pubData.publishedAt || Date.now(),
+            };
+          }
+        }
+      });
+
+      // Recipient for push notifications (exclude creator and already notified recipients)
+      if (userId !== creatorUserId && userMatchingSlots.length > 0 && token && token.trim()) {
+        if (!existingNotifiedRecipients[userId]) {
+          recipientMap.set(userId, { token, matchingSlots: userMatchingSlots });
+        }
+      }
+    });
+
+    // Write server-maintained audience and feed indexes in bulk
+    if (Object.keys(indexUpdates).length > 0) {
+      await db.ref().update(indexUpdates);
+    }
+
+    // Atomic per-recipient transaction claim to protect from concurrent trigger executions
+    const claimedRecipients = [];
+    for (const [userId, entry] of recipientMap.entries()) {
+      const recipientAuditRef = auditRef.child('recipients').child(userId);
+      const claimTx = await recipientAuditRef.transaction((current) => {
+        if (current && (current.status === 'sent' || (current.status === 'claimed' && Date.now() - current.claimedAt < 60000))) {
+          return; // Abort: already sent or claimed by an active invocation
+        }
+        return { status: 'claimed', claimedAt: Date.now() };
+      });
+
+      if (claimTx.committed && claimTx.snapshot.val() && claimTx.snapshot.val().status === 'claimed') {
+        claimedRecipients.push({ userId, entry });
+      }
+    }
+
+    if (claimedRecipients.length === 0) {
+      await auditRef.update({
+        processedAt: Date.now(),
+        requestGroupId,
+        notifiedCount: Object.keys(existingNotifiedRecipients).length,
+      });
+      return null;
+    }
+
+    const messages = [];
+    const messageRecipients = [];
+
+    claimedRecipients.forEach(({ userId, entry }) => {
+      const matchCount = entry.matchingSlots.length;
+      const firstSlot = entry.matchingSlots[0];
+      const title = `🎼 Musician Request`;
+      const body = matchCount === 1
+        ? `${firstSlot.voicePart} needed for ${bandName}!`
+        : `Multiple substitute positions (${matchCount}) open for ${bandName}!`;
+
+      messages.push({
+        token: entry.token,
+        notification: {
+          title,
+          body,
+        },
+        data: {
+          click_action: 'FLUTTER_NOTIFICATION_CLICK',
+          requestGroupId: requestGroupId,
+          publicationId: publicationId,
+          type: 'grouped_sub_request',
+        },
+        android: { notification: { sound: 'default' } },
+        apns: { payload: { aps: { sound: 'default' } } },
+      });
+      messageRecipients.push(userId);
+    });
+
+    const response = await admin.messaging().sendEach(messages);
+    console.log(`Sent grouped sub request notifications for ${publicationId}: ${response.successCount} succeeded, ${response.failureCount} failed.`);
+
+    // Per-recipient delivery audit state for partial recovery
+    const perRecipientAuditUpdates = {};
+    messageRecipients.forEach((uid, idx) => {
+      if (response.responses[idx] && response.responses[idx].success) {
+        perRecipientAuditUpdates[`/subRequestNotificationAudit/${publicationId}/recipients/${uid}`] = {
+          notifiedAt: Date.now(),
+          status: 'sent',
+        };
+      } else {
+        perRecipientAuditUpdates[`/subRequestNotificationAudit/${publicationId}/recipients/${uid}`] = {
+          failedAt: Date.now(),
+          status: 'failed',
+          error: response.responses[idx]?.error?.message || 'Unknown send error',
+        };
+      }
+    });
+
+    perRecipientAuditUpdates[`/subRequestNotificationAudit/${publicationId}/processedAt`] = Date.now();
+    perRecipientAuditUpdates[`/subRequestNotificationAudit/${publicationId}/requestGroupId`] = requestGroupId;
+    perRecipientAuditUpdates[`/subRequestNotificationAudit/${publicationId}/notifiedCount`] =
+      Object.keys(existingNotifiedRecipients).length + response.successCount;
+
+    await db.ref().update(perRecipientAuditUpdates);
+
+    return null;
+  } catch (error) {
+    console.error('Error in onSubRequestGroupPublished:', error);
+    return null;
+  }
+});
+
+/**
+ * Production callable entrypoint to publish a grouped substitute request.
+ * Authorized for Band Leader/Admin or event creator.
+ * Atomically writes SubRequests, publication manifest, audience index, and user feeds.
+ */
+exports.publishSubRequestGroup = onCall({ region: 'europe-west1' }, async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'User must be authenticated.');
+  }
+
+  const callerId = request.auth.uid;
+  const data = request.data || {};
+  const { bandId, requestGroupId, eventId, slots, bandName } = data;
+
+  if (!requestGroupId || !slots || !Array.isArray(slots) || slots.length === 0) {
+    throw new HttpsError('invalid-argument', 'Invalid request payload.');
+  }
+
+  const db = admin.database();
+
+  // 1. Validate band authorization and event ownership if bandId is provided
+  if (bandId) {
+    const memberRoleSnap = await db.ref(`/Bands/${bandId}/Members_band/${callerId}/Role`).once('value');
+    const role = memberRoleSnap.val();
+    if (role !== 'Leader' && role !== 'Admin') {
+      throw new HttpsError('permission-denied', 'Only Band Leaders or Admins can publish substitute requests for this band.');
+    }
+
+    // Verify all slots belong to the band and verify event ownership
+    for (const slot of slots) {
+      if (slot.bandId && slot.bandId !== bandId) {
+        throw new HttpsError('invalid-argument', 'Mixed band slots in a single publication group are rejected.');
+      }
+      const slotEventId = slot.eventId || eventId;
+      if (slotEventId && slotEventId !== 'standalone') {
+        const evSnap = await db.ref(`/Bands/${bandId}/Events/${slotEventId}`).once('value');
+        if (!evSnap.exists()) {
+          throw new HttpsError('permission-denied', `Event ${slotEventId} does not belong to band ${bandId}.`);
+        }
+      }
+    }
+  }
+
+  // 2. Fetch creator favorites to strictly validate targeted favorites
+  const callerFavSnap = await db.ref(`/users/${callerId}/Favorites`).once('value');
+  const callerFavorites = callerFavSnap.val() || {};
+
+  const slotIds = slots.map(s => s.subRequestId || s.slotId).filter(Boolean);
+  const publicationId = computeStablePublicationId(requestGroupId, slotIds);
+
+  const updates = {};
+  const now = Date.now();
+
+  // 3. Write each canonical SubRequest
+  slots.forEach((slot) => {
+    const slotKey = slot.subRequestId || slot.slotId;
+    updates[`/SubRequests/${slotKey}`] = {
+      ...slot,
+      SubRequestId: slotKey,
+      SlotId: slot.slotId || slotKey,
+      RequestGroupId: requestGroupId,
+      PublicationId: publicationId,
+      NotificationMode: 'grouped',
+      CreatorUserId: callerId,
+      Status: 'published',
+      CreatedAt: slot.createdAt || now,
+    };
+  });
+
+  // 4. Write publication manifest
+  updates[`/subRequestPublications/${publicationId}`] = {
+    publicationId,
+    requestGroupId,
+    creatorUserId: callerId,
+    bandId: bandId || null,
+    bandName: bandName || 'Freelance Gig',
+    publishedAt: now,
+    slots: slots.map(s => ({
+      slotId: s.slotId || s.subRequestId,
+      subRequestId: s.subRequestId || s.slotId,
+      voicePart: s.voicePart || s.VoicePart || '',
+      searchSource: s.searchSource || s.SearchSource || 'search_all',
+      targetUserIds: s.targetUserIds || s.TargetUserIds || [],
+      eventTitle: s.eventTitle || s.EventTitle || '',
+      eventSequence: s.eventSequence || s.EventSequence || 1,
+      date: s.date || s.Date || '',
+      payAmountMinor: s.payAmountMinor || s.PayAmountMinor || null,
+      currency: s.currency || s.Currency || 'SEK',
+    })),
+  };
+
+  // 5. Populate audience and feed indexes across users
+  const usersSnap = await db.ref('/users').once('value');
+  const users = usersSnap.val() || {};
+
+  if (callerId) {
+    updates[`/creatorSubRequestGroups/${callerId}/${requestGroupId}`] = true;
+  }
+
+  Object.keys(users).forEach((userId) => {
+    const userInfo = users[userId].info;
+    const userType = (userInfo ? (userInfo.UserType || userInfo.userType || '') : '').toLowerCase();
+    const instruments = (userInfo ? (userInfo.Instruments || userInfo.instruments || []) : []).map(i => (i || '').toLowerCase());
+
+    slots.forEach((slot) => {
+      const slotKey = slot.subRequestId || slot.slotId;
+      const voicePart = (slot.voicePart || slot.VoicePart || '').toLowerCase();
+      const searchSource = slot.searchSource || slot.SearchSource || 'search_all';
+      const rawTargetUserIds = slot.targetUserIds || slot.TargetUserIds || [];
+
+      let isEligible = false;
+      if (searchSource === 'favorites') {
+        // Enforce that target user is genuinely in the caller's favorites list
+        const isVerifiedFavorite = callerFavorites[userId] === true || callerFavorites[userId] === 'true';
+        isEligible = isVerifiedFavorite && Array.isArray(rawTargetUserIds) && rawTargetUserIds.includes(userId);
+      } else {
+        isEligible = userType === voicePart || instruments.includes(voicePart);
+      }
+
+      if (isEligible && slotKey) {
+        updates[`/subRequestAudience/${slotKey}/${userId}`] = true;
+        updates[`/userSubRequestFeed/${userId}/${slotKey}`] = {
+          slotId: slot.slotId || slotKey,
+          requestGroupId: requestGroupId,
+          bandName: bandName || 'Freelance Gig',
+          voicePart: slot.voicePart || slot.VoicePart || '',
+          date: slot.date || slot.Date || '',
+          searchSource: searchSource,
+          publishedAt: now,
+        };
+      }
+    });
+  });
+
+  // Single atomic root multi-location update containing all prerequisites and manifest
+  await db.ref().update(updates);
+
+  return {
+    success: true,
+    publicationId,
+    requestGroupId,
+    slotCount: slots.length,
+  };
+});
+
+/**
+ * Secure server-owned Cloud Function callable to assign a candidate to a SubRequest slot.
+ * Enforces authentication, Band Leader/Admin/Creator authorization, candidate eligibility,
+ * and performs an atomic RTDB transaction rejecting competing candidates while ensuring idempotent retry.
+ */
+exports.assignSubstitute = onCall({ region: 'europe-west1' }, async (request) => {
+  const callerId = request.auth?.uid;
+  if (!callerId) {
+    throw new HttpsError('unauthenticated', 'User must be authenticated.');
+  }
+
+  const {
+    subRequestId,
+    candidateUserId,
+    candidateName,
+    bandId,
+    eventId,
+    roleOrInstrument,
+    slotId,
+    replacedMemberId,
+    replacedMemberName,
+  } = request.data || {};
+
+  if (!subRequestId || !candidateUserId) {
+    throw new HttpsError('invalid-argument', 'subRequestId and candidateUserId are required.');
+  }
+
+  const db = admin.database();
+  const subReqRef = db.ref(`/SubRequests/${subRequestId}`);
+  const subReqSnap = await subReqRef.once('value');
+  if (!subReqSnap.exists()) {
+    throw new HttpsError('not-found', `SubRequest ${subRequestId} does not exist.`);
+  }
+
+  const subReqData = subReqSnap.val();
+  const targetBandId = bandId || subReqData.bandId || subReqData.BandId;
+  const targetEventId = eventId || subReqData.eventId || subReqData.EventId;
+  const creatorUserId = subReqData.CreatorUserId || subReqData.UserId;
+
+  // Authorization check: Caller must be creator OR Band Leader/Admin of the request's band
+  let isAuthorized = (creatorUserId === callerId);
+  if (!isAuthorized && targetBandId) {
+    const memberSnap = await db.ref(`/Bands/${targetBandId}/Members_band/${callerId}`).once('value');
+    if (memberSnap.exists()) {
+      const role = memberSnap.val()?.Role || memberSnap.val()?.role;
+      if (role === 'Leader' || role === 'Admin') {
+        isAuthorized = true;
+      }
+    }
+  }
+
+  if (!isAuthorized) {
+    throw new HttpsError('permission-denied', 'Only Band Leaders, Band Admins, or the Request Creator can assign substitutes.');
+  }
+
+  const now = Date.now();
+  const actualSlotId = slotId || subReqData.SlotId || subReqData.slotId || subRequestId;
+
+  // Real server-side RTDB atomic transaction on canonical SubRequest
+  let committed = false;
+  let txError = null;
+  let alreadyAssignedToSame = false;
+
+  await new Promise((resolve) => {
+    subReqRef.transaction((current) => {
+      if (current === null) return current;
+      const currentAssignedId = current.AssignedUserId || current.assignedUserId;
+      const isSelected = current.IsSelected === true || current.Status === 'assigned' || current.Status === 'filled';
+
+      if (isSelected && currentAssignedId === candidateUserId) {
+        alreadyAssignedToSame = true;
+        return current; // Idempotent success
+      }
+
+      if (isSelected && currentAssignedId && currentAssignedId !== candidateUserId) {
+        return; // Abort transaction on conflict
+      }
+
+      if (current.Status === 'cancelled' || current.Status === 'closed') {
+        return; // Abort on closed/cancelled
+      }
+
+      current.IsSelected = true;
+      current.Status = 'assigned';
+      current.AssignedUserId = candidateUserId;
+      if (candidateName) {
+        current.AssignedUserName = candidateName;
+      }
+      current.AssignedAt = now;
+      current.AssignedBy = callerId;
+      return current;
+    }, (error, wasCommitted) => {
+      txError = error;
+      committed = wasCommitted;
+      resolve();
+    });
+  });
+
+  if (txError) {
+    throw new HttpsError('internal', txError.message);
+  }
+
+  if (!committed && !alreadyAssignedToSame) {
+    throw new HttpsError('already-exists', `Slot ${subRequestId} has already been assigned to another candidate.`);
+  }
+
+  // Multi-location idempotent derived updates (band event substitute assignments, externalInvitees, creator index)
+  const updates = {};
+  if (targetBandId && targetEventId) {
+    updates[`/Bands/${targetBandId}/Events/${targetEventId}/substituteAssignments/${actualSlotId}`] = {
+      slotId: actualSlotId,
+      subRequestId: subRequestId,
+      assignedUserId: candidateUserId,
+      assignedUserName: candidateName || `Candidate ${candidateUserId}`,
+      instrument: roleOrInstrument || subReqData.VoicePart || '',
+      replacedMemberId: replacedMemberId || null,
+      replacedMemberName: replacedMemberName || null,
+      status: 'assigned',
+      assignedAt: now,
+      assignedBy: callerId,
+    };
+
+    updates[`/Bands/${targetBandId}/Events/${targetEventId}/externalInvitees/${candidateUserId}/userId`] = candidateUserId;
+    updates[`/Bands/${targetBandId}/Events/${targetEventId}/externalInvitees/${candidateUserId}/status`] = 'attending';
+    updates[`/Bands/${targetBandId}/Events/${targetEventId}/externalInvitees/${candidateUserId}/instrument`] = roleOrInstrument || subReqData.VoicePart || '';
+    if (candidateName) {
+      updates[`/Bands/${targetBandId}/Events/${targetEventId}/externalInvitees/${candidateUserId}/displayName`] = candidateName;
+    }
+    updates[`/Bands/${targetBandId}/Events/${targetEventId}/externalInvitees/${candidateUserId}/source`] = 'subRequest';
+    updates[`/Bands/${targetBandId}/Events/${targetEventId}/externalInvitees/${candidateUserId}/subRequestId`] = subRequestId;
+    updates[`/Bands/${targetBandId}/Events/${targetEventId}/updatedAt`] = now;
+  }
+
+  if (callerId) {
+    updates[`/users/${callerId}/SubRequests/${subRequestId}/IsSelected`] = true;
+    updates[`/users/${callerId}/SubRequests/${subRequestId}/Status`] = 'assigned';
+    updates[`/users/${callerId}/SubRequests/${subRequestId}/AssignedUserId`] = candidateUserId;
+    if (candidateName) {
+      updates[`/users/${callerId}/SubRequests/${subRequestId}/AssignedUserName`] = candidateName;
+    }
+    updates[`/users/${callerId}/SubRequests/${subRequestId}/AssignedAt`] = now;
+    updates[`/users/${callerId}/SubRequests/${subRequestId}/AssignedBy`] = callerId;
+  }
+
+  if (Object.keys(updates).length > 0) {
+    await db.ref().update(updates);
+  }
+
+  return {
+    success: true,
+    subRequestId,
+    assignedUserId: candidateUserId,
+    status: 'assigned',
+  };
+});
+
+/**
+ * Secure server-owned Cloud Function callable to revoke a substitute assignment.
+ */
+exports.revokeSubstituteAssignment = onCall({ region: 'europe-west1' }, async (request) => {
+  const callerId = request.auth?.uid;
+  if (!callerId) {
+    throw new HttpsError('unauthenticated', 'User must be authenticated.');
+  }
+
+  const { subRequestId, candidateUserId, bandId, eventId, slotId } = request.data || {};
+  if (!subRequestId) {
+    throw new HttpsError('invalid-argument', 'subRequestId is required.');
+  }
+
+  const db = admin.database();
+  const subReqRef = db.ref(`/SubRequests/${subRequestId}`);
+  const subReqSnap = await subReqRef.once('value');
+  if (!subReqSnap.exists()) {
+    throw new HttpsError('not-found', `SubRequest ${subRequestId} does not exist.`);
+  }
+
+  const subReqData = subReqSnap.val();
+  const targetBandId = bandId || subReqData.bandId || subReqData.BandId;
+  const targetEventId = eventId || subReqData.eventId || subReqData.EventId;
+  const creatorUserId = subReqData.CreatorUserId || subReqData.UserId;
+
+  let isAuthorized = (creatorUserId === callerId);
+  if (!isAuthorized && targetBandId) {
+    const memberSnap = await db.ref(`/Bands/${targetBandId}/Members_band/${callerId}`).once('value');
+    if (memberSnap.exists()) {
+      const role = memberSnap.val()?.Role || memberSnap.val()?.role;
+      if (role === 'Leader' || role === 'Admin') {
+        isAuthorized = true;
+      }
+    }
+  }
+
+  if (!isAuthorized) {
+    throw new HttpsError('permission-denied', 'Only Band Leaders, Band Admins, or Creator can revoke assignments.');
+  }
+
+  const actualSlotId = slotId || subReqData.SlotId || subReqData.slotId || subRequestId;
+  const updates = {};
+
+  updates[`/SubRequests/${subRequestId}/IsSelected`] = false;
+  updates[`/SubRequests/${subRequestId}/Status`] = 'published';
+  updates[`/SubRequests/${subRequestId}/AssignedUserId`] = null;
+  updates[`/SubRequests/${subRequestId}/AssignedUserName`] = null;
+  updates[`/SubRequests/${subRequestId}/AssignedAt`] = null;
+  updates[`/SubRequests/${subRequestId}/AssignedBy`] = null;
+
+  if (targetBandId && targetEventId) {
+    updates[`/Bands/${targetBandId}/Events/${targetEventId}/substituteAssignments/${actualSlotId}`] = null;
+  }
+
+  if (callerId) {
+    updates[`/users/${callerId}/SubRequests/${subRequestId}/IsSelected`] = false;
+    updates[`/users/${callerId}/SubRequests/${subRequestId}/Status`] = 'published';
+    updates[`/users/${callerId}/SubRequests/${subRequestId}/AssignedUserId`] = null;
+    updates[`/users/${callerId}/SubRequests/${subRequestId}/AssignedUserName`] = null;
+    updates[`/users/${callerId}/SubRequests/${subRequestId}/AssignedAt`] = null;
+    updates[`/users/${callerId}/SubRequests/${subRequestId}/AssignedBy`] = null;
+  }
+
+  await db.ref().update(updates);
+
+  return { success: true, subRequestId };
 });
 
 /**
@@ -350,7 +941,7 @@ exports.getAppMetrics = functions.region('europe-west1').https.onRequest(async (
  * Triggered when a member responds to an event under /Bands/{bandId}/Events/{eventId}/Responses/{userId}.
  * Sends a push notification to the event creator when 70% or more of invited members have responded.
  */
-exports.onEventResponseChanged = functions.database
+exports.onEventResponseChanged = functions.region(databaseTriggerRegion).database
   .ref('/Bands/{bandId}/Events/{eventId}/Responses/{userId}')
   .onWrite(async (change, context) => {
     const bandId = context.params.bandId;
@@ -588,7 +1179,8 @@ exports.checkEventReminders = functions.pubsub
   });
 
 exports.onCollabSessionApplicationChanged = onValueWritten({
-  ref: '/Collabs/Applications/{sessionId}/{applicantId}'
+  ref: '/Collabs/Applications/{sessionId}/{applicantId}',
+  region: databaseTriggerRegion
 }, async (event) => {
   try {
     const beforeData = event.data.before.val();
@@ -1837,7 +2429,7 @@ exports.manageBandSectionConversation = onCall({ region: 'europe-west1' }, async
  */
 exports.onBandMemberRemoved = onValueWritten({
   ref: '/Bands/{bandId}/Members_band/{memberId}',
-  region: 'europe-west1'
+  region: databaseTriggerRegion
 }, async (event) => {
   // Only trigger on deletion
   if (event.data.after.exists()) return null;
