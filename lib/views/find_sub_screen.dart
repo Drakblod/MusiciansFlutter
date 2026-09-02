@@ -51,6 +51,8 @@ class SubstituteSlotDraft {
   int? assignedAt;
   List<ResponderItem> candidates;
   bool isExpanded;
+  bool isFavoritesListOpen;
+  bool isAddFavoriteOpen;
   String addFavoriteQuery;
 
   SubstituteSlotDraft({
@@ -71,6 +73,8 @@ class SubstituteSlotDraft {
     this.assignedAt,
     List<ResponderItem>? candidates,
     this.isExpanded = true,
+    this.isFavoritesListOpen = false,
+    this.isAddFavoriteOpen = false,
     this.addFavoriteQuery = '',
   })  : selectedFavoriteIds = selectedFavoriteIds ?? {},
         candidates = candidates ?? [];
@@ -135,6 +139,9 @@ class _FindSubScreenState extends State<FindSubScreen> {
   String _selectedNewMemberInstrument = 'Electric Guitar';
   String _newMemberSource = 'search_all';
   Set<String> _selectedNewMemberFavorites = {};
+  bool _isNewMemberFavoritesOpen = false;
+  bool _isNewMemberAddFavoriteOpen = false;
+  String _newMemberAddFavoriteQuery = '';
 
   DateTime _selectedDate = DateTime.now().add(const Duration(days: 4));
   TimeOfDay _startTime = const TimeOfDay(hour: 18, minute: 0);
@@ -353,10 +360,9 @@ class _FindSubScreenState extends State<FindSubScreen> {
               final subSlotId = (subReq.slotId != null && subReq.slotId!.isNotEmpty) ? subReq.slotId! : ('slot_' + evId + '_' + sIdx.toString());
 
               final candidates = await _loadCandidatesForSubRequest(subReq);
-              final matchingFavs = _getFilteredFavoritesForInstrument(subVoicePart);
               final targetFavIds = subReq.targetUserIds != null && subReq.targetUserIds!.isNotEmpty
                   ? subReq.targetUserIds!.toSet()
-                  : matchingFavs.map((f) => f.userId!).toSet();
+                  : <String>{};
 
               slots.add(
                 SubstituteSlotDraft(
@@ -411,7 +417,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
                           ? memberProf.displayName
                           : (nicknameStr.isNotEmpty ? nicknameStr : ('Musician ' + memberUserId)),
                       searchSource: 'search_all',
-                      selectedFavoriteIds: matchingFavs.map((f) => f.userId!).toSet(),
+                      selectedFavoriteIds: <String>{},
                       status: 'draft',
                       rsvpStatus: isNo ? null : status,
                       isSuggested: !isNo,
@@ -424,14 +430,13 @@ class _FindSubScreenState extends State<FindSubScreen> {
 
               if (slots.isEmpty) {
                 final defaultInstrument = _suggestDefaultInstrument(ev, seq);
-                final matchingFavs = _getFilteredFavoritesForInstrument(defaultInstrument);
                 slots.add(
                   SubstituteSlotDraft(
                     slotId: 'draft_' + evId + '_0',
                     eventId: evId,
                     instrument: defaultInstrument,
                     searchSource: 'search_all',
-                    selectedFavoriteIds: matchingFavs.map((f) => f.userId!).toSet(),
+                    selectedFavoriteIds: <String>{},
                     status: 'draft',
                     isConfirmed: true,
                     isExpanded: true,
@@ -496,7 +501,6 @@ class _FindSubScreenState extends State<FindSubScreen> {
         requireResponse: true,
       );
 
-      final matchingFavs = _getFilteredFavoritesForInstrument('Electric Guitar');
       final initialSlot = SubstituteSlotDraft(
         slotId: (widget.initialRequest?.slotId != null && widget.initialRequest!.slotId!.isNotEmpty) ? widget.initialRequest!.slotId! : 'draft_initial_0',
         eventId: widget.eventId,
@@ -505,7 +509,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
         searchSource: widget.initialRequest?.searchSource ?? 'search_all',
         selectedFavoriteIds: widget.initialRequest?.targetUserIds != null
             ? widget.initialRequest!.targetUserIds!.toSet()
-            : matchingFavs.map((f) => f.userId!).toSet(),
+            : <String>{},
         status: widget.initialRequest?.status ?? 'draft',
         assignedUserId: widget.initialRequest?.assignedUserId,
         assignedUserName: widget.initialRequest?.assignedUserName,
@@ -570,7 +574,6 @@ class _FindSubScreenState extends State<FindSubScreen> {
     setState(() {
       final newSlotIndex = section.slots.length;
       final defaultInstrument = 'Electric Guitar';
-      final matchingFavs = _getFilteredFavoritesForInstrument(defaultInstrument);
 
       section.slots.add(
         SubstituteSlotDraft(
@@ -578,7 +581,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
           eventId: section.event.id ?? widget.eventId,
           instrument: defaultInstrument,
           searchSource: 'search_all',
-          selectedFavoriteIds: matchingFavs.map((f) => f.userId!).toSet(),
+          selectedFavoriteIds: <String>{},
           status: 'draft',
           isExpanded: true,
         ),
@@ -590,14 +593,13 @@ class _FindSubScreenState extends State<FindSubScreen> {
     setState(() {
       section.slots.remove(slot);
       if (section.slots.isEmpty && _eventSections.length == 1) {
-        final matchingFavs = _getFilteredFavoritesForInstrument('Electric Guitar');
         section.slots.add(
           SubstituteSlotDraft(
             slotId: 'draft_0',
             eventId: section.event.id,
             instrument: 'Electric Guitar',
             searchSource: 'search_all',
-            selectedFavoriteIds: matchingFavs.map((f) => f.userId!).toSet(),
+            selectedFavoriteIds: <String>{},
             status: 'draft',
           ),
         );
@@ -666,10 +668,6 @@ class _FindSubScreenState extends State<FindSubScreen> {
     if (selectedList != null && selectedList.isNotEmpty) {
       setState(() {
         slot.instrument = selectedList.first;
-        if (slot.searchSource == 'favorites') {
-          final matchingFavs = _getFilteredFavoritesForInstrument(slot.instrument);
-          slot.selectedFavoriteIds = matchingFavs.map((f) => f.userId!).toSet();
-        }
       });
     }
   }
@@ -700,7 +698,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
           if (slot.searchSource == 'favorites' && slot.selectedFavoriteIds.isEmpty) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('No favorited musicians play ' + slot.instrument + '. Please select favorites or switch to Search All.'),
+                content: const Text('Please choose a favorite substitute or switch to Search All.'),
                 backgroundColor: AppTheme.danger,
               ),
             );
@@ -985,7 +983,6 @@ class _FindSubScreenState extends State<FindSubScreen> {
     if (confirmed == true) {
       if (!mounted) return;
       final appState = Provider.of<AppState>(context, listen: false);
-      final currentUserId = appState.currentUserId ?? '';
       final subRequestId = slot.subRequestId ?? slot.slotId;
 
       setState(() => _isLoading = true);
@@ -1184,13 +1181,12 @@ class _FindSubScreenState extends State<FindSubScreen> {
 
   String _buildEventHeaderLabel(EventStaffingSection section) {
     final title = section.titleController.text.trim();
-    final eventType = section.selectedEventType?.trim() ?? '';
-    if (title.isEmpty && eventType.isEmpty) {
-      return 'EVENT ' + section.sequence.toString();
-    }
-    final displayTitle = title.isNotEmpty ? title : (section.event.title.isNotEmpty ? section.event.title : 'Event');
-    final displayType = eventType.isNotEmpty ? eventType : (section.event.eventType.isNotEmpty ? section.event.eventType : 'Gig');
-    return 'EVENT ' + section.sequence.toString() + ' · ' + displayTitle + ' · ' + displayType;
+    final rawType = (section.selectedEventType != null && section.selectedEventType!.trim().isNotEmpty)
+        ? section.selectedEventType!.trim()
+        : (section.event.eventType.trim().isNotEmpty ? section.event.eventType.trim() : 'EVENT');
+    final typeStr = rawType.toUpperCase();
+    final displayTitle = title.isNotEmpty ? title : (section.event.title.trim().isNotEmpty ? section.event.title.trim() : 'Event');
+    return 'EVENT ' + section.sequence.toString() + ' - ' + typeStr + ': "' + displayTitle + '"';
   }
 
   Future<void> _pickDateForSection(EventStaffingSection section) async {
@@ -1262,29 +1258,30 @@ class _FindSubScreenState extends State<FindSubScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: const BoxDecoration(
-              color: Color(0xFF1A1635),
-              borderRadius: BorderRadius.vertical(top: Radius.circular(15)),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    _buildEventHeaderLabel(section),
-                    style: GoogleFonts.outfit(
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
+          if (_eventSections.length > 1)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: const BoxDecoration(
+                color: Color(0xFF1A1635),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(15)),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      _buildEventHeaderLabel(section),
+                      style: GoogleFonts.outfit(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: Column(
@@ -1573,29 +1570,30 @@ class _FindSubScreenState extends State<FindSubScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: const BoxDecoration(
-              color: Color(0xFF1A1635),
-              borderRadius: BorderRadius.vertical(top: Radius.circular(15)),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    _buildEventHeaderLabel(section),
-                    style: GoogleFonts.outfit(
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
+          if (_eventSections.length > 1)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: const BoxDecoration(
+                color: Color(0xFF1A1635),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(15)),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      _buildEventHeaderLabel(section),
+                      style: GoogleFonts.outfit(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
           Padding(
             padding: const EdgeInsets.all(14.0),
             child: Column(
@@ -1634,467 +1632,295 @@ class _FindSubScreenState extends State<FindSubScreen> {
   }
 
   Widget _buildSlotCard(EventStaffingSection section, SubstituteSlotDraft slot, int slotIndex) {
-    final eligibleFavorites = _getFilteredFavoritesForInstrument(slot.instrument);
     final isDraft = slot.status == 'draft';
     final bool isAssigned = slot.assignedUserId != null && slot.assignedUserId!.trim().isNotEmpty;
+    final bool showSlotNumber = section.slots.length > 1;
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: const Color(0xFF16122C),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isAssigned
-              ? AppTheme.success.withValues(alpha: 0.4)
-              : (slot.isSuggested && !slot.isConfirmed
-                  ? Colors.amber.withValues(alpha: 0.4)
-                  : const Color(0xFF231F45)),
-          width: 1,
-        ),
-      ),
+    // Resolve Chosen Substitute name if a favorite is selected for this slot
+    String? chosenSubstituteName;
+    if (slot.selectedFavoriteIds.isNotEmpty) {
+      final chosenId = slot.selectedFavoriteIds.first;
+      final fav = _favorites.where((f) => f.userId == chosenId).firstOrNull ??
+          _allMusicianProfiles.where((p) => p.userId == chosenId).firstOrNull;
+      chosenSubstituteName = fav?.displayName ?? fav?.nickname ?? chosenId;
+    }
+
+    final slotContent = Padding(
+      padding: const EdgeInsets.all(12.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Slot Header
-          InkWell(
-            onTap: () {
-              setState(() {
-                slot.isExpanded = !slot.isExpanded;
-              });
-            },
-            borderRadius: BorderRadius.circular(12),
-            child: Padding(
-              padding: const EdgeInsets.all(12.0),
+          // 1. Assigned substitute (Render ONLY when a substitute is actually assigned)
+          if (isAssigned) ...[
+            Text(
+              'Assigned substitute',
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: AppTheme.success.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppTheme.success.withValues(alpha: 0.4)),
+              ),
               child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Expanded(
-                    child: Text(
-                      'SUBSTITUTE ' + (slotIndex + 1).toString(),
-                      style: GoogleFonts.outfit(
-                        fontSize: 15,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
+                  Row(
+                    children: [
+                      const Icon(Icons.check_circle_rounded, color: AppTheme.success, size: 18),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Assigned: ' + (slot.assignedUserName ?? 'Musician'),
+                        style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white),
                       ),
-                    ),
+                    ],
                   ),
-                  _buildStatusBadge(slot),
-                  const SizedBox(width: 6),
-                  Icon(
-                    slot.isExpanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
-                    color: Colors.white70,
+                  TextButton(
+                    onPressed: () => _revokeAssignment(section, slot),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    child: Text(
+                      'Revoke',
+                      style: GoogleFonts.inter(color: AppTheme.danger, fontSize: 12, fontWeight: FontWeight.bold),
+                    ),
                   ),
                 ],
               ),
             ),
+            const SizedBox(height: 12),
+          ],
+
+          // 2. Replacing (Show only when replacedMemberName is present)
+          if (slot.replacedMemberName != null && slot.replacedMemberName!.trim().isNotEmpty) ...[
+            Text(
+              'Replacing',
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1E1A3A),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFF2E2A4E)),
+              ),
+              child: Text(
+                slot.replacedMemberName!,
+                style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+
+          // 3. Instrument/Skill (Singular)
+          InkWell(
+            onTap: isDraft ? () => _openInstrumentPicker(slot) : null,
+            borderRadius: BorderRadius.circular(8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Instrument/Skill',
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1E1A3A),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFF2E2A4E)),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          slot.instrument,
+                          style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (isDraft)
+                        const Icon(Icons.arrow_drop_down, color: AppTheme.primaryAccent, size: 20),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
 
-          if (slot.isExpanded) ...[
-            const Divider(color: Color(0xFF231F45), height: 1),
-            Padding(
-              padding: const EdgeInsets.all(12.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // 1. Assigned substitute (Render ONLY when a substitute is actually assigned)
-                  if (isAssigned) ...[
-                    Text(
-                      'Assigned substitute',
-                      style: GoogleFonts.inter(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: AppTheme.textSecondary,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: AppTheme.success.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: AppTheme.success.withValues(alpha: 0.4)),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Row(
-                            children: [
-                              const Icon(Icons.check_circle_rounded, color: AppTheme.success, size: 18),
-                              const SizedBox(width: 8),
-                              Text(
-                                'Assigned: ' + (slot.assignedUserName ?? 'Musician'),
-                                style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white),
-                              ),
-                            ],
-                          ),
-                          TextButton(
-                            onPressed: () => _revokeAssignment(section, slot),
-                            style: TextButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                              minimumSize: Size.zero,
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            ),
-                            child: Text(
-                              'Revoke',
-                              style: GoogleFonts.inter(color: AppTheme.danger, fontSize: 12, fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                  ],
-
-                  // 2. Replacing (Show only when replacedMemberName is present)
-                  if (slot.replacedMemberName != null && slot.replacedMemberName!.trim().isNotEmpty) ...[
-                    Text(
-                      'Replacing',
-                      style: GoogleFonts.inter(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: AppTheme.textSecondary,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF1E1A3A),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: const Color(0xFF2E2A4E)),
-                      ),
-                      child: Text(
-                        slot.replacedMemberName!,
-                        style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                  ],
-
-                  // 3. Instrument/Skill (Singular)
-                  InkWell(
-                    onTap: isDraft ? () => _openInstrumentPicker(slot) : null,
+          // Chosen Substitute (appears directly below Instrument/Skill when chosen)
+          if (chosenSubstituteName != null && chosenSubstituteName.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Chosen Substitute',
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1E1A3A),
                     borderRadius: BorderRadius.circular(8),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Instrument/Skill',
+                    border: Border.all(color: const Color(0xFF2E2A4E)),
+                  ),
+                  child: Text(
+                    chosenSubstituteName,
+                    style: GoogleFonts.inter(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ],
+          const SizedBox(height: 12),
+
+          // 4. Source Selector (Favorites List | Search All - Favorites List on the left)
+          if (isDraft) ...[
+            Row(
+              children: [
+                Expanded(
+                  child: InkWell(
+                    onTap: () {
+                      setState(() {
+                        if (slot.searchSource != 'favorites') {
+                          slot.searchSource = 'favorites';
+                          slot.isFavoritesListOpen = true;
+                        } else {
+                          slot.isFavoritesListOpen = !slot.isFavoritesListOpen;
+                        }
+                      });
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      decoration: BoxDecoration(
+                        color: slot.searchSource == 'favorites'
+                            ? AppTheme.primaryAccent.withValues(alpha: 0.2)
+                            : const Color(0xFF1E1A3A),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: slot.searchSource == 'favorites'
+                              ? AppTheme.primaryAccent
+                              : const Color(0xFF2E2A4E),
+                        ),
+                      ),
+                      child: Center(
+                        child: Text(
+                          'Favorites List',
                           style: GoogleFonts.inter(
                             fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: AppTheme.textSecondary,
+                            fontWeight: FontWeight.bold,
+                            color: slot.searchSource == 'favorites' ? Colors.white : AppTheme.textSecondary,
                           ),
-                        ),
-                        const SizedBox(height: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF1E1A3A),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: const Color(0xFF2E2A4E)),
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  slot.instrument,
-                                  style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              if (isDraft)
-                                const Icon(Icons.arrow_drop_down, color: AppTheme.primaryAccent, size: 20),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-
-                  // 4. Source Selector (Favorites List / Search All)
-                  if (isDraft) ...[
-                    Row(
-                      children: [
-                        Expanded(
-                          child: InkWell(
-                            onTap: () {
-                              setState(() {
-                                slot.searchSource = 'favorites';
-                                if (slot.selectedFavoriteIds.isEmpty) {
-                                  final matching = _getFilteredFavoritesForInstrument(slot.instrument);
-                                  slot.selectedFavoriteIds = matching.map((f) => f.userId!).toSet();
-                                }
-                              });
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(vertical: 10),
-                              decoration: BoxDecoration(
-                                color: slot.searchSource == 'favorites'
-                                    ? AppTheme.primaryAccent.withOpacity(0.2)
-                                    : const Color(0xFF1E1A3A),
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(
-                                  color: slot.searchSource == 'favorites'
-                                      ? AppTheme.primaryAccent
-                                      : const Color(0xFF2E2A4E),
-                                ),
-                              ),
-                              child: Center(
-                                child: Text(
-                                  'Favorites List',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                    color: slot.searchSource == 'favorites' ? Colors.white : AppTheme.textSecondary,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: InkWell(
-                            onTap: () {
-                              setState(() {
-                                slot.searchSource = 'search_all';
-                              });
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(vertical: 10),
-                              decoration: BoxDecoration(
-                                color: slot.searchSource == 'search_all'
-                                    ? AppTheme.primaryAccent.withOpacity(0.2)
-                                    : const Color(0xFF1E1A3A),
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(
-                                  color: slot.searchSource == 'search_all'
-                                      ? AppTheme.primaryAccent
-                                      : const Color(0xFF2E2A4E),
-                                ),
-                              ),
-                              child: Center(
-                                child: Text(
-                                  'Search All',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                    color: slot.searchSource == 'search_all' ? Colors.white : AppTheme.textSecondary,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-
-                    if (slot.searchSource == 'favorites') ...[
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF1E1A3A),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: const Color(0xFF2E2A4E)),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Favorites List',
-                              style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white),
-                            ),
-                            const SizedBox(height: 8),
-
-                            TextField(
-                              onChanged: (val) {
-                                setState(() {
-                                  slot.addFavoriteQuery = val;
-                                });
-                              },
-                              style: GoogleFonts.inter(color: Colors.white, fontSize: 13),
-                              decoration: InputDecoration(
-                                hintText: 'Add Favorites',
-                                hintStyle: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 13),
-                                prefixIcon: const Icon(Icons.search_rounded, color: AppTheme.primaryAccent, size: 18),
-                                isDense: true,
-                                filled: true,
-                                fillColor: const Color(0xFF16122C),
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                  borderSide: const BorderSide(color: Color(0xFF2E2A4E)),
-                                ),
-                                enabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                  borderSide: const BorderSide(color: Color(0xFF2E2A4E)),
-                                ),
-                                focusedBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                  borderSide: const BorderSide(color: AppTheme.primaryAccent, width: 1.5),
-                                ),
-                              ),
-                            ),
-
-                            if (slot.addFavoriteQuery.trim().isNotEmpty) ...[
-                              const SizedBox(height: 6),
-                              Builder(
-                                builder: (context) {
-                                  final appState = Provider.of<AppState>(context, listen: false);
-                                  final currentUserId = appState.currentUserId;
-                                  final existingFavIds = _favorites.map((f) => f.userId).toSet();
-                                  final query = slot.addFavoriteQuery.trim().toLowerCase();
-
-                                  final results = _allMusicianProfiles.where((p) {
-                                    if (p.userId == null || p.userId == currentUserId) return false;
-                                    if (existingFavIds.contains(p.userId)) return false;
-                                    final name = (p.displayName ?? p.nickname ?? '').toLowerCase();
-                                    final uType = (p.userType ?? '').toLowerCase();
-                                    final insts = p.instruments.map((i) => i.toLowerCase()).toList();
-                                    return name.contains(query) || uType.contains(query) || insts.any((i) => i.contains(query));
-                                  }).toList();
-
-                                  if (results.isEmpty) {
-                                    return Padding(
-                                      padding: const EdgeInsets.symmetric(vertical: 6),
-                                      child: Text(
-                                        'No matching musicians to add.',
-                                        style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary),
-                                      ),
-                                    );
-                                  }
-
-                                  return Container(
-                                    constraints: const BoxConstraints(maxHeight: 140),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFF16122C),
-                                      borderRadius: BorderRadius.circular(8),
-                                      border: Border.all(color: const Color(0xFF2E2A4E)),
-                                    ),
-                                    child: ListView.builder(
-                                      shrinkWrap: true,
-                                      itemCount: results.length,
-                                      itemBuilder: (context, idx) {
-                                        final prof = results[idx];
-                                        return ListTile(
-                                          dense: true,
-                                          title: Text(
-                                            prof.displayName ?? prof.nickname ?? 'Musician',
-                                            style: GoogleFonts.inter(fontSize: 12, color: Colors.white, fontWeight: FontWeight.w600),
-                                          ),
-                                          subtitle: Text(
-                                            prof.instruments.join(', '),
-                                            style: GoogleFonts.inter(fontSize: 10, color: AppTheme.textSecondary),
-                                          ),
-                                          trailing: IconButton(
-                                            icon: const Icon(Icons.star_border_rounded, color: AppTheme.primaryAccent, size: 20),
-                                            onPressed: () async {
-                                              try {
-                                                await appState.firebaseService.toggleFavoriteAsync(prof.userId!, true);
-                                                setState(() {
-                                                  _favorites.add(prof);
-                                                  slot.selectedFavoriteIds.add(prof.userId!);
-                                                  slot.addFavoriteQuery = '';
-                                                });
-                                                ScaffoldMessenger.of(context).showSnackBar(
-                                                  SnackBar(
-                                                    content: Text((prof.displayName ?? 'Musician') + ' added to Favorites.'),
-                                                    backgroundColor: AppTheme.success,
-                                                  ),
-                                                );
-                                              } catch (e) {
-                                                ScaffoldMessenger.of(context).showSnackBar(
-                                                  SnackBar(content: Text('Failed to add favorite: ' + e.toString()), backgroundColor: AppTheme.danger),
-                                                );
-                                              }
-                                            },
-                                          ),
-                                        );
-                                      },
-                                    ),
-                                  );
-                                },
-                              ),
-                            ],
-
-                            const SizedBox(height: 8),
-
-                            Row(
-                              children: [
-                                TextButton(
-                                  style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2)),
-                                  onPressed: () {
-                                    setState(() {
-                                      final eligible = _getFilteredFavoritesForInstrument(slot.instrument);
-                                      slot.selectedFavoriteIds.addAll(eligible.map((m) => m.userId!).where((id) => id.isNotEmpty));
-                                    });
-                                  },
-                                  child: Text('SELECT ALL', style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.primaryAccent)),
-                                ),
-                                const SizedBox(width: 4),
-                                TextButton(
-                                  style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2)),
-                                  onPressed: () {
-                                    setState(() {
-                                      slot.selectedFavoriteIds.clear();
-                                    });
-                                  },
-                                  child: Text('CLEAR ALL', style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white60)),
-                                ),
-                                const Spacer(),
-                                Text(
-                                  slot.selectedFavoriteIds.length.toString() + ' of ' + eligibleFavorites.length.toString() + ' favorites selected',
-                                  style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary),
-                                ),
-                              ],
-                            ),
-
-                            if (eligibleFavorites.isEmpty)
-                              Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 4),
-                                child: Text(
-                                  'No favorited ' + slot.instrument + ' players found.',
-                                  style: GoogleFonts.inter(fontSize: 11, color: Colors.amberAccent),
-                                ),
-                              )
-                            else
-                              ...eligibleFavorites.map((fav) {
-                                final uid = fav.userId ?? '';
-                                final isChecked = slot.selectedFavoriteIds.contains(uid);
-                                return CheckboxListTile(
-                                  dense: true,
-                                  contentPadding: EdgeInsets.zero,
-                                  value: isChecked,
-                                  activeColor: AppTheme.primaryAccent,
-                                  checkColor: Colors.white,
-                                  title: Text(
-                                    fav.displayName ?? fav.nickname ?? 'Musician',
-                                    style: GoogleFonts.inter(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500),
-                                  ),
-                                  subtitle: Text(
-                                    fav.instruments.join(', '),
-                                    style: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 11),
-                                  ),
-                                  onChanged: (val) {
-                                    setState(() {
-                                      if (val == true) {
-                                        slot.selectedFavoriteIds.add(uid);
-                                      } else {
-                                        slot.selectedFavoriteIds.remove(uid);
-                                      }
-                                    });
-                                  },
-                                );
-                              }),
-                          ],
                         ),
                       ),
-                    ],
-                  ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: InkWell(
+                    onTap: () {
+                      setState(() {
+                        slot.searchSource = 'search_all';
+                        slot.isFavoritesListOpen = false;
+                      });
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      decoration: BoxDecoration(
+                        color: slot.searchSource == 'search_all'
+                            ? AppTheme.primaryAccent.withValues(alpha: 0.2)
+                            : const Color(0xFF1E1A3A),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: slot.searchSource == 'search_all'
+                              ? AppTheme.primaryAccent
+                              : const Color(0xFF2E2A4E),
+                        ),
+                      ),
+                      child: Center(
+                        child: Text(
+                          'Search All',
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: slot.searchSource == 'search_all' ? Colors.white : AppTheme.textSecondary,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+
+            if (slot.searchSource == 'favorites' && slot.isFavoritesListOpen) ...[
+              _buildFavoritesListPanel(
+                isSingleSelect: true,
+                selectedIds: slot.selectedFavoriteIds,
+                onSelect: (uid, selected) {
+                  setState(() {
+                    if (selected) {
+                      slot.selectedFavoriteIds = {uid};
+                      slot.isFavoritesListOpen = false;
+                    } else {
+                      slot.selectedFavoriteIds.remove(uid);
+                    }
+                  });
+                },
+                isAddFavoriteOpen: slot.isAddFavoriteOpen,
+                onToggleAddFavorite: () {
+                  setState(() {
+                    slot.isAddFavoriteOpen = !slot.isAddFavoriteOpen;
+                  });
+                },
+                addFavoriteQuery: slot.addFavoriteQuery,
+                onAddFavoriteQueryChanged: (val) {
+                  setState(() {
+                    slot.addFavoriteQuery = val;
+                  });
+                },
+                onFavoriteAdded: () {
+                  setState(() {
+                    slot.isFavoritesListOpen = true;
+                  });
+                },
+              ),
+            ],
+          ],
 
                   if (slot.isSuggested && !slot.isConfirmed) ...[
                     const SizedBox(height: 10),
@@ -2191,7 +2017,273 @@ class _FindSubScreenState extends State<FindSubScreen> {
                   ),
                 ],
               ),
+            );
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF16122C),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isAssigned
+              ? AppTheme.success.withValues(alpha: 0.4)
+              : (slot.isSuggested && !slot.isConfirmed
+                  ? Colors.amber.withValues(alpha: 0.4)
+                  : const Color(0xFF231F45)),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (showSlotNumber) ...[
+            // Slot Header
+            InkWell(
+              onTap: () {
+                setState(() {
+                  slot.isExpanded = !slot.isExpanded;
+                });
+              },
+              borderRadius: BorderRadius.circular(12),
+              child: Padding(
+                padding: const EdgeInsets.all(12.0),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'SUBSTITUTE ' + (slotIndex + 1).toString(),
+                        style: GoogleFonts.outfit(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                    _buildStatusBadge(slot),
+                    const SizedBox(width: 6),
+                    Icon(
+                      slot.isExpanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
+                      color: Colors.white70,
+                    ),
+                  ],
+                ),
+              ),
             ),
+            if (slot.isExpanded) ...[
+              const Divider(color: Color(0xFF231F45), height: 1),
+              slotContent,
+            ],
+          ] else ...[
+            slotContent,
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFavoritesListPanel({
+    required bool isSingleSelect,
+    required Set<String> selectedIds,
+    required void Function(String uid, bool selected) onSelect,
+    required bool isAddFavoriteOpen,
+    required VoidCallback onToggleAddFavorite,
+    required String addFavoriteQuery,
+    required ValueChanged<String> onAddFavoriteQueryChanged,
+    required VoidCallback onFavoriteAdded,
+  }) {
+    final appState = Provider.of<AppState>(context, listen: false);
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E1A3A),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFF2E2A4E)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Favorites List',
+            style: GoogleFonts.outfit(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 10),
+
+          if (_favorites.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Text(
+                'No favorites yet. Use + Add Favorite(s) below to add musicians to your favorites.',
+                style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
+              ),
+            )
+          else
+            ..._favorites.map((fav) {
+              final uid = fav.userId ?? '';
+              final isChecked = selectedIds.contains(uid);
+              return CheckboxListTile(
+                controlAffinity: ListTileControlAffinity.leading,
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                value: isChecked,
+                activeColor: AppTheme.primaryAccent,
+                checkColor: Colors.white,
+                title: Text(
+                  fav.displayName ?? fav.nickname ?? 'Musician',
+                  style: GoogleFonts.inter(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500),
+                ),
+                subtitle: Text(
+                  fav.instruments.isNotEmpty ? fav.instruments.join(', ') : (fav.userType ?? ''),
+                  style: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 11),
+                ),
+                onChanged: (val) => onSelect(uid, val == true),
+              );
+            }),
+
+          const SizedBox(height: 8),
+          const Divider(color: Color(0xFF2E2A4E), height: 1),
+          const SizedBox(height: 8),
+
+          // + Add Favorite(s) control
+          InkWell(
+            onTap: onToggleAddFavorite,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.add_circle_outline_rounded, color: AppTheme.primaryAccent, size: 18),
+                  const SizedBox(width: 6),
+                  Text(
+                    '+ Add Favorite(s)',
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.primaryAccent,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          if (isAddFavoriteOpen) ...[
+            const SizedBox(height: 8),
+            TextField(
+              onChanged: onAddFavoriteQueryChanged,
+              style: GoogleFonts.inter(color: Colors.white, fontSize: 13),
+              decoration: InputDecoration(
+                hintText: 'Search musicians to add as favorite...',
+                hintStyle: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 13),
+                prefixIcon: const Icon(Icons.search_rounded, color: AppTheme.primaryAccent, size: 18),
+                isDense: true,
+                filled: true,
+                fillColor: const Color(0xFF16122C),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: Color(0xFF2E2A4E)),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: Color(0xFF2E2A4E)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: AppTheme.primaryAccent, width: 1.5),
+                ),
+              ),
+            ),
+
+            if (addFavoriteQuery.trim().isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Builder(
+                builder: (context) {
+                  final currentUserId = appState.currentUserId;
+                  final existingFavIds = _favorites.map((f) => f.userId).toSet();
+                  final query = addFavoriteQuery.trim().toLowerCase();
+
+                  final results = _allMusicianProfiles.where((p) {
+                    if (p.userId == null || p.userId == currentUserId) return false;
+                    if (existingFavIds.contains(p.userId)) return false;
+                    final name = (p.displayName ?? p.nickname ?? '').toLowerCase();
+                    final uType = (p.userType ?? '').toLowerCase();
+                    final insts = p.instruments.map((i) => i.toLowerCase()).toList();
+                    return name.contains(query) || uType.contains(query) || insts.any((i) => i.contains(query));
+                  }).toList();
+
+                  if (results.isEmpty) {
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 6),
+                      child: Text(
+                        'No matching musicians to add.',
+                        style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary),
+                      ),
+                    );
+                  }
+
+                  return Container(
+                    constraints: const BoxConstraints(maxHeight: 160),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF16122C),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFF2E2A4E)),
+                    ),
+                    child: ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: results.length,
+                      itemBuilder: (context, idx) {
+                        final prof = results[idx];
+                        return ListTile(
+                          dense: true,
+                          title: Text(
+                            prof.displayName ?? prof.nickname ?? 'Musician',
+                            style: GoogleFonts.inter(fontSize: 12, color: Colors.white, fontWeight: FontWeight.w600),
+                          ),
+                          subtitle: Text(
+                            prof.instruments.join(', '),
+                            style: GoogleFonts.inter(fontSize: 10, color: AppTheme.textSecondary),
+                          ),
+                          trailing: TextButton.icon(
+                            icon: const Icon(Icons.star_rounded, color: AppTheme.primaryAccent, size: 18),
+                            label: Text('Add', style: GoogleFonts.inter(color: AppTheme.primaryAccent, fontSize: 12, fontWeight: FontWeight.bold)),
+                            onPressed: () async {
+                              try {
+                                await appState.firebaseService.toggleFavoriteAsync(prof.userId!, true);
+                                setState(() {
+                                  if (!_favorites.any((f) => f.userId == prof.userId)) {
+                                    _favorites.add(prof);
+                                  }
+                                  onFavoriteAdded();
+                                });
+                                if (!mounted) return;
+                                ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('${prof.displayName ?? 'Musician'} added to Favorites.'),
+                                    backgroundColor: AppTheme.success,
+                                  ),
+                                );
+                              } catch (e) {
+                                if (!mounted) return;
+                                ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('Failed to add favorite: $e'), backgroundColor: AppTheme.danger),
+                                );
+                              }
+                            },
+                          ),
+                        );
+                      },
+                    ),
+                  );
+                },
+              ),
+            ],
           ],
         ],
       ),
@@ -2426,44 +2518,11 @@ class _FindSubScreenState extends State<FindSubScreen> {
                     child: InkWell(
                       onTap: () {
                         setState(() {
-                          _newMemberSource = 'search_all';
-                        });
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 10),
-                        decoration: BoxDecoration(
-                          color: _newMemberSource == 'search_all'
-                              ? AppTheme.primaryAccent.withOpacity(0.2)
-                              : const Color(0xFF1E1A3A),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                            color: _newMemberSource == 'search_all'
-                                ? AppTheme.primaryAccent
-                                : const Color(0xFF2E2A4E),
-                          ),
-                        ),
-                        child: Center(
-                          child: Text(
-                            'Search All',
-                            style: GoogleFonts.inter(
-                              fontSize: 12.5,
-                              fontWeight: FontWeight.bold,
-                              color: _newMemberSource == 'search_all' ? Colors.white : AppTheme.textSecondary,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: InkWell(
-                      onTap: () {
-                        setState(() {
-                          _newMemberSource = 'favorites';
-                          if (_selectedNewMemberFavorites.isEmpty) {
-                            final matchingFavs = _getFilteredFavoritesForInstrument(_selectedNewMemberInstrument);
-                            _selectedNewMemberFavorites = matchingFavs.map((f) => f.userId!).toSet();
+                          if (_newMemberSource != 'favorites') {
+                            _newMemberSource = 'favorites';
+                            _isNewMemberFavoritesOpen = true;
+                          } else {
+                            _isNewMemberFavoritesOpen = !_isNewMemberFavoritesOpen;
                           }
                         });
                       },
@@ -2471,7 +2530,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
                         padding: const EdgeInsets.symmetric(vertical: 10),
                         decoration: BoxDecoration(
                           color: _newMemberSource == 'favorites'
-                              ? AppTheme.primaryAccent.withOpacity(0.2)
+                              ? AppTheme.primaryAccent.withValues(alpha: 0.2)
                               : const Color(0xFF1E1A3A),
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(
@@ -2493,8 +2552,76 @@ class _FindSubScreenState extends State<FindSubScreen> {
                       ),
                     ),
                   ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: InkWell(
+                      onTap: () {
+                        setState(() {
+                          _newMemberSource = 'search_all';
+                          _isNewMemberFavoritesOpen = false;
+                        });
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        decoration: BoxDecoration(
+                          color: _newMemberSource == 'search_all'
+                              ? AppTheme.primaryAccent.withValues(alpha: 0.2)
+                              : const Color(0xFF1E1A3A),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: _newMemberSource == 'search_all'
+                                ? AppTheme.primaryAccent
+                                : const Color(0xFF2E2A4E),
+                          ),
+                        ),
+                        child: Center(
+                          child: Text(
+                            'Search All',
+                            style: GoogleFonts.inter(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.bold,
+                              color: _newMemberSource == 'search_all' ? Colors.white : AppTheme.textSecondary,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
                 ],
               ),
+              if (_newMemberSource == 'favorites' && _isNewMemberFavoritesOpen) ...[
+                const SizedBox(height: 10),
+                _buildFavoritesListPanel(
+                  isSingleSelect: false,
+                  selectedIds: _selectedNewMemberFavorites,
+                  onSelect: (uid, selected) {
+                    setState(() {
+                      if (selected) {
+                        _selectedNewMemberFavorites.add(uid);
+                      } else {
+                        _selectedNewMemberFavorites.remove(uid);
+                      }
+                    });
+                  },
+                  isAddFavoriteOpen: _isNewMemberAddFavoriteOpen,
+                  onToggleAddFavorite: () {
+                    setState(() {
+                      _isNewMemberAddFavoriteOpen = !_isNewMemberAddFavoriteOpen;
+                    });
+                  },
+                  addFavoriteQuery: _newMemberAddFavoriteQuery,
+                  onAddFavoriteQueryChanged: (val) {
+                    setState(() {
+                      _newMemberAddFavoriteQuery = val;
+                    });
+                  },
+                  onFavoriteAdded: () {
+                    setState(() {
+                      _isNewMemberFavoritesOpen = true;
+                    });
+                  },
+                ),
+              ],
             ],
           ),
         ),

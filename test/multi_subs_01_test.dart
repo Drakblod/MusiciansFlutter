@@ -401,7 +401,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('FIND MUSICIAN/VOCALIST'), findsOneWidget);
-      expect(find.text('SUBSTITUTE 1'), findsOneWidget);
+      // Under 03B, single-slot events omit SUBSTITUTE 1
+      expect(find.text('SUBSTITUTE 1'), findsNothing);
       expect(find.text('Instrument/Skill'), findsOneWidget);
       expect(find.text('Electric Guitar'), findsOneWidget);
     });
@@ -449,7 +450,9 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Drums'), findsWidgets);
-      expect(find.text('Waiting for answers'), findsWidgets);
+      // Under 03B, single slot proceeds directly to slot content without slot header
+      expect(find.text('SUBSTITUTE 1'), findsNothing);
+      expect(find.text('Instrument/Skill'), findsOneWidget);
     });
 
     testWidgets('3. Opening the workflow performs zero writes', (tester) async {
@@ -483,7 +486,7 @@ void main() {
       expect(mock.writeOperationCount, equals(0));
     });
 
-    testWidgets('4. Several draft slots can exist in one unified workflow', (tester) async {
+    testWidgets('4. Several draft slots can exist in one unified workflow (conditional numbering)', (tester) async {
       tester.view.physicalSize = const Size(800, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -492,7 +495,8 @@ void main() {
       await tester.pumpWidget(createMultiSubsTestApp(mockService: mock, child: const FindSubScreen()));
       await tester.pumpAndSettle();
 
-      expect(find.text('SUBSTITUTE 1'), findsOneWidget);
+      // Under 03B, 1 slot hides SUBSTITUTE 1
+      expect(find.text('SUBSTITUTE 1'), findsNothing);
 
       await tester.tap(find.text('ADD ANOTHER SUBSTITUTE'));
       await tester.pumpAndSettle();
@@ -522,7 +526,12 @@ void main() {
       await tester.tap(favoritesButtons.first);
       await tester.pumpAndSettle();
 
-      expect(find.text('1 of 1 favorites selected'), findsOneWidget);
+      expect(find.text('Favorite Guitarist'), findsOneWidget);
+      await tester.tap(find.widgetWithText(CheckboxListTile, 'Favorite Guitarist'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Chosen Substitute'), findsOneWidget);
+      expect(find.text('Favorite Guitarist'), findsOneWidget);
     });
 
     testWidgets('6. Slot 2 can independently choose Search All source', (tester) async {
@@ -835,7 +844,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(mock.assignCalls, equals(1));
-      expect(find.textContaining('Jimi Hendrix assigned'), findsOneWidget);
+      expect(find.text('Assigned: Jimi Hendrix'), findsOneWidget);
+      expect(find.text('Revoke'), findsOneWidget);
     });
 
     testWidgets('14. Assigning one slot leaves unrelated slots open', (tester) async {
@@ -1348,7 +1358,7 @@ void main() {
       await tester.tap(favButton);
       await tester.pumpAndSettle();
 
-      expect(find.text('No favorited Electric Guitar players found.'), findsOneWidget);
+      expect(find.textContaining('No favorites yet'), findsOneWidget);
 
       // Attempting to publish should display validation warning
       final publishContainer = find.textContaining('PUBLISH SUBSTITUTE REQUESTS');
@@ -1356,7 +1366,7 @@ void main() {
       await tester.tap(publishContainer);
       await tester.pumpAndSettle();
 
-      expect(find.textContaining('No favorited musicians play Electric Guitar'), findsOneWidget);
+      expect(find.textContaining('Please choose a favorite substitute or switch to Search All.'), findsOneWidget);
       expect(mock.batchSaveCalls, equals(0));
     });
 
@@ -1693,7 +1703,9 @@ void main() {
       ));
       await tester.pumpAndSettle();
 
-      expect(find.text('SUBSTITUTE 1'), findsOneWidget);
+      // Under 03B, single-slot events omit SUBSTITUTE 1
+      expect(find.text('SUBSTITUTE 1'), findsNothing);
+      expect(find.text('Instrument/Skill'), findsOneWidget);
       expect(find.text('ADD ANOTHER SUBSTITUTE'), findsOneWidget);
       expect(find.textContaining('PUBLISH SUBSTITUTE REQUESTS'), findsOneWidget);
     });
@@ -1824,7 +1836,9 @@ void main() {
       ));
       await tester.pumpAndSettle();
 
-      expect(find.text('SUBSTITUTE 1'), findsOneWidget);
+      // Under 03B, single-slot events omit SUBSTITUTE 1
+      expect(find.text('SUBSTITUTE 1'), findsNothing);
+      expect(find.text('Instrument/Skill'), findsOneWidget);
       expect(find.text('Find Substitute(s)'), findsOneWidget);
     });
 

@@ -291,7 +291,7 @@ void main() {
   }
 
   group('FIND-MUSICIAN-03A.1 Entry Context & Request Snapshot Tests', () {
-    testWidgets('1. HomeView/standalone entry renders an empty Name of Event and EVENT 1 header', (WidgetTester tester) async {
+    testWidgets('1. HomeView/standalone entry renders an empty Name of Event without EVENT 1 header', (WidgetTester tester) async {
       tester.view.physicalSize = const Size(800, 2000);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -299,7 +299,7 @@ void main() {
       await tester.pumpWidget(createWidgetUnderTest(eventId: null));
       await tester.pumpAndSettle();
 
-      expect(find.text('EVENT 1'), findsWidgets);
+      expect(find.textContaining('EVENT 1'), findsNothing);
       expect(find.text('Name of Event'), findsOneWidget);
 
       final titleField = tester.widget<TextFormField>(find.widgetWithText(TextFormField, ''));

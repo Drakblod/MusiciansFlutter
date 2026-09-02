@@ -486,13 +486,14 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.textContaining('EVENT 1 ·'), findsWidgets);
-      expect(find.textContaining('EVENT 2 ·'), findsWidgets);
+      expect(find.textContaining('EVENT 1 - '), findsWidgets);
+      expect(find.textContaining('EVENT 2 - '), findsWidgets);
+      expect(find.textContaining('·'), findsNothing);
       expect(find.text('ADD SUBSTITUTE TO EVENT 1'), findsOneWidget);
       expect(find.text('ADD SUBSTITUTE TO EVENT 2'), findsOneWidget);
     });
 
-    testWidgets('15. Slot numbering restarts per event occurrence', (tester) async {
+    testWidgets('15. Slot numbering restarts per event occurrence (single slot hides number)', (tester) async {
       await tester.pumpWidget(
         ChangeNotifierProvider<AppState>.value(
           value: appState,
@@ -506,7 +507,9 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('SUBSTITUTE 1'), findsNWidgets(2));
+      // Under 03B, single-slot events omit SUBSTITUTE 1
+      expect(find.text('SUBSTITUTE 1'), findsNothing);
+      expect(find.text('Instrument/Skill'), findsNWidgets(2));
     });
 
     testWidgets('16. Adds substitute slot to specific event occurrence when + ADD SUBSTITUTE is tapped', (tester) async {
@@ -530,7 +533,8 @@ void main() {
       await tester.tap(find.text('ADD SUBSTITUTE TO EVENT 1'));
       await tester.pumpAndSettle();
 
-      expect(find.text('SUBSTITUTE 1'), findsNWidgets(2));
+      // Event 1 now has 2 slots (shows SUBSTITUTE 1 and SUBSTITUTE 2), Event 2 still has 1 slot (no header)
+      expect(find.text('SUBSTITUTE 1'), findsOneWidget);
       expect(find.text('SUBSTITUTE 2'), findsOneWidget);
     });
 
@@ -650,7 +654,7 @@ void main() {
       appState.mockService.favoriteUserIds.add('fav_guitarist');
     });
 
-    testWidgets('21. Favorites section shows Add Favorites search field and SELECT ALL / CLEAR ALL buttons', (tester) async {
+    testWidgets('21. Favorites section shows prominent header, checkboxes, and + Add Favorite(s)', (tester) async {
       tester.view.physicalSize = const Size(1080, 1920);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.reset);
@@ -669,12 +673,12 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Favorites List'), findsWidgets);
-      expect(find.text('Add Favorites'), findsOneWidget);
-      expect(find.text('SELECT ALL'), findsOneWidget);
-      expect(find.text('CLEAR ALL'), findsOneWidget);
+      expect(find.text('+ Add Favorite(s)'), findsOneWidget);
+      expect(find.byType(CheckboxListTile), findsWidgets);
+      expect(find.widgetWithText(TextField, 'Search musicians to add as favorite...'), findsNothing);
     });
 
-    testWidgets('22. SELECT ALL and CLEAR ALL update favorites selection count', (tester) async {
+    testWidgets('22. Selecting a favorite collapses list, displays Chosen Substitute, and clearing removes it', (tester) async {
       tester.view.physicalSize = const Size(1080, 1920);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.reset);
@@ -692,20 +696,27 @@ void main() {
       await tester.tap(find.text('Favorites List').first);
       await tester.pumpAndSettle();
 
-      expect(find.text('1 of 1 favorites selected'), findsOneWidget);
+      expect(find.text('Chosen Substitute'), findsNothing);
 
-      await tester.tap(find.text('CLEAR ALL'));
+      // Select first favorite
+      final firstTile = find.byType(CheckboxListTile).first;
+      await tester.tap(firstTile);
       await tester.pumpAndSettle();
 
-      expect(find.text('0 of 1 favorites selected'), findsOneWidget);
+      // List collapsed and Chosen Substitute displayed
+      expect(find.byType(CheckboxListTile), findsNothing);
+      expect(find.text('Chosen Substitute'), findsOneWidget);
 
-      await tester.tap(find.text('SELECT ALL'));
+      // Reopen and uncheck
+      await tester.tap(find.text('Favorites List').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(CheckboxListTile).first);
       await tester.pumpAndSettle();
 
-      expect(find.text('1 of 1 favorites selected'), findsOneWidget);
+      expect(find.text('Chosen Substitute'), findsNothing);
     });
 
-    testWidgets('23. Searching and starring musician immediately adds to favorites and selects for slot', (tester) async {
+    testWidgets('23. Searching and adding musician via + Add Favorite(s) adds to global favorites', (tester) async {
       tester.view.physicalSize = const Size(1080, 1920);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.reset);
@@ -723,16 +734,23 @@ void main() {
       await tester.tap(find.text('Favorites List').first);
       await tester.pumpAndSettle();
 
-      await tester.enterText(find.widgetWithText(TextField, 'Add Favorites'), 'Bob');
+      await tester.tap(find.text('+ Add Favorite(s)'));
+      await tester.pumpAndSettle();
+
+      final searchInput = find.widgetWithText(TextField, 'Search musicians to add as favorite...');
+      expect(searchInput, findsOneWidget);
+
+      await tester.enterText(searchInput, 'Bob');
       await tester.pumpAndSettle();
 
       expect(find.text('Bob Rocker'), findsOneWidget);
+      expect(find.text('Add'), findsOneWidget);
 
-      await tester.tap(find.widgetWithIcon(IconButton, Icons.star_border_rounded));
+      await tester.tap(find.text('Add'));
       await tester.pumpAndSettle();
 
       expect(appState.mockService.favoriteUserIds.contains('candidate_guitarist'), isTrue);
-      expect(find.text('2 of 2 favorites selected'), findsOneWidget);
+      expect(find.widgetWithText(CheckboxListTile, 'Bob Rocker'), findsOneWidget);
     });
   });
 
@@ -934,8 +952,8 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
       await tester.pump(const Duration(milliseconds: 300));
 
-      expect(find.textContaining('EVENT 1 · Summer Tour - Night 1'), findsWidgets);
-      expect(find.textContaining('EVENT 2 · Summer Tour - Night 2'), findsWidgets);
+      expect(find.textContaining('EVENT 1 - GIG: "Summer Tour - Night 1"'), findsWidgets);
+      expect(find.textContaining('EVENT 2 - GIG: "Summer Tour - Night 2"'), findsWidgets);
 
       // Open from Child 2
       await tester.pumpWidget(
@@ -950,8 +968,8 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
       await tester.pump(const Duration(milliseconds: 300));
 
-      expect(find.textContaining('EVENT 1 · Summer Tour - Night 1'), findsWidgets);
-      expect(find.textContaining('EVENT 2 · Summer Tour - Night 2'), findsWidgets);
+      expect(find.textContaining('EVENT 1 - GIG: "Summer Tour - Night 1"'), findsWidgets);
+      expect(find.textContaining('EVENT 2 - GIG: "Summer Tour - Night 2"'), findsWidgets);
     });
 
     testWidgets('28. MusicianProfileScreen star button writes through canonical service toggleFavoriteAsync and toggles instantly', (tester) async {
@@ -1221,10 +1239,11 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // Should render child events as Event 1, Event 2
-      expect(find.textContaining('EVENT 1 ·'), findsWidgets);
-      expect(find.textContaining('EVENT 2 ·'), findsWidgets);
-      expect(find.text('EVENT 3 ·'), findsNothing);
+      // Should render child events as Event 1, Event 2 without dot separators
+      expect(find.textContaining('EVENT 1 - '), findsWidgets);
+      expect(find.textContaining('EVENT 2 - '), findsWidgets);
+      expect(find.textContaining('·'), findsNothing);
+      expect(find.textContaining('EVENT 3'), findsNothing);
     });
 
     testWidgets('34. PayAmountMinor (150000) round-trips with PayAmount (1500) and displays formatted Swedish currency', (tester) async {
