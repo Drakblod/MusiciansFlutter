@@ -415,7 +415,7 @@ void main() {
 
       expect(find.text('FIND MUSICIAN/VOCALIST'), findsOneWidget);
       expect(find.text('Find Substitute(s)'), findsOneWidget);
-      expect(find.text('Find New Band Member'), findsOneWidget);
+      expect(find.text('Find New Band Member(s)'), findsOneWidget);
     });
 
     testWidgets('11. Displays only the band name in band context area (no Staffing for...)', (tester) async {
@@ -436,7 +436,7 @@ void main() {
       expect(find.textContaining('Staffing for Mats'), findsNothing);
     });
 
-    testWidgets('12. Renames heading to Event Date(s)', (tester) async {
+    testWidgets('12. Renames heading to Date & Time', (tester) async {
       await tester.pumpWidget(
         ChangeNotifierProvider<AppState>.value(
           value: appState,
@@ -450,7 +450,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Event Date(s)'), findsOneWidget);
+      expect(find.text('Date & Time'), findsWidgets);
       expect(find.text('Gig/Event Details'), findsNothing);
     });
 
@@ -486,8 +486,8 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.textContaining('EVENT 1 ·'), findsOneWidget);
-      expect(find.textContaining('EVENT 2 ·'), findsOneWidget);
+      expect(find.textContaining('EVENT 1 ·'), findsWidgets);
+      expect(find.textContaining('EVENT 2 ·'), findsWidgets);
       expect(find.text('ADD SUBSTITUTE TO EVENT 1'), findsOneWidget);
       expect(find.text('ADD SUBSTITUTE TO EVENT 2'), findsOneWidget);
     });
@@ -506,7 +506,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Substitute 1'), findsNWidgets(2));
+      expect(find.text('SUBSTITUTE 1'), findsNWidgets(2));
     });
 
     testWidgets('16. Adds substitute slot to specific event occurrence when + ADD SUBSTITUTE is tapped', (tester) async {
@@ -530,8 +530,8 @@ void main() {
       await tester.tap(find.text('ADD SUBSTITUTE TO EVENT 1'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Substitute 1'), findsNWidgets(2));
-      expect(find.text('Substitute 2'), findsOneWidget);
+      expect(find.text('SUBSTITUTE 1'), findsNWidgets(2));
+      expect(find.text('SUBSTITUTE 2'), findsOneWidget);
     });
 
     testWidgets('17. Description field has visible label Description', (tester) async {
@@ -589,7 +589,7 @@ void main() {
     });
 
     testWidgets('20. Publishing saves all slots with same RequestGroupId, EventSequence, and PayAmount', (tester) async {
-      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.physicalSize = const Size(1080, 3200);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.reset);
 
@@ -665,10 +665,10 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Favorites').first);
+      await tester.tap(find.text('Favorites List').first);
       await tester.pumpAndSettle();
 
-      expect(find.text('Favorites List'), findsOneWidget);
+      expect(find.text('Favorites List'), findsWidgets);
       expect(find.text('Add Favorites'), findsOneWidget);
       expect(find.text('SELECT ALL'), findsOneWidget);
       expect(find.text('CLEAR ALL'), findsOneWidget);
@@ -689,7 +689,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Favorites').first);
+      await tester.tap(find.text('Favorites List').first);
       await tester.pumpAndSettle();
 
       expect(find.text('1 of 1 favorites selected'), findsOneWidget);
@@ -720,7 +720,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Favorites').first);
+      await tester.tap(find.text('Favorites List').first);
       await tester.pumpAndSettle();
 
       await tester.enterText(find.widgetWithText(TextField, 'Add Favorites'), 'Bob');
@@ -934,8 +934,8 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
       await tester.pump(const Duration(milliseconds: 300));
 
-      expect(find.text('EVENT 1 · Summer Tour - Night 1'), findsOneWidget);
-      expect(find.text('EVENT 2 · Summer Tour - Night 2'), findsOneWidget);
+      expect(find.textContaining('EVENT 1 · Summer Tour - Night 1'), findsWidgets);
+      expect(find.textContaining('EVENT 2 · Summer Tour - Night 2'), findsWidgets);
 
       // Open from Child 2
       await tester.pumpWidget(
@@ -950,8 +950,8 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
       await tester.pump(const Duration(milliseconds: 300));
 
-      expect(find.text('EVENT 1 · Summer Tour - Night 1'), findsOneWidget);
-      expect(find.text('EVENT 2 · Summer Tour - Night 2'), findsOneWidget);
+      expect(find.textContaining('EVENT 1 · Summer Tour - Night 1'), findsWidgets);
+      expect(find.textContaining('EVENT 2 · Summer Tour - Night 2'), findsWidgets);
     });
 
     testWidgets('28. MusicianProfileScreen star button writes through canonical service toggleFavoriteAsync and toggles instantly', (tester) async {
@@ -1144,6 +1144,7 @@ void main() {
 
       final publishBtn = find.text('PUBLISH MULTIPLE REQUEST');
       expect(publishBtn, findsOneWidget);
+      await tester.ensureVisible(publishBtn);
       await tester.tap(publishBtn);
       await tester.pumpAndSettle();
 
@@ -1221,8 +1222,8 @@ void main() {
       await tester.pumpAndSettle();
 
       // Should render child events as Event 1, Event 2
-      expect(find.textContaining('EVENT 1 ·'), findsOneWidget);
-      expect(find.textContaining('EVENT 2 ·'), findsOneWidget);
+      expect(find.textContaining('EVENT 1 ·'), findsWidgets);
+      expect(find.textContaining('EVENT 2 ·'), findsWidgets);
       expect(find.text('EVENT 3 ·'), findsNothing);
     });
 

@@ -80,12 +80,32 @@ class EventStaffingSection {
   final BandEvent event;
   final int sequence;
   final List<SubstituteSlotDraft> slots;
+  final TextEditingController titleController;
+  String? selectedEventType;
+  final TextEditingController descriptionController;
+  final TextEditingController locationController;
+  DateTime selectedDate;
+  TimeOfDay startTime;
+  TimeOfDay endTime;
 
   EventStaffingSection({
     required this.event,
     required this.sequence,
     required this.slots,
+    required this.titleController,
+    this.selectedEventType,
+    required this.descriptionController,
+    required this.locationController,
+    required this.selectedDate,
+    required this.startTime,
+    required this.endTime,
   });
+
+  void dispose() {
+    titleController.dispose();
+    descriptionController.dispose();
+    locationController.dispose();
+  }
 }
 
 class FindSubScreen extends StatefulWidget {
@@ -200,6 +220,17 @@ class _FindSubScreenState extends State<FindSubScreen> {
       }
     }
     _loadDataAsync();
+  }
+
+  @override
+  void dispose() {
+    _messageController.dispose();
+    _locationController.dispose();
+    _amountController.dispose();
+    for (final section in _eventSections) {
+      section.dispose();
+    }
+    super.dispose();
   }
 
   Future<void> _loadDataAsync() async {
@@ -409,11 +440,35 @@ class _FindSubScreenState extends State<FindSubScreen> {
               }
             }
 
+            DateTime secDate = _selectedDate;
+            TimeOfDay secStartTime = _startTime;
+            TimeOfDay secEndTime = _endTime;
+            if (ev.startDateTime.isNotEmpty) {
+              final parsed = DateTime.tryParse(ev.startDateTime)?.toLocal();
+              if (parsed != null) {
+                secDate = parsed;
+                secStartTime = TimeOfDay(hour: parsed.hour, minute: parsed.minute);
+              }
+            }
+            if (ev.endDateTime.isNotEmpty) {
+              final parsedEnd = DateTime.tryParse(ev.endDateTime)?.toLocal();
+              if (parsedEnd != null) {
+                secEndTime = TimeOfDay(hour: parsedEnd.hour, minute: parsedEnd.minute);
+              }
+            }
+
             sections.add(
               EventStaffingSection(
                 event: ev,
                 sequence: seq,
                 slots: slots,
+                titleController: TextEditingController(text: ev.title),
+                selectedEventType: ev.eventType.isNotEmpty ? ev.eventType : null,
+                descriptionController: TextEditingController(text: ev.description.isNotEmpty ? ev.description : ev.additionalNotes),
+                locationController: TextEditingController(text: ev.location),
+                selectedDate: secDate,
+                startTime: secStartTime,
+                endTime: secEndTime,
               ),
             );
           }
@@ -425,13 +480,14 @@ class _FindSubScreenState extends State<FindSubScreen> {
     }
 
     if (_eventSections.isEmpty) {
+      final isStandalone = (widget.eventId == null || widget.eventId!.isEmpty);
       final dummyEvent = BandEvent(
-        id: widget.eventId ?? 'freelance_event',
-        title: _bandName ?? appState.activeBandName ?? 'Freelance Gig',
-        description: 'Single Gig',
+        id: widget.eventId,
+        title: isStandalone ? '' : (_bandName ?? appState.activeBandName ?? ''),
+        description: '',
         additionalNotes: '',
-        eventType: 'Gig',
-        location: _locationController.text.isNotEmpty ? _locationController.text : (appState.currentUserProfile?.location ?? 'Stockholm, Sweden'),
+        eventType: isStandalone ? '' : 'Gig',
+        location: isStandalone ? '' : (_locationController.text.isNotEmpty ? _locationController.text : (appState.currentUserProfile?.location ?? 'Stockholm, Sweden')),
         startDateTime: _selectedDate.toIso8601String(),
         endDateTime: _selectedDate.add(const Duration(hours: 3)).toIso8601String(),
         createdBy: appState.currentUserId ?? 'user',
@@ -462,6 +518,13 @@ class _FindSubScreenState extends State<FindSubScreen> {
           event: dummyEvent,
           sequence: 1,
           slots: [initialSlot],
+          titleController: TextEditingController(text: dummyEvent.title),
+          selectedEventType: isStandalone ? null : (dummyEvent.eventType.isNotEmpty ? dummyEvent.eventType : null),
+          descriptionController: TextEditingController(text: isStandalone ? '' : _messageController.text),
+          locationController: TextEditingController(text: dummyEvent.location),
+          selectedDate: _selectedDate,
+          startTime: _startTime,
+          endTime: _endTime,
         ),
       ];
     }
@@ -591,60 +654,6 @@ class _FindSubScreenState extends State<FindSubScreen> {
     }
   }
 
-  Future<void> _pickDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _selectedDate,
-      firstDate: DateTime.now(),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
-      builder: (context, child) {
-        return Theme(
-          data: ThemeData.dark().copyWith(
-            colorScheme: const ColorScheme.dark(
-              primary: AppTheme.primaryAccent,
-              onPrimary: Colors.white,
-              surface: AppTheme.cardBackground,
-              onSurface: Colors.white,
-            ),
-          ),
-          child: child!,
-        );
-      },
-    );
-    if (picked != null) {
-      setState(() => _selectedDate = picked);
-    }
-  }
-
-  Future<void> _pickTime(bool isStart) async {
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: isStart ? _startTime : _endTime,
-      builder: (context, child) {
-        return Theme(
-          data: ThemeData.dark().copyWith(
-            colorScheme: const ColorScheme.dark(
-              primary: AppTheme.primaryAccent,
-              onPrimary: Colors.white,
-              surface: AppTheme.cardBackground,
-              onSurface: Colors.white,
-            ),
-          ),
-          child: child!,
-        );
-      },
-    );
-    if (picked != null) {
-      setState(() {
-        if (isStart) {
-          _startTime = picked;
-        } else {
-          _endTime = picked;
-        }
-      });
-    }
-  }
-
   Future<void> _openInstrumentPicker(SubstituteSlotDraft slot) async {
     final selectedList = await SearchableCategoryMultiSelectSheet.show(
       context: context,
@@ -669,6 +678,20 @@ class _FindSubScreenState extends State<FindSubScreen> {
     final appState = Provider.of<AppState>(context, listen: false);
     final profile = appState.currentUserProfile;
     final effectiveBandId = widget.bandId ?? appState.activeBandId;
+
+    final isStandalone = (widget.eventId == null || widget.eventId!.isEmpty);
+    if (isStandalone && _eventSections.isNotEmpty) {
+      final sec = _eventSections.first;
+      if (sec.titleController.text.trim().isEmpty || sec.selectedEventType == null || sec.selectedEventType!.trim().isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please enter Name of Event and select an Event Type before publishing.'),
+            backgroundColor: AppTheme.danger,
+          ),
+        );
+        return;
+      }
+    }
 
     final List<SubstituteSlotDraft> draftSlots = [];
     for (final section in _eventSections) {
@@ -710,30 +733,20 @@ class _FindSubScreenState extends State<FindSubScreen> {
       final List<SubRequest> requestsToSave = [];
 
       for (final section in _eventSections) {
-        final ev = section.event;
-        final evId = ev.id ?? widget.eventId ?? 'freelance_event';
-        final evTitle = ev.title.isNotEmpty ? ev.title : bandName;
-
-        String dateStr = _selectedDate.toIso8601String();
-        String startTimeStr = (_startTime.hour.toString().padLeft(2, '0') + ':' + _startTime.minute.toString().padLeft(2, '0'));
-        String endTimeStr = (_endTime.hour.toString().padLeft(2, '0') + ':' + _endTime.minute.toString().padLeft(2, '0'));
-        String locStr = _locationController.text.trim().isNotEmpty
-            ? _locationController.text.trim()
-            : (ev.location.isNotEmpty ? ev.location : (profile?.location ?? 'Stockholm, Sweden'));
-
-        if (ev.startDateTime.isNotEmpty) {
-          dateStr = ev.startDateTime;
-          final pDate = DateTime.tryParse(ev.startDateTime)?.toLocal();
-          if (pDate != null) {
-            startTimeStr = (pDate.hour.toString().padLeft(2, '0') + ':' + pDate.minute.toString().padLeft(2, '0'));
-          }
-        }
-        if (ev.endDateTime.isNotEmpty) {
-          final pEnd = DateTime.tryParse(ev.endDateTime)?.toLocal();
-          if (pEnd != null) {
-            endTimeStr = (pEnd.hour.toString().padLeft(2, '0') + ':' + pEnd.minute.toString().padLeft(2, '0'));
-          }
-        }
+        final evId = section.event.id ?? widget.eventId ?? 'freelance_event';
+        final evTitle = section.titleController.text.trim().isNotEmpty
+            ? section.titleController.text.trim()
+            : (section.event.title.isNotEmpty ? section.event.title : bandName);
+        final evType = (section.selectedEventType != null && section.selectedEventType!.trim().isNotEmpty)
+            ? section.selectedEventType!.trim()
+            : (section.event.eventType.isNotEmpty ? section.event.eventType : 'Gig');
+        final descStr = section.descriptionController.text.trim();
+        final locStr = section.locationController.text.trim().isNotEmpty
+            ? section.locationController.text.trim()
+            : (section.event.location.isNotEmpty ? section.event.location : (profile?.location ?? 'Stockholm, Sweden'));
+        final dateStr = section.selectedDate.toIso8601String();
+        final startTimeStr = (section.startTime.hour.toString().padLeft(2, '0') + ':' + section.startTime.minute.toString().padLeft(2, '0'));
+        final endTimeStr = (section.endTime.hour.toString().padLeft(2, '0') + ':' + section.endTime.minute.toString().padLeft(2, '0'));
 
         for (final slot in section.slots) {
           if (slot.status != 'draft') continue;
@@ -747,7 +760,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
             bandName: bandName,
             role: 'Substitute',
             voicePart: slot.instrument,
-            description: _messageController.text.trim(),
+            description: descStr,
             date: dateStr,
             startTime: startTimeStr,
             endTime: endTimeStr,
@@ -764,7 +777,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
             eventSequence: section.sequence,
             eventTitle: evTitle,
             createdAt: now.millisecondsSinceEpoch,
-            extraFields: {'PublicationId': pubId},
+            extraFields: {'PublicationId': pubId, 'eventType': evType},
           );
 
           requestsToSave.add(req);
@@ -1050,6 +1063,24 @@ class _FindSubScreenState extends State<FindSubScreen> {
                     ),
                     const SizedBox(height: 16),
 
+                    if (_bandName != null || appState.activeBandName != null) ...[
+                      Text(
+                        _bandName ?? appState.activeBandName!,
+                        style: GoogleFonts.outfit(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.primaryAccent,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+
+                    // Event information block (rendered once per occurrence before mode selector)
+                    ..._eventSections.map((sec) => _buildEventInformationCard(sec, context)),
+
+                    const SizedBox(height: 8),
+
+                    // Global Mode Selector (rendered exactly once after all event info)
                     Row(
                       children: [
                         Expanded(
@@ -1076,8 +1107,11 @@ class _FindSubScreenState extends State<FindSubScreen> {
                               child: Center(
                                 child: Text(
                                   'Find Substitute(s)',
+                                  textAlign: TextAlign.center,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
                                   style: GoogleFonts.inter(
-                                    fontSize: 12.5,
+                                    fontSize: 12,
                                     fontWeight: FontWeight.bold,
                                     color: _currentMode == 'substitute'
                                         ? Colors.white
@@ -1112,9 +1146,12 @@ class _FindSubScreenState extends State<FindSubScreen> {
                               ),
                               child: Center(
                                 child: Text(
-                                  'Find New Band Member',
+                                  'Find New Band Member(s)',
+                                  textAlign: TextAlign.center,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
                                   style: GoogleFonts.inter(
-                                    fontSize: 12.5,
+                                    fontSize: 12,
                                     fontWeight: FontWeight.bold,
                                     color: _currentMode == 'new_member'
                                         ? Colors.white
@@ -1132,179 +1169,10 @@ class _FindSubScreenState extends State<FindSubScreen> {
                     if (_currentMode == 'new_member')
                       _buildNewMemberView(context, appState)
                     else ...[
-                      if (_bandName != null || appState.activeBandName != null) ...[
-                        Text(
-                          _bandName ?? appState.activeBandName!,
-                          style: GoogleFonts.outfit(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: AppTheme.primaryAccent,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                      ],
-
-                      _buildEventDatesSection(context),
-                      const SizedBox(height: 16),
-
-                      ..._eventSections.map((sec) => _buildEventSectionCard(sec)),
-
-                      const SizedBox(height: 16),
-
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: AppTheme.cardBackground,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Description',
-                              style: GoogleFonts.inter(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.white,
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-                            TextField(
-                              controller: _messageController,
-                              maxLines: 3,
-                              style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
-                              decoration: InputDecoration(
-                                hintText: 'Description',
-                                hintStyle: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 14),
-                                filled: true,
-                                fillColor: const Color(0xFF1E1A3A),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                  borderSide: const BorderSide(color: Color(0xFF2E2A4E)),
-                                ),
-                                enabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                  borderSide: const BorderSide(color: Color(0xFF2E2A4E)),
-                                ),
-                                focusedBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                  borderSide: const BorderSide(color: AppTheme.primaryAccent, width: 1.5),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: AppTheme.cardBackground,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(
-                                  'Paid Gig',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                                Switch(
-                                  value: _isPaid,
-                                  activeColor: AppTheme.primaryAccent,
-                                  onChanged: (val) {
-                                    setState(() {
-                                      _isPaid = val;
-                                    });
-                                  },
-                                ),
-                              ],
-                            ),
-                            if (_isPaid) ...[
-                              const SizedBox(height: 12),
-                              Text(
-                                'Amount',
-                                style: GoogleFonts.inter(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppTheme.textSecondary,
-                                ),
-                              ),
-                              const SizedBox(height: 6),
-                              TextField(
-                                controller: _amountController,
-                                keyboardType: TextInputType.number,
-                                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                                style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
-                                decoration: InputDecoration(
-                                  prefixText: 'SEK ',
-                                  prefixStyle: GoogleFonts.inter(
-                                    color: AppTheme.primaryAccent,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16,
-                                  ),
-                                  hintText: '1500',
-                                  hintStyle: GoogleFonts.inter(color: Colors.white30),
-                                  filled: true,
-                                  fillColor: const Color(0xFF1E1A3A),
-                                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(10),
-                                    borderSide: const BorderSide(color: Color(0xFF2E2A4E)),
-                                  ),
-                                  enabledBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(10),
-                                    borderSide: const BorderSide(color: Color(0xFF2E2A4E)),
-                                  ),
-                                  focusedBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(10),
-                                    borderSide: const BorderSide(color: AppTheme.primaryAccent, width: 1.5),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
+                      ..._eventSections.map((sec) => _buildSubstituteSectionCard(sec)),
+                      _buildPaidGigSection(),
                       const SizedBox(height: 24),
-
-                      SizedBox(
-                        width: double.infinity,
-                        height: 52,
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppTheme.primaryAccent,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                            elevation: 4,
-                          ),
-                          onPressed: _isSubmitting ? null : _publishAllDraftRequests,
-                          child: _isSubmitting
-                              ? const SizedBox(
-                                  width: 24,
-                                  height: 24,
-                                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
-                                )
-                              : Text(
-                                  publishButtonLabel,
-                                  style: GoogleFonts.inter(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                    letterSpacing: 0.5,
-                                  ),
-                                ),
-                        ),
-                      ),
+                      _buildPublishButton(publishButtonLabel),
                       const SizedBox(height: 30),
                     ],
                   ],
@@ -1314,187 +1182,375 @@ class _FindSubScreenState extends State<FindSubScreen> {
     );
   }
 
-  Widget _buildEventDatesSection(BuildContext context) {
-    if (_eventSections.length > 1) {
-      return Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: AppTheme.cardBackground,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Event Date(s)',
-              style: GoogleFonts.inter(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-            ),
-            const SizedBox(height: 12),
-            ..._eventSections.map((sec) {
-              final dateStr = sec.event.startDateTime.isNotEmpty
-                  ? DateFormat('EEE, MMM d, yyyy').format(DateTime.tryParse(sec.event.startDateTime)?.toLocal() ?? _selectedDate)
-                  : DateFormat('EEE, MMM d, yyyy').format(_selectedDate);
-              final timeStr = sec.event.startDateTime.isNotEmpty
-                  ? (DateFormat('HH:mm').format(DateTime.tryParse(sec.event.startDateTime)?.toLocal() ?? _selectedDate) + ' - ' + DateFormat('HH:mm').format(DateTime.tryParse(sec.event.endDateTime)?.toLocal() ?? _selectedDate.add(const Duration(hours: 2))))
-                  : (_startTime.format(context) + ' - ' + _endTime.format(context));
-
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 8.0),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: AppTheme.primaryAccent.withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        '#' + sec.sequence.toString(),
-                        style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.primaryAccent),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        sec.event.title + ' · ' + dateStr + ' (' + timeStr + ')',
-                        style: GoogleFonts.inter(fontSize: 13, color: Colors.white70),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }),
-          ],
-        ),
-      );
+  String _buildEventHeaderLabel(EventStaffingSection section) {
+    final title = section.titleController.text.trim();
+    final eventType = section.selectedEventType?.trim() ?? '';
+    if (title.isEmpty && eventType.isEmpty) {
+      return 'EVENT ' + section.sequence.toString();
     }
+    final displayTitle = title.isNotEmpty ? title : (section.event.title.isNotEmpty ? section.event.title : 'Event');
+    final displayType = eventType.isNotEmpty ? eventType : (section.event.eventType.isNotEmpty ? section.event.eventType : 'Gig');
+    return 'EVENT ' + section.sequence.toString() + ' · ' + displayTitle + ' · ' + displayType;
+  }
 
+  Future<void> _pickDateForSection(EventStaffingSection section) async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: section.selectedDate,
+      firstDate: DateTime.now().subtract(const Duration(days: 30)),
+      lastDate: DateTime.now().add(const Duration(days: 730)),
+      builder: (context, child) {
+        return Theme(
+          data: ThemeData.dark().copyWith(
+            colorScheme: const ColorScheme.dark(
+              primary: AppTheme.primaryAccent,
+              onPrimary: Colors.white,
+              surface: const Color(0xFF1E1A3A),
+              onSurface: Colors.white,
+            ),
+            dialogBackgroundColor: const Color(0xFF16122B),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null) {
+      setState(() {
+        section.selectedDate = picked;
+      });
+    }
+  }
+
+  Future<void> _pickTimeForSection(EventStaffingSection section, bool isStart) async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: isStart ? section.startTime : section.endTime,
+      builder: (context, child) {
+        return Theme(
+          data: ThemeData.dark().copyWith(
+            colorScheme: const ColorScheme.dark(
+              primary: AppTheme.primaryAccent,
+              onPrimary: Colors.white,
+              surface: const Color(0xFF1E1A3A),
+              onSurface: Colors.white,
+            ),
+            dialogBackgroundColor: const Color(0xFF16122B),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null) {
+      setState(() {
+        if (isStart) {
+          section.startTime = picked;
+        } else {
+          section.endTime = picked;
+        }
+      });
+    }
+  }
+
+  Widget _buildEventInformationCard(EventStaffingSection section, BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
         color: AppTheme.cardBackground,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
+        border: Border.all(color: const Color(0xFF2E2A4E), width: 1.5),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Event Date(s)',
-            style: GoogleFonts.inter(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: const BoxDecoration(
+              color: Color(0xFF1A1635),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(15)),
             ),
-          ),
-          const SizedBox(height: 12),
-          InkWell(
-            onTap: _pickDate,
-            borderRadius: BorderRadius.circular(10),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              decoration: BoxDecoration(
-                color: const Color(0xFF1E1A3A),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: const Color(0xFF2E2A4E)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.calendar_today_rounded, color: AppTheme.primaryAccent, size: 20),
-                  const SizedBox(width: 12),
-                  Text(
-                    DateFormat('EEEE, MMMM d, yyyy').format(_selectedDate),
-                    style: GoogleFonts.inter(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w500),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 10),
-
-          Row(
-            children: [
-              Expanded(
-                child: InkWell(
-                  onTap: () => _pickTime(true),
-                  borderRadius: BorderRadius.circular(10),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF1E1A3A),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: const Color(0xFF2E2A4E)),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    _buildEventHeaderLabel(section),
+                    style: GoogleFonts.outfit(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
                     ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.access_time_rounded, color: AppTheme.primaryAccent, size: 20),
-                        const SizedBox(width: 8),
-                        Text(
-                          _startTime.format(context),
-                          style: GoogleFonts.inter(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w500),
-                        ),
-                      ],
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // 1. Name of Event
+                Text(
+                  'Name of Event',
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                TextFormField(
+                  controller: section.titleController,
+                  style: GoogleFonts.inter(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
+                  decoration: InputDecoration(
+                    hintText: 'Enter event name',
+                    hintStyle: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 14),
+                    filled: true,
+                    fillColor: const Color(0xFF1E1A3A),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: Color(0xFF2E2A4E)),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: Color(0xFF2E2A4E)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: AppTheme.primaryAccent, width: 1.5),
+                    ),
+                  ),
+                  onChanged: (_) => setState(() {}),
+                ),
+                const SizedBox(height: 14),
+
+                // 2. Event Type
+                Text(
+                  'Event Type',
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                DropdownButtonFormField<String>(
+                  isExpanded: true,
+                  value: (section.selectedEventType != null && section.selectedEventType!.isNotEmpty) ? section.selectedEventType : null,
+                  dropdownColor: const Color(0xFF1E1A3A),
+                  style: GoogleFonts.inter(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
+                  hint: Text('Select Event Type', style: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 14)),
+                  decoration: InputDecoration(
+                    filled: true,
+                    fillColor: const Color(0xFF1E1A3A),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: Color(0xFF2E2A4E)),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: Color(0xFF2E2A4E)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: AppTheme.primaryAccent, width: 1.5),
+                    ),
+                  ),
+                  items: () {
+                    final types = List<String>.from(BandEvent.standardEventTypes);
+                    if (section.selectedEventType != null &&
+                        section.selectedEventType!.isNotEmpty &&
+                        !types.contains(section.selectedEventType)) {
+                      types.add(section.selectedEventType!);
+                    }
+                    return types.map((t) => DropdownMenuItem<String>(
+                      value: t,
+                      child: Text(t, style: GoogleFonts.inter(color: Colors.white, fontSize: 14), overflow: TextOverflow.ellipsis),
+                    )).toList();
+                  }(),
+                  onChanged: (val) {
+                    setState(() {
+                      section.selectedEventType = val;
+                    });
+                  },
+                ),
+                const SizedBox(height: 14),
+
+                // 3. Description
+                Text(
+                  'Description',
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: section.descriptionController,
+                  maxLines: 2,
+                  style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
+                  decoration: InputDecoration(
+                    hintText: 'Add description',
+                    hintStyle: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 14),
+                    filled: true,
+                    fillColor: const Color(0xFF1E1A3A),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: Color(0xFF2E2A4E)),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: Color(0xFF2E2A4E)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: AppTheme.primaryAccent, width: 1.5),
                     ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: InkWell(
-                  onTap: () => _pickTime(false),
-                  borderRadius: BorderRadius.circular(10),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF1E1A3A),
+                const SizedBox(height: 14),
+
+                // 4. Location
+                Text(
+                  'Location',
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: section.locationController,
+                  style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
+                  decoration: InputDecoration(
+                    prefixIcon: const Icon(Icons.location_on_outlined, color: AppTheme.primaryAccent, size: 20),
+                    hintText: 'Enter location',
+                    hintStyle: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 14),
+                    filled: true,
+                    fillColor: const Color(0xFF1E1A3A),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: const Color(0xFF2E2A4E)),
+                      borderSide: const BorderSide(color: Color(0xFF2E2A4E)),
                     ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.access_time_rounded, color: AppTheme.primaryAccent, size: 20),
-                        const SizedBox(width: 8),
-                        Text(
-                          _endTime.format(context),
-                          style: GoogleFonts.inter(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w500),
-                        ),
-                      ],
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: Color(0xFF2E2A4E)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: AppTheme.primaryAccent, width: 1.5),
                     ),
                   ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
+                const SizedBox(height: 14),
 
-          TextField(
-            controller: _locationController,
-            style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
-            decoration: InputDecoration(
-              prefixIcon: const Icon(Icons.location_on_outlined, color: AppTheme.primaryAccent),
-              hintText: 'Location',
-              hintStyle: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 14),
-              filled: true,
-              fillColor: const Color(0xFF1E1A3A),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: Color(0xFF2E2A4E)),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: Color(0xFF2E2A4E)),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: AppTheme.primaryAccent, width: 1.5),
-              ),
+                // 5. Date & Time
+                Text(
+                  'Date & Time',
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Column(
+                  children: [
+                    InkWell(
+                      onTap: () => _pickDateForSection(section),
+                      borderRadius: BorderRadius.circular(10),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF1E1A3A),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: const Color(0xFF2E2A4E)),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.calendar_today_rounded, color: AppTheme.primaryAccent, size: 18),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                DateFormat('EEEE, MMMM d, yyyy').format(section.selectedDate),
+                                style: GoogleFonts.inter(color: Colors.white, fontSize: 13.5, fontWeight: FontWeight.w500),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: InkWell(
+                            onTap: () => _pickTimeForSection(section, true),
+                            borderRadius: BorderRadius.circular(10),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF1E1A3A),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: const Color(0xFF2E2A4E)),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.access_time_rounded, color: AppTheme.primaryAccent, size: 18),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Text(
+                                      section.startTime.format(context),
+                                      style: GoogleFonts.inter(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: InkWell(
+                            onTap: () => _pickTimeForSection(section, false),
+                            borderRadius: BorderRadius.circular(10),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF1E1A3A),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: const Color(0xFF2E2A4E)),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.access_time_rounded, color: AppTheme.primaryAccent, size: 18),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Text(
+                                      section.endTime.format(context),
+                                      style: GoogleFonts.inter(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
         ],
@@ -1502,14 +1558,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
     );
   }
 
-  Widget _buildEventSectionCard(EventStaffingSection section) {
-    final dateStr = section.event.startDateTime.isNotEmpty
-        ? DateFormat('EEE, MMM d').format(DateTime.tryParse(section.event.startDateTime)?.toLocal() ?? _selectedDate)
-        : DateFormat('EEE, MMM d').format(_selectedDate);
-    final timeStr = section.event.startDateTime.isNotEmpty
-        ? (DateFormat('HH:mm').format(DateTime.tryParse(section.event.startDateTime)?.toLocal() ?? _selectedDate) + ' - ' + DateFormat('HH:mm').format(DateTime.tryParse(section.event.endDateTime)?.toLocal() ?? _selectedDate.add(const Duration(hours: 2))))
-        : (_startTime.format(context) + ' - ' + _endTime.format(context));
-
+  Widget _buildSubstituteSectionCard(EventStaffingSection section) {
     final addLabel = _eventSections.length > 1
         ? ('ADD SUBSTITUTE TO EVENT ' + section.sequence.toString())
         : 'ADD ANOTHER SUBSTITUTE';
@@ -1524,47 +1573,29 @@ class _FindSubScreenState extends State<FindSubScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (_eventSections.length > 1) ...[
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: const BoxDecoration(
-                color: Color(0xFF1A1635),
-                borderRadius: BorderRadius.vertical(top: Radius.circular(15)),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'EVENT ' + section.sequence.toString() + ' · ' + _shortenTitle(section.event.title),
-                          style: GoogleFonts.outfit(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          dateStr + ' · ' + timeStr,
-                          style: GoogleFonts.inter(
-                            fontSize: 12,
-                            color: AppTheme.primaryAccent,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: const BoxDecoration(
+              color: Color(0xFF1A1635),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(15)),
             ),
-          ],
-
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    _buildEventHeaderLabel(section),
+                    style: GoogleFonts.outfit(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ),
           Padding(
             padding: const EdgeInsets.all(14.0),
             child: Column(
@@ -1605,6 +1636,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
   Widget _buildSlotCard(EventStaffingSection section, SubstituteSlotDraft slot, int slotIndex) {
     final eligibleFavorites = _getFilteredFavoritesForInstrument(slot.instrument);
     final isDraft = slot.status == 'draft';
+    final bool isAssigned = slot.assignedUserId != null && slot.assignedUserId!.trim().isNotEmpty;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -1612,10 +1644,10 @@ class _FindSubScreenState extends State<FindSubScreen> {
         color: const Color(0xFF16122C),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: slot.status == 'assigned'
-              ? AppTheme.success.withOpacity(0.4)
+          color: isAssigned
+              ? AppTheme.success.withValues(alpha: 0.4)
               : (slot.isSuggested && !slot.isConfirmed
-                  ? Colors.amber.withOpacity(0.4)
+                  ? Colors.amber.withValues(alpha: 0.4)
                   : const Color(0xFF231F45)),
           width: 1,
         ),
@@ -1623,6 +1655,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Slot Header
           InkWell(
             onTap: () {
               setState(() {
@@ -1635,33 +1668,17 @@ class _FindSubScreenState extends State<FindSubScreen> {
               child: Row(
                 children: [
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Text(
-                              'Substitute ' + (slotIndex + 1).toString(),
-                              style: GoogleFonts.outfit(
-                                fontSize: 15,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            _buildStatusBadge(slot),
-                          ],
-                        ),
-                        if (slot.replacedMemberName != null) ...[
-                          const SizedBox(height: 2),
-                          Text(
-                            'Replacing: ' + slot.replacedMemberName!,
-                            style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
-                          ),
-                        ],
-                      ],
+                    child: Text(
+                      'SUBSTITUTE ' + (slotIndex + 1).toString(),
+                      style: GoogleFonts.outfit(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
                     ),
                   ),
+                  _buildStatusBadge(slot),
+                  const SizedBox(width: 6),
                   Icon(
                     slot.isExpanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
                     color: Colors.white70,
@@ -1678,6 +1695,83 @@ class _FindSubScreenState extends State<FindSubScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // 1. Assigned substitute (Render ONLY when a substitute is actually assigned)
+                  if (isAssigned) ...[
+                    Text(
+                      'Assigned substitute',
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: AppTheme.success.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: AppTheme.success.withValues(alpha: 0.4)),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.check_circle_rounded, color: AppTheme.success, size: 18),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Assigned: ' + (slot.assignedUserName ?? 'Musician'),
+                                style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white),
+                              ),
+                            ],
+                          ),
+                          TextButton(
+                            onPressed: () => _revokeAssignment(section, slot),
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              minimumSize: Size.zero,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                            child: Text(
+                              'Revoke',
+                              style: GoogleFonts.inter(color: AppTheme.danger, fontSize: 12, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+
+                  // 2. Replacing (Show only when replacedMemberName is present)
+                  if (slot.replacedMemberName != null && slot.replacedMemberName!.trim().isNotEmpty) ...[
+                    Text(
+                      'Replacing',
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1E1A3A),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFF2E2A4E)),
+                      ),
+                      child: Text(
+                        slot.replacedMemberName!,
+                        style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+
+                  // 3. Instrument/Skill (Singular)
                   InkWell(
                     onTap: isDraft ? () => _openInstrumentPicker(slot) : null,
                     borderRadius: BorderRadius.circular(8),
@@ -1685,8 +1779,12 @@ class _FindSubScreenState extends State<FindSubScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'INSTRUMENT/SKILLS',
-                          style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: AppTheme.textSecondary),
+                          'Instrument/Skill',
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: AppTheme.textSecondary,
+                          ),
                         ),
                         const SizedBox(height: 6),
                         Container(
@@ -1699,9 +1797,12 @@ class _FindSubScreenState extends State<FindSubScreen> {
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Text(
-                                slot.instrument,
-                                style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13),
+                              Expanded(
+                                child: Text(
+                                  slot.instrument,
+                                  style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               ),
                               if (isDraft)
                                 const Icon(Icons.arrow_drop_down, color: AppTheme.primaryAccent, size: 20),
@@ -1713,12 +1814,8 @@ class _FindSubScreenState extends State<FindSubScreen> {
                   ),
                   const SizedBox(height: 12),
 
+                  // 4. Source Selector (Favorites List / Search All)
                   if (isDraft) ...[
-                    Text(
-                      'Search Source',
-                      style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: AppTheme.textSecondary),
-                    ),
-                    const SizedBox(height: 6),
                     Row(
                       children: [
                         Expanded(
@@ -1733,7 +1830,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
                               });
                             },
                             child: Container(
-                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              padding: const EdgeInsets.symmetric(vertical: 10),
                               decoration: BoxDecoration(
                                 color: slot.searchSource == 'favorites'
                                     ? AppTheme.primaryAccent.withOpacity(0.2)
@@ -1747,7 +1844,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
                               ),
                               child: Center(
                                 child: Text(
-                                  'Favorites',
+                                  'Favorites List',
                                   style: GoogleFonts.inter(
                                     fontSize: 12,
                                     fontWeight: FontWeight.bold,
@@ -1767,7 +1864,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
                               });
                             },
                             child: Container(
-                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              padding: const EdgeInsets.symmetric(vertical: 10),
                               decoration: BoxDecoration(
                                 color: slot.searchSource == 'search_all'
                                     ? AppTheme.primaryAccent.withOpacity(0.2)
@@ -1838,7 +1935,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
                                 ),
                                 focusedBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(8),
-                                  borderSide: const BorderSide(color: AppTheme.primaryAccent),
+                                  borderSide: const BorderSide(color: AppTheme.primaryAccent, width: 1.5),
                                 ),
                               ),
                             ),
@@ -1996,27 +2093,6 @@ class _FindSubScreenState extends State<FindSubScreen> {
                           ],
                         ),
                       ),
-                    ] else ...[
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF1E1A3A),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: const Color(0xFF2E2A4E)),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.broadcast_on_personal_rounded, color: AppTheme.primaryAccent, size: 18),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                'Will be broadcast to all eligible ' + slot.instrument + ' musicians.',
-                                style: GoogleFonts.inter(fontSize: 12, color: Colors.white70),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
                     ],
                   ],
 
@@ -2056,36 +2132,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
                     ),
                   ],
 
-                  if (slot.status == 'assigned') ...[
-                    const SizedBox(height: 10),
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: AppTheme.success.withOpacity(0.12),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: AppTheme.success.withOpacity(0.4)),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Row(
-                            children: [
-                              const Icon(Icons.check_circle_rounded, color: AppTheme.success, size: 20),
-                              const SizedBox(width: 8),
-                              Text(
-                                'Assigned: ' + (slot.assignedUserName ?? 'Musician'),
-                                style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white),
-                              ),
-                            ],
-                          ),
-                          TextButton(
-                            onPressed: () => _revokeAssignment(section, slot),
-                            child: Text('Revoke', style: GoogleFonts.inter(color: AppTheme.danger, fontSize: 12, fontWeight: FontWeight.bold)),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ] else if (slot.candidates.isNotEmpty) ...[
+                  if (slot.candidates.isNotEmpty) ...[
                     const SizedBox(height: 10),
                     Text(
                       'CANDIDATES (' + slot.candidates.length.toString() + ')',
@@ -2152,17 +2199,31 @@ class _FindSubScreenState extends State<FindSubScreen> {
   }
 
   Widget _buildStatusBadge(SubstituteSlotDraft slot) {
-    if (slot.status == 'assigned') {
+    final bool isAssigned = slot.assignedUserId != null && slot.assignedUserId!.trim().isNotEmpty;
+    if (isAssigned) {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
         decoration: BoxDecoration(
-          color: AppTheme.success.withOpacity(0.2),
+          color: AppTheme.success.withValues(alpha: 0.2),
           borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: AppTheme.success.withOpacity(0.5)),
+          border: Border.all(color: AppTheme.success.withValues(alpha: 0.5)),
         ),
         child: Text(
           slot.assignedUserName != null ? (slot.assignedUserName! + ' assigned') : 'Assigned',
           style: GoogleFonts.inter(fontSize: 10, color: AppTheme.success, fontWeight: FontWeight.bold),
+        ),
+      );
+    } else if (slot.status == 'published' || slot.status == 'assigned') {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        decoration: BoxDecoration(
+          color: AppTheme.primaryAccent.withOpacity(0.2),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.5)),
+        ),
+        child: Text(
+          'Waiting for answers',
+          style: GoogleFonts.inter(fontSize: 10, color: AppTheme.primaryAccent, fontWeight: FontWeight.bold),
         ),
       );
     } else if (slot.status == 'draft') {
@@ -2180,45 +2241,121 @@ class _FindSubScreenState extends State<FindSubScreen> {
           ),
         );
       }
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-        decoration: BoxDecoration(
-          color: Colors.white12,
-          borderRadius: BorderRadius.circular(6),
-        ),
-        child: Text(
-          'Draft',
-          style: GoogleFonts.inter(fontSize: 10, color: Colors.white70, fontWeight: FontWeight.bold),
-        ),
-      );
+      return const SizedBox.shrink();
     } else {
-      if (slot.candidates.isNotEmpty) {
-        return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-          decoration: BoxDecoration(
-            color: Colors.blueAccent.withOpacity(0.2),
-            borderRadius: BorderRadius.circular(6),
-            border: Border.all(color: Colors.blueAccent.withOpacity(0.5)),
-          ),
-          child: Text(
-            slot.candidates.length.toString() + ' candidate' + (slot.candidates.length == 1 ? '' : 's'),
-            style: GoogleFonts.inter(fontSize: 10, color: Colors.blueAccent, fontWeight: FontWeight.bold),
-          ),
-        );
-      }
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-        decoration: BoxDecoration(
-          color: Colors.orangeAccent.withOpacity(0.2),
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: Colors.orangeAccent.withOpacity(0.5)),
-        ),
-        child: Text(
-          'Waiting for answers',
-          style: GoogleFonts.inter(fontSize: 10, color: Colors.orangeAccent, fontWeight: FontWeight.bold),
-        ),
-      );
+      return const SizedBox.shrink();
     }
+  }
+
+  Widget _buildPaidGigSection() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppTheme.cardBackground,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Paid Gig',
+                style: GoogleFonts.inter(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                ),
+              ),
+              Switch(
+                value: _isPaid,
+                activeColor: AppTheme.primaryAccent,
+                onChanged: (val) {
+                  setState(() {
+                    _isPaid = val;
+                  });
+                },
+              ),
+            ],
+          ),
+          if (_isPaid) ...[
+            const SizedBox(height: 12),
+            Text(
+              'Amount',
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 6),
+            TextField(
+              controller: _amountController,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+              decoration: InputDecoration(
+                prefixText: 'SEK ',
+                prefixStyle: GoogleFonts.inter(
+                  color: AppTheme.primaryAccent,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+                hintText: '1500',
+                hintStyle: GoogleFonts.inter(color: Colors.white30),
+                filled: true,
+                fillColor: const Color(0xFF1E1A3A),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: Color(0xFF2E2A4E)),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: Color(0xFF2E2A4E)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: AppTheme.primaryAccent, width: 1.5),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPublishButton(String publishButtonLabel) {
+    return SizedBox(
+      width: double.infinity,
+      height: 52,
+      child: ElevatedButton(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AppTheme.primaryAccent,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          elevation: 4,
+        ),
+        onPressed: _isSubmitting ? null : _publishAllDraftRequests,
+        child: _isSubmitting
+            ? const SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
+              )
+            : Text(
+                publishButtonLabel,
+                style: GoogleFonts.inter(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                  letterSpacing: 0.5,
+                ),
+              ),
+      ),
+    );
   }
 
   Widget _buildNewMemberView(BuildContext context, AppState appState) {
@@ -2264,9 +2401,12 @@ class _FindSubScreenState extends State<FindSubScreen> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        _selectedNewMemberInstrument,
-                        style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                      Expanded(
+                        child: Text(
+                          _selectedNewMemberInstrument,
+                          style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                       const Icon(Icons.arrow_drop_down, color: AppTheme.primaryAccent),
                     ],
@@ -2342,7 +2482,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
                         ),
                         child: Center(
                           child: Text(
-                            'Favorites Only',
+                            'Favorites List',
                             style: GoogleFonts.inter(
                               fontSize: 12.5,
                               fontWeight: FontWeight.bold,
@@ -2354,25 +2494,6 @@ class _FindSubScreenState extends State<FindSubScreen> {
                     ),
                   ),
                 ],
-              ),
-              const SizedBox(height: 16),
-
-              Text(
-                'Description',
-                style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: AppTheme.textSecondary),
-              ),
-              const SizedBox(height: 6),
-              TextField(
-                controller: _messageController,
-                maxLines: 3,
-                style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
-                decoration: InputDecoration(
-                  hintText: 'Description',
-                  hintStyle: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 14),
-                  filled: true,
-                  fillColor: const Color(0xFF1E1A3A),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                ),
               ),
             ],
           ),
@@ -2416,22 +2537,60 @@ class _FindSubScreenState extends State<FindSubScreen> {
   }
 
   Future<void> _submitNewMemberRequest() async {
-    setState(() => _isSubmitting = true);
     final appState = Provider.of<AppState>(context, listen: false);
     final profile = appState.currentUserProfile;
     final effectiveBandId = widget.bandId ?? appState.activeBandId;
 
+    final isStandalone = (widget.eventId == null || widget.eventId!.isEmpty);
+    if (isStandalone && _eventSections.isNotEmpty) {
+      final sec = _eventSections.first;
+      if (sec.titleController.text.trim().isEmpty || sec.selectedEventType == null || sec.selectedEventType!.trim().isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please enter Name of Event and select an Event Type before publishing.'),
+            backgroundColor: AppTheme.danger,
+          ),
+        );
+        return;
+      }
+    }
+
+    setState(() => _isSubmitting = true);
+
     try {
+      String newMemberDesc = '';
+      String newMemberLoc = profile?.location ?? 'Stockholm, Sweden';
+      String newMemberType = 'Gig';
+      String newMemberTitle = _bandName ?? appState.activeBandName ?? 'Freelance Band';
+
+      if (_eventSections.isNotEmpty) {
+        final sec = _eventSections.first;
+        if (sec.descriptionController.text.trim().isNotEmpty) {
+          newMemberDesc = sec.descriptionController.text.trim();
+        }
+        if (sec.locationController.text.trim().isNotEmpty) {
+          newMemberLoc = sec.locationController.text.trim();
+        }
+        if (sec.selectedEventType != null && sec.selectedEventType!.trim().isNotEmpty) {
+          newMemberType = sec.selectedEventType!.trim();
+        }
+        if (sec.titleController.text.trim().isNotEmpty) {
+          newMemberTitle = sec.titleController.text.trim();
+        }
+      }
+
       final req = SubRequest(
         role: 'New Member',
         voicePart: _selectedNewMemberInstrument,
-        description: _messageController.text.trim(),
-        location: _locationController.text.trim().isNotEmpty ? _locationController.text.trim() : (profile?.location ?? 'Stockholm, Sweden'),
+        description: newMemberDesc,
+        location: newMemberLoc,
         bandId: effectiveBandId,
         bandName: _bandName ?? appState.activeBandName ?? 'Freelance Band',
         searchSource: _newMemberSource,
         targetUserIds: _newMemberSource == 'favorites' ? _selectedNewMemberFavorites.toList() : null,
         status: 'published',
+        eventTitle: newMemberTitle,
+        extraFields: {'eventType': newMemberType},
       );
 
       await appState.firebaseService.saveSubRequestsBatchAsync([req]);

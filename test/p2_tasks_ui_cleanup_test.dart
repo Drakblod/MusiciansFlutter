@@ -165,7 +165,7 @@ void main() {
         await tester.pump(const Duration(milliseconds: 300));
         await tester.pump(const Duration(milliseconds: 300));
 
-        expect(find.text('Event Date(s)'), findsOneWidget);
+        expect(find.text('Date & Time'), findsOneWidget);
         expect(find.text('Gig/Rehearsal Details'), findsNothing);
         expect(find.text('Gig / Event Details'), findsNothing);
       },

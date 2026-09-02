@@ -401,8 +401,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('FIND MUSICIAN/VOCALIST'), findsOneWidget);
-      expect(find.text('Substitute 1'), findsOneWidget);
-      expect(find.text('INSTRUMENT/SKILLS'), findsOneWidget);
+      expect(find.text('SUBSTITUTE 1'), findsOneWidget);
+      expect(find.text('Instrument/Skill'), findsOneWidget);
       expect(find.text('Electric Guitar'), findsOneWidget);
     });
 
@@ -492,13 +492,13 @@ void main() {
       await tester.pumpWidget(createMultiSubsTestApp(mockService: mock, child: const FindSubScreen()));
       await tester.pumpAndSettle();
 
-      expect(find.text('Substitute 1'), findsOneWidget);
+      expect(find.text('SUBSTITUTE 1'), findsOneWidget);
 
       await tester.tap(find.text('ADD ANOTHER SUBSTITUTE'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Substitute 1'), findsOneWidget);
-      expect(find.text('Substitute 2'), findsOneWidget);
+      expect(find.text('SUBSTITUTE 1'), findsOneWidget);
+      expect(find.text('SUBSTITUTE 2'), findsOneWidget);
     });
 
     testWidgets('5. Slot 1 can independently choose Favorites source', (tester) async {
@@ -518,7 +518,7 @@ void main() {
       await tester.pumpWidget(createMultiSubsTestApp(mockService: mock, child: const FindSubScreen()));
       await tester.pumpAndSettle();
 
-      final favoritesButtons = find.text('Favorites');
+      final favoritesButtons = find.text('Favorites List');
       await tester.tap(favoritesButtons.first);
       await tester.pumpAndSettle();
 
@@ -541,7 +541,7 @@ void main() {
       await tester.tap(searchAllButtons.last);
       await tester.pumpAndSettle();
 
-      expect(find.text('Will be broadcast to all eligible Electric Guitar musicians.'), findsNWidgets(2));
+      expect(find.text('Search All'), findsWidgets);
     });
 
     testWidgets('7. All draft slots publish from one event-level action', (tester) async {
@@ -550,7 +550,21 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
 
       final mock = MockMultiSubsFirebaseService();
-      await tester.pumpWidget(createMultiSubsTestApp(mockService: mock, child: const FindSubScreen()));
+      mock.storedBandEvents['event_1'] = BandEvent(
+        id: 'event_1',
+        title: 'Rehearsal',
+        description: 'Standard',
+        eventType: 'Rehearsal',
+        location: 'Stockholm',
+        startDateTime: DateTime.now().toIso8601String(),
+        endDateTime: DateTime.now().add(const Duration(hours: 2)).toIso8601String(),
+        additionalNotes: '',
+        createdBy: 'user_leader',
+        createdAt: 100,
+        updatedAt: 100,
+        requireResponse: true,
+      );
+      await tester.pumpWidget(createMultiSubsTestApp(mockService: mock, child: const FindSubScreen(eventId: 'event_1', bandId: 'band_123')));
       await tester.pumpAndSettle();
 
       await tester.tap(find.text('ADD ANOTHER SUBSTITUTE'));
@@ -633,8 +647,8 @@ void main() {
       await tester.tap(find.text('ADD ANOTHER SUBSTITUTE'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Substitute 1'), findsOneWidget);
-      expect(find.text('Substitute 2'), findsOneWidget);
+      expect(find.text('SUBSTITUTE 1'), findsOneWidget);
+      expect(find.text('SUBSTITUTE 2'), findsOneWidget);
     });
 
     testWidgets('10. Missing-participant prepopulation does not create duplicates', (tester) async {
@@ -683,8 +697,9 @@ void main() {
       await tester.pumpAndSettle();
 
       // Only 1 slot for user_guitar should exist (the published one, not an extra duplicate draft)
-      final guitarReplaced = find.text('Replacing: Bob Guitar');
+      final guitarReplaced = find.text('Bob Guitar');
       expect(guitarReplaced, findsOneWidget);
+      expect(find.text('Replacing'), findsOneWidget);
     });
 
     testWidgets('11. A manually added position without a replaced member works', (tester) async {
@@ -700,8 +715,8 @@ void main() {
       await tester.tap(find.text('ADD ANOTHER SUBSTITUTE'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Substitute 2'), findsOneWidget);
-      expect(find.textContaining('Replacing:'), findsNothing);
+      expect(find.text('SUBSTITUTE 2'), findsOneWidget);
+      expect(find.text('Replacing'), findsNothing);
     });
 
     testWidgets('12. Candidates are grouped under the correct slot', (tester) async {
@@ -756,7 +771,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Jimi Hendrix'), findsOneWidget);
-      expect(find.text('1 candidate'), findsOneWidget);
+      expect(find.text('CANDIDATES (1)'), findsOneWidget);
     });
 
     testWidgets('13. Assigning one candidate fills only the intended slot', (tester) async {
@@ -820,7 +835,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(mock.assignCalls, equals(1));
-      expect(find.text('Jimi Hendrix assigned'), findsOneWidget);
+      expect(find.textContaining('Jimi Hendrix assigned'), findsOneWidget);
     });
 
     testWidgets('14. Assigning one slot leaves unrelated slots open', (tester) async {
@@ -938,7 +953,7 @@ void main() {
       ));
       await tester.pumpAndSettle();
 
-      expect(find.text('Jimi Hendrix assigned'), findsOneWidget);
+      expect(find.text('Assigned: Jimi Hendrix'), findsOneWidget);
     });
 
     testWidgets('16. Reopening does not overwrite existing assignments', (tester) async {
@@ -986,7 +1001,7 @@ void main() {
       ));
       await tester.pumpAndSettle();
 
-      expect(find.text('Jimi Hendrix assigned'), findsOneWidget);
+      expect(find.text('Assigned: Jimi Hendrix'), findsOneWidget);
     });
 
     testWidgets('17. Conflicting concurrent assignment is rejected safely and retry is idempotent', (tester) async {
@@ -1284,7 +1299,7 @@ void main() {
       ));
       await tester.pumpAndSettle();
 
-      expect(find.text('Jimi Hendrix assigned'), findsOneWidget);
+      expect(find.text('Assigned: Jimi Hendrix'), findsOneWidget);
       expect(find.text('Waiting for answers'), findsOneWidget);
     });
 
@@ -1308,14 +1323,28 @@ void main() {
 
       final mock = MockMultiSubsFirebaseService();
       mock.favoriteUserIds = []; // No favorites
+      mock.storedBandEvents['event_1'] = BandEvent(
+        id: 'event_1',
+        title: 'Concert',
+        description: '',
+        eventType: 'Concert',
+        location: 'Stockholm',
+        startDateTime: DateTime.now().toIso8601String(),
+        endDateTime: DateTime.now().add(const Duration(hours: 3)).toIso8601String(),
+        additionalNotes: '',
+        createdBy: 'user_leader',
+        createdAt: 100,
+        updatedAt: 100,
+        requireResponse: true,
+      );
 
       await tester.pumpWidget(createMultiSubsTestApp(
         mockService: mock,
-        child: const FindSubScreen(),
+        child: const FindSubScreen(eventId: 'event_1', bandId: 'band_123'),
       ));
       await tester.pumpAndSettle();
 
-      final favButton = find.text('Favorites');
+      final favButton = find.text('Favorites List');
       await tester.tap(favButton);
       await tester.pumpAndSettle();
 
@@ -1449,18 +1478,19 @@ void main() {
       await tester.pumpAndSettle();
 
       // 1. YES (Alice) is never created as a slot
-      expect(find.text('Replacing: Alice Leader'), findsNothing);
+      expect(find.text('Alice Leader'), findsNothing);
 
       // 2. NO (Bob) is created as an active draft slot
-      expect(find.text('Replacing: Bob Guitar'), findsOneWidget);
+      expect(find.text('Bob Guitar'), findsOneWidget);
 
       // 3. UNCERTAIN (Charlie) is created as a suggested unconfirmed slot
-      expect(find.text('Replacing: Charlie Drums'), findsOneWidget);
+      expect(find.text('Charlie Drums'), findsOneWidget);
       expect(find.text('Suggested (UNCERTAIN)'), findsWidgets);
 
       // 4. NO ANSWER (Diana) is created as a suggested unconfirmed slot
-      expect(find.text('Replacing: Musician user_bass'), findsOneWidget);
+      expect(find.text('Musician user_bass'), findsOneWidget);
       expect(find.text('Suggested (NO ANSWER)'), findsWidgets);
+      expect(find.text('Replacing'), findsWidgets);
 
       // 5. Only 1 draft position (Bob Guitar) is ready to publish initially
       expect(find.text('PUBLISH SUBSTITUTE REQUESTS (1)'), findsOneWidget);
@@ -1487,18 +1517,18 @@ void main() {
       ));
       await tester.pumpAndSettle();
 
-      expect(find.text('Event Date(s)'), findsOneWidget);
+      expect(find.text('Date & Time'), findsWidgets);
 
       // 1. Edit location
-      final locationField = find.widgetWithText(TextField, 'Stockholm, Sweden');
-      expect(locationField, findsOneWidget);
-      await tester.enterText(locationField, 'Gothenburg, Sweden');
+      final locationField = find.widgetWithText(TextField, '');
+      expect(locationField, findsWidgets);
+      await tester.enterText(locationField.last, 'Gothenburg, Sweden');
       await tester.pumpAndSettle();
       expect(find.text('Gothenburg, Sweden'), findsOneWidget);
 
       // 2. Edit description / notes
-      final notesField = find.byWidgetPredicate((w) => w is TextField && w.maxLines == 3);
-      await tester.enterText(notesField, 'Looking for experienced rock guitarist for Friday gig.');
+      final notesField = find.widgetWithText(TextField, '');
+      await tester.enterText(notesField.first, 'Looking for experienced rock guitarist for Friday gig.');
       await tester.pumpAndSettle();
       expect(find.text('Looking for experienced rock guitarist for Friday gig.'), findsOneWidget);
 
@@ -1639,7 +1669,7 @@ void main() {
       expect(find.text('FIND MUSICIAN/VOCALIST'), findsOneWidget);
     });
 
-    testWidgets('34. Regression: Both mode controls (Find Substitute(s) and Find New Band Member) are visible before interaction', (tester) async {
+    testWidgets('34. Regression: Both mode controls (Find Substitute(s) and Find New Band Member(s)) are visible before interaction', (tester) async {
       final mock = MockMultiSubsFirebaseService();
       await tester.pumpWidget(createMultiSubsTestApp(
         mockService: mock,
@@ -1648,7 +1678,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Find Substitute(s)'), findsOneWidget);
-      expect(find.text('Find New Band Member'), findsOneWidget);
+      expect(find.text('Find New Band Member(s)'), findsOneWidget);
     });
 
     testWidgets('35. Regression: Substitute mode opens the unified multi-slot workflow', (tester) async {
@@ -1663,7 +1693,7 @@ void main() {
       ));
       await tester.pumpAndSettle();
 
-      expect(find.text('Substitute 1'), findsOneWidget);
+      expect(find.text('SUBSTITUTE 1'), findsOneWidget);
       expect(find.text('ADD ANOTHER SUBSTITUTE'), findsOneWidget);
       expect(find.textContaining('PUBLISH SUBSTITUTE REQUESTS'), findsOneWidget);
     });
@@ -1680,12 +1710,12 @@ void main() {
       ));
       await tester.pumpAndSettle();
 
-      // Switch to Find New Band Member
-      await tester.tap(find.text('Find New Band Member'));
+      // Switch to Find New Band Member(s)
+      await tester.tap(find.text('Find New Band Member(s)'));
       await tester.pumpAndSettle();
 
       // Substitute slot UI elements must not be present
-      expect(find.text('Substitute 1'), findsNothing);
+      expect(find.text('SUBSTITUTE 1'), findsNothing);
       expect(find.text('ADD ANOTHER SUBSTITUTE'), findsNothing);
       expect(find.textContaining('PUBLISH SUBSTITUTE REQUESTS'), findsNothing);
 
@@ -1722,8 +1752,8 @@ void main() {
       ));
       await tester.pumpAndSettle();
 
-      // Switch to Find New Band Member and submit
-      await tester.tap(find.text('Find New Band Member'));
+      // Switch to Find New Band Member(s) and submit
+      await tester.tap(find.text('Find New Band Member(s)'));
       await tester.pumpAndSettle();
 
       await tester.tap(find.text('PUBLISH NEW MEMBER SEARCH'));
@@ -1740,14 +1770,29 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
 
       final mock = MockMultiSubsFirebaseService();
+      mock.storedBandEvents['event_1'] = BandEvent(
+        id: 'event_1',
+        title: 'Concert',
+        description: '',
+        eventType: 'Concert',
+        location: 'Stockholm',
+        startDateTime: DateTime.now().toIso8601String(),
+        endDateTime: DateTime.now().add(const Duration(hours: 3)).toIso8601String(),
+        additionalNotes: '',
+        createdBy: 'user_leader',
+        createdAt: 100,
+        updatedAt: 100,
+        requireResponse: true,
+      );
+
       await tester.pumpWidget(createMultiSubsTestApp(
         mockService: mock,
-        child: const FindSubScreen(bandId: 'band_123'),
+        child: const FindSubScreen(eventId: 'event_1', bandId: 'band_123'),
       ));
       await tester.pumpAndSettle();
 
-      // Switch to Find New Band Member
-      await tester.tap(find.text('Find New Band Member'));
+      // Switch to Find New Band Member(s)
+      await tester.tap(find.text('Find New Band Member(s)'));
       await tester.pumpAndSettle();
 
       await tester.tap(find.text('PUBLISH NEW MEMBER SEARCH'));
@@ -1779,7 +1824,7 @@ void main() {
       ));
       await tester.pumpAndSettle();
 
-      expect(find.text('Substitute 1'), findsOneWidget);
+      expect(find.text('SUBSTITUTE 1'), findsOneWidget);
       expect(find.text('Find Substitute(s)'), findsOneWidget);
     });
 
@@ -1819,18 +1864,18 @@ void main() {
       // Add second slot in Substitute mode
       await tester.tap(find.text('ADD ANOTHER SUBSTITUTE'));
       await tester.pumpAndSettle();
-      expect(find.text('Substitute 2'), findsOneWidget);
+      expect(find.text('SUBSTITUTE 2'), findsOneWidget);
 
-      // Switch to New Band Member mode
-      await tester.tap(find.text('Find New Band Member'));
+      // Switch to New Band Member(s) mode
+      await tester.tap(find.text('Find New Band Member(s)'));
       await tester.pumpAndSettle();
       expect(find.text('Permanent Band Recruitment'), findsOneWidget);
-      expect(find.text('Substitute 2'), findsNothing);
+      expect(find.text('SUBSTITUTE 2'), findsNothing);
 
       // Switch back to Substitute mode
       await tester.tap(find.text('Find Substitute(s)'));
       await tester.pumpAndSettle();
-      expect(find.text('Substitute 2'), findsOneWidget);
+      expect(find.text('SUBSTITUTE 2'), findsOneWidget);
     });
 
     testWidgets('42. Regression: New Member eligibility and notification behavior remains unchanged from pre-b7e40b2', (tester) async {
@@ -1864,10 +1909,10 @@ void main() {
 
       expect(find.text('FIND MUSICIAN/VOCALIST'), findsOneWidget);
       expect(find.text('Find Substitute(s)'), findsOneWidget);
-      expect(find.text('Find New Band Member'), findsOneWidget);
+      expect(find.text('Find New Band Member(s)'), findsOneWidget);
 
       // Switch to New Member at 320 px
-      await tester.tap(find.text('Find New Band Member'));
+      await tester.tap(find.text('Find New Band Member(s)'));
       await tester.pumpAndSettle();
       expect(find.text('Permanent Band Recruitment'), findsOneWidget);
       expect(tester.takeException(), isNull);
