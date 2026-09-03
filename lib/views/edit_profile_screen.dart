@@ -1159,7 +1159,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               ),
               const SizedBox(height: 4),
               Text(
-                'Specify what types of collaborations you are open to.',
+                'Specify what types of collaborations you are open to (if any)',
                 style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
               ),
               const SizedBox(height: 8),

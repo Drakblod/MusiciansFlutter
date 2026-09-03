@@ -209,6 +209,7 @@ void main() {
 
       expect(skillsPos, lessThan(genresPos), reason: 'SKILLS/TALENTS must render before GENRES/BAND TYPES');
       expect(genresPos, lessThan(levelPos), reason: 'GENRES/BAND TYPES must render before Level');
+      expect(find.text('Specify what types of collaborations you are open to (if any)'), findsOneWidget);
     });
 
     testWidgets('GEN-05: ProfileTabScreen enforces relative section order PRIMARY Skills/Talents < Genres/Band Types < Level', (tester) async {
