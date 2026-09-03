@@ -5,7 +5,9 @@ import '../providers/app_state.dart';
 import '../theme/app_theme.dart';
 import '../widgets/gradient_scaffold.dart';
 import '../widgets/animated_tap_detector.dart';
+import '../widgets/searchable_category_multi_select_sheet.dart';
 import '../data/skills_taxonomy.dart';
+import '../data/genres_taxonomy.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -22,6 +24,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   String _selectedUserType = 'Electric Guitar';
   String _selectedLevel = 'C = INTERMEDIATE';
+  List<String> _selectedGenres = [];
   bool _obscurePassword = true;
 
   final List<String> _levels = [
@@ -43,6 +46,20 @@ class _RegisterScreenState extends State<RegisterScreen> {
     super.dispose();
   }
 
+  Future<void> _openGenrePicker() async {
+    final result = await SearchableCategoryMultiSelectSheet.show(
+      context: context,
+      title: 'Genres/Band Types',
+      categoryMap: GenresTaxonomy.categoryMap,
+      initialSelected: _selectedGenres,
+    );
+    if (result != null) {
+      setState(() {
+        _selectedGenres = result;
+      });
+    }
+  }
+
   Future<void> _handleRegister() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -54,6 +71,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         _selectedUserType,
         _nicknameController.text.trim(),
         _selectedLevel,
+        _selectedGenres,
       );
       if (mounted) {
         Navigator.pushReplacementNamed(context, '/main-nav');
@@ -279,7 +297,116 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 ),
                 const SizedBox(height: 16),
 
-                // 5. Level Selection
+                // 5. Genres/Band Types Selection
+                AnimatedTapDetector(
+                  enableFocus: true,
+                  semanticLabel: 'Genres/Band Types',
+                  onTap: _openGenrePicker,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 14,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppTheme.inputBackground,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: const Color(0xFF2E2A4E),
+                        width: 1,
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.category_outlined,
+                              color: AppTheme.textSecondary,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                'Genres/Band Types',
+                                style: GoogleFonts.inter(
+                                  color: _selectedGenres.isNotEmpty
+                                      ? Colors.white
+                                      : AppTheme.textSecondary,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ),
+                            if (_selectedGenres.isNotEmpty)
+                              Container(
+                                margin: const EdgeInsets.only(right: 6),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.primaryAccent.withValues(alpha: 0.2),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text(
+                                  '${_selectedGenres.length}',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppTheme.primaryAccent,
+                                  ),
+                                ),
+                              ),
+                            const Icon(
+                              Icons.keyboard_arrow_down_rounded,
+                              color: AppTheme.textSecondary,
+                            ),
+                          ],
+                        ),
+                        if (_selectedGenres.isNotEmpty) ...[
+                          const SizedBox(height: 10),
+                          Wrap(
+                            spacing: 6,
+                            runSpacing: 6,
+                            children: _selectedGenres.map((genre) {
+                              return InputChip(
+                                label: Text(genre),
+                                selected: false,
+                                onDeleted: () {
+                                  setState(() {
+                                    _selectedGenres.remove(genre);
+                                  });
+                                },
+                                deleteIcon: const Icon(Icons.close_rounded, size: 14, color: Colors.white70),
+                                backgroundColor: const Color(0xFF1B1735),
+                                labelStyle: GoogleFonts.inter(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                side: const BorderSide(
+                                  color: AppTheme.primaryAccent,
+                                  width: 1,
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 4,
+                                  vertical: 0,
+                                ),
+                                visualDensity: VisualDensity.compact,
+                              );
+                            }).toList(),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // 6. Level Selection
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 16,

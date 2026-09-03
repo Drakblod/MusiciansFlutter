@@ -102,7 +102,7 @@ class _CollabsLandingScreenState extends State<CollabsLandingScreen> {
     _selectedFavorites.clear();
     for (final f in _filteredFavorites) {
       if (f.userId != null) {
-        _selectedFavorites[f.userId!] = true;
+        _selectedFavorites[f.userId!] = false;
       }
     }
   }
@@ -178,7 +178,7 @@ class _CollabsLandingScreenState extends State<CollabsLandingScreen> {
     try {
       List<String>? targetIds;
       if (_sendToFavoritesOnly) {
-        targetIds = _selectedFavorites.entries.where((e) => e.value).map((e) => e.key).toList();
+        targetIds = _selectedFavorites.entries.where((e) => e.value).map((e) => e.key).toSet().toList();
         if (targetIds.isEmpty) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -778,36 +778,90 @@ class _CollabsLandingScreenState extends State<CollabsLandingScreen> {
                                 ),
                               )
                             : Column(
-                                children: _filteredFavorites.map((fav) {
-                                  final isChecked = _selectedFavorites[fav.userId] ?? false;
-                                  return CheckboxListTile(
-                                    controlAffinity: ListTileControlAffinity.leading,
-                                    value: isChecked,
-                                    activeColor: AppTheme.primaryAccent,
-                                    checkColor: Colors.white,
-                                    title: Text(
-                                      fav.displayName ?? 'Artist',
-                                      style: GoogleFonts.inter(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                    subtitle: Text(
-                                      fav.mainSkillsSubtitle,
-                                      style: GoogleFonts.inter(
-                                        color: AppTheme.textSecondary,
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                    onChanged: (val) {
-                                      if (fav.userId != null) {
-                                        setState(() {
-                                          _selectedFavorites[fav.userId!] = val ?? false;
-                                        });
-                                      }
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Builder(
+                                    builder: (context) {
+                                      final selectedCount = _filteredFavorites
+                                          .where((fav) => fav.userId != null && (_selectedFavorites[fav.userId] ?? false))
+                                          .length;
+                                      final allSelected = _filteredFavorites.isNotEmpty &&
+                                          selectedCount == _filteredFavorites.length;
+
+                                      return Padding(
+                                        padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 4.0),
+                                        child: Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            Text(
+                                              '$selectedCount selected',
+                                              style: GoogleFonts.inter(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w600,
+                                                color: AppTheme.textSecondary,
+                                              ),
+                                            ),
+                                            TextButton(
+                                              onPressed: () {
+                                                setState(() {
+                                                  final targetVal = !allSelected;
+                                                  for (final fav in _filteredFavorites) {
+                                                    if (fav.userId != null) {
+                                                      _selectedFavorites[fav.userId!] = targetVal;
+                                                    }
+                                                  }
+                                                });
+                                              },
+                                              style: TextButton.styleFrom(
+                                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                minimumSize: Size.zero,
+                                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                              ),
+                                              child: Text(
+                                                allSelected ? 'Clear all' : 'Select all',
+                                                style: GoogleFonts.inter(
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: AppTheme.primaryAccent,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      );
                                     },
-                                  );
-                                }).toList(),
+                                  ),
+                                  ..._filteredFavorites.map((fav) {
+                                    final isChecked = _selectedFavorites[fav.userId] ?? false;
+                                    return CheckboxListTile(
+                                      controlAffinity: ListTileControlAffinity.leading,
+                                      value: isChecked,
+                                      activeColor: AppTheme.primaryAccent,
+                                      checkColor: Colors.white,
+                                      title: Text(
+                                        fav.displayName ?? 'Artist',
+                                        style: GoogleFonts.inter(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                      subtitle: Text(
+                                        fav.mainSkillsSubtitle,
+                                        style: GoogleFonts.inter(
+                                          color: AppTheme.textSecondary,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                      onChanged: (val) {
+                                        if (fav.userId != null) {
+                                          setState(() {
+                                            _selectedFavorites[fav.userId!] = val ?? false;
+                                          });
+                                        }
+                                      },
+                                    );
+                                  }),
+                                ],
                               ),
                   ],
                 ],

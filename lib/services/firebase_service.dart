@@ -67,6 +67,7 @@ class FirebaseService {
     String userType,
     String nickname, [
     String? level,
+    List<String>? genres,
   ]) async {
     final credential = await _auth.createUserWithEmailAndPassword(
       email: email,
@@ -101,6 +102,7 @@ class FirebaseService {
         level: level ?? 'C = INTERMEDIATE',
         about: 'Hey! I am a musician ready to play.',
         instruments: [userType],
+        genres: genres ?? const [],
       );
 
       await saveUserProfileAsync(trimmedUid, profile);

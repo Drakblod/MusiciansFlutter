@@ -265,6 +265,7 @@ class AppState extends ChangeNotifier {
     String userType,
     String nickname, [
     String? level,
+    List<String>? genres,
   ]) async {
     _isLoading = true;
     _clearProfileState();
@@ -276,6 +277,7 @@ class AppState extends ChangeNotifier {
         userType,
         nickname,
         level,
+        genres,
       );
       await _loadProfileAndSubscribe();
     } catch (e) {
