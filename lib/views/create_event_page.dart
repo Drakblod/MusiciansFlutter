@@ -956,25 +956,6 @@ class _CreateEventPageState extends State<CreateEventPage> {
                             const Divider(color: Color(0xFF2E2A4E)),
                             const SizedBox(height: 12),
 
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(
-                                  'Generated Dates, Summary',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.bold,
-                                    color: AppTheme.primaryAccent,
-                                  ),
-                                ),
-                                Text(
-                                  '${1 + _additionalEvents.length} events',
-                                  style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-
                             // Event 1 (Primary Event Card)
                             Container(
                               margin: const EdgeInsets.only(bottom: 8),

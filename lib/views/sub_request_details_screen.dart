@@ -100,6 +100,45 @@ class _SubRequestDetailsScreenState extends State<SubRequestDetailsScreen> {
                       fontWeight: FontWeight.w600,
                     ),
                   ),
+                  if (gig.eventTitle != null && gig.eventTitle!.trim().isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      'Event name',
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      gig.eventTitle!.trim(),
+                      style: GoogleFonts.inter(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
+                  if (gig.payDetails != null && gig.payDetails!.trim().isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      'Details',
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      gig.payDetails!.trim(),
+                      style: GoogleFonts.inter(
+                        fontSize: 14,
+                        color: Colors.white70,
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -245,7 +284,7 @@ class _SubRequestDetailsScreenState extends State<SubRequestDetailsScreen> {
 
             // Description Section
             Text(
-              'ABOUT THIS REQUEST',
+              'Description',
               style: GoogleFonts.outfit(
                 fontSize: 14,
                 fontWeight: FontWeight.bold,

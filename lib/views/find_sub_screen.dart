@@ -132,6 +132,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
   final _messageController = TextEditingController();
   final _locationController = TextEditingController();
   final _amountController = TextEditingController(text: '1500');
+  final _payDetailsController = TextEditingController();
   String? _existingRequestGroupId;
   String? _canonicalMultipleEventParentId;
 
@@ -224,6 +225,9 @@ class _FindSubScreenState extends State<FindSubScreen> {
         if (init.payAmount != null) {
           _amountController.text = init.payAmount.toString();
         }
+        if (init.payDetails != null) {
+          _payDetailsController.text = init.payDetails!;
+        }
       }
     }
     _loadDataAsync();
@@ -234,6 +238,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
     _messageController.dispose();
     _locationController.dispose();
     _amountController.dispose();
+    _payDetailsController.dispose();
     for (final section in _eventSections) {
       section.dispose();
     }
@@ -354,6 +359,15 @@ class _FindSubScreenState extends State<FindSubScreen> {
               final subReq = existingSubRequests[sIdx];
               if (_existingRequestGroupId == null && subReq.requestGroupId != null && subReq.requestGroupId!.isNotEmpty) {
                 _existingRequestGroupId = subReq.requestGroupId;
+              }
+              if (sIdx == 0) {
+                _isPaid = subReq.isPaid;
+                if (subReq.payAmount != null) {
+                  _amountController.text = subReq.payAmount.toString();
+                }
+                if (subReq.payDetails != null && subReq.payDetails!.isNotEmpty) {
+                  _payDetailsController.text = subReq.payDetails!;
+                }
               }
 
               final subVoicePart = (subReq.voicePart != null && subReq.voicePart!.isNotEmpty) ? subReq.voicePart! : 'Electric Guitar';
@@ -766,6 +780,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
             isPaid: _isPaid,
             payAmount: _isPaid ? payAmount : null,
             currency: 'SEK',
+            payDetails: _isPaid && _payDetailsController.text.trim().isNotEmpty ? _payDetailsController.text.trim() : null,
             searchSource: slot.searchSource,
             targetUserIds: slot.searchSource == 'favorites' ? slot.selectedFavoriteIds.toList() : null,
             status: 'published',
@@ -1636,13 +1651,23 @@ class _FindSubScreenState extends State<FindSubScreen> {
     final bool isAssigned = slot.assignedUserId != null && slot.assignedUserId!.trim().isNotEmpty;
     final bool showSlotNumber = section.slots.length > 1;
 
-    // Resolve Chosen Substitute name if a favorite is selected for this slot
-    String? chosenSubstituteName;
-    if (slot.selectedFavoriteIds.isNotEmpty) {
+    // Resolve Chosen Substitute(s) name if favorite(s) are selected for this slot
+    String? chosenSubstituteHeading;
+    String? chosenSubstituteText;
+    if (slot.selectedFavoriteIds.length == 1) {
+      chosenSubstituteHeading = 'Chosen Substitute';
       final chosenId = slot.selectedFavoriteIds.first;
       final fav = _favorites.where((f) => f.userId == chosenId).firstOrNull ??
           _allMusicianProfiles.where((p) => p.userId == chosenId).firstOrNull;
-      chosenSubstituteName = fav?.displayName ?? fav?.nickname ?? chosenId;
+      chosenSubstituteText = fav?.displayName ?? fav?.nickname ?? chosenId;
+    } else if (slot.selectedFavoriteIds.length > 1) {
+      chosenSubstituteHeading = 'Chosen Substitutes';
+      final names = slot.selectedFavoriteIds.map((chosenId) {
+        final fav = _favorites.where((f) => f.userId == chosenId).firstOrNull ??
+            _allMusicianProfiles.where((p) => p.userId == chosenId).firstOrNull;
+        return fav?.displayName ?? fav?.nickname ?? chosenId;
+      }).toList();
+      chosenSubstituteText = names.join(', ');
     }
 
     final slotContent = Padding(
@@ -1768,14 +1793,14 @@ class _FindSubScreenState extends State<FindSubScreen> {
             ),
           ),
 
-          // Chosen Substitute (appears directly below Instrument/Skill when chosen)
-          if (chosenSubstituteName != null && chosenSubstituteName.isNotEmpty) ...[
+          // Chosen Substitute / Chosen Substitutes (appears directly below Instrument/Skill when chosen)
+          if (chosenSubstituteHeading != null && chosenSubstituteText != null && chosenSubstituteText.isNotEmpty) ...[
             const SizedBox(height: 12),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Chosen Substitute',
+                  chosenSubstituteHeading,
                   style: GoogleFonts.inter(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
@@ -1792,7 +1817,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
                     border: Border.all(color: const Color(0xFF2E2A4E)),
                   ),
                   child: Text(
-                    chosenSubstituteName,
+                    chosenSubstituteText,
                     style: GoogleFonts.inter(
                       color: Colors.white,
                       fontWeight: FontWeight.w600,
@@ -1894,11 +1919,25 @@ class _FindSubScreenState extends State<FindSubScreen> {
                 onSelect: (uid, selected) {
                   setState(() {
                     if (selected) {
-                      slot.selectedFavoriteIds = {uid};
-                      slot.isFavoritesListOpen = false;
+                      if (slot.selectedFavoriteIds.length > 1) {
+                        slot.selectedFavoriteIds.add(uid);
+                      } else {
+                        slot.selectedFavoriteIds = {uid};
+                        slot.isFavoritesListOpen = false;
+                      }
                     } else {
                       slot.selectedFavoriteIds.remove(uid);
                     }
+                  });
+                },
+                onSelectAllFavorites: () {
+                  setState(() {
+                    final allIds = _favorites
+                        .map((f) => f.userId)
+                        .where((id) => id != null && id.isNotEmpty)
+                        .cast<String>()
+                        .toSet();
+                    slot.selectedFavoriteIds.addAll(allIds);
                   });
                 },
                 isAddFavoriteOpen: slot.isAddFavoriteOpen,
@@ -2019,6 +2058,12 @@ class _FindSubScreenState extends State<FindSubScreen> {
               ),
             );
 
+    final parentEventTitle = section.titleController.text.trim().isNotEmpty
+        ? section.titleController.text.trim()
+        : (section.event.title.trim().isNotEmpty
+            ? section.event.title.trim()
+            : 'Event');
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
@@ -2051,7 +2096,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
                   children: [
                     Expanded(
                       child: Text(
-                        'SUBSTITUTE ' + (slotIndex + 1).toString(),
+                        'SUBSTITUTE ' + (slotIndex + 1).toString() + ' - "' + parentEventTitle + '"',
                         style: GoogleFonts.outfit(
                           fontSize: 15,
                           fontWeight: FontWeight.bold,
@@ -2085,6 +2130,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
     required bool isSingleSelect,
     required Set<String> selectedIds,
     required void Function(String uid, bool selected) onSelect,
+    VoidCallback? onSelectAllFavorites,
     required bool isAddFavoriteOpen,
     required VoidCallback onToggleAddFavorite,
     required String addFavoriteQuery,
@@ -2103,13 +2149,35 @@ class _FindSubScreenState extends State<FindSubScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Favorites List',
-            style: GoogleFonts.outfit(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Favorites List',
+                style: GoogleFonts.outfit(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+              if (onSelectAllFavorites != null)
+                TextButton(
+                  onPressed: _favorites.isNotEmpty ? onSelectAllFavorites : null,
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  child: Text(
+                    'Add all favorites',
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: _favorites.isNotEmpty ? AppTheme.primaryAccent : AppTheme.textSecondary,
+                    ),
+                  ),
+                ),
+            ],
           ),
           const SizedBox(height: 10),
 
@@ -2414,6 +2482,40 @@ class _FindSubScreenState extends State<FindSubScreen> {
                 ),
               ),
             ),
+            const SizedBox(height: 12),
+            Text(
+              'Details',
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 6),
+            TextField(
+              controller: _payDetailsController,
+              maxLines: 3,
+              style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
+              decoration: InputDecoration(
+                hintText: 'e.g. Travel expenses included, payment after invoice, hotel included',
+                hintStyle: GoogleFonts.inter(color: Colors.white30),
+                filled: true,
+                fillColor: const Color(0xFF1E1A3A),
+                contentPadding: const EdgeInsets.all(12),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: Color(0xFF2E2A4E)),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: Color(0xFF2E2A4E)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: AppTheme.primaryAccent, width: 1.5),
+                ),
+              ),
+            ),
           ],
         ],
       ),
@@ -2601,6 +2703,16 @@ class _FindSubScreenState extends State<FindSubScreen> {
                       } else {
                         _selectedNewMemberFavorites.remove(uid);
                       }
+                    });
+                  },
+                  onSelectAllFavorites: () {
+                    setState(() {
+                      final allFavIds = _favorites
+                          .map((f) => f.userId)
+                          .where((id) => id != null && id.isNotEmpty)
+                          .cast<String>()
+                          .toSet();
+                      _selectedNewMemberFavorites.addAll(allFavIds);
                     });
                   },
                   isAddFavoriteOpen: _isNewMemberAddFavoriteOpen,

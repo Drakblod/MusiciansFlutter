@@ -16,6 +16,7 @@ class GigGroup {
   final String? bandName;
   final String? location;
   final String? description;
+  final String? payDetails;
   final bool isMultiple;
   final List<SubRequest> requests;
   final DateTime earliestDate;
@@ -26,6 +27,7 @@ class GigGroup {
     this.bandName,
     this.location,
     this.description,
+    this.payDetails,
     required this.isMultiple,
     required this.requests,
     required this.earliestDate,
@@ -106,6 +108,11 @@ class _FindGigsScreenState extends State<FindGigsScreen>
       }
       if (earliest == DateTime(3000)) earliest = DateTime.now();
 
+      final firstWithPayDetails = reqs.firstWhere(
+        (r) => r.payDetails != null && r.payDetails!.trim().isNotEmpty,
+        orElse: () => first,
+      );
+
       groups.add(
         GigGroup(
           groupId: entry.key,
@@ -113,6 +120,7 @@ class _FindGigsScreenState extends State<FindGigsScreen>
           bandName: first.bandName,
           location: first.location,
           description: first.description,
+          payDetails: firstWithPayDetails.payDetails,
           isMultiple: isMulti,
           requests: reqs,
           earliestDate: earliest,
@@ -210,6 +218,20 @@ class _FindGigsScreenState extends State<FindGigsScreen>
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setModalState) {
+            final distinctEventTitles = group.requests
+                .map((r) => r.eventTitle?.trim())
+                .where((t) => t != null && t.isNotEmpty)
+                .cast<String>()
+                .toSet();
+            final bool hasMultipleDistinctEvents = distinctEventTitles.length > 1;
+            final String? singleEventTitle = distinctEventTitles.length == 1
+                ? distinctEventTitles.first
+                : (distinctEventTitles.isEmpty
+                    ? (group.requests.isNotEmpty && group.requests.first.eventTitle?.trim().isNotEmpty == true
+                        ? group.requests.first.eventTitle!.trim()
+                        : null)
+                    : null);
+
             return ConstrainedBox(
               constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.85),
               child: Padding(
@@ -278,6 +300,28 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                         const SizedBox(height: 12),
                       ],
 
+                      // Event name (for single event requests or groups where all slots share one event)
+                      if (!hasMultipleDistinctEvents && singleEventTitle != null && singleEventTitle.isNotEmpty) ...[
+                        Text(
+                          'Event name',
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: AppTheme.textSecondary,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          singleEventTitle,
+                          style: GoogleFonts.inter(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+
                       // Summary info
                       Row(
                         children: [
@@ -322,10 +366,32 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                       ),
                       const SizedBox(height: 16),
 
+                      // Paid Gig Details
+                      if (group.payDetails != null && group.payDetails!.trim().isNotEmpty) ...[
+                        Text(
+                          'Details',
+                          style: GoogleFonts.outfit(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          group.payDetails!,
+                          style: GoogleFonts.inter(
+                            fontSize: 14,
+                            color: AppTheme.textSecondary,
+                            height: 1.4,
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                      ],
+
                       // Description
                       if (group.description != null && group.description!.isNotEmpty) ...[
                         Text(
-                          'About this Request',
+                          'Description',
                           style: GoogleFonts.outfit(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
@@ -409,6 +475,17 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                                         'Replacing: ${req.replacedMemberName}',
                                         style: GoogleFonts.inter(fontSize: 11, color: Colors.white60),
                                       ),
+                                    if (hasMultipleDistinctEvents && req.eventTitle != null && req.eventTitle!.trim().isNotEmpty) ...[
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        'Event name',
+                                        style: GoogleFonts.inter(fontSize: 10, color: AppTheme.textSecondary, fontWeight: FontWeight.w600),
+                                      ),
+                                      Text(
+                                        req.eventTitle!.trim(),
+                                        style: GoogleFonts.inter(fontSize: 12, color: Colors.white, fontWeight: FontWeight.bold),
+                                      ),
+                                    ],
                                   ],
                                 ),
                               ),

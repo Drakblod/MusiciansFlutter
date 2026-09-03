@@ -501,8 +501,8 @@ void main() {
       await tester.tap(find.text('ADD ANOTHER SUBSTITUTE'));
       await tester.pumpAndSettle();
 
-      expect(find.text('SUBSTITUTE 1'), findsOneWidget);
-      expect(find.text('SUBSTITUTE 2'), findsOneWidget);
+      expect(find.textContaining('SUBSTITUTE 1 - "'), findsOneWidget);
+      expect(find.textContaining('SUBSTITUTE 2 - "'), findsOneWidget);
     });
 
     testWidgets('5. Slot 1 can independently choose Favorites source', (tester) async {
@@ -656,8 +656,8 @@ void main() {
       await tester.tap(find.text('ADD ANOTHER SUBSTITUTE'));
       await tester.pumpAndSettle();
 
-      expect(find.text('SUBSTITUTE 1'), findsOneWidget);
-      expect(find.text('SUBSTITUTE 2'), findsOneWidget);
+      expect(find.textContaining('SUBSTITUTE 1 - "'), findsOneWidget);
+      expect(find.textContaining('SUBSTITUTE 2 - "'), findsOneWidget);
     });
 
     testWidgets('10. Missing-participant prepopulation does not create duplicates', (tester) async {
@@ -724,7 +724,7 @@ void main() {
       await tester.tap(find.text('ADD ANOTHER SUBSTITUTE'));
       await tester.pumpAndSettle();
 
-      expect(find.text('SUBSTITUTE 2'), findsOneWidget);
+      expect(find.textContaining('SUBSTITUTE 2 - "'), findsOneWidget);
       expect(find.text('Replacing'), findsNothing);
     });
 
@@ -1878,18 +1878,18 @@ void main() {
       // Add second slot in Substitute mode
       await tester.tap(find.text('ADD ANOTHER SUBSTITUTE'));
       await tester.pumpAndSettle();
-      expect(find.text('SUBSTITUTE 2'), findsOneWidget);
+      expect(find.textContaining('SUBSTITUTE 2 - "'), findsOneWidget);
 
       // Switch to New Band Member(s) mode
       await tester.tap(find.text('Find New Band Member(s)'));
       await tester.pumpAndSettle();
       expect(find.text('Permanent Band Recruitment'), findsOneWidget);
-      expect(find.text('SUBSTITUTE 2'), findsNothing);
+      expect(find.textContaining('SUBSTITUTE 2 - "'), findsNothing);
 
       // Switch back to Substitute mode
       await tester.tap(find.text('Find Substitute(s)'));
       await tester.pumpAndSettle();
-      expect(find.text('SUBSTITUTE 2'), findsOneWidget);
+      expect(find.textContaining('SUBSTITUTE 2 - "'), findsOneWidget);
     });
 
     testWidgets('42. Regression: New Member eligibility and notification behavior remains unchanged from pre-b7e40b2', (tester) async {

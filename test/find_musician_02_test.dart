@@ -533,9 +533,9 @@ void main() {
       await tester.tap(find.text('ADD SUBSTITUTE TO EVENT 1'));
       await tester.pumpAndSettle();
 
-      // Event 1 now has 2 slots (shows SUBSTITUTE 1 and SUBSTITUTE 2), Event 2 still has 1 slot (no header)
-      expect(find.text('SUBSTITUTE 1'), findsOneWidget);
-      expect(find.text('SUBSTITUTE 2'), findsOneWidget);
+      // Event 1 now has 2 slots (shows SUBSTITUTE 1 and SUBSTITUTE 2 with event name), Event 2 still has 1 slot (no header)
+      expect(find.textContaining('SUBSTITUTE 1 - "'), findsOneWidget);
+      expect(find.textContaining('SUBSTITUTE 2 - "'), findsOneWidget);
     });
 
     testWidgets('17. Description field has visible label Description', (tester) async {

@@ -11,6 +11,8 @@ import 'package:musicians_flutter/models/band_event.dart';
 import 'package:musicians_flutter/providers/app_state.dart';
 import 'package:musicians_flutter/services/firebase_service.dart';
 import 'package:musicians_flutter/views/find_sub_screen.dart';
+import 'package:musicians_flutter/views/find_gigs_screen.dart';
+import 'package:musicians_flutter/views/create_event_page.dart';
 
 class Mock03bFirebaseService extends Fake implements FirebaseService {
   final Map<String, BandEvent> events = {};
@@ -190,6 +192,11 @@ class Mock03bFirebaseService extends Fake implements FirebaseService {
   ) async {
     totalWriteCalls++;
     eventWriteCalls++;
+  }
+
+  @override
+  Future<String?> getUserBandRoleAsync(String bandId, String userId) async {
+    return 'Leader';
   }
 }
 
@@ -444,8 +451,8 @@ void main() {
       await tester.tap(find.text('ADD ANOTHER SUBSTITUTE'));
       await tester.pumpAndSettle();
 
-      expect(find.text('SUBSTITUTE 1'), findsOneWidget);
-      expect(find.text('SUBSTITUTE 2'), findsOneWidget);
+      expect(find.textContaining('SUBSTITUTE 1 - "'), findsOneWidget);
+      expect(find.textContaining('SUBSTITUTE 2 - "'), findsOneWidget);
     });
 
     // 7. Removing Substitute 2 hides SUBSTITUTE 1 again.
@@ -460,8 +467,8 @@ void main() {
       await tester.tap(find.text('ADD ANOTHER SUBSTITUTE'));
       await tester.pumpAndSettle();
 
-      expect(find.text('SUBSTITUTE 1'), findsOneWidget);
-      expect(find.text('SUBSTITUTE 2'), findsOneWidget);
+      expect(find.textContaining('SUBSTITUTE 1 - "'), findsOneWidget);
+      expect(find.textContaining('SUBSTITUTE 2 - "'), findsOneWidget);
 
       // Find Remove Slot button for the second slot
       final removeButtons = find.text('Remove Slot');
@@ -470,8 +477,8 @@ void main() {
       await tester.pumpAndSettle();
 
       // Now only 1 slot remains: SUBSTITUTE 1 must be hidden again
-      expect(find.text('SUBSTITUTE 1'), findsNothing);
-      expect(find.text('SUBSTITUTE 2'), findsNothing);
+      expect(find.textContaining('SUBSTITUTE 1 - "'), findsNothing);
+      expect(find.textContaining('SUBSTITUTE 2 - "'), findsNothing);
     });
 
     // 8. Substitute numbering is independent per event.
@@ -485,7 +492,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Initially Event 1 has 1 slot and Event 2 has 1 slot -> neither shows SUBSTITUTE 1
-      expect(find.text('SUBSTITUTE 1'), findsNothing);
+      expect(find.textContaining('SUBSTITUTE 1 - "'), findsNothing);
 
       // Tap ADD SUBSTITUTE TO EVENT 1
       await tester.tap(find.text('ADD SUBSTITUTE TO EVENT 1'));
@@ -493,8 +500,8 @@ void main() {
 
       // Now Event 1 has 2 slots (shows SUBSTITUTE 1 & SUBSTITUTE 2)
       // Event 2 has 1 slot (shows NO SUBSTITUTE number)
-      expect(find.text('SUBSTITUTE 1'), findsOneWidget);
-      expect(find.text('SUBSTITUTE 2'), findsOneWidget);
+      expect(find.textContaining('SUBSTITUTE 1 - "'), findsOneWidget);
+      expect(find.textContaining('SUBSTITUTE 2 - "'), findsOneWidget);
     });
 
     // 9. Favorites List appears left of Search All.
@@ -1277,6 +1284,294 @@ void main() {
 
       expect(tester.widget<CheckboxListTile>(find.widgetWithText(CheckboxListTile, 'Gurra')).value, isTrue);
       expect(tester.widget<CheckboxListTile>(find.widgetWithText(CheckboxListTile, 'Alice Bass')).value, isTrue);
+    });
+
+    // 47. Add all favorites selects every saved Favorite without assigning a substitute, displays Chosen Substitutes, and allows individual removal.
+    testWidgets('47. Add all favorites selects all saved Favorites without assigning and displays Chosen Substitutes', (tester) async {
+      tester.view.physicalSize = const Size(800, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      await tester.pumpWidget(createWidgetUnderTest(eventId: null));
+      await tester.pumpAndSettle();
+
+      // Open Favorites List
+      await tester.tap(find.text('Favorites List'));
+      await tester.pumpAndSettle();
+
+      // Tap 'Add all favorites'
+      expect(find.text('Add all favorites'), findsOneWidget);
+      await tester.tap(find.text('Add all favorites'));
+      await tester.pumpAndSettle();
+
+      // Both favorites are checked
+      expect(tester.widget<CheckboxListTile>(find.widgetWithText(CheckboxListTile, 'Gurra')).value, isTrue);
+      expect(tester.widget<CheckboxListTile>(find.widgetWithText(CheckboxListTile, 'Alice Bass')).value, isTrue);
+      expect(mockService.assignCalls, equals(0));
+
+      // Multiple selected Favorites display 'Chosen Substitutes'
+      expect(find.text('Chosen Substitutes'), findsOneWidget);
+      expect(find.text('Chosen Substitute'), findsNothing);
+      expect(find.textContaining('Gurra, Alice Bass'), findsOneWidget);
+
+      // Individual favorites remain removable: uncheck Gurra
+      await tester.tap(find.widgetWithText(CheckboxListTile, 'Gurra'));
+      await tester.pumpAndSettle();
+
+      // Now exactly one Favorite remains -> displays 'Chosen Substitute'
+      expect(tester.widget<CheckboxListTile>(find.widgetWithText(CheckboxListTile, 'Gurra')).value, isFalse);
+      expect(tester.widget<CheckboxListTile>(find.widgetWithText(CheckboxListTile, 'Alice Bass')).value, isTrue);
+      expect(find.text('Chosen Substitute'), findsOneWidget);
+      expect(find.text('Chosen Substitutes'), findsNothing);
+      expect(find.text('Alice Bass'), findsWidgets);
+
+      // Uncheck Alice Bass -> neither displays
+      await tester.tap(find.widgetWithText(CheckboxListTile, 'Alice Bass'));
+      await tester.pumpAndSettle();
+      expect(find.text('Chosen Substitute'), findsNothing);
+      expect(find.text('Chosen Substitutes'), findsNothing);
+    });
+
+    // 48. Paid Gig displays Details field, survives serialization, and reopens correctly.
+    testWidgets('48. Paid Gig displays Details field, survives serialization, and reopens correctly', (tester) async {
+      tester.view.physicalSize = const Size(800, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      // A: When Paid Gig is true, Details field is visible
+      await tester.pumpWidget(createWidgetUnderTest(eventId: null));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Details'), findsOneWidget);
+      await tester.enterText(
+        find.widgetWithText(TextField, 'e.g. Travel expenses included, payment after invoice, hotel included'),
+        'Travel expenses included, hotel paid',
+      );
+      await tester.pumpAndSettle();
+
+      // Fill Name and Type
+      final textFields = find.byType(TextFormField);
+      await tester.enterText(textFields.first, 'Tour Rehearsal');
+      await tester.tap(find.text('Select Event Type'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Rehearsal').last);
+      await tester.pumpAndSettle();
+
+      // Select Gurra as favorite
+      await tester.tap(find.text('Favorites List'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(CheckboxListTile, 'Gurra'));
+      await tester.pumpAndSettle();
+
+      // Publish
+      await tester.tap(find.text('PUBLISH SUBSTITUTE REQUESTS (1)'));
+      await tester.pumpAndSettle();
+
+      expect(mockService.savedBatchRequests, isNotEmpty);
+      final publishedReq = mockService.savedBatchRequests.first;
+      expect(publishedReq.payDetails, equals('Travel expenses included, hotel paid'));
+
+      // Serialization test
+      final json = publishedReq.toJson();
+      expect(json['PayDetails'], equals('Travel expenses included, hotel paid'));
+      final fromJsonReq = SubRequest.fromJson(json, 'sub_test_id');
+      expect(fromJsonReq.payDetails, equals('Travel expenses included, hotel paid'));
+
+      // Reopen with initialRequest containing payDetails
+      await tester.pumpWidget(createWidgetUnderTest(eventId: null, initialRequest: fromJsonReq));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Details'), findsOneWidget);
+      expect(find.text('Travel expenses included, hotel paid'), findsOneWidget);
+    });
+
+    // 49. Find Gigs details view displays Description (not About this event), correct Event name, and saved Paid Gig Details.
+    testWidgets('49. Find Gigs details view displays Description, Event name, and saved Paid Gig Details', (tester) async {
+      tester.view.physicalSize = const Size(800, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      mockService.allSubRequests.clear();
+      final req1 = SubRequest(
+        id: 'sub_gigs_1',
+        subRequestId: 'sub_gigs_1',
+        slotId: 'slot_1',
+        bandId: 'band_1',
+        bandName: 'The Rockers',
+        role: 'Substitute',
+        voicePart: 'Lead Guitar',
+        description: 'Need a shredder for weekend show',
+        date: '2026-09-20T18:00:00Z',
+        startTime: '19:00',
+        endTime: '22:00',
+        location: 'Stockholm Club',
+        isPaid: true,
+        payAmount: 2000,
+        payDetails: 'Hotel included, invoice payment',
+        currency: 'SEK',
+        eventTitle: 'Rock Fest 2026',
+        requestGroupId: 'grp_rock_fest',
+      );
+      mockService.allSubRequests.add(req1);
+
+      await tester.pumpWidget(
+        ChangeNotifierProvider<AppState>.value(
+          value: appState,
+          child: const MaterialApp(
+            home: FindGigsScreen(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Open bottom sheet
+      await tester.tap(find.text('The Rockers'));
+      await tester.pumpAndSettle();
+
+      // Verifies:
+      // 1. Description label, NOT About this event or About this Request
+      expect(find.text('Description'), findsOneWidget);
+      expect(find.text('About this event'), findsNothing);
+      expect(find.text('About this Request'), findsNothing);
+      expect(find.text('Need a shredder for weekend show'), findsOneWidget);
+
+      // 2. Event name label and value
+      expect(find.text('Event name'), findsOneWidget);
+      expect(find.text('Rock Fest 2026'), findsOneWidget);
+
+      // 3. Paid Gig Details
+      expect(find.text('Details'), findsOneWidget);
+      expect(find.text('Hotel included, invoice payment'), findsOneWidget);
+    });
+
+    // 50. Multi-event Find Gigs details view displays correct Event name for each occurrence without single top-level title.
+    testWidgets('50. Multi-event Find Gigs displays distinct Event name per occurrence without top-level collision', (tester) async {
+      tester.view.physicalSize = const Size(800, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      mockService.allSubRequests.clear();
+      final occ1 = SubRequest(
+        id: 'sub_multi_occ_1',
+        subRequestId: 'sub_multi_occ_1',
+        slotId: 'slot_1',
+        bandId: 'band_tour',
+        bandName: 'Touring Band',
+        role: 'Substitute',
+        voicePart: 'Lead Guitar',
+        description: 'Tour gig',
+        date: '2026-09-20T18:00:00Z',
+        eventSequence: 1,
+        eventTitle: 'Tour Stop Oslo',
+        requestGroupId: 'grp_tour_distinct',
+      );
+      final occ2 = SubRequest(
+        id: 'sub_multi_occ_2',
+        subRequestId: 'sub_multi_occ_2',
+        slotId: 'slot_2',
+        bandId: 'band_tour',
+        bandName: 'Touring Band',
+        role: 'Substitute',
+        voicePart: 'Rhythm Guitar',
+        description: 'Tour gig',
+        date: '2026-09-21T18:00:00Z',
+        eventSequence: 2,
+        eventTitle: 'Tour Stop Stockholm',
+        requestGroupId: 'grp_tour_distinct',
+      );
+      mockService.allSubRequests.addAll([occ1, occ2]);
+
+      await tester.pumpWidget(
+        ChangeNotifierProvider<AppState>.value(
+          value: appState,
+          child: const MaterialApp(
+            home: FindGigsScreen(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Touring Band'));
+      await tester.pumpAndSettle();
+
+      // Displays both occurrence event names in their respective position sections
+      expect(find.text('Tour Stop Oslo'), findsOneWidget);
+      expect(find.text('Tour Stop Stockholm'), findsOneWidget);
+      expect(find.text('Event name'), findsNWidgets(2));
+    });
+
+    // 51. Older requests without PayDetails load safely and display cleanly.
+    test('51. Older requests without PayDetails load safely without exceptions', () {
+      final legacyJson = {
+        'SubRequestId': 'legacy_sub_999',
+        'Role': 'Substitute',
+        'VoicePart': 'Piano',
+        'Date': '2026-09-10T18:00:00Z',
+        'IsPaid': false,
+      };
+
+      final legacyReq = SubRequest.fromJson(legacyJson, 'legacy_sub_999');
+      expect(legacyReq.payDetails, isNull);
+
+      final legacyMap = legacyReq.toJson();
+      expect(legacyMap.containsKey('PayDetails'), isFalse);
+    });
+
+    // 52. Numbered Substitute headings append straight-quoted event name with hyphen.
+    testWidgets('52. Numbered Substitute headings include straight-quoted event name with hyphen', (tester) async {
+      tester.view.physicalSize = const Size(800, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      await tester.pumpWidget(createWidgetUnderTest(eventId: null));
+      await tester.pumpAndSettle();
+
+      // Set event name
+      await tester.enterText(find.widgetWithText(TextField, 'Enter event name'), 'Sommarturné Gig');
+      await tester.pumpAndSettle();
+
+      // Add second slot
+      await tester.tap(find.text('ADD ANOTHER SUBSTITUTE'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('SUBSTITUTE 1 - "Sommarturné Gig"'), findsOneWidget);
+      expect(find.text('SUBSTITUTE 2 - "Sommarturné Gig"'), findsOneWidget);
+      expect(find.textContaining('·'), findsNothing);
+    });
+
+    // 53. Create Event does not display Generated Dates Summary, while Multiple Events generation still works.
+    testWidgets('53. Create Event omits Generated Dates Summary and preserves Multiple Events generation', (tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      await tester.pumpWidget(
+        ChangeNotifierProvider<AppState>.value(
+          value: appState,
+          child: const MaterialApp(
+            home: Scaffold(
+              body: CreateEventPage(bandId: 'band_123'),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      // Toggle Multiple Events switch
+      await tester.tap(find.byType(Switch).first);
+      await tester.pumpAndSettle();
+
+      // Generated Dates Summary is NO LONGER visible
+      expect(find.text('Generated Dates, Summary'), findsNothing);
+      expect(find.text('Generated Dates Summary'), findsNothing);
+
+      // Multiple Events generation still works: '+ Add Event(s)' is functional
+      expect(find.text('+ Add Event(s)'), findsOneWidget);
+      await tester.tap(find.text('+ Add Event(s)'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Add Event'), findsWidgets);
     });
   });
 }

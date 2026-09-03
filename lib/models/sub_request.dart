@@ -42,6 +42,7 @@ class SubRequest {
   final int? payAmount; // Exact integer whole currency units (e.g. 1500 for SEK 1,500)
   final int? payAmountMinor; // Exact integer minor currency units (e.g. 150000 öre)
   final String? currency; // ISO currency code, e.g. 'SEK'
+  final String? payDetails; // Payment-related information/details
   final Map<String, dynamic> extraFields;
 
   SubRequest({
@@ -86,6 +87,7 @@ class SubRequest {
     int? payAmount,
     int? payAmountMinor,
     this.currency,
+    this.payDetails,
     this.extraFields = const {},
   })  : payAmount = payAmount ?? (payAmountMinor != null ? payAmountMinor ~/ 100 : null),
         payAmountMinor = payAmountMinor ?? (payAmount != null ? payAmount * 100 : null);
@@ -172,6 +174,8 @@ class SubRequest {
       'payAmount',
       'Currency',
       'currency',
+      'PayDetails',
+      'payDetails',
     };
 
     final Map<String, dynamic> extra = {};
@@ -244,6 +248,7 @@ class SubRequest {
       eventTitle: json['EventTitle']?.toString() ?? json['eventTitle']?.toString(),
       payAmountMinor: effectiveMinor,
       currency: json['Currency']?.toString() ?? json['currency']?.toString() ?? (json['IsPaid'] == true ? 'SEK' : null),
+      payDetails: json['PayDetails']?.toString() ?? json['payDetails']?.toString(),
       extraFields: extra,
     );
   }
@@ -300,6 +305,7 @@ class SubRequest {
       if (eventTitle != null) 'EventTitle': eventTitle,
       if (payAmount != null) 'PayAmount': payAmount,
       if (currency != null) 'Currency': currency,
+      if (payDetails != null && payDetails!.trim().isNotEmpty) 'PayDetails': payDetails,
     });
     return map;
   }
@@ -345,6 +351,7 @@ class SubRequest {
     String? eventTitle,
     int? payAmount,
     String? currency,
+    String? payDetails,
     Map<String, dynamic>? extraFields,
   }) {
     return SubRequest(
@@ -388,6 +395,7 @@ class SubRequest {
       eventTitle: eventTitle ?? this.eventTitle,
       payAmount: payAmount ?? this.payAmount,
       currency: currency ?? this.currency,
+      payDetails: payDetails ?? this.payDetails,
       extraFields: extraFields ?? this.extraFields,
     );
   }
