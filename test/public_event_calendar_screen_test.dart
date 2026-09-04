@@ -12,6 +12,7 @@ import 'package:musicians_flutter/services/firebase_service.dart';
 import 'package:musicians_flutter/views/calendar_screen.dart';
 import 'package:musicians_flutter/views/public_event_calendar_screen.dart';
 import 'package:musicians_flutter/views/public_event_details_screen.dart';
+import 'package:musicians_flutter/widgets/event_category_picker_sheet.dart';
 
 class SpyingFirebaseService extends FirebaseService {
   int callCount = 0;
@@ -122,11 +123,11 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('EVENT CALENDAR'), findsOneWidget);
-      expect(find.text('Discover live music, open sessions, workshops and music events.'), findsOneWidget);
+      expect(find.text('Discover live music, sessions, workshops and music events.'), findsOneWidget);
       expect(find.text('DEMO EVENTS'), findsOneWidget);
     });
 
-    testWidgets('2. Displays 4 filter tabs in exact order', (tester) async {
+    testWidgets('2. Displays category picker with options and no duplicate chips row', (tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() => tester.view.resetPhysicalSize());
@@ -134,9 +135,18 @@ void main() {
       await tester.pumpWidget(createTestWidget());
       await tester.pumpAndSettle();
 
-      expect(find.text('All'), findsOneWidget);
+      // Horizontal chips row is removed
+      expect(find.text('All'), findsNothing);
+      expect(find.text('Live/Gigs'), findsNothing);
+
+      // Tapping search field opens picker sheet with all category options
+      await tester.tap(find.byType(TextField));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(EventCategoryPickerSheet), findsOneWidget);
+      expect(find.text('All Events'), findsOneWidget);
       expect(find.text('Live/Gigs'), findsOneWidget);
-      expect(find.text('Open Sessions'), findsOneWidget);
+      expect(find.text('Sessions'), findsOneWidget);
       expect(find.text('Workshops'), findsOneWidget);
     });
 
@@ -181,7 +191,12 @@ void main() {
       await tester.pumpWidget(createTestWidget());
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Live/Gigs'));
+      await tester.tap(find.byTooltip('Select Category'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.descendant(
+        of: find.byType(EventCategoryPickerSheet),
+        matching: find.text('Live/Gigs'),
+      ));
       await tester.pumpAndSettle();
 
       expect(find.text('Stockholm Jazz Night'), findsOneWidget);
@@ -190,7 +205,7 @@ void main() {
       expect(find.text('Load More'), findsNothing);
     });
 
-    testWidgets('6. Filtering Open Sessions shows only Open Co-writing Session without Load More', (tester) async {
+    testWidgets('6. Filtering Sessions shows only Open Co-writing Session without Load More', (tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() => tester.view.resetPhysicalSize());
@@ -198,7 +213,12 @@ void main() {
       await tester.pumpWidget(createTestWidget());
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Open Sessions'));
+      await tester.tap(find.byTooltip('Select Category'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.descendant(
+        of: find.byType(EventCategoryPickerSheet),
+        matching: find.text('Sessions'),
+      ));
       await tester.pumpAndSettle();
 
       expect(find.text('Stockholm Jazz Night'), findsNothing);
@@ -215,7 +235,12 @@ void main() {
       await tester.pumpWidget(createTestWidget());
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Workshops'));
+      await tester.tap(find.byTooltip('Select Category'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.descendant(
+        of: find.byType(EventCategoryPickerSheet),
+        matching: find.text('Workshops'),
+      ));
       await tester.pumpAndSettle();
 
       expect(find.text('Stockholm Jazz Night'), findsNothing);
@@ -273,7 +298,12 @@ void main() {
       await tester.pumpWidget(createTestWidget());
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Live/Gigs'));
+      await tester.tap(find.byTooltip('Select Category'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.descendant(
+        of: find.byType(EventCategoryPickerSheet),
+        matching: find.text('Live/Gigs'),
+      ));
       await tester.pumpAndSettle();
 
       await tester.enterText(find.byType(TextField), 'workshop');
@@ -335,7 +365,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('No public events available yet.'), findsOneWidget);
-      expect(find.text('Upcoming concerts, open sessions and workshops will appear here.'), findsOneWidget);
+      expect(find.text('Upcoming concerts, sessions and workshops will appear here.'), findsOneWidget);
     });
 
     testWidgets('13. Failing repository shows error and retry button recovers when repository succeeds', (tester) async {

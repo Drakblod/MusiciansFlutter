@@ -94,10 +94,10 @@ class PublicEventDetailsScreen extends StatelessWidget {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
-                          color: AppTheme.primaryAccent.withOpacity(0.2),
+                          color: AppTheme.primaryAccent.withValues(alpha: 0.2),
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(
-                            color: AppTheme.primaryAccent.withOpacity(0.5),
+                            color: AppTheme.primaryAccent.withValues(alpha: 0.5),
                             width: 1.0,
                           ),
                         ),
@@ -115,9 +115,9 @@ class PublicEventDetailsScreen extends StatelessWidget {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
-                            color: Colors.amber.withOpacity(0.15),
+                            color: Colors.amber.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(6),
-                            border: Border.all(color: Colors.amber.withOpacity(0.4)),
+                            border: Border.all(color: Colors.amber.withValues(alpha: 0.4)),
                           ),
                           child: Text(
                             'DEMO EVENT',
@@ -184,7 +184,7 @@ class PublicEventDetailsScreen extends StatelessWidget {
                             Container(
                               padding: const EdgeInsets.all(10),
                               decoration: BoxDecoration(
-                                color: AppTheme.primaryAccent.withOpacity(0.15),
+                                color: AppTheme.primaryAccent.withValues(alpha: 0.15),
                                 borderRadius: BorderRadius.circular(10),
                               ),
                               child: const Icon(
@@ -229,7 +229,7 @@ class PublicEventDetailsScreen extends StatelessWidget {
                             Container(
                               padding: const EdgeInsets.all(10),
                               decoration: BoxDecoration(
-                                color: Colors.blueAccent.withOpacity(0.15),
+                                color: Colors.blueAccent.withValues(alpha: 0.15),
                                 borderRadius: BorderRadius.circular(10),
                               ),
                               child: const Icon(
@@ -274,7 +274,7 @@ class PublicEventDetailsScreen extends StatelessWidget {
                             Container(
                               padding: const EdgeInsets.all(10),
                               decoration: BoxDecoration(
-                                color: Colors.greenAccent.withOpacity(0.15),
+                                color: Colors.greenAccent.withValues(alpha: 0.15),
                                 borderRadius: BorderRadius.circular(10),
                               ),
                               child: const Icon(
@@ -375,7 +375,7 @@ class PublicEventDetailsScreen extends StatelessWidget {
                       activeEvent.description,
                       style: GoogleFonts.inter(
                         fontSize: 14,
-                        color: Colors.white.withOpacity(0.9),
+                        color: Colors.white.withValues(alpha: 0.9),
                         height: 1.5,
                       ),
                     ),

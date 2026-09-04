@@ -8,12 +8,18 @@ import '../repositories/public_event_repository.dart';
 import '../theme/app_theme.dart';
 import '../widgets/animated_tap_detector.dart';
 import '../widgets/custom_top_bar.dart';
+import '../widgets/event_category_picker_sheet.dart';
 import '../widgets/gradient_scaffold.dart';
 
 class PublicEventCalendarScreen extends StatefulWidget {
   final PublicEventRepository? repository;
+  final bool enableCategoryFallback;
 
-  const PublicEventCalendarScreen({super.key, this.repository});
+  const PublicEventCalendarScreen({
+    super.key,
+    this.repository,
+    this.enableCategoryFallback = true,
+  });
 
   @override
   State<PublicEventCalendarScreen> createState() => _PublicEventCalendarScreenState();
@@ -22,21 +28,17 @@ class PublicEventCalendarScreen extends StatefulWidget {
 class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
   late final PublicEventRepository _repository;
   final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
 
   bool _isLoading = true;
   String? _errorMessage;
   List<PublicCalendarEvent> _allEvents = [];
 
   String _searchQuery = '';
-  String _selectedFilter = 'All';
+  String _selectedFilter = EventCalendarCategories.all;
   int _visibleCount = 2; // Initial pagination limit for 3-event prototype
-
-  static const List<String> _filters = [
-    'All',
-    'Live/Gigs',
-    'Open Sessions',
-    'Workshops',
-  ];
+  bool _isOpeningPicker = false;
+  bool _hasOpenedCategoryPickerOnSearchTap = false;
 
   @override
   void initState() {
@@ -45,11 +47,20 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
         (FeatureToggles.useMockPublicEventCalendar
             ? MockPublicEventRepository()
             : EmptyPublicEventRepository());
+    _searchFocusNode.addListener(_handleSearchFocusChange);
     _loadEvents();
+  }
+
+  void _handleSearchFocusChange() {
+    if (!_searchFocusNode.hasFocus && !_isOpeningPicker) {
+      _hasOpenedCategoryPickerOnSearchTap = false;
+    }
   }
 
   @override
   void dispose() {
+    _searchFocusNode.removeListener(_handleSearchFocusChange);
+    _searchFocusNode.dispose();
     _searchController.dispose();
     super.dispose();
   }
@@ -103,6 +114,37 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
     });
   }
 
+  Future<void> _onSearchFieldTap() async {
+    if (_hasOpenedCategoryPickerOnSearchTap || _searchController.text.isNotEmpty) {
+      return;
+    }
+    _hasOpenedCategoryPickerOnSearchTap = true;
+    await _openCategoryPicker();
+    if (mounted) {
+      _searchFocusNode.requestFocus();
+    }
+  }
+
+  Future<void> _openCategoryPicker() async {
+    if (_isOpeningPicker) return;
+    _isOpeningPicker = true;
+    _searchFocusNode.unfocus();
+
+    final selected = await EventCategoryPickerSheet.show(
+      context: context,
+      currentSelectedCategory: _selectedFilter,
+    );
+
+    _isOpeningPicker = false;
+
+    if (selected != null && mounted) {
+      setState(() {
+        _selectedFilter = selected;
+        _visibleCount = 2; // Reset pagination
+      });
+    }
+  }
+
   void _onFilterSelected(String filter) {
     setState(() {
       _selectedFilter = filter;
@@ -114,8 +156,9 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
     setState(() {
       _searchController.clear();
       _searchQuery = '';
-      _selectedFilter = 'All';
+      _selectedFilter = EventCalendarCategories.all;
       _visibleCount = 2;
+      _hasOpenedCategoryPickerOnSearchTap = false;
     });
   }
 
@@ -127,8 +170,8 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
 
   List<PublicCalendarEvent> _getFilteredEvents() {
     return _allEvents.where((event) {
-      // Type Filter
-      if (_selectedFilter != 'All' && event.typeFilterCategory != _selectedFilter) {
+      // Category / Type Filter
+      if (!EventCalendarCategories.matches(event, _selectedFilter)) {
         return false;
       }
 
@@ -168,39 +211,50 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
       appBar: const CustomTopBar(showBack: true),
       body: SafeArea(
         top: false,
-        child: RefreshIndicator(
-          onRefresh: _handleRefresh,
-          color: AppTheme.primaryAccent,
-          backgroundColor: AppTheme.cardBackground,
-          child: CustomScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            slivers: [
-              // Header Section
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
-                  child: Column(
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 800),
+            child: RefreshIndicator(
+              onRefresh: _handleRefresh,
+              color: AppTheme.primaryAccent,
+              backgroundColor: AppTheme.cardBackground,
+              child: CustomScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                slivers: [
+                  // Header Section
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+                      child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text(
-                            'EVENT CALENDAR',
-                            style: GoogleFonts.outfit(
-                              fontSize: 24,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                              letterSpacing: 1.5,
+                          Expanded(
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                'EVENT CALENDAR',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                  letterSpacing: 1.5,
+                                ),
+                              ),
                             ),
                           ),
-                          if (hasMockEvents)
+                          if (hasMockEvents) ...[
+                            const SizedBox(width: 8),
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                               decoration: BoxDecoration(
-                                color: Colors.amber.withOpacity(0.15),
+                                color: Colors.amber.withValues(alpha: 0.15),
                                 borderRadius: BorderRadius.circular(6),
-                                border: Border.all(color: Colors.amber.withOpacity(0.4)),
+                                border: Border.all(color: Colors.amber.withValues(alpha: 0.4)),
                               ),
                               child: Text(
                                 'DEMO EVENTS',
@@ -212,11 +266,12 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
                                 ),
                               ),
                             ),
+                          ],
                         ],
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        'Discover live music, open sessions, workshops and music events.',
+                        'Discover live music, sessions, workshops and music events.',
                         style: GoogleFonts.inter(
                           fontSize: 13,
                           color: AppTheme.textSecondary,
@@ -235,89 +290,114 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
                           ),
                           child: TextField(
                             controller: _searchController,
+                            focusNode: _searchFocusNode,
+                            onTap: _onSearchFieldTap,
                             onChanged: _onSearchChanged,
                             style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
                             decoration: InputDecoration(
-                              hintText: 'Search events, artists, venues or cities...',
+                              hintText: 'Search events...',
                               hintStyle: GoogleFonts.inter(
                                 color: AppTheme.textMuted,
                                 fontSize: 13,
                               ),
-                              prefixIcon: const Icon(
-                                Icons.search_rounded,
-                                color: AppTheme.textSecondary,
-                                size: 20,
+                              prefixIcon: InkWell(
+                                borderRadius: BorderRadius.circular(20),
+                                onTap: _openCategoryPicker,
+                                child: const Icon(
+                                  Icons.search_rounded,
+                                  color: AppTheme.textSecondary,
+                                  size: 20,
+                                ),
                               ),
-                              suffixIcon: _searchController.text.isNotEmpty
-                                  ? IconButton(
+                              suffixIcon: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (_searchController.text.isNotEmpty)
+                                    IconButton(
                                       icon: const Icon(Icons.clear_rounded, size: 18, color: Colors.white70),
+                                      tooltip: 'Clear search text',
                                       onPressed: () {
                                         _searchController.clear();
                                         _onSearchChanged('');
+                                        _hasOpenedCategoryPickerOnSearchTap = false;
                                       },
-                                    )
-                                  : null,
+                                    ),
+                                  IconButton(
+                                    icon: const Icon(Icons.tune_rounded, size: 18, color: AppTheme.secondaryAccent),
+                                    tooltip: 'Select Category',
+                                    onPressed: _openCategoryPicker,
+                                  ),
+                                ],
+                              ),
                               contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                               border: InputBorder.none,
                             ),
                           ),
                         ),
                       ),
-                      const SizedBox(height: 14),
-
-                      // Type Filter Chips
-                      SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: Row(
-                          children: _filters.map((filter) {
-                            final isSelected = _selectedFilter == filter;
-                            return Padding(
-                              padding: const EdgeInsets.only(right: 8.0),
-                              child: Semantics(
-                                button: true,
-                                selected: isSelected,
-                                label: 'Filter by $filter',
-                                child: FocusableActionDetector(
-                                  mouseCursor: SystemMouseCursors.click,
-                                  shortcuts: {
-                                    LogicalKeySet(LogicalKeyboardKey.enter): const ActivateIntent(),
-                                    LogicalKeySet(LogicalKeyboardKey.space): const ActivateIntent(),
-                                  },
-                                  actions: {
-                                    ActivateIntent: CallbackAction<ActivateIntent>(
-                                      onInvoke: (_) => _onFilterSelected(filter),
-                                    ),
-                                  },
-                                  child: InkWell(
-                                    borderRadius: BorderRadius.circular(10),
-                                    onTap: () => _onFilterSelected(filter),
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                                      decoration: BoxDecoration(
-                                        color: isSelected ? AppTheme.primaryAccent : const Color(0xFF1E1A3A),
-                                        borderRadius: BorderRadius.circular(10),
-                                        border: Border.all(
-                                          color: isSelected
-                                              ? AppTheme.primaryAccent
-                                              : const Color(0xFF2E2452),
-                                        ),
-                                      ),
-                                      child: Text(
-                                        filter,
-                                        style: GoogleFonts.inter(
-                                          fontSize: 13,
-                                          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                                          color: isSelected ? Colors.white : Colors.white70,
-                                        ),
-                                      ),
+                      if (_selectedFilter != EventCalendarCategories.all) ...[
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 6,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            Text(
+                              'Active category:',
+                              style: GoogleFonts.inter(
+                                fontSize: 12,
+                                color: AppTheme.textSecondary,
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: AppTheme.primaryAccent.withValues(alpha: 0.18),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: AppTheme.primaryAccent.withValues(alpha: 0.5)),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    _selectedFilter,
+                                    style: GoogleFonts.inter(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
                                     ),
                                   ),
+                                  const SizedBox(width: 6),
+                                  InkWell(
+                                    onTap: () => _onFilterSelected(EventCalendarCategories.all),
+                                    child: const Icon(
+                                      Icons.close_rounded,
+                                      size: 16,
+                                      color: Colors.white70,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            TextButton(
+                              onPressed: () => _onFilterSelected(EventCalendarCategories.all),
+                              style: TextButton.styleFrom(
+                                padding: EdgeInsets.zero,
+                                minimumSize: const Size(40, 24),
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              ),
+                              child: Text(
+                                'Clear filter',
+                                style: GoogleFonts.inter(
+                                  fontSize: 12,
+                                  color: AppTheme.secondaryAccent,
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
-                            );
-                          }).toList(),
+                            ),
+                          ],
                         ),
-                      ),
+                      ],
                     ],
                   ),
                 ),
@@ -376,7 +456,7 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
                         children: [
                           Icon(
                             Icons.calendar_month_outlined,
-                            color: AppTheme.textSecondary.withOpacity(0.4),
+                            color: AppTheme.textSecondary.withValues(alpha: 0.4),
                             size: 56,
                           ),
                           const SizedBox(height: 16),
@@ -390,7 +470,7 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'Upcoming concerts, open sessions and workshops will appear here.',
+                            'Upcoming concerts, sessions and workshops will appear here.',
                             style: GoogleFonts.inter(
                               fontSize: 13,
                               color: AppTheme.textSecondary,
@@ -413,7 +493,7 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
                         children: [
                           Icon(
                             Icons.search_off_rounded,
-                            color: AppTheme.textSecondary.withOpacity(0.4),
+                            color: AppTheme.textSecondary.withValues(alpha: 0.4),
                             size: 56,
                           ),
                           const SizedBox(height: 16),
@@ -494,7 +574,9 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
           ),
         ),
       ),
-    );
+    ),
+  ),
+);
   }
 
   List<Widget> _buildMonthGroupedList(List<PublicCalendarEvent> events) {
@@ -549,6 +631,7 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
     final dayStr = DateFormat('dd').format(event.startDateTime);
     final timeStr =
         '${DateFormat('HH:mm').format(event.startDateTime)} – ${DateFormat('HH:mm').format(event.endDateTime)}';
+    final imageWidget = _buildEventCardImage(event);
 
     return Semantics(
       button: true,
@@ -585,12 +668,16 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                if (imageWidget != null) imageWidget,
+
                 // Card Top Banner
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                  decoration: const BoxDecoration(
-                    color: Color(0xFF1E1A3A),
-                    borderRadius: BorderRadius.vertical(top: Radius.circular(15)),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1E1A3A),
+                    borderRadius: imageWidget == null
+                        ? const BorderRadius.vertical(top: Radius.circular(15))
+                        : BorderRadius.zero,
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -599,7 +686,7 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                         decoration: BoxDecoration(
-                          color: AppTheme.primaryAccent.withOpacity(0.2),
+                          color: AppTheme.primaryAccent.withValues(alpha: 0.2),
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
@@ -616,8 +703,8 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                         decoration: BoxDecoration(
                           color: event.isFree
-                              ? Colors.greenAccent.withOpacity(0.15)
-                              : Colors.white.withOpacity(0.1),
+                              ? Colors.greenAccent.withValues(alpha: 0.15)
+                              : Colors.white.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
@@ -696,12 +783,20 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
                             const SizedBox(height: 6),
                             Row(
                               children: [
-                                const Icon(Icons.location_on_outlined, size: 13, color: AppTheme.textMuted),
+                                const Icon(
+                                  Icons.location_on_outlined,
+                                  size: 13,
+                                  color: Color(0xFFA899E6),
+                                ),
                                 const SizedBox(width: 4),
                                 Expanded(
                                   child: Text(
                                     '${event.venueName}, ${event.city}',
-                                    style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textMuted),
+                                    style: GoogleFonts.inter(
+                                      fontSize: 12,
+                                      color: const Color(0xFFD4CEEB),
+                                      fontWeight: FontWeight.w400,
+                                    ),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                   ),
@@ -711,11 +806,19 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
                             const SizedBox(height: 2),
                             Row(
                               children: [
-                                const Icon(Icons.access_time_rounded, size: 13, color: AppTheme.textMuted),
+                                const Icon(
+                                  Icons.access_time_rounded,
+                                  size: 13,
+                                  color: Color(0xFFA899E6),
+                                ),
                                 const SizedBox(width: 4),
                                 Text(
                                   timeStr,
-                                  style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textMuted),
+                                  style: GoogleFonts.inter(
+                                    fontSize: 12,
+                                    color: const Color(0xFFD4CEEB),
+                                    fontWeight: FontWeight.w400,
+                                  ),
                                 ),
                               ],
                             ),
@@ -759,6 +862,81 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget? _buildEventCardImage(PublicCalendarEvent event) {
+    final String? imageSource = EventCalendarArtwork.resolveArtwork(
+      event,
+      enableCategoryFallback: widget.enableCategoryFallback,
+    );
+
+    if (imageSource == null || imageSource.isEmpty) {
+      return null;
+    }
+
+    final bool isNetwork =
+        imageSource.startsWith('http://') || imageSource.startsWith('https://');
+
+    return ClipRRect(
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(15)),
+      child: SizedBox(
+        height: 160,
+        width: double.infinity,
+        child: isNetwork
+            ? Image.network(
+                imageSource,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) =>
+                    _buildImageErrorFallback(),
+                loadingBuilder: (context, child, loadingProgress) {
+                  if (loadingProgress == null) return child;
+                  return Container(
+                    color: const Color(0xFF161033),
+                    child: const Center(
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: AppTheme.primaryAccent,
+                      ),
+                    ),
+                  );
+                },
+              )
+            : Image.asset(
+                imageSource,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) =>
+                    _buildImageErrorFallback(),
+              ),
+      ),
+    );
+  }
+
+  Widget _buildImageErrorFallback() {
+    return Container(
+      color: const Color(0xFF1E1A3A),
+      height: 160,
+      width: double.infinity,
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.music_note_rounded,
+              size: 32,
+              color: AppTheme.secondaryAccent.withValues(alpha: 0.5),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Event Preview',
+              style: GoogleFonts.inter(
+                fontSize: 11,
+                color: AppTheme.textSecondary,
+              ),
+            ),
+          ],
         ),
       ),
     );

@@ -80,8 +80,8 @@ void main() {
       expect(event2.endDateTime.minute, 30);
       expect(event2.title, 'Open Co-writing Session');
       expect(event2.eventType, PublicEventType.openSession);
-      expect(event2.eventTypeDisplayLabel, 'Open Session');
-      expect(event2.typeFilterCategory, 'Open Sessions');
+      expect(event2.eventTypeDisplayLabel, 'Session');
+      expect(event2.typeFilterCategory, 'Sessions');
       expect(event2.venueName, 'Song Lab Göteborg');
       expect(event2.city, 'Göteborg');
       expect(event2.isFree, isTrue);
