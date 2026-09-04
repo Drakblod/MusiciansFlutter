@@ -3582,13 +3582,14 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
   }
 }
 
-class _AddMemberDialogContent extends StatefulWidget {
+class AddMemberDialogContent extends StatefulWidget {
   final String bandId;
   final List<UserProfile> allUsers;
   final List<BandMember> existingMembers;
   final VoidCallback onMemberAdded;
 
-  const _AddMemberDialogContent({
+  const AddMemberDialogContent({
+    super.key,
     required this.bandId,
     required this.allUsers,
     required this.existingMembers,
@@ -3596,18 +3597,68 @@ class _AddMemberDialogContent extends StatefulWidget {
   });
 
   @override
-  State<_AddMemberDialogContent> createState() => _AddMemberDialogContentState();
+  State<AddMemberDialogContent> createState() => AddMemberDialogContentState();
 }
 
-class _AddMemberDialogContentState extends State<_AddMemberDialogContent> {
+typedef _AddMemberDialogContent = AddMemberDialogContent;
+
+class AddMemberDialogContentState extends State<AddMemberDialogContent> {
   final _searchController = TextEditingController();
   String _searchQuery = '';
   bool _isAdding = false;
+  final Set<String> _pendingUserIds = {};
 
   @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  Future<void> _handleAddMember(UserProfile user) async {
+    final userId = user.userId;
+    if (userId == null || _isAdding || _pendingUserIds.contains(userId)) return;
+
+    final appState = Provider.of<AppState>(context, listen: false);
+    final name = user.displayName ?? user.nickname ?? 'Unknown';
+
+    setState(() {
+      _isAdding = true;
+      _pendingUserIds.add(userId);
+    });
+
+    try {
+      await appState.firebaseService.addBandMemberAsync(
+        widget.bandId,
+        userId,
+        'Member',
+        user.nickname ?? name,
+      );
+      widget.onMemberAdded();
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("$name added to the band!"),
+            backgroundColor: AppTheme.success,
+          ),
+        );
+        Navigator.pop(context); // Close dialog
+      }
+    } catch (e) {
+      debugPrint("Error adding band member: $e");
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Failed to add $name: $e"),
+            backgroundColor: AppTheme.danger,
+          ),
+        );
+      }
+    } finally {
+      _pendingUserIds.remove(userId);
+      if (mounted) {
+        setState(() => _isAdding = false);
+      }
+    }
   }
 
   @override
@@ -3671,55 +3722,17 @@ class _AddMemberDialogContentState extends State<_AddMemberDialogContent> {
                         final user = filteredUsers[index];
                         final name = user.displayName ?? user.nickname ?? 'Unknown';
 
-                        void _addMember() async {
-                          if (_isAdding) return;
-                          setState(() => _isAdding = true);
-                          try {
-                            await appState.firebaseService.addBandMemberAsync(
-                              widget.bandId,
-                              user.userId!,
-                              'Member',
-                              user.nickname ?? name,
-                            );
-                            widget.onMemberAdded();
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text("$name added to the band!"),
-                                  backgroundColor: AppTheme.success,
-                                ),
-                              );
-                              Navigator.pop(context); // Close dialog
-                            }
-                          } catch (e) {
-                            debugPrint("Error adding band member: $e");
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text("Failed to add $name: $e"),
-                                  backgroundColor: AppTheme.danger,
-                                ),
-                              );
-                            }
-                          } finally {
-                            if (mounted) {
-                              setState(() => _isAdding = false);
-                            }
-                          }
-                        }
-
-                        return GestureDetector(
-                          behavior: HitTestBehavior.opaque,
-                          onTap: _addMember,
-                          child: Container(
-                            margin: const EdgeInsets.only(bottom: 8),
-                            decoration: BoxDecoration(
-                              color: AppTheme.cardBackground,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          decoration: BoxDecoration(
+                            color: AppTheme.cardBackground,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Material(
+                            color: Colors.transparent,
                             child: InkWell(
                               borderRadius: BorderRadius.circular(12),
-                              onTap: _addMember,
+                              onTap: () => _handleAddMember(user),
                               child: Padding(
                                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                                 child: Row(
@@ -3751,7 +3764,12 @@ class _AddMemberDialogContentState extends State<_AddMemberDialogContent> {
                                         ],
                                       ),
                                     ),
-                                    const Icon(Icons.add_circle, color: AppTheme.primaryAccent, size: 24),
+                                    IconButton(
+                                      icon: const Icon(Icons.add_circle, color: AppTheme.primaryAccent, size: 24),
+                                      onPressed: () => _handleAddMember(user),
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints(),
+                                    ),
                                   ],
                                 ),
                               ),

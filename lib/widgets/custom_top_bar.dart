@@ -6,6 +6,7 @@ import '../providers/app_state.dart';
 import '../theme/app_theme.dart';
 import 'animated_tap_detector.dart';
 import '../config/feature_toggles.dart';
+import '../views/edit_band_info_screen.dart';
 
 class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
   final String title;
@@ -278,6 +279,54 @@ class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
                     Navigator.pushNamed(context, '/edit-profile');
                   },
                 ),
+                if (FeatureToggles.showEditBandInSettings) ...[
+                  const SizedBox(height: 12),
+                  _buildMenuItem(
+                    context,
+                    icon: Icons.edit_outlined,
+                    title: 'Edit Band',
+                    color: const Color(0xFFF39C12),
+                    onTap: () async {
+                      Navigator.pop(context); // Close dialog
+                      final activeBandId = appState.activeBandId;
+                      if (activeBandId == null) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('No active band selected to edit.'),
+                            backgroundColor: AppTheme.warning,
+                          ),
+                        );
+                        return;
+                      }
+                      final band = await appState.firebaseService.getBandInfoAsync(activeBandId);
+                      if (!context.mounted) return;
+                      if (band == null) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('No active band selected to edit.'),
+                            backgroundColor: AppTheme.warning,
+                          ),
+                        );
+                        return;
+                      }
+                      if (!band.canUserEdit(appState.currentUserId)) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Only band Leaders or Admins can edit this band.'),
+                            backgroundColor: AppTheme.warning,
+                          ),
+                        );
+                        return;
+                      }
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => EditBandInfoScreen(band: band),
+                        ),
+                      );
+                    },
+                  ),
+                ],
                 const SizedBox(height: 12),
                 _buildMenuItem(
                   context,

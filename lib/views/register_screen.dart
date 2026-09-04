@@ -155,10 +155,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
                   decoration: const InputDecoration(
                     labelText: 'Profile Name',
-                    hintText: 'Enter your name or stage name',
-                    helperText:
+                    hintText:
                         'Preferably use your real name to make it easier for users to find you',
-                    helperMaxLines: 3,
                     prefixIcon: Icon(
                       Icons.person_outline_rounded,
                       color: AppTheme.textSecondary,
@@ -323,17 +321,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           children: [
                             const Icon(
                               Icons.category_outlined,
-                              color: AppTheme.textSecondary,
+                              color: Colors.white70,
                             ),
                             const SizedBox(width: 12),
                             Expanded(
                               child: Text(
                                 'Genres/Band Types',
                                 style: GoogleFonts.inter(
-                                  color: _selectedGenres.isNotEmpty
-                                      ? Colors.white
-                                      : AppTheme.textSecondary,
+                                  color: Colors.white,
                                   fontSize: 14,
+                                  fontWeight: FontWeight.w500,
                                 ),
                               ),
                             ),
@@ -359,7 +356,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               ),
                             const Icon(
                               Icons.keyboard_arrow_down_rounded,
-                              color: AppTheme.textSecondary,
+                              color: Colors.white70,
                             ),
                           ],
                         ),

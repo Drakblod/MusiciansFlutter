@@ -34,6 +34,7 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
   late TimeOfDay _endTime;
   
   late List<String> _selectedStyles;
+  late bool _hasRegularRehearsal;
   bool _isMapDisclaimerAccepted = false;
   bool _isSaving = false;
 
@@ -78,6 +79,11 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
 
     _startTime = _parseTime(widget.band.rehearsalStartTime, const TimeOfDay(hour: 18, minute: 0));
     _endTime = _parseTime(widget.band.rehearsalEndTime, const TimeOfDay(hour: 21, minute: 0));
+
+    final hasRehearsal = (widget.band.rehearsalDayOfWeek != null && widget.band.rehearsalDayOfWeek!.trim().isNotEmpty) ||
+        (widget.band.rehearsalStartTime != null && widget.band.rehearsalStartTime!.trim().isNotEmpty) ||
+        (widget.band.rehearsalEndTime != null && widget.band.rehearsalEndTime!.trim().isNotEmpty);
+    _hasRegularRehearsal = hasRehearsal;
 
     _selectedStyles = List<String>.from(widget.band.genres);
   }
@@ -164,6 +170,20 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
       return;
     }
 
+    if (_hasRegularRehearsal) {
+      final startMinutes = _startTime.hour * 60 + _startTime.minute;
+      final endMinutes = _endTime.hour * 60 + _endTime.minute;
+      if (endMinutes <= startMinutes) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('End time must be after start time'),
+            backgroundColor: AppTheme.danger,
+          ),
+        );
+        return;
+      }
+    }
+
     setState(() => _isSaving = true);
 
     try {
@@ -181,9 +201,9 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
         location: _locationController.text.trim(),
         rehearsalLocation: _rehearsalLocationController.text.trim(),
         address: _mapViewLocationController.text.trim(),
-        rehearsalDayOfWeek: _rehearsalDay,
-        rehearsalStartTime: _formatTime(_startTime),
-        rehearsalEndTime: _formatTime(_endTime),
+        rehearsalDayOfWeek: _hasRegularRehearsal ? _rehearsalDay : null,
+        rehearsalStartTime: _hasRegularRehearsal ? _formatTime(_startTime) : null,
+        rehearsalEndTime: _hasRegularRehearsal ? _formatTime(_endTime) : null,
         about: _aboutController.text.trim(),
         description: _aboutController.text.trim(),
       );
@@ -258,6 +278,22 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
                   }
                   return null;
                 },
+              ),
+              const SizedBox(height: 20),
+
+              // About
+              Text(
+                'About',
+                style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+              ),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: _aboutController,
+                maxLines: 4,
+                style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
+                decoration: const InputDecoration(
+                  hintText: 'Provide details about rehearsals, gigs, level, style, etc.',
+                ),
               ),
               const SizedBox(height: 20),
 
@@ -441,6 +477,144 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
               ),
               const SizedBox(height: 20),
 
+              // Regular Rehearsal Day & Time (if any)
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Text.rich(
+                      TextSpan(
+                        children: [
+                          TextSpan(
+                            text: 'Regular Rehearsal Day & Time',
+                            style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                          ),
+                          TextSpan(
+                            text: ' (if any)',
+                            style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.normal, color: Colors.white),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  Switch.adaptive(
+                    value: _hasRegularRehearsal,
+                    activeColor: AppTheme.primaryAccent,
+                    onChanged: (val) {
+                      setState(() {
+                        _hasRegularRehearsal = val;
+                      });
+                    },
+                  ),
+                ],
+              ),
+              if (_hasRegularRehearsal) ...[
+                const SizedBox(height: 12),
+                Text(
+                  'Day',
+                  style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppTheme.inputBackground,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButtonFormField<String>(
+                      value: _rehearsalDay,
+                      dropdownColor: AppTheme.cardBackground,
+                      style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
+                      icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppTheme.textSecondary),
+                      decoration: const InputDecoration(
+                        border: InputBorder.none,
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                      items: _daysOfWeek.map((String val) {
+                        return DropdownMenuItem<String>(
+                          value: val,
+                          child: Text(val),
+                        );
+                      }).toList(),
+                      onChanged: (newValue) {
+                        if (newValue != null) {
+                          setState(() {
+                            _rehearsalDay = newValue;
+                          });
+                        }
+                      },
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Start Time',
+                            style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
+                          ),
+                          const SizedBox(height: 8),
+                          AnimatedTapDetector(
+                            onTap: () => _pickTime(true),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              decoration: BoxDecoration(
+                                color: AppTheme.inputBackground,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
+                              ),
+                              child: Center(
+                                child: Text(
+                                  _formatTime(_startTime),
+                                  style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'End Time',
+                            style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
+                          ),
+                          const SizedBox(height: 8),
+                          AnimatedTapDetector(
+                            onTap: () => _pickTime(false),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              decoration: BoxDecoration(
+                                color: AppTheme.inputBackground,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
+                              ),
+                              child: Center(
+                                child: Text(
+                                  _formatTime(_endTime),
+                                  style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+              const SizedBox(height: 20),
+
               // Map view location (if other than Rehearsal Location)
               Text.rich(
                 TextSpan(
@@ -458,8 +632,8 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
               ),
               const SizedBox(height: 4),
               Text(
-                '(= the band’s "official" location: rehearsal space, bandleader’s address, etc)',
-                style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary, fontStyle: FontStyle.italic),
+                'The band’s official location for "Map View" where sound snippets from rehearsals and concerts, recorded music, etc. may be uploaded. Example: 1. Same as "Rehearsal Location" 2. Bandleader’s Address a.o.',
+                style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary, height: 1.3),
               ),
               const SizedBox(height: 8),
               TextFormField(
@@ -506,12 +680,12 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Location Sharing & Media Disclaimer',
+                              'Location & Media disclaimer for Map View',
                               style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              'By checking this box, you grant permission to display your band’s location on the Map View and confirm that all necessary rights/permissions for uploaded media have been obtained.',
+                              'By checking this box, you give MUSICIANS permission to display your band’s location in "Map View" and make your uploaded media available through your band’s map icon. You confirm that you have all necessary rights and permissions for the media you upload.',
                               style: GoogleFonts.inter(fontSize: 11, color: Colors.white70, height: 1.4),
                             ),
                           ],
@@ -519,129 +693,6 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
                       ),
                     ),
                   ],
-                ),
-              ),
-              const SizedBox(height: 20),
-
-              // Rehearsal Day
-              Text(
-                'Rehearsal Day',
-                style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
-              ),
-              const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                decoration: BoxDecoration(
-                  color: AppTheme.inputBackground,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
-                ),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButtonFormField<String>(
-                    value: _rehearsalDay,
-                    dropdownColor: AppTheme.cardBackground,
-                    style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
-                    icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppTheme.textSecondary),
-                    decoration: const InputDecoration(
-                      border: InputBorder.none,
-                      contentPadding: EdgeInsets.zero,
-                    ),
-                    items: _daysOfWeek.map((String val) {
-                      return DropdownMenuItem<String>(
-                        value: val,
-                        child: Text(val),
-                      );
-                    }).toList(),
-                    onChanged: (newValue) {
-                      if (newValue != null) {
-                        setState(() {
-                          _rehearsalDay = newValue;
-                        });
-                      }
-                    },
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-
-              // Times Row
-              Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Start Time',
-                          style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
-                        ),
-                        const SizedBox(height: 8),
-                        AnimatedTapDetector(
-                          onTap: () => _pickTime(true),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            decoration: BoxDecoration(
-                              color: AppTheme.inputBackground,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
-                            ),
-                            child: Center(
-                              child: Text(
-                                _formatTime(_startTime),
-                                style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'End Time',
-                          style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
-                        ),
-                        const SizedBox(height: 8),
-                        AnimatedTapDetector(
-                          onTap: () => _pickTime(false),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            decoration: BoxDecoration(
-                              color: AppTheme.inputBackground,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
-                            ),
-                            child: Center(
-                              child: Text(
-                                _formatTime(_endTime),
-                                style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-
-              // About/Description
-              Text(
-                'About',
-                style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
-              ),
-              const SizedBox(height: 8),
-              TextFormField(
-                controller: _aboutController,
-                maxLines: 4,
-                style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
-                decoration: const InputDecoration(
-                  hintText: 'Provide details about rehearsals, gigs, level, style, etc.',
                 ),
               ),
               const SizedBox(height: 30),

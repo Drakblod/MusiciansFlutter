@@ -34,6 +34,8 @@ import 'views/marketplace_page.dart';
 import 'views/create_listing_page.dart';
 import 'views/listing_details_page.dart';
 import 'views/my_listings_page.dart';
+import 'models/band.dart';
+import 'views/edit_band_info_screen.dart';
 import 'models/listing.dart';
 import 'models/collab_session.dart';
 import 'models/collab_studio.dart';
@@ -129,6 +131,16 @@ class MyApp extends StatelessWidget {
           '/create-session': (context) => const CreateSessionScreen(),
         },
         onGenerateRoute: (settings) {
+          if (settings.name == '/edit-band') {
+            final band = settings.arguments as Band;
+            return MaterialPageRoute(
+              builder: (context) => EditBandInfoScreen(
+                band: band,
+              ),
+              settings: settings,
+            );
+          }
+
           if (settings.name == '/listing-details') {
             final listing = settings.arguments as Listing;
             return MaterialPageRoute(

@@ -128,6 +128,19 @@ class Band {
     };
   }
 
+  bool canUserEdit(String? userId) {
+    if (userId == null) return false;
+    final member = membersBand[userId] ??
+        membersBand.values.firstWhere(
+          (m) => m.userId == userId,
+          orElse: () => BandMember(),
+        );
+    final role = (member.role ?? '').toLowerCase();
+    if (role.contains('leader') || role.contains('admin')) return true;
+    final uRole = (userRole ?? '').toLowerCase();
+    return uRole.contains('leader') || uRole.contains('admin');
+  }
+
   static List<String> _toList(dynamic val) {
     if (val == null) return [];
     if (val is List) return val.map((e) => e.toString()).toList();
