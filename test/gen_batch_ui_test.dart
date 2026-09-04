@@ -212,7 +212,7 @@ void main() {
       expect(find.text('Specify what types of collaborations you are open to (if any)'), findsOneWidget);
     });
 
-    testWidgets('GEN-05: ProfileTabScreen enforces relative section order PRIMARY Skills/Talents < Genres/Band Types < Level', (tester) async {
+    testWidgets('GEN-05: ProfileTabScreen enforces relative section order PRIMARY SKILL/TALENT < Genres/Band Types < Level', (tester) async {
       tester.view.physicalSize = const Size(800, 3000);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -225,15 +225,15 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      final skillsPos = tester.getTopLeft(find.text('PRIMARY Skills/Talents')).dy;
+      final skillsPos = tester.getTopLeft(find.text('PRIMARY SKILL/TALENT')).dy;
       final genresPos = tester.getTopLeft(find.text('Genres/Band Types')).dy;
       final levelPos = tester.getTopLeft(find.text('Level')).dy;
 
-      expect(skillsPos, lessThan(genresPos), reason: 'PRIMARY Skills/Talents must render before Genres/Band Types');
+      expect(skillsPos, lessThan(genresPos), reason: 'PRIMARY SKILL/TALENT must render before Genres/Band Types');
       expect(genresPos, lessThan(levelPos), reason: 'Genres/Band Types must render before Level');
     });
 
-    testWidgets('GEN-05: MusicianProfileScreen enforces relative section order PRIMARY Skills/Talents < Genres/Band Types < Level', (tester) async {
+    testWidgets('GEN-05: MusicianProfileScreen enforces relative section order PRIMARY SKILL/TALENT < Genres/Band Types < Level', (tester) async {
       tester.view.physicalSize = const Size(800, 3000);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -254,11 +254,11 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      final skillsPos = tester.getTopLeft(find.text('PRIMARY Skills/Talents')).dy;
+      final skillsPos = tester.getTopLeft(find.text('PRIMARY SKILL/TALENT')).dy;
       final genresPos = tester.getTopLeft(find.text('Genres/Band Types')).dy;
       final levelPos = tester.getTopLeft(find.text('Level')).dy;
 
-      expect(skillsPos, lessThan(genresPos), reason: 'PRIMARY Skills/Talents must render before Genres/Band Types');
+      expect(skillsPos, lessThan(genresPos), reason: 'PRIMARY SKILL/TALENT must render before Genres/Band Types');
       expect(genresPos, lessThan(levelPos), reason: 'Genres/Band Types must render before Level');
     });
   });

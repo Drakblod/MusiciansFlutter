@@ -361,10 +361,10 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // 1. PRIMARY Skills/Talents
+                  // 1. PRIMARY SKILL/TALENT
                   if (widget.musician.mainSkills.isNotEmpty) ...[
                     Text(
-                      'PRIMARY Skills/Talents',
+                      'PRIMARY SKILL/TALENT',
                       style: GoogleFonts.outfit(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -382,10 +382,10 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
                             vertical: 8,
                           ),
                           decoration: BoxDecoration(
-                            color: AppTheme.primaryAccent.withOpacity(0.15),
+                            color: AppTheme.primaryAccent.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
-                              color: AppTheme.primaryAccent.withOpacity(0.5),
+                              color: AppTheme.primaryAccent.withValues(alpha: 0.5),
                               width: 1.5,
                             ),
                           ),
@@ -414,7 +414,49 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
                     const SizedBox(height: 24),
                   ],
 
-                  // 2. SECONDARY Skills/Talents
+                  // 2. Genres/Band Types
+                  if (widget.musician.genres.isNotEmpty) ...[
+                    Text(
+                      'Genres/Band Types',
+                      style: GoogleFonts.outfit(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: widget.musician.genres.map((genre) {
+                        return Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppTheme.cardBackground,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: AppTheme.primaryAccent.withValues(alpha: 0.4),
+                              width: 1,
+                            ),
+                          ),
+                          child: Text(
+                            genre,
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              color: Colors.white,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 24),
+                  ],
+
+                  // 3. SECONDARY Skills/Talents
                   if (widget.musician.secondarySkills.isNotEmpty) ...[
                     Text(
                       'SECONDARY Skills/Talents',
@@ -447,48 +489,6 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
                             style: GoogleFonts.inter(
                               fontSize: 12,
                               color: Colors.white70,
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                    const SizedBox(height: 24),
-                  ],
-
-                  // 3. Genres/Band Types
-                  if (widget.musician.genres.isNotEmpty) ...[
-                    Text(
-                      'Genres/Band Types',
-                      style: GoogleFonts.outfit(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: widget.musician.genres.map((genre) {
-                        return Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppTheme.cardBackground,
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: AppTheme.primaryAccent.withOpacity(0.4),
-                              width: 1,
-                            ),
-                          ),
-                          child: Text(
-                            genre,
-                            style: GoogleFonts.inter(
-                              fontSize: 12,
-                              color: Colors.white,
-                              fontWeight: FontWeight.w500,
                             ),
                           ),
                         );
@@ -578,6 +578,14 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
                       color: Colors.white,
                     ),
                   ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Specify what types of collaborations you are open to (if any)',
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      color: AppTheme.textSecondary,
+                    ),
+                  ),
                   const SizedBox(height: 8),
                   Container(
                     width: double.infinity,
@@ -592,12 +600,19 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
                     ),
                     child: Text(
                       widget.musician.collabBio != null &&
-                              widget.musician.collabBio!.isNotEmpty
-                          ? widget.musician.collabBio!
-                          : "I'm looking for musical collaborations!",
+                              widget.musician.collabBio!.trim().isNotEmpty
+                          ? widget.musician.collabBio!.trim()
+                          : 'None specified',
                       style: GoogleFonts.inter(
                         fontSize: 14,
-                        color: AppTheme.textSecondary,
+                        color: widget.musician.collabBio != null &&
+                                widget.musician.collabBio!.trim().isNotEmpty
+                            ? AppTheme.textSecondary
+                            : AppTheme.textMuted,
+                        fontStyle: widget.musician.collabBio != null &&
+                                widget.musician.collabBio!.trim().isNotEmpty
+                            ? FontStyle.normal
+                            : FontStyle.italic,
                         height: 1.4,
                       ),
                     ),

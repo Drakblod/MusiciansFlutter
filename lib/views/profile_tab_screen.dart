@@ -349,10 +349,10 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                     ),
                     const SizedBox(height: 24),
 
-          // 1. PRIMARY Skills/Talents
+          // 1. PRIMARY SKILL/TALENT
           if (user.mainSkills.isNotEmpty) ...[
             Text(
-              'PRIMARY Skills/Talents',
+              'PRIMARY SKILL/TALENT',
               style: GoogleFonts.outfit(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
@@ -367,9 +367,9 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                 return Container(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                   decoration: BoxDecoration(
-                    color: AppTheme.primaryAccent.withOpacity(0.15),
+                    color: AppTheme.primaryAccent.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.5), width: 1.5),
+                    border: Border.all(color: AppTheme.primaryAccent.withValues(alpha: 0.5), width: 1.5),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -392,7 +392,43 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
             const SizedBox(height: 24),
           ],
 
-          // 2. SECONDARY Skills/Talents
+          // 2. Genres/Band Types
+          if (user.genres.isNotEmpty) ...[
+            Text(
+              'Genres/Band Types',
+              style: GoogleFonts.outfit(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: user.genres.map((genre) {
+                return Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: AppTheme.cardBackground,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: AppTheme.primaryAccent.withValues(alpha: 0.4), width: 1),
+                  ),
+                  child: Text(
+                    genre,
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      color: Colors.white,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 24),
+          ],
+
+          // 3. SECONDARY Skills/Talents
           if (user.secondarySkills.isNotEmpty) ...[
             Text(
               'SECONDARY Skills/Talents',
@@ -419,42 +455,6 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                     style: GoogleFonts.inter(
                       fontSize: 12,
                       color: Colors.white70,
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 24),
-          ],
-
-          // 3. Genres/Band Types
-          if (user.genres.isNotEmpty) ...[
-            Text(
-              'Genres/Band Types',
-              style: GoogleFonts.outfit(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: user.genres.map((genre) {
-                return Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: AppTheme.cardBackground,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.4), width: 1),
-                  ),
-                  child: Text(
-                    genre,
-                    style: GoogleFonts.inter(
-                      fontSize: 12,
-                      color: Colors.white,
-                      fontWeight: FontWeight.w500,
                     ),
                   ),
                 );
@@ -531,6 +531,14 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
               color: Colors.white,
             ),
           ),
+          const SizedBox(height: 4),
+          Text(
+            'Specify what types of collaborations you are open to (if any)',
+            style: GoogleFonts.inter(
+              fontSize: 12,
+              color: AppTheme.textSecondary,
+            ),
+          ),
           const SizedBox(height: 8),
           Container(
             width: double.infinity,
@@ -541,12 +549,17 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
               border: Border.all(color: const Color(0xFF231F45), width: 1),
             ),
             child: Text(
-              user.collabBio != null && user.collabBio!.isNotEmpty
-                  ? user.collabBio!
-                  : "I'm looking for musical collaborations!",
+              user.collabBio != null && user.collabBio!.trim().isNotEmpty
+                  ? user.collabBio!.trim()
+                  : 'None specified',
               style: GoogleFonts.inter(
                 fontSize: 14,
-                color: AppTheme.textSecondary,
+                color: user.collabBio != null && user.collabBio!.trim().isNotEmpty
+                    ? AppTheme.textSecondary
+                    : AppTheme.textMuted,
+                fontStyle: user.collabBio != null && user.collabBio!.trim().isNotEmpty
+                    ? FontStyle.normal
+                    : FontStyle.italic,
                 height: 1.4,
               ),
             ),
