@@ -49,7 +49,7 @@ void main() {
 
   group('HomeView "Profiles" vs "Explore musician/collaborator" Label Tests', () {
     testWidgets(
-      'When Profiles is NOT a shortcut, it renders as "Explore musician/collaborator" with helptext underneath',
+      'When Profiles is NOT a shortcut, button name is "Profiles" and infotext underneath is "Explore musician/collaborator"',
       (tester) async {
         tester.view.physicalSize = const Size(1080, 2400);
         tester.view.devicePixelRatio = 1.0;
@@ -71,15 +71,13 @@ void main() {
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 300));
 
-        // The card title is "Explore musician/collaborator"
-        expect(find.text('Explore musician/collaborator'), findsOneWidget);
-        // And has the helptext underneath
+        // The card title is "Profiles"
+        expect(find.text('Profiles'), findsOneWidget);
+        // And has the infotext underneath: "Explore musician/collaborator"
         expect(
-          find.text('Explore profiles and discover new collaborators'),
+          find.text('Explore musician/collaborator'),
           findsOneWidget,
         );
-        // "Profiles" is NOT rendered as an action card title or bubble
-        expect(find.text('Profiles'), findsNothing);
       },
     );
 

@@ -82,7 +82,7 @@ void main() {
       expect(find.widgetWithText(Row, 'Guitarist'), findsOneWidget);
     });
 
-    testWidgets('Genres/Band Types appears directly below PRIMARY SKILL/TALENT and above SECONDARY Skills/Talents', (tester) async {
+    testWidgets('Section order is PRIMARY SKILL/TALENT, then SECONDARY Skills/Talents, then Genres/Band Types', (tester) async {
       final musician = UserProfile(
         userId: 'm1',
         displayName: 'John Doe',
@@ -109,11 +109,11 @@ void main() {
       expect(find.text('Blues'), findsWidgets);
 
       final primarySkillPos = tester.getTopLeft(find.text('PRIMARY SKILL/TALENT')).dy;
-      final genresPos = tester.getTopLeft(find.text('Genres/Band Types')).dy;
       final secondarySkillsPos = tester.getTopLeft(find.text('SECONDARY Skills/Talents')).dy;
+      final genresPos = tester.getTopLeft(find.text('Genres/Band Types')).dy;
 
-      expect(primarySkillPos < genresPos, isTrue, reason: 'PRIMARY SKILL/TALENT must be above Genres');
-      expect(genresPos < secondarySkillsPos, isTrue, reason: 'Genres must be above SECONDARY Skills/Talents');
+      expect(primarySkillPos < secondarySkillsPos, isTrue, reason: 'PRIMARY SKILL/TALENT must be above SECONDARY Skills/Talents');
+      expect(secondarySkillsPos < genresPos, isTrue, reason: 'SECONDARY Skills/Talents must be above Genres/Band Types');
     });
 
     testWidgets('Collaborations displays helper text and populated collabBio', (tester) async {
@@ -210,11 +210,11 @@ void main() {
       expect(find.text('Soul'), findsWidgets);
 
       final primarySkillPos = tester.getTopLeft(find.text('PRIMARY SKILL/TALENT')).dy;
-      final genresPos = tester.getTopLeft(find.text('Genres/Band Types')).dy;
       final secondarySkillsPos = tester.getTopLeft(find.text('SECONDARY Skills/Talents')).dy;
+      final genresPos = tester.getTopLeft(find.text('Genres/Band Types')).dy;
 
-      expect(primarySkillPos < genresPos, isTrue);
-      expect(genresPos < secondarySkillsPos, isTrue);
+      expect(primarySkillPos < secondarySkillsPos, isTrue);
+      expect(secondarySkillsPos < genresPos, isTrue);
 
       expect(find.text('Collaborations'), findsOneWidget);
       expect(

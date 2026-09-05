@@ -60,13 +60,21 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
 
   Future<void> _launchUrl(String urlString) async {
     try {
-      final uri = Uri.parse(urlString.trim());
+      var trimmed = urlString.trim();
+      if (trimmed.isEmpty) return;
+      if (!trimmed.startsWith('http://') &&
+          !trimmed.startsWith('https://') &&
+          !trimmed.startsWith('spotify:') &&
+          !trimmed.startsWith('youtube:')) {
+        trimmed = 'https://$trimmed';
+      }
+      final uri = Uri.parse(trimmed);
       final success = await launchUrl(
         uri,
         mode: LaunchMode.externalApplication,
       );
       if (!success) {
-        await launchUrl(uri);
+        await launchUrl(uri, mode: LaunchMode.platformDefault);
       }
     } catch (e) {
       if (mounted) {
@@ -414,7 +422,48 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
                     const SizedBox(height: 24),
                   ],
 
-                  // 2. Genres/Band Types
+                  // 2. SECONDARY Skills/Talents
+                  if (widget.musician.secondarySkills.isNotEmpty) ...[
+                    Text(
+                      'SECONDARY Skills/Talents',
+                      style: GoogleFonts.outfit(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: widget.musician.secondarySkills.map((skill) {
+                        return Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF1E1A3A),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: const Color(0xFF2E2A4E),
+                              width: 1,
+                            ),
+                          ),
+                          child: Text(
+                            skill,
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              color: Colors.white70,
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 24),
+                  ],
+
+                  // 3. Genres/Band Types
                   if (widget.musician.genres.isNotEmpty) ...[
                     Text(
                       'Genres/Band Types',
@@ -448,47 +497,6 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
                               fontSize: 12,
                               color: Colors.white,
                               fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                    const SizedBox(height: 24),
-                  ],
-
-                  // 3. SECONDARY Skills/Talents
-                  if (widget.musician.secondarySkills.isNotEmpty) ...[
-                    Text(
-                      'SECONDARY Skills/Talents',
-                      style: GoogleFonts.outfit(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: widget.musician.secondarySkills.map((skill) {
-                        return Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF1E1A3A),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: const Color(0xFF2E2A4E),
-                              width: 1,
-                            ),
-                          ),
-                          child: Text(
-                            skill,
-                            style: GoogleFonts.inter(
-                              fontSize: 12,
-                              color: Colors.white70,
                             ),
                           ),
                         );

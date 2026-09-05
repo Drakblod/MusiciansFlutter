@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../providers/app_state.dart';
 import '../theme/app_theme.dart';
 import '../models/user_profile.dart';
@@ -54,6 +55,36 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
     } finally {
       if (mounted) {
         setState(() => _isLoadingFavorites = false);
+      }
+    }
+  }
+
+  Future<void> _launchUrl(String urlString) async {
+    try {
+      var trimmed = urlString.trim();
+      if (trimmed.isEmpty) return;
+      if (!trimmed.startsWith('http://') &&
+          !trimmed.startsWith('https://') &&
+          !trimmed.startsWith('spotify:') &&
+          !trimmed.startsWith('youtube:')) {
+        trimmed = 'https://$trimmed';
+      }
+      final uri = Uri.parse(trimmed);
+      final success = await launchUrl(
+        uri,
+        mode: LaunchMode.externalApplication,
+      );
+      if (!success) {
+        await launchUrl(uri, mode: LaunchMode.platformDefault);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not launch link: $urlString'),
+            backgroundColor: AppTheme.danger,
+          ),
+        );
       }
     }
   }
@@ -392,7 +423,42 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
             const SizedBox(height: 24),
           ],
 
-          // 2. Genres/Band Types
+          // 2. SECONDARY Skills/Talents
+          if (user.secondarySkills.isNotEmpty) ...[
+            Text(
+              'SECONDARY Skills/Talents',
+              style: GoogleFonts.outfit(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: user.secondarySkills.map((skill) {
+                return Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1E1A3A),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
+                  ),
+                  child: Text(
+                    skill,
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      color: Colors.white70,
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 24),
+          ],
+
+          // 3. Genres/Band Types
           if (user.genres.isNotEmpty) ...[
             Text(
               'Genres/Band Types',
@@ -420,41 +486,6 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                       fontSize: 12,
                       color: Colors.white,
                       fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 24),
-          ],
-
-          // 3. SECONDARY Skills/Talents
-          if (user.secondarySkills.isNotEmpty) ...[
-            Text(
-              'SECONDARY Skills/Talents',
-              style: GoogleFonts.outfit(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: user.secondarySkills.map((skill) {
-                return Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1E1A3A),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
-                  ),
-                  child: Text(
-                    skill,
-                    style: GoogleFonts.inter(
-                      fontSize: 12,
-                      color: Colors.white70,
                     ),
                   ),
                 );
@@ -583,7 +614,7 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                 if (user.spotifyUrl != null && user.spotifyUrl!.isNotEmpty)
                   Expanded(
                     child: OutlinedButton.icon(
-                      onPressed: () {},
+                      onPressed: () => _launchUrl(user.spotifyUrl!),
                       icon: const Icon(Icons.music_note, color: Colors.green),
                       label: Text('Spotify', style: GoogleFonts.inter(color: Colors.white)),
                       style: OutlinedButton.styleFrom(
@@ -599,7 +630,7 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                 if (user.youtubeUrl != null && user.youtubeUrl!.isNotEmpty)
                   Expanded(
                     child: OutlinedButton.icon(
-                      onPressed: () {},
+                      onPressed: () => _launchUrl(user.youtubeUrl!),
                       icon: const Icon(Icons.play_circle_fill, color: Colors.red),
                       label: Text('YouTube', style: GoogleFonts.inter(color: Colors.white)),
                       style: OutlinedButton.styleFrom(
