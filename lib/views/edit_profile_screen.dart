@@ -1,5 +1,3 @@
-import 'dart:io';
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -13,6 +11,7 @@ import '../widgets/gradient_scaffold.dart';
 import '../widgets/custom_top_bar.dart';
 import '../widgets/animated_tap_detector.dart';
 import '../widgets/searchable_category_multi_select_sheet.dart';
+import '../widgets/audio_snippet_player.dart';
 import '../data/skills_taxonomy.dart';
 import '../data/genres_taxonomy.dart';
 
@@ -389,7 +388,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
-                content: Text('Track uploaded successfully!'),
+                content: Text('Track uploaded! Remember to save your profile to keep changes.'),
                 backgroundColor: AppTheme.success,
               ),
             );
@@ -1258,56 +1257,64 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         ],
                       )
                     : _audioSnippetUrl != null
-                        ? Row(
+                        ? Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Icon(Icons.audiotrack_rounded, color: AppTheme.primaryAccent, size: 36),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      _pickedAudioFileName ?? 'track.mp3',
-                                      style: GoogleFonts.inter(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 14,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
+                              Row(
+                                children: [
+                                  const Icon(Icons.audiotrack_rounded, color: AppTheme.primaryAccent, size: 36),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          _pickedAudioFileName ?? 'track.mp3',
+                                          style: GoogleFonts.inter(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 14,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          'Track loaded',
+                                          style: GoogleFonts.inter(
+                                            color: AppTheme.success,
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      ],
                                     ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      'Track loaded',
-                                      style: GoogleFonts.inter(
-                                        color: AppTheme.success,
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                  ],
-                                ),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.edit_rounded, color: AppTheme.primaryAccent),
+                                    onPressed: _pickAndUploadAudio,
+                                    tooltip: 'Change track',
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.delete_forever_rounded, color: AppTheme.danger),
+                                    onPressed: () {
+                                      setState(() {
+                                        _audioSnippetUrl = null;
+                                        _pickedAudioFileName = null;
+                                      });
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(
+                                          content: Text('Track removed from profile (save to apply changes)'),
+                                          backgroundColor: AppTheme.warning,
+                                        ),
+                                      );
+                                    },
+                                    tooltip: 'Remove track',
+                                  ),
+                                ],
                               ),
-                              IconButton(
-                                icon: const Icon(Icons.edit_rounded, color: AppTheme.primaryAccent),
-                                onPressed: _pickAndUploadAudio,
-                                tooltip: 'Change track',
-                              ),
-                              IconButton(
-                                icon: const Icon(Icons.delete_forever_rounded, color: AppTheme.danger),
-                                onPressed: () {
-                                  setState(() {
-                                    _audioSnippetUrl = null;
-                                    _pickedAudioFileName = null;
-                                  });
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('Track removed from profile (save to apply changes)'),
-                                      backgroundColor: AppTheme.warning,
-                                    ),
-                                  );
-                                },
-                                tooltip: 'Remove track',
-                              ),
+                              const SizedBox(height: 12),
+                              AudioSnippetPlayer(audioUrl: _audioSnippetUrl!),
                             ],
                           )
                         : InkWell(

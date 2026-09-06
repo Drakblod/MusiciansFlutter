@@ -35,6 +35,27 @@ class _AudioSnippetPlayerState extends State<AudioSnippetPlayer> {
     _initPlayer();
   }
 
+  @override
+  void didUpdateWidget(covariant AudioSnippetPlayer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.audioUrl != widget.audioUrl) {
+      _durationSubscription?.cancel();
+      _positionSubscription?.cancel();
+      _playerStateSubscription?.cancel();
+      _playerCompleteSubscription?.cancel();
+      try {
+        _audioPlayer?.dispose();
+      } catch (_) {}
+      _audioPlayer = null;
+      _isLoading = true;
+      _errorMessage = null;
+      _position = Duration.zero;
+      _duration = Duration.zero;
+      _playerState = PlayerState.stopped;
+      _initPlayer();
+    }
+  }
+
   Future<void> _initPlayer() async {
     try {
       final player = AudioPlayer();
@@ -78,7 +99,11 @@ class _AudioSnippetPlayerState extends State<AudioSnippetPlayer> {
         }
       });
 
-      await player.setSource(UrlSource(widget.audioUrl));
+      try {
+        await player.setSource(UrlSource(widget.audioUrl));
+      } catch (e) {
+        debugPrint("[AudioSnippetPlayer] Non-fatal notice: Preloading audio source deferred: $e");
+      }
       if (mounted) {
         setState(() {
           _isLoading = false;
@@ -89,7 +114,7 @@ class _AudioSnippetPlayerState extends State<AudioSnippetPlayer> {
       if (mounted) {
         setState(() {
           _isLoading = false;
-          _errorMessage = "Audio playback is not supported on this platform";
+          _errorMessage = "Audio playback initialization error. Tap play to try.";
         });
       }
     }
@@ -110,17 +135,33 @@ class _AudioSnippetPlayerState extends State<AudioSnippetPlayer> {
   }
 
   Future<void> _togglePlayback() async {
-    if (_errorMessage != null || _audioPlayer == null) return;
+    if (_audioPlayer == null) {
+      await _initPlayer();
+      if (_audioPlayer == null) return;
+    }
     try {
       if (_playerState == PlayerState.playing) {
         await _audioPlayer!.pause();
+      } else if (_playerState == PlayerState.paused) {
+        await _audioPlayer!.resume();
       } else {
+        setState(() {
+          _isLoading = true;
+          _errorMessage = null;
+        });
         await _audioPlayer!.play(UrlSource(widget.audioUrl));
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
+        }
       }
-    } catch (e) {
+    } catch (e, stack) {
+      debugPrint("[AudioSnippetPlayer] Playback error: $e\n$stack");
       if (mounted) {
         setState(() {
-          _errorMessage = "Playback error";
+          _isLoading = false;
+          _errorMessage = "Playback error. Tap to retry.";
         });
       }
     }
@@ -135,27 +176,6 @@ class _AudioSnippetPlayerState extends State<AudioSnippetPlayer> {
 
   @override
   Widget build(BuildContext context) {
-    if (_errorMessage != null) {
-      return Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: AppTheme.cardBackground,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppTheme.danger.withOpacity(0.3)),
-        ),
-        child: Row(
-          children: [
-            const Icon(Icons.error_outline_rounded, color: AppTheme.danger, size: 24),
-            const SizedBox(width: 12),
-            Text(
-              _errorMessage!,
-              style: GoogleFonts.inter(color: AppTheme.danger, fontSize: 14),
-            ),
-          ],
-        ),
-      );
-    }
-
     final isPlaying = _playerState == PlayerState.playing;
 
     return Container(
@@ -212,6 +232,41 @@ class _AudioSnippetPlayerState extends State<AudioSnippetPlayer> {
             ],
           ),
           const SizedBox(height: 8),
+          if (_errorMessage != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                children: [
+                  const Icon(Icons.info_outline_rounded, color: AppTheme.danger, size: 16),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      _errorMessage!,
+                      style: GoogleFonts.inter(color: AppTheme.danger, fontSize: 12),
+                    ),
+                  ),
+                  TextButton(
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    onPressed: () {
+                      setState(() => _errorMessage = null);
+                      _togglePlayback();
+                    },
+                    child: Text(
+                      'Retry',
+                      style: GoogleFonts.inter(
+                        color: AppTheme.primaryAccent,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           Row(
             children: [
               // Play/Pause Button

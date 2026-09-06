@@ -818,25 +818,25 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
                       letterSpacing: 1.2,
                     ),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Upload an MP3 track of your own music to play on your profile.',
-                    style: GoogleFonts.inter(
-                      fontSize: 13,
-                      color: AppTheme.textSecondary,
+                  if (isMe) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      'Upload an MP3 track of your own music to play on your profile.',
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        color: AppTheme.textSecondary,
+                      ),
                     ),
-                  ),
+                  ],
                   const SizedBox(height: 12),
                   if (widget.musician.audioSnippetUrl != null &&
                       widget.musician.audioSnippetUrl!.isNotEmpty)
                     AudioSnippetPlayer(
                       audioUrl: widget.musician.audioSnippetUrl!,
                     )
-                  else
+                  else if (isMe)
                     InkWell(
-                      onTap: isMe
-                          ? () => Navigator.pushNamed(context, '/edit-profile')
-                          : null,
+                      onTap: () => Navigator.pushNamed(context, '/edit-profile'),
                       borderRadius: BorderRadius.circular(12),
                       child: Container(
                         width: double.infinity,
@@ -873,6 +873,15 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
                             ),
                           ],
                         ),
+                      ),
+                    )
+                  else
+                    Text(
+                      'None specified',
+                      style: GoogleFonts.inter(
+                        fontSize: 14,
+                        color: AppTheme.textMuted,
+                        fontStyle: FontStyle.italic,
                       ),
                     ),
                   const SizedBox(height: 24),
