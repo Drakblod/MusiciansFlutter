@@ -200,8 +200,8 @@ void main() {
       expect(find.text('Level'), findsOneWidget);
       expect(find.text('About'), findsOneWidget);
       expect(find.text('Collaborations'), findsOneWidget);
-      expect(find.text('SOCIAL LINKS'), findsOneWidget);
-      expect(find.text('TRACKS'), findsOneWidget);
+      expect(find.text('Social Links'), findsOneWidget);
+      expect(find.text('Track'), findsOneWidget);
 
       // Empty fields show "None specified"
       expect(find.text('None specified'), findsWidgets);
@@ -284,8 +284,8 @@ void main() {
       expect(find.text('Level'), findsOneWidget);
       expect(find.text('About'), findsOneWidget);
       expect(find.text('Collaborations'), findsOneWidget);
-      expect(find.text('SOCIAL LINKS'), findsOneWidget);
-      expect(find.text('TRACKS'), findsOneWidget);
+      expect(find.text('Social Links'), findsOneWidget);
+      expect(find.text('Track'), findsOneWidget);
 
       expect(find.text('None specified'), findsWidgets);
     });

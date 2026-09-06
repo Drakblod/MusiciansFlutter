@@ -656,112 +656,223 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
                   ),
                   const SizedBox(height: 24),
 
-                  // 6. SOCIAL LINKS
+                  // 6. Social Links
                   Text(
-                    'SOCIAL LINKS',
+                    'Social Links',
                     style: GoogleFonts.outfit(
                       fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                      letterSpacing: 1.2,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  Text(
+                    'Spotify Profile or Track Link',
+                    style: GoogleFonts.outfit(
+                      fontSize: 14,
                       fontWeight: FontWeight.bold,
                       color: Colors.white,
                     ),
                   ),
                   const SizedBox(height: 8),
-                  if ((widget.musician.spotifyUrl != null &&
-                          widget.musician.spotifyUrl!.isNotEmpty) ||
-                      (widget.musician.youtubeUrl != null &&
-                          widget.musician.youtubeUrl!.isNotEmpty))
-                    Row(
-                      children: [
-                        if (widget.musician.spotifyUrl != null &&
+                  InkWell(
+                    onTap: (widget.musician.spotifyUrl != null &&
                             widget.musician.spotifyUrl!.isNotEmpty)
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              onPressed: () =>
-                                  _launchUrl(widget.musician.spotifyUrl!),
-                              icon: const Icon(
-                                Icons.music_note,
-                                color: Colors.green,
-                              ),
-                              label: Text(
-                                'Spotify',
-                                style: GoogleFonts.inter(color: Colors.white),
-                              ),
-                              style: OutlinedButton.styleFrom(
-                                side: const BorderSide(color: Colors.green),
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 12,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                              ),
+                        ? () => _launchUrl(widget.musician.spotifyUrl!)
+                        : null,
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                      decoration: BoxDecoration(
+                        color: AppTheme.inputBackground,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.music_note, color: Colors.green, size: 22),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Spotify',
+                            style: GoogleFonts.inter(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.green,
                             ),
                           ),
-                        if (widget.musician.spotifyUrl != null &&
-                            widget.musician.spotifyUrl!.isNotEmpty &&
-                            widget.musician.youtubeUrl != null &&
-                            widget.musician.youtubeUrl!.isNotEmpty)
-                          const SizedBox(width: 12),
-                        if (widget.musician.youtubeUrl != null &&
-                            widget.musician.youtubeUrl!.isNotEmpty)
+                          const SizedBox(width: 8),
+                          Container(width: 1, height: 16, color: Colors.white24),
+                          const SizedBox(width: 8),
                           Expanded(
-                            child: OutlinedButton.icon(
-                              onPressed: () =>
-                                  _launchUrl(widget.musician.youtubeUrl!),
-                              icon: const Icon(
-                                Icons.play_circle_fill,
-                                color: Colors.red,
+                            child: Text(
+                              (widget.musician.spotifyUrl != null &&
+                                      widget.musician.spotifyUrl!.isNotEmpty)
+                                  ? widget.musician.spotifyUrl!
+                                  : 'None specified',
+                              style: GoogleFonts.inter(
+                                fontSize: 14,
+                                color: (widget.musician.spotifyUrl != null &&
+                                        widget.musician.spotifyUrl!.isNotEmpty)
+                                    ? Colors.white
+                                    : AppTheme.textMuted,
+                                fontStyle: (widget.musician.spotifyUrl != null &&
+                                        widget.musician.spotifyUrl!.isNotEmpty)
+                                    ? FontStyle.normal
+                                    : FontStyle.italic,
                               ),
-                              label: Text(
-                                'YouTube',
-                                style: GoogleFonts.inter(color: Colors.white),
-                              ),
-                              style: OutlinedButton.styleFrom(
-                                side: const BorderSide(color: Colors.red),
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 12,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
-                      ],
-                    )
-                  else
-                    Text(
-                      'None specified',
-                      style: GoogleFonts.inter(
-                        fontSize: 14,
-                        color: AppTheme.textMuted,
-                        fontStyle: FontStyle.italic,
+                          if (widget.musician.spotifyUrl != null &&
+                              widget.musician.spotifyUrl!.isNotEmpty) ...[
+                            const SizedBox(width: 8),
+                            const Icon(Icons.open_in_new_rounded, color: AppTheme.textSecondary, size: 18),
+                          ],
+                        ],
                       ),
                     ),
-                  const SizedBox(height: 24),
+                  ),
+                  const SizedBox(height: 16),
 
-                  // 7. TRACKS
                   Text(
-                    'TRACKS',
+                    'YouTube Channel or Video Link',
                     style: GoogleFonts.outfit(
-                      fontSize: 18,
+                      fontSize: 14,
                       fontWeight: FontWeight.bold,
                       color: Colors.white,
                     ),
                   ),
                   const SizedBox(height: 8),
+                  InkWell(
+                    onTap: (widget.musician.youtubeUrl != null &&
+                            widget.musician.youtubeUrl!.isNotEmpty)
+                        ? () => _launchUrl(widget.musician.youtubeUrl!)
+                        : null,
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                      decoration: BoxDecoration(
+                        color: AppTheme.inputBackground,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.play_circle_fill, color: Colors.red, size: 22),
+                          const SizedBox(width: 8),
+                          Text(
+                            'YouTube',
+                            style: GoogleFonts.inter(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.red,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Container(width: 1, height: 16, color: Colors.white24),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              (widget.musician.youtubeUrl != null &&
+                                      widget.musician.youtubeUrl!.isNotEmpty)
+                                  ? widget.musician.youtubeUrl!
+                                  : 'None specified',
+                              style: GoogleFonts.inter(
+                                fontSize: 14,
+                                color: (widget.musician.youtubeUrl != null &&
+                                        widget.musician.youtubeUrl!.isNotEmpty)
+                                    ? Colors.white
+                                    : AppTheme.textMuted,
+                                fontStyle: (widget.musician.youtubeUrl != null &&
+                                        widget.musician.youtubeUrl!.isNotEmpty)
+                                    ? FontStyle.normal
+                                    : FontStyle.italic,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (widget.musician.youtubeUrl != null &&
+                              widget.musician.youtubeUrl!.isNotEmpty) ...[
+                            const SizedBox(width: 8),
+                            const Icon(Icons.open_in_new_rounded, color: AppTheme.textSecondary, size: 18),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // 7. Track
+                  Text(
+                    'Track',
+                    style: GoogleFonts.outfit(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                      letterSpacing: 1.2,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Upload an MP3 track of your own music to play on your profile.',
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      color: AppTheme.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
                   if (widget.musician.audioSnippetUrl != null &&
                       widget.musician.audioSnippetUrl!.isNotEmpty)
                     AudioSnippetPlayer(
                       audioUrl: widget.musician.audioSnippetUrl!,
                     )
                   else
-                    Text(
-                      'None specified',
-                      style: GoogleFonts.inter(
-                        fontSize: 14,
-                        color: AppTheme.textMuted,
-                        fontStyle: FontStyle.italic,
+                    InkWell(
+                      onTap: isMe
+                          ? () => Navigator.pushNamed(context, '/edit-profile')
+                          : null,
+                      borderRadius: BorderRadius.circular(12),
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: AppTheme.cardBackground,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.cloud_upload_outlined,
+                              color: AppTheme.textSecondary,
+                              size: 40,
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              'None specified',
+                              style: GoogleFonts.inter(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Only MP3 files supported',
+                              style: GoogleFonts.inter(
+                                color: AppTheme.textMuted,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   const SizedBox(height: 24),
