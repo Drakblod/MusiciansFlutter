@@ -1582,7 +1582,16 @@ class FirebaseService {
               'Uploaded File';
           final fileUrl =
               v['FileUrl']?.toString() ?? v['fileUrl']?.toString() ?? '';
-          files[k.toString()] = {'FileName': fileName, 'FileUrl': fileUrl};
+          final category =
+              v['Category']?.toString() ?? v['category']?.toString() ?? '';
+          final Map<String, String> fileData = {
+            'FileName': fileName,
+            'FileUrl': fileUrl,
+          };
+          if (category.isNotEmpty) {
+            fileData['Category'] = category;
+          }
+          files[k.toString()] = fileData;
         } else if (v is String) {
           files[k.toString()] = {'FileName': v, 'FileUrl': ''};
         }
@@ -1594,10 +1603,15 @@ class FirebaseService {
   Future<void> addBandFileAsync(
     String bandId,
     String fileName,
-    String fileUrl,
-  ) async {
+    String fileUrl, [
+    String? category,
+  ]) async {
     final ref = _dbRef('files/$bandId').push();
-    await ref.set({'FileName': fileName, 'FileUrl': fileUrl});
+    final Map<String, dynamic> data = {'FileName': fileName, 'FileUrl': fileUrl};
+    if (category != null && category.isNotEmpty) {
+      data['Category'] = category;
+    }
+    await ref.set(data);
   }
 
   Future<void> removeBandFileAsync(String bandId, String fileId) async {
