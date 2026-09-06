@@ -47,9 +47,9 @@ void main() {
     await Firebase.initializeApp();
   });
 
-  group('HomeView "Profiles" vs "Explore musician/collaborator" Label Tests', () {
+  group('HomeView "Profiles" vs "Explore musicians/collaborators" Label Tests', () {
     testWidgets(
-      'When Profiles is NOT a shortcut, button name is "Profiles" and infotext underneath is "Explore musician/collaborator"',
+      'When Profiles is NOT a shortcut, button name is "Profiles" and infotext underneath is "Explore musicians/collaborators"',
       (tester) async {
         tester.view.physicalSize = const Size(1080, 2400);
         tester.view.devicePixelRatio = 1.0;
@@ -73,9 +73,9 @@ void main() {
 
         // The card title is "Profiles"
         expect(find.text('Profiles'), findsOneWidget);
-        // And has the infotext underneath: "Explore musician/collaborator"
+        // And has the infotext underneath: "Explore musicians/collaborators"
         expect(
-          find.text('Explore musician/collaborator'),
+          find.text('Explore musicians/collaborators'),
           findsOneWidget,
         );
       },
@@ -106,8 +106,8 @@ void main() {
 
         // The bubble displays "Profiles"
         expect(find.text('Profiles'), findsOneWidget);
-        // Since it's in the top bubbles, "Explore musician/collaborator" card is not in remaining cards
-        expect(find.text('Explore musician/collaborator'), findsNothing);
+        // Since it's in the top bubbles, "Explore musicians/collaborators" card is not in remaining cards
+        expect(find.text('Explore musicians/collaborators'), findsNothing);
       },
     );
   });

@@ -167,13 +167,35 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Collaborations'), findsOneWidget);
-      expect(
-        find.text('Specify what types of collaborations you are open to (if any)'),
-        findsOneWidget,
-      );
-      expect(find.text('None specified'), findsOneWidget);
+      expect(find.text('Genres/Band Types'), findsOneWidget);
+      expect(find.text('None specified'), findsNWidgets(2));
       expect(find.text("I'm looking for musical collaborations!"), findsNothing);
+    });
+
+    testWidgets('Genres/Band Types is still showing even if genres is empty', (tester) async {
+      final musician = UserProfile(
+        userId: 'm1',
+        displayName: 'John Doe',
+        instruments: ['Guitarist'],
+        mainInstrument: 'Guitarist',
+        genres: [],
+        collabBio: 'Looking for a band.',
+      );
+
+      final mockAppState = MockAppStateForProfile();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ChangeNotifierProvider<AppState>.value(
+            value: mockAppState,
+            child: MusicianProfileScreen(musician: musician),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Genres/Band Types'), findsOneWidget);
+      expect(find.text('None specified'), findsOneWidget);
     });
   });
 
@@ -223,6 +245,32 @@ void main() {
       );
       expect(find.text('None specified'), findsOneWidget);
       expect(find.text("I'm looking for musical collaborations!"), findsNothing);
+    });
+
+    testWidgets('ProfileTabScreen displays Genres/Band Types even if genres is empty', (tester) async {
+      final user = UserProfile(
+        userId: 'self_1',
+        displayName: 'My Own Profile',
+        instruments: ['Bassist'],
+        mainInstrument: 'Bassist',
+        genres: [],
+        collabBio: 'Open to jam.',
+      );
+
+      final mockAppState = MockAppStateForProfile(user: user);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ChangeNotifierProvider<AppState>.value(
+            value: mockAppState,
+            child: const Scaffold(body: ProfileTabScreen()),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Genres/Band Types'), findsOneWidget);
+      expect(find.text('None specified'), findsOneWidget);
     });
   });
 }

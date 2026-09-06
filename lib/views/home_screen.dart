@@ -235,7 +235,7 @@ class HomeScreen extends StatelessWidget {
         id: 'browse_musicians',
         icon: Icons.search_rounded,
         title: 'Profiles',
-        subtitle: 'Explore musician/collaborator',
+        subtitle: 'Explore musicians/collaborators',
         onTap: () {
           appState.trackButtonClick('browse_musicians');
           Navigator.pushNamed(context, '/browse-musicians');
@@ -399,7 +399,7 @@ class HomeScreen extends StatelessWidget {
               child: Padding(
                 padding: const EdgeInsets.only(bottom: 10, right: 10),
                 child: Text(
-                  '2.33',
+                  '2.33.1',
                   style: GoogleFonts.inter(
                     color: AppTheme.textSecondary.withOpacity(0.5),
                     fontSize: 12,
@@ -910,7 +910,7 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
         id: 'browse_musicians',
         icon: Icons.search_rounded,
         title: 'Profiles',
-        subtitle: 'Explore musician/collaborator',
+        subtitle: 'Explore musicians/collaborators',
         onTap: () async {
           await HomeUsageTracker.incrementClick('browse_musicians');
           await Navigator.pushNamed(context, '/browse-musicians');
@@ -1181,7 +1181,7 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
                               }
                             },
                             child: Text(
-                              '2.33',
+                              '2.33.1',
                               style: GoogleFonts.inter(
                                 color: AppTheme.textSecondary.withOpacity(0.5),
                                 fontSize: 12,

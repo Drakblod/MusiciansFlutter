@@ -464,16 +464,16 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
                   ],
 
                   // 3. Genres/Band Types
-                  if (widget.musician.genres.isNotEmpty) ...[
-                    Text(
-                      'Genres/Band Types',
-                      style: GoogleFonts.outfit(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
+                  Text(
+                    'Genres/Band Types',
+                    style: GoogleFonts.outfit(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
                     ),
-                    const SizedBox(height: 8),
+                  ),
+                  const SizedBox(height: 8),
+                  if (widget.musician.genres.isNotEmpty)
                     Wrap(
                       spacing: 8,
                       runSpacing: 8,
@@ -501,9 +501,17 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
                           ),
                         );
                       }).toList(),
+                    )
+                  else
+                    Text(
+                      'None specified',
+                      style: GoogleFonts.inter(
+                        fontSize: 14,
+                        color: AppTheme.textMuted,
+                        fontStyle: FontStyle.italic,
+                      ),
                     ),
-                    const SizedBox(height: 24),
-                  ],
+                  const SizedBox(height: 24),
 
                   // 4. Level
                   if (widget.musician.level != null &&
