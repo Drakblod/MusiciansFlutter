@@ -168,11 +168,11 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Genres/Band Types'), findsOneWidget);
-      expect(find.text('None specified'), findsNWidgets(2));
+      expect(find.text('None specified'), findsWidgets);
       expect(find.text("I'm looking for musical collaborations!"), findsNothing);
     });
 
-    testWidgets('Genres/Band Types is still showing even if genres is empty', (tester) async {
+    testWidgets('All fields are still showing even if empty with None specified fallback', (tester) async {
       final musician = UserProfile(
         userId: 'm1',
         displayName: 'John Doe',
@@ -194,8 +194,17 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      expect(find.text('PRIMARY SKILL/TALENT'), findsOneWidget);
+      expect(find.text('SECONDARY Skills/Talents'), findsOneWidget);
       expect(find.text('Genres/Band Types'), findsOneWidget);
-      expect(find.text('None specified'), findsOneWidget);
+      expect(find.text('Level'), findsOneWidget);
+      expect(find.text('About'), findsOneWidget);
+      expect(find.text('Collaborations'), findsOneWidget);
+      expect(find.text('SOCIAL LINKS'), findsOneWidget);
+      expect(find.text('TRACKS'), findsOneWidget);
+
+      // Empty fields show "None specified"
+      expect(find.text('None specified'), findsWidgets);
     });
   });
 
@@ -243,11 +252,11 @@ void main() {
         find.text('Specify what types of collaborations you are open to (if any)'),
         findsOneWidget,
       );
-      expect(find.text('None specified'), findsOneWidget);
+      expect(find.text('None specified'), findsWidgets);
       expect(find.text("I'm looking for musical collaborations!"), findsNothing);
     });
 
-    testWidgets('ProfileTabScreen displays Genres/Band Types even if genres is empty', (tester) async {
+    testWidgets('ProfileTabScreen displays all fields even if empty with None specified', (tester) async {
       final user = UserProfile(
         userId: 'self_1',
         displayName: 'My Own Profile',
@@ -269,8 +278,16 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      expect(find.text('PRIMARY SKILL/TALENT'), findsOneWidget);
+      expect(find.text('SECONDARY Skills/Talents'), findsOneWidget);
       expect(find.text('Genres/Band Types'), findsOneWidget);
-      expect(find.text('None specified'), findsOneWidget);
+      expect(find.text('Level'), findsOneWidget);
+      expect(find.text('About'), findsOneWidget);
+      expect(find.text('Collaborations'), findsOneWidget);
+      expect(find.text('SOCIAL LINKS'), findsOneWidget);
+      expect(find.text('TRACKS'), findsOneWidget);
+
+      expect(find.text('None specified'), findsWidgets);
     });
   });
 }

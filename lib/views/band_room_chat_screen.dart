@@ -1662,6 +1662,7 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                           ],
                         ),
                       ),
+                    );
                   }),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(12, 4, 12, 10),

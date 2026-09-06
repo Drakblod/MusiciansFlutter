@@ -116,9 +116,6 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
   Widget build(BuildContext context) {
     final defaultAbout =
         "Passionate musician looking to collaborate. Love playing live gigs and creating fresh arrangements in the studio.";
-    final skills = widget.musician.instruments.isEmpty
-        ? ['Studio Recording', 'Live Performance', 'Songwriting']
-        : [...widget.musician.instruments, 'Live Performance', 'Songwriting'];
 
     final appState = Provider.of<AppState>(context);
     final isMe = widget.musician.userId == appState.currentUserId;
@@ -370,16 +367,16 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // 1. PRIMARY SKILL/TALENT
-                  if (widget.musician.mainSkills.isNotEmpty) ...[
-                    Text(
-                      'PRIMARY SKILL/TALENT',
-                      style: GoogleFonts.outfit(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
+                  Text(
+                    'PRIMARY SKILL/TALENT',
+                    style: GoogleFonts.outfit(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
                     ),
-                    const SizedBox(height: 8),
+                  ),
+                  const SizedBox(height: 8),
+                  if (widget.musician.mainSkills.isNotEmpty)
                     Wrap(
                       spacing: 8,
                       runSpacing: 8,
@@ -418,21 +415,29 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
                           ),
                         );
                       }).toList(),
-                    ),
-                    const SizedBox(height: 24),
-                  ],
-
-                  // 2. SECONDARY Skills/Talents
-                  if (widget.musician.secondarySkills.isNotEmpty) ...[
+                    )
+                  else
                     Text(
-                      'SECONDARY Skills/Talents',
-                      style: GoogleFonts.outfit(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
+                      'None specified',
+                      style: GoogleFonts.inter(
+                        fontSize: 14,
+                        color: AppTheme.textMuted,
+                        fontStyle: FontStyle.italic,
                       ),
                     ),
-                    const SizedBox(height: 8),
+                  const SizedBox(height: 24),
+
+                  // 2. SECONDARY Skills/Talents
+                  Text(
+                    'SECONDARY Skills/Talents',
+                    style: GoogleFonts.outfit(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  if (widget.musician.secondarySkills.isNotEmpty)
                     Wrap(
                       spacing: 8,
                       runSpacing: 8,
@@ -459,9 +464,17 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
                           ),
                         );
                       }).toList(),
+                    )
+                  else
+                    Text(
+                      'None specified',
+                      style: GoogleFonts.inter(
+                        fontSize: 14,
+                        color: AppTheme.textMuted,
+                        fontStyle: FontStyle.italic,
+                      ),
                     ),
-                    const SizedBox(height: 24),
-                  ],
+                  const SizedBox(height: 24),
 
                   // 3. Genres/Band Types
                   Text(
@@ -514,17 +527,17 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
                   const SizedBox(height: 24),
 
                   // 4. Level
-                  if (widget.musician.level != null &&
-                      widget.musician.level!.isNotEmpty) ...[
-                    Text(
-                      'Level',
-                      style: GoogleFonts.outfit(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
+                  Text(
+                    'Level',
+                    style: GoogleFonts.outfit(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
                     ),
-                    const SizedBox(height: 8),
+                  ),
+                  const SizedBox(height: 8),
+                  if (widget.musician.level != null &&
+                      widget.musician.level!.isNotEmpty)
                     Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 12,
@@ -546,9 +559,17 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
                           fontWeight: FontWeight.w500,
                         ),
                       ),
+                    )
+                  else
+                    Text(
+                      'None specified',
+                      style: GoogleFonts.inter(
+                        fontSize: 14,
+                        color: AppTheme.textMuted,
+                        fontStyle: FontStyle.italic,
+                      ),
                     ),
-                    const SizedBox(height: 24),
-                  ],
+                  const SizedBox(height: 24),
 
                   // 4. About Section
                   Text(
@@ -636,19 +657,19 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
                   const SizedBox(height: 24),
 
                   // 6. SOCIAL LINKS
+                  Text(
+                    'SOCIAL LINKS',
+                    style: GoogleFonts.outfit(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
                   if ((widget.musician.spotifyUrl != null &&
                           widget.musician.spotifyUrl!.isNotEmpty) ||
                       (widget.musician.youtubeUrl != null &&
-                          widget.musician.youtubeUrl!.isNotEmpty)) ...[
-                    Text(
-                      'SOCIAL LINKS',
-                      style: GoogleFonts.outfit(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
+                          widget.musician.youtubeUrl!.isNotEmpty))
                     Row(
                       children: [
                         if (widget.musician.spotifyUrl != null &&
@@ -707,27 +728,43 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
                             ),
                           ),
                       ],
-                    ),
-                    const SizedBox(height: 24),
-                  ],
-
-                  // 7. TRACKS
-                  if (widget.musician.audioSnippetUrl != null &&
-                      widget.musician.audioSnippetUrl!.isNotEmpty) ...[
+                    )
+                  else
                     Text(
-                      'TRACKS',
-                      style: GoogleFonts.outfit(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
+                      'None specified',
+                      style: GoogleFonts.inter(
+                        fontSize: 14,
+                        color: AppTheme.textMuted,
+                        fontStyle: FontStyle.italic,
                       ),
                     ),
-                    const SizedBox(height: 8),
+                  const SizedBox(height: 24),
+
+                  // 7. TRACKS
+                  Text(
+                    'TRACKS',
+                    style: GoogleFonts.outfit(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  if (widget.musician.audioSnippetUrl != null &&
+                      widget.musician.audioSnippetUrl!.isNotEmpty)
                     AudioSnippetPlayer(
                       audioUrl: widget.musician.audioSnippetUrl!,
+                    )
+                  else
+                    Text(
+                      'None specified',
+                      style: GoogleFonts.inter(
+                        fontSize: 14,
+                        color: AppTheme.textMuted,
+                        fontStyle: FontStyle.italic,
+                      ),
                     ),
-                    const SizedBox(height: 24),
-                  ],
+                  const SizedBox(height: 24),
                   const SizedBox(height: 20),
                   // Bottom Action Buttons (Message & Add, or Edit & Logout if isMe)
                   Row(

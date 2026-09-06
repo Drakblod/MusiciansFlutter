@@ -381,16 +381,16 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                     const SizedBox(height: 24),
 
           // 1. PRIMARY SKILL/TALENT
-          if (user.mainSkills.isNotEmpty) ...[
-            Text(
-              'PRIMARY SKILL/TALENT',
-              style: GoogleFonts.outfit(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
+          Text(
+            'PRIMARY SKILL/TALENT',
+            style: GoogleFonts.outfit(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
             ),
-            const SizedBox(height: 8),
+          ),
+          const SizedBox(height: 8),
+          if (user.mainSkills.isNotEmpty)
             Wrap(
               spacing: 8,
               runSpacing: 8,
@@ -419,21 +419,29 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                   ),
                 );
               }).toList(),
-            ),
-            const SizedBox(height: 24),
-          ],
-
-          // 2. SECONDARY Skills/Talents
-          if (user.secondarySkills.isNotEmpty) ...[
+            )
+          else
             Text(
-              'SECONDARY Skills/Talents',
-              style: GoogleFonts.outfit(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
+              'None specified',
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                color: AppTheme.textMuted,
+                fontStyle: FontStyle.italic,
               ),
             ),
-            const SizedBox(height: 8),
+          const SizedBox(height: 24),
+
+          // 2. SECONDARY Skills/Talents
+          Text(
+            'SECONDARY Skills/Talents',
+            style: GoogleFonts.outfit(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 8),
+          if (user.secondarySkills.isNotEmpty)
             Wrap(
               spacing: 8,
               runSpacing: 8,
@@ -454,9 +462,17 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                   ),
                 );
               }).toList(),
+            )
+          else
+            Text(
+              'None specified',
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                color: AppTheme.textMuted,
+                fontStyle: FontStyle.italic,
+              ),
             ),
-            const SizedBox(height: 24),
-          ],
+          const SizedBox(height: 24),
 
           // 3. Genres/Band Types
           Text(
@@ -503,16 +519,16 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
           const SizedBox(height: 24),
 
           // 4. Level
-          if (user.level != null && user.level!.isNotEmpty) ...[
-            Text(
-              'Level',
-              style: GoogleFonts.outfit(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
+          Text(
+            'Level',
+            style: GoogleFonts.outfit(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
             ),
-            const SizedBox(height: 8),
+          ),
+          const SizedBox(height: 8),
+          if (user.level != null && user.level!.isNotEmpty)
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
@@ -528,9 +544,17 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                   fontWeight: FontWeight.w500,
                 ),
               ),
+            )
+          else
+            Text(
+              'None specified',
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                color: AppTheme.textMuted,
+                fontStyle: FontStyle.italic,
+              ),
             ),
-            const SizedBox(height: 24),
-          ],
+          const SizedBox(height: 24),
 
           // 4. About Info section
           Text(
@@ -606,17 +630,17 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
           const SizedBox(height: 24),
 
           // 6. SOCIAL LINKS
-          if ((user.spotifyUrl != null && user.spotifyUrl!.isNotEmpty) ||
-              (user.youtubeUrl != null && user.youtubeUrl!.isNotEmpty)) ...[
-            Text(
-              'SOCIAL LINKS',
-              style: GoogleFonts.outfit(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
+          Text(
+            'SOCIAL LINKS',
+            style: GoogleFonts.outfit(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
             ),
-            const SizedBox(height: 10),
+          ),
+          const SizedBox(height: 8),
+          if ((user.spotifyUrl != null && user.spotifyUrl!.isNotEmpty) ||
+              (user.youtubeUrl != null && user.youtubeUrl!.isNotEmpty))
             Row(
               children: [
                 if (user.spotifyUrl != null && user.spotifyUrl!.isNotEmpty)
@@ -649,24 +673,40 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                     ),
                   ),
               ],
-            ),
-            const SizedBox(height: 24),
-          ],
-
-          // 7. TRACKS
-          if (user.audioSnippetUrl != null && user.audioSnippetUrl!.isNotEmpty) ...[
+            )
+          else
             Text(
-              'TRACKS',
-              style: GoogleFonts.outfit(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
+              'None specified',
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                color: AppTheme.textMuted,
+                fontStyle: FontStyle.italic,
               ),
             ),
-            const SizedBox(height: 8),
-            AudioSnippetPlayer(audioUrl: user.audioSnippetUrl!),
-            const SizedBox(height: 24),
-          ],
+          const SizedBox(height: 24),
+
+          // 7. TRACKS
+          Text(
+            'TRACKS',
+            style: GoogleFonts.outfit(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 8),
+          if (user.audioSnippetUrl != null && user.audioSnippetUrl!.isNotEmpty)
+            AudioSnippetPlayer(audioUrl: user.audioSnippetUrl!)
+          else
+            Text(
+              'None specified',
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                color: AppTheme.textMuted,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          const SizedBox(height: 24),
 // 3. Bands / Rehearsals section
           Text(
             'Active Band',
