@@ -20,6 +20,7 @@ import '../widgets/gradient_scaffold.dart';
 import '../widgets/rsvp_reminder_dialog.dart';
 import 'create_event_page.dart';
 import 'event_details_page.dart';
+import 'event_results_page.dart';
 import 'event_room_chat_screen.dart';
 import 'edit_band_info_screen.dart';
 import '../utils/band_section_utils.dart';
@@ -2723,8 +2724,38 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
     final startLocal = DateTime.tryParse(event.startDateTime)?.toLocal() ?? DateTime.now();
     final formattedTime = DateFormat('EEEE, MMM d - HH:mm').format(startLocal);
 
-    final totalResponses = event.responses.length;
-    final yesResponses = event.responses.values.where((r) => r.status == 'Yes').length;
+    // Regular member response counts
+    final regularUserIds = _members
+        .map((m) => m.userId)
+        .where((id) => id != null && id.isNotEmpty)
+        .cast<String>()
+        .toSet();
+
+    int yesResponses = 0;
+    int totalResponses = 0;
+
+    if (regularUserIds.isNotEmpty) {
+      for (final uid in regularUserIds) {
+        final status = classifyEventResponse(event.responses[uid]?.status);
+        if (status == EventResponseStatus.yes) {
+          yesResponses++;
+        }
+        if (status != EventResponseStatus.noAnswer) {
+          totalResponses++;
+        }
+      }
+    } else {
+      // Fallback if members not yet loaded
+      for (final r in event.responses.values) {
+        final status = classifyEventResponse(r.status);
+        if (status == EventResponseStatus.yes) {
+          yesResponses++;
+        }
+        if (status != EventResponseStatus.noAnswer) {
+          totalResponses++;
+        }
+      }
+    }
 
     IconData eventIcon;
     switch (event.eventType.toLowerCase()) {
@@ -2745,199 +2776,162 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
         eventIcon = Icons.event_available_rounded;
     }
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppTheme.cardBackground,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isUpcoming ? AppTheme.success.withOpacity(0.3) : const Color(0xFF2E2A4E),
-          width: 1.0,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: (isUpcoming ? AppTheme.success : AppTheme.textSecondary).withOpacity(0.12),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  eventIcon,
-                  color: isUpcoming ? AppTheme.success : AppTheme.textSecondary,
-                  size: 20,
-                ),
+    return AnimatedTapDetector(
+      onTap: () {
+        if (bandId != null && event.id != null) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => EventResultsPage(
+                bandId: bandId,
+                eventId: event.id!,
+                initialEvent: event,
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: (isUpcoming ? AppTheme.success : AppTheme.textSecondary).withOpacity(0.15),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            isUpcoming ? 'NEW EVENT' : 'PAST EVENT',
-                            style: GoogleFonts.inter(
-                              fontSize: 9,
-                              fontWeight: FontWeight.bold,
-                              color: isUpcoming ? AppTheme.success : AppTheme.textSecondary,
+            ),
+          );
+        }
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppTheme.cardBackground,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isUpcoming ? AppTheme.success.withOpacity(0.3) : const Color(0xFF2E2A4E),
+            width: 1.0,
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: (isUpcoming ? AppTheme.success : AppTheme.textSecondary).withOpacity(0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    eventIcon,
+                    color: isUpcoming ? AppTheme.success : AppTheme.textSecondary,
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: (isUpcoming ? AppTheme.success : AppTheme.textSecondary).withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              isUpcoming ? 'NEW EVENT' : 'PAST EVENT',
+                              style: GoogleFonts.inter(
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold,
+                                color: isUpcoming ? AppTheme.success : AppTheme.textSecondary,
+                              ),
                             ),
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      event.title,
-                      style: GoogleFonts.outfit(
-                        fontSize: 17,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
+                        ],
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 4),
+                      Text(
+                        event.title,
+                        style: GoogleFonts.outfit(
+                          fontSize: 17,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          if (event.description.isNotEmpty) ...[
-            Text(
-              event.description,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: GoogleFonts.inter(
-                fontSize: 13,
-                color: AppTheme.textSecondary,
-                height: 1.35,
-              ),
+              ],
             ),
             const SizedBox(height: 12),
-          ],
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Column(
-              children: [
-                Row(
-                  children: [
-                    const Icon(Icons.access_time_rounded, color: AppTheme.textSecondary, size: 14),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        formattedTime,
-                        style: GoogleFonts.inter(fontSize: 12.5, color: Colors.white70),
-                      ),
-                    ),
-                  ],
+            if (event.description.isNotEmpty) ...[
+              Text(
+                event.description,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.inter(
+                  fontSize: 13,
+                  color: AppTheme.textSecondary,
+                  height: 1.35,
                 ),
-                if (event.location.isNotEmpty) ...[
-                  const SizedBox(height: 8),
+              ),
+              const SizedBox(height: 12),
+            ],
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Column(
+                children: [
                   Row(
                     children: [
-                      const Icon(Icons.location_on_outlined, color: AppTheme.textSecondary, size: 14),
+                      const Icon(Icons.access_time_rounded, color: AppTheme.textSecondary, size: 14),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          event.location,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                          formattedTime,
                           style: GoogleFonts.inter(fontSize: 12.5, color: Colors.white70),
                         ),
                       ),
                     ],
                   ),
-                ],
-              ],
-            ),
-          ),
-          const SizedBox(height: 14),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                '$yesResponses Attending ($totalResponses responses)',
-                style: GoogleFonts.inter(
-                  fontSize: 11,
-                  color: AppTheme.textMuted,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              GestureDetector(
-                onTap: () {
-                  if (bandId != null && event.id != null) {
-                    final appState = Provider.of<AppState>(context, listen: false);
-                    final userId = appState.currentUserProfile?.userId ?? appState.firebaseService.currentUser?.uid ?? '';
-                    if (isUpcoming && event.requireResponse) {
-                      RsvpReminderDialog.show(
-                        context: context,
-                        event: event,
-                        bandId: bandId,
-                        currentUserId: userId,
-                        onResponded: () {
-                          if (mounted) setState(() {});
-                        },
-                      );
-                    } else {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => EventDetailsPage(
-                            bandId: bandId,
-                            eventId: event.id!,
-                            initialEvent: event,
+                  if (event.location.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        const Icon(Icons.location_on_outlined, color: AppTheme.textSecondary, size: 14),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            event.location,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.inter(fontSize: 12.5, color: Colors.white70),
                           ),
                         ),
-                      );
-                    }
-                  }
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: isUpcoming ? AppTheme.primaryAccent.withOpacity(0.15) : const Color(0xFF2E2A4E),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: isUpcoming ? AppTheme.primaryAccent : const Color(0xFF2E2A4E),
+                      ],
                     ),
-                  ),
-                  child: Row(
-                    children: [
-                      Text(
-                        isUpcoming ? 'RSVP / Details' : 'View Details',
-                        style: GoogleFonts.inter(
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.bold,
-                          color: isUpcoming ? AppTheme.primaryAccent : Colors.white70,
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      Icon(
-                        Icons.chevron_right_rounded,
-                        color: isUpcoming ? AppTheme.primaryAccent : Colors.white70,
-                        size: 14,
-                      ),
-                    ],
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  '$yesResponses Attending ($totalResponses responses)',
+                  style: GoogleFonts.inter(
+                    fontSize: 11,
+                    color: AppTheme.textMuted,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
-              ),
-            ],
-          ),
-        ],
+                const Icon(
+                  Icons.chevron_right_rounded,
+                  color: AppTheme.textSecondary,
+                  size: 20,
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

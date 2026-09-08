@@ -81,6 +81,106 @@ class ExternalInvitee {
       if (comment != null) 'comment': comment,
     };
   }
+}enum EventResponseStatus {
+  yes,
+  no,
+  uncertain,
+  noAnswer,
+}
+
+EventResponseStatus classifyEventResponse(String? rawStatus) {
+  if (rawStatus == null || rawStatus.trim().isEmpty) {
+    return EventResponseStatus.noAnswer;
+  }
+  final s = rawStatus.trim().toLowerCase();
+  if (s == 'yes' || s == 'attending') {
+    return EventResponseStatus.yes;
+  }
+  if (s == 'no' || s == 'declined') {
+    return EventResponseStatus.no;
+  }
+  if (s == 'uncertain' || s == 'maybe') {
+    return EventResponseStatus.uncertain;
+  }
+  return EventResponseStatus.noAnswer;
+}
+
+class SubstituteAssignment {
+  final String slotId;
+  final String? subRequestId;
+  final String assignedUserId;
+  final String? assignedUserName;
+  final String? instrument;
+  final String? replacedMemberId;
+  final String? replacedMemberName;
+  final String status;
+  final int? assignedAt;
+  final String? assignedBy;
+
+  SubstituteAssignment({
+    required this.slotId,
+    this.subRequestId,
+    required this.assignedUserId,
+    this.assignedUserName,
+    this.instrument,
+    this.replacedMemberId,
+    this.replacedMemberName,
+    required this.status,
+    this.assignedAt,
+    this.assignedBy,
+  });
+
+  factory SubstituteAssignment.fromJson(Map<dynamic, dynamic> json, String slotId) {
+    return SubstituteAssignment(
+      slotId: json['slotId']?.toString() ?? slotId,
+      subRequestId: json['subRequestId']?.toString(),
+      assignedUserId: json['assignedUserId']?.toString() ?? '',
+      assignedUserName: json['assignedUserName']?.toString(),
+      instrument: json['instrument']?.toString(),
+      replacedMemberId: json['replacedMemberId']?.toString(),
+      replacedMemberName: json['replacedMemberName']?.toString(),
+      status: json['status']?.toString() ?? 'assigned',
+      assignedAt: json['assignedAt'] is int
+          ? json['assignedAt'] as int
+          : int.tryParse(json['assignedAt']?.toString() ?? ''),
+      assignedBy: json['assignedBy']?.toString(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'slotId': slotId,
+      if (subRequestId != null) 'subRequestId': subRequestId,
+      'assignedUserId': assignedUserId,
+      if (assignedUserName != null) 'assignedUserName': assignedUserName,
+      if (instrument != null) 'instrument': instrument,
+      if (replacedMemberId != null) 'replacedMemberId': replacedMemberId,
+      if (replacedMemberName != null) 'replacedMemberName': replacedMemberName,
+      'status': status,
+      if (assignedAt != null) 'assignedAt': assignedAt,
+      if (assignedBy != null) 'assignedBy': assignedBy,
+    };
+  }
+
+  bool get isConfirmedAssignment {
+    final uid = assignedUserId.trim();
+    if (uid.isEmpty) return false;
+    final s = status.trim().toLowerCase();
+    if (s == 'revoked' ||
+        s == 'cancelled' ||
+        s == 'canceled' ||
+        s == 'unassigned' ||
+        s == 'published' ||
+        s == 'draft' ||
+        s == 'open' ||
+        s == 'accepted' ||
+        s == 'selected' ||
+        s == 'favorite' ||
+        s == 'applicant') {
+      return false;
+    }
+    return s == 'assigned' || s == 'filled';
+  }
 }
 
 class BandEvent {
@@ -119,6 +219,7 @@ class BandEvent {
   final bool sentReminder72h;
   final bool sentReminder84h;
   final Map<String, ExternalInvitee> externalInvitees;
+  final Map<String, SubstituteAssignment> substituteAssignments;
   final int? rsvpDeadline; // epoch millis
   final int? reminderIntervalHours; // e.g. 24, 48, 72
   final String? temporaryRoomId;
@@ -148,6 +249,7 @@ class BandEvent {
     this.sentReminder72h = false,
     this.sentReminder84h = false,
     this.externalInvitees = const {},
+    this.substituteAssignments = const {},
     this.rsvpDeadline,
     this.reminderIntervalHours,
     this.temporaryRoomId,
@@ -172,6 +274,19 @@ class BandEvent {
       externalInviteesRaw.forEach((k, v) {
         if (v is Map) {
           parsedExternalInvitees[k.toString()] = ExternalInvitee.fromJson(
+            v,
+            k.toString(),
+          );
+        }
+      });
+    }
+
+    final Map<String, SubstituteAssignment> parsedSubstituteAssignments = {};
+    final subAssignmentsRaw = json['substituteAssignments'];
+    if (subAssignmentsRaw is Map) {
+      subAssignmentsRaw.forEach((k, v) {
+        if (v is Map) {
+          parsedSubstituteAssignments[k.toString()] = SubstituteAssignment.fromJson(
             v,
             k.toString(),
           );
@@ -208,6 +323,7 @@ class BandEvent {
       sentReminder72h: json['sentReminder72h'] == true,
       sentReminder84h: json['sentReminder84h'] == true,
       externalInvitees: parsedExternalInvitees,
+      substituteAssignments: parsedSubstituteAssignments,
       rsvpDeadline: json['rsvpDeadline'] is int
           ? json['rsvpDeadline'] as int
           : int.tryParse(json['rsvpDeadline']?.toString() ?? ''),
@@ -233,6 +349,11 @@ class BandEvent {
       externalInviteesMap[k] = v.toJson();
     });
 
+    final Map<String, dynamic> subAssignmentsMap = {};
+    substituteAssignments.forEach((k, v) {
+      subAssignmentsMap[k] = v.toJson();
+    });
+
     return {
       'title': title,
       'description': description,
@@ -255,6 +376,7 @@ class BandEvent {
       'sentReminder72h': sentReminder72h,
       'sentReminder84h': sentReminder84h,
       'externalInvitees': externalInviteesMap,
+      if (subAssignmentsMap.isNotEmpty) 'substituteAssignments': subAssignmentsMap,
       if (rsvpDeadline != null) 'rsvpDeadline': rsvpDeadline,
       if (reminderIntervalHours != null)
         'reminderIntervalHours': reminderIntervalHours,

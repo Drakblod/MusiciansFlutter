@@ -2030,6 +2030,27 @@ class FirebaseService {
     });
   }
 
+  Future<Map<String, SubstituteAssignment>> getSubstituteAssignmentsAsync(
+    String bandId,
+    String eventId,
+  ) async {
+    try {
+      final snap = await _dbRef('Bands/$bandId/Events/$eventId/substituteAssignments').get();
+      final Map<String, SubstituteAssignment> assignments = {};
+      if (snap.exists && snap.value is Map) {
+        (snap.value as Map).forEach((k, v) {
+          if (v is Map) {
+            assignments[k.toString()] = SubstituteAssignment.fromJson(v, k.toString());
+          }
+        });
+      }
+      return assignments;
+    } catch (e) {
+      debugPrint('[FirebaseService] Error getting substitute assignments: $e');
+      return {};
+    }
+  }
+
   Future<void> updateEventResponseAsync(
     String bandId,
     String eventId,
