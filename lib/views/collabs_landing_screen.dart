@@ -682,44 +682,6 @@ class _CollabsLandingScreenState extends State<CollabsLandingScreen> {
                         child: AnimatedTapDetector(
                           onTap: () {
                             setState(() {
-                              _sendToFavoritesOnly = true;
-                              _showFavoritesList = true;
-                            });
-                          },
-                          child: Container(
-                            height: 44,
-                            decoration: BoxDecoration(
-                              color: _sendToFavoritesOnly
-                                  ? AppTheme.primaryAccent.withOpacity(0.15)
-                                  : AppTheme.inputBackground,
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(
-                                color: _sendToFavoritesOnly
-                                    ? AppTheme.primaryAccent
-                                    : const Color(0xFF2E2A4E),
-                                width: 1.5,
-                              ),
-                            ),
-                            child: Center(
-                              child: Text(
-                                'FAVORITES LIST',
-                                style: GoogleFonts.inter(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.bold,
-                                  color: _sendToFavoritesOnly
-                                      ? Colors.white
-                                      : AppTheme.textSecondary,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: AnimatedTapDetector(
-                          onTap: () {
-                            setState(() {
                               _sendToFavoritesOnly = false;
                               _showFavoritesList = false;
                             });
@@ -745,6 +707,44 @@ class _CollabsLandingScreenState extends State<CollabsLandingScreen> {
                                   fontSize: 11,
                                   fontWeight: FontWeight.bold,
                                   color: !_sendToFavoritesOnly
+                                      ? Colors.white
+                                      : AppTheme.textSecondary,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: AnimatedTapDetector(
+                          onTap: () {
+                            setState(() {
+                              _sendToFavoritesOnly = true;
+                              _showFavoritesList = true;
+                            });
+                          },
+                          child: Container(
+                            height: 44,
+                            decoration: BoxDecoration(
+                              color: _sendToFavoritesOnly
+                                  ? AppTheme.primaryAccent.withOpacity(0.15)
+                                  : AppTheme.inputBackground,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: _sendToFavoritesOnly
+                                    ? AppTheme.primaryAccent
+                                    : const Color(0xFF2E2A4E),
+                                width: 1.5,
+                              ),
+                            ),
+                            child: Center(
+                              child: Text(
+                                'FAVORITES LIST',
+                                style: GoogleFonts.inter(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: _sendToFavoritesOnly
                                       ? Colors.white
                                       : AppTheme.textSecondary,
                                 ),

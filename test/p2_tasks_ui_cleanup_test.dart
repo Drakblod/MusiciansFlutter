@@ -191,7 +191,7 @@ void main() {
     });
 
     testWidgets(
-      'GIG-03: Gigs list tab label remains Upcoming without false booked claim',
+      'GIG-03: Gigs list tab label is Available gigs and Direct Invitations without false booked claim',
       (tester) async {
         await tester.pumpWidget(
           ChangeNotifierProvider<AppState>(
@@ -201,7 +201,9 @@ void main() {
         );
         await tester.pumpAndSettle();
 
-        expect(find.text('Upcoming'), findsOneWidget);
+        expect(find.text('Available gigs'), findsOneWidget);
+        expect(find.text('Direct Invitations'), findsOneWidget);
+        expect(find.text('Upcoming'), findsNothing);
         expect(find.text('Upcoming (booked)'), findsNothing);
       },
     );

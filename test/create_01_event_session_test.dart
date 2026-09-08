@@ -319,7 +319,7 @@ void main() {
       expect(find.text('Specify Event Type'), findsOneWidget);
 
       // Enter event title, location, and RSVP hours, but leave Specify Event Type empty
-      await tester.enterText(find.widgetWithText(TextFormField, 'Event Title'), 'Masterclass Workshop');
+      await tester.enterText(find.widgetWithText(TextFormField, 'New event title'), 'Masterclass Workshop');
       await tester.enterText(find.widgetWithText(TextFormField, 'Location (City, Country)'), 'Stockholm');
       await tester.enterText(find.widgetWithText(TextFormField, 'Set hours here'), '24');
 
@@ -475,7 +475,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
 
       // Enter basic event info
-      await tester.enterText(find.widgetWithText(TextFormField, 'Event Title'), 'Test Rehearsal');
+      await tester.enterText(find.widgetWithText(TextFormField, 'New event title'), 'Test Rehearsal');
       await tester.enterText(find.widgetWithText(TextFormField, 'Location (City, Country)'), 'Berlin');
 
       // 1. Missing custom hours blocks submission
@@ -526,7 +526,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
-      await tester.enterText(find.widgetWithText(TextFormField, 'Event Title'), 'Preset 48 Event');
+      await tester.enterText(find.widgetWithText(TextFormField, 'New event title'), 'Preset 48 Event');
       await tester.enterText(find.widgetWithText(TextFormField, 'Location (City, Country)'), 'Paris');
 
       // Select predefined 48 hours
@@ -562,7 +562,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
-      await tester.enterText(find.widgetWithText(TextFormField, 'Event Title'), 'No Reminder Event');
+      await tester.enterText(find.widgetWithText(TextFormField, 'New event title'), 'No Reminder Event');
       await tester.enterText(find.widgetWithText(TextFormField, 'Location (City, Country)'), 'Rome');
 
       // Select No automatic Reminders

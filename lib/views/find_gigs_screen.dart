@@ -620,8 +620,8 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                 unselectedLabelColor: AppTheme.textSecondary,
                 labelStyle: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 14),
                 tabs: const [
-                  Tab(text: 'Upcoming'),
-                  Tab(text: 'Invites'),
+                  Tab(text: 'Available gigs'),
+                  Tab(text: 'Direct Invitations'),
                   Tab(text: 'Saved'),
                 ],
               ),
