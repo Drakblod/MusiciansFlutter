@@ -738,44 +738,6 @@ class _FindCollabsScreenState extends State<FindCollabsScreen> {
                         child: AnimatedTapDetector(
                           onTap: () {
                             setState(() {
-                              _sendToFavoritesOnly = false;
-                              _showFavoritesList = false;
-                            });
-                          },
-                          child: Container(
-                            height: 44,
-                            decoration: BoxDecoration(
-                              color: !_sendToFavoritesOnly
-                                  ? AppTheme.primaryAccent.withOpacity(0.15)
-                                  : AppTheme.inputBackground,
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(
-                                color: !_sendToFavoritesOnly
-                                    ? AppTheme.primaryAccent
-                                    : const Color(0xFF2E2A4E),
-                                width: 1.5,
-                              ),
-                            ),
-                            child: Center(
-                              child: Text(
-                                'SEND TO ALL',
-                                style: GoogleFonts.inter(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.bold,
-                                  color: !_sendToFavoritesOnly
-                                      ? Colors.white
-                                      : AppTheme.textSecondary,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: AnimatedTapDetector(
-                          onTap: () {
-                            setState(() {
                               _sendToFavoritesOnly = true;
                               _showFavoritesList = true;
                             });
@@ -801,6 +763,44 @@ class _FindCollabsScreenState extends State<FindCollabsScreen> {
                                   fontSize: 11,
                                   fontWeight: FontWeight.bold,
                                   color: _sendToFavoritesOnly
+                                      ? Colors.white
+                                      : AppTheme.textSecondary,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: AnimatedTapDetector(
+                          onTap: () {
+                            setState(() {
+                              _sendToFavoritesOnly = false;
+                              _showFavoritesList = false;
+                            });
+                          },
+                          child: Container(
+                            height: 44,
+                            decoration: BoxDecoration(
+                              color: !_sendToFavoritesOnly
+                                  ? AppTheme.primaryAccent.withOpacity(0.15)
+                                  : AppTheme.inputBackground,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: !_sendToFavoritesOnly
+                                    ? AppTheme.primaryAccent
+                                    : const Color(0xFF2E2A4E),
+                                width: 1.5,
+                              ),
+                            ),
+                            child: Center(
+                              child: Text(
+                                'SEND TO ALL',
+                                style: GoogleFonts.inter(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: !_sendToFavoritesOnly
                                       ? Colors.white
                                       : AppTheme.textSecondary,
                                 ),
@@ -849,14 +849,6 @@ class _FindCollabsScreenState extends State<FindCollabsScreen> {
                                         child: Row(
                                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                           children: [
-                                            Text(
-                                              '$selectedCount selected',
-                                              style: GoogleFonts.inter(
-                                                fontSize: 12,
-                                                fontWeight: FontWeight.w600,
-                                                color: AppTheme.textSecondary,
-                                              ),
-                                            ),
                                             TextButton(
                                               onPressed: () {
                                                 setState(() {
@@ -880,6 +872,14 @@ class _FindCollabsScreenState extends State<FindCollabsScreen> {
                                                   fontWeight: FontWeight.w600,
                                                   color: AppTheme.primaryAccent,
                                                 ),
+                                              ),
+                                            ),
+                                            Text(
+                                              '$selectedCount selected',
+                                              style: GoogleFonts.inter(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w600,
+                                                color: AppTheme.textSecondary,
                                               ),
                                             ),
                                           ],

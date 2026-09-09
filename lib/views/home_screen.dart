@@ -244,7 +244,7 @@ class HomeScreen extends StatelessWidget {
       HomeActionItem(
         id: 'find_gigs',
         icon: Icons.local_activity_outlined,
-        title: 'Gigs list',
+        title: 'Find Gigs',
         subtitle: 'Find gigs and opportunities in your area',
         onTap: () {
           appState.trackButtonClick('find_gigs');
@@ -399,7 +399,7 @@ class HomeScreen extends StatelessWidget {
               child: Padding(
                 padding: const EdgeInsets.only(bottom: 10, right: 10),
                 child: Text(
-                  '2.38',
+                  '2.38.1',
                   style: GoogleFonts.inter(
                     color: AppTheme.textSecondary.withOpacity(0.5),
                     fontSize: 12,
@@ -726,7 +726,7 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
       case 'browse_musicians':
         return 'Profiles';
       case 'find_gigs':
-        return 'Gigs list';
+        return 'Find Gigs';
       case 'band_room':
         return 'Band Room';
       case 'create_event':
@@ -920,7 +920,7 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
       HomeActionItem(
         id: 'find_gigs',
         icon: Icons.local_activity_outlined,
-        title: 'Gigs list',
+        title: 'Find Gigs',
         subtitle: 'Find gigs and opportunities in your area',
         onTap: () async {
           await HomeUsageTracker.incrementClick('find_gigs');
@@ -1181,7 +1181,7 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
                               }
                             },
                             child: Text(
-                              '2.38',
+                              '2.38.1',
                               style: GoogleFonts.inter(
                                 color: AppTheme.textSecondary.withOpacity(0.5),
                                 fontSize: 12,

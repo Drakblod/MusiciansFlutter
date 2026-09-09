@@ -376,7 +376,7 @@ class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
       {'id': 'band_room', 'name': 'Band Room'},
       {'id': 'create_event', 'name': 'Create Event'},
       {'id': 'browse_musicians', 'name': 'Profiles'},
-      {'id': 'find_gigs', 'name': 'Gigs list'},
+      {'id': 'find_gigs', 'name': 'Find Gigs'},
       {'id': 'collabs', 'name': 'Collabs'},
       {'id': 'event_calendar', 'name': 'Event Calendar'},
       {'id': 'marketplace', 'name': 'Marketplace'},

@@ -362,11 +362,11 @@ class _CreateEventPageState extends State<CreateEventPage> {
                     ),
                     const SizedBox(height: 12),
 
-                    // New event title
+                    // Name of Event
                     TextFormField(
                       controller: draftTitleController,
                       style: GoogleFonts.inter(color: Colors.white),
-                      decoration: const InputDecoration(labelText: 'New event title'),
+                      decoration: const InputDecoration(labelText: 'Name of Event'),
                     ),
                     const SizedBox(height: 12),
 
@@ -695,12 +695,12 @@ class _CreateEventPageState extends State<CreateEventPage> {
                     ),
                     const SizedBox(height: 20),
 
-                    // New event title
+                    // Name of Event
                     TextFormField(
                       controller: _titleController,
                       style: GoogleFonts.inter(color: Colors.white),
                       decoration: const InputDecoration(
-                        labelText: 'New event title',
+                        labelText: 'Name of Event',
                         hintText: 'e.g. Choir Rehearsal, Friday Gig',
                       ),
                       validator: (value) {
