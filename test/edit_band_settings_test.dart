@@ -15,8 +15,14 @@ import 'package:provider/provider.dart';
 
 class MockSettingsFirebaseService extends FirebaseService {
   Band? bandToReturn;
+  Map<String, String> userBandsToReturn = {};
   final List<Map<String, String>> addedMembers = [];
   Completer<void>? addMemberCompleter;
+
+  @override
+  Future<Map<String, String>> getUserBandsAsync(String userId) async {
+    return userBandsToReturn;
+  }
 
   @override
   Future<Band?> getBandInfoAsync(String bandId) async {
@@ -129,13 +135,22 @@ void main() {
   });
 
   group('EDIT-BAND-01: Regular Settings Menu & Edit Band', () {
-    testWidgets('Edit Band is hidden from regular Settings menu in HomeView', (tester) async {
+    testWidgets('Edit Band is shown in regular Settings menu and prompts to choose band to edit', (tester) async {
       tester.view.physicalSize = const Size(800, 1200);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
 
       final mockService = MockSettingsFirebaseService();
-      final appState = MockSettingsAppState(mockService, activeBandId: 'band_123');
+      mockService.userBandsToReturn = {
+        'band_1': 'The Rockers',
+        'band_2': 'Jazz Trio',
+      };
+      mockService.bandToReturn = Band(
+        id: 'band_1',
+        name: 'The Rockers',
+        userRole: 'Leader',
+      );
+      final appState = MockSettingsAppState(mockService, currentUserId: 'user_leader');
 
       await tester.pumpWidget(createSettingsTestWidget(
         const Scaffold(
@@ -155,12 +170,30 @@ void main() {
       final createBandFinder = find.text('Create Band');
 
       expect(editProfileFinder, findsOneWidget);
-      expect(editBandFinder, findsNothing, reason: 'Edit Band must be hidden from regular Settings menu');
+      expect(editBandFinder, findsOneWidget, reason: 'Edit Band must be present in regular Settings menu');
       expect(createBandFinder, findsOneWidget);
 
       final editProfileY = tester.getTopLeft(editProfileFinder).dy;
+      final editBandY = tester.getTopLeft(editBandFinder).dy;
       final createBandY = tester.getTopLeft(createBandFinder).dy;
-      expect(editProfileY, lessThan(createBandY));
+      expect(editProfileY, lessThan(editBandY));
+      expect(editBandY, lessThan(createBandY));
+
+      // Tap Edit Band to prompt band selection
+      await tester.tap(editBandFinder);
+      await tester.pumpAndSettle();
+
+      // Verify prompt appears
+      expect(find.text('SELECT BAND TO EDIT'), findsOneWidget);
+      expect(find.text('The Rockers'), findsOneWidget);
+      expect(find.text('Jazz Trio'), findsOneWidget);
+
+      // Select 'The Rockers'
+      await tester.tap(find.text('The Rockers'));
+      await tester.pumpAndSettle();
+
+      // Verify EditBandInfoScreen opened
+      expect(find.byType(EditBandInfoScreen), findsOneWidget);
     });
 
     testWidgets('/edit-band route successfully opens EditBandInfoScreen', (tester) async {

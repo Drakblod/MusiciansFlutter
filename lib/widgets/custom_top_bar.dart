@@ -238,7 +238,7 @@ class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
   void _showSettingsMenu(BuildContext context, AppState appState) {
     showDialog(
       context: context,
-      builder: (context) {
+      builder: (dialogContext) {
         return Dialog(
           backgroundColor: Colors.transparent,
           insetPadding: const EdgeInsets.symmetric(horizontal: 40),
@@ -275,7 +275,7 @@ class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
                   title: 'Edit Profile',
                   color: const Color(0xFF16C033),
                   onTap: () {
-                    Navigator.pop(context); // Close dialog
+                    Navigator.pop(dialogContext); // Close dialog
                     Navigator.pushNamed(context, '/edit-profile');
                   },
                 ),
@@ -287,43 +287,42 @@ class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
                     title: 'Edit Band',
                     color: const Color(0xFFF39C12),
                     onTap: () async {
-                      Navigator.pop(context); // Close dialog
-                      final activeBandId = appState.activeBandId;
-                      if (activeBandId == null) {
+                      Navigator.pop(dialogContext); // Close dialog
+                      final userId = appState.currentUserId;
+                      if (userId == null) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
-                            content: Text('No active band selected to edit.'),
+                            content: Text('Please log in to edit bands.'),
                             backgroundColor: AppTheme.warning,
                           ),
                         );
                         return;
                       }
-                      final band = await appState.firebaseService.getBandInfoAsync(activeBandId);
-                      if (!context.mounted) return;
-                      if (band == null) {
+
+                      try {
+                        final bands = await appState.firebaseService.getUserBandsAsync(userId);
+                        if (!context.mounted) return;
+
+                        if (bands.isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('You are not a member of any bands.'),
+                              backgroundColor: AppTheme.warning,
+                            ),
+                          );
+                          return;
+                        }
+
+                        _showEditBandSelectorSheet(context, appState, bands);
+                      } catch (e) {
+                        if (!context.mounted) return;
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('No active band selected to edit.'),
-                            backgroundColor: AppTheme.warning,
+                          SnackBar(
+                            content: Text('Error checking bands: $e'),
+                            backgroundColor: AppTheme.danger,
                           ),
                         );
-                        return;
                       }
-                      if (!band.canUserEdit(appState.currentUserId)) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Only band Leaders or Admins can edit this band.'),
-                            backgroundColor: AppTheme.warning,
-                          ),
-                        );
-                        return;
-                      }
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => EditBandInfoScreen(band: band),
-                        ),
-                      );
                     },
                   ),
                 ],
@@ -334,7 +333,7 @@ class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
                   title: 'Create Band',
                   color: const Color(0xFF3498DB),
                   onTap: () {
-                    Navigator.pop(context); // Close dialog
+                    Navigator.pop(dialogContext); // Close dialog
                     Navigator.pushNamed(context, '/create-band');
                   },
                 ),
@@ -345,7 +344,7 @@ class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
                   title: 'Home View Shortcuts',
                   color: Colors.purpleAccent,
                   onTap: () {
-                    Navigator.pop(context); // Close settings menu
+                    Navigator.pop(dialogContext); // Close settings menu
                     _showChooseBubblesDialog(context, appState);
                   },
                 ),
@@ -356,12 +355,202 @@ class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
                   title: 'Logout',
                   color: Colors.redAccent,
                   onTap: () {
-                    Navigator.pop(context); // Close dialog
+                    Navigator.pop(dialogContext); // Close dialog
                     _showLogoutConfirmation(context, appState);
                   },
                 ),
               ],
             ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _showEditBandSelectorSheet(
+    BuildContext context,
+    AppState appState,
+    Map<String, String> bands,
+  ) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        return Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFF0F0C22).withOpacity(0.95),
+            borderRadius: const BorderRadius.only(
+              topLeft: Radius.circular(24),
+              topRight: Radius.circular(24),
+            ),
+            border: Border.all(color: const Color(0xFF2E2A4E), width: 1.5),
+          ),
+          padding: EdgeInsets.only(
+            left: 24,
+            right: 24,
+            top: 16,
+            bottom: MediaQuery.of(sheetContext).padding.bottom + 24,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.white24,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                'SELECT BAND TO EDIT',
+                style: GoogleFonts.outfit(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                  letterSpacing: 2,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Choose which band you want to edit.',
+                style: GoogleFonts.inter(
+                  fontSize: 13,
+                  color: AppTheme.textSecondary,
+                ),
+              ),
+              const SizedBox(height: 20),
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(sheetContext).size.height * 0.4,
+                ),
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: bands.length,
+                  itemBuilder: (itemContext, index) {
+                    final bandId = bands.keys.elementAt(index);
+                    final bandName = bands[bandId]!;
+                    final isSelected = appState.activeBandId == bandId;
+
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: AnimatedTapDetector(
+                        enableFocus: true,
+                        semanticLabel: 'Select band $bandName',
+                        onTap: () async {
+                          Navigator.pop(sheetContext); // Close bottom sheet
+
+                          try {
+                            final band = await appState.firebaseService.getBandInfoAsync(bandId);
+                            if (!context.mounted) return;
+
+                            if (band == null) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Band not found.'),
+                                  backgroundColor: AppTheme.danger,
+                                ),
+                              );
+                              return;
+                            }
+
+                            bool canEdit = band.canUserEdit(appState.currentUserId);
+                            if (!canEdit && appState.currentUserId != null) {
+                              final role = await appState.firebaseService.getUserBandRoleAsync(bandId, appState.currentUserId!);
+                              final r = (role ?? '').trim().toLowerCase();
+                              if (r == 'leader' || r == 'admin') {
+                                canEdit = true;
+                              }
+                            }
+
+                            if (!canEdit) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Only band Leaders or Admins can edit this band.'),
+                                  backgroundColor: AppTheme.warning,
+                                ),
+                              );
+                              return;
+                            }
+
+                            appState.selectBand(band.id ?? bandId, band.name ?? bandName);
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => EditBandInfoScreen(band: band),
+                              ),
+                            );
+                          } catch (e) {
+                            if (!context.mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Error loading band details: $e'),
+                                backgroundColor: AppTheme.danger,
+                              ),
+                            );
+                          }
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? AppTheme.primaryAccent.withOpacity(0.12)
+                                : AppTheme.cardBackground,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: isSelected
+                                  ? AppTheme.primaryAccent
+                                  : const Color(0xFF2E2A4E),
+                              width: 1.5,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: isSelected
+                                      ? AppTheme.primaryAccent.withOpacity(0.2)
+                                      : Colors.white.withOpacity(0.05),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.groups_rounded,
+                                  color: Colors.white,
+                                  size: 20,
+                                ),
+                              ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Text(
+                                  bandName,
+                                  style: GoogleFonts.inter(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                              if (isSelected)
+                                const Icon(
+                                  Icons.check_circle_rounded,
+                                  color: AppTheme.primaryAccent,
+                                  size: 20,
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
           ),
         );
       },

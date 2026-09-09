@@ -9,5 +9,5 @@ class FeatureToggles {
   static const bool useMockPublicEventCalendar = true;
 
   // Set to 'false' to hide Edit Band from the regular Settings menu until complete
-  static const bool showEditBandInSettings = false;
+  static const bool showEditBandInSettings = true;
 }

@@ -118,7 +118,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
     });
 
-    testWidgets('3. EditProfileScreen: Other Skills opens picker', (WidgetTester tester) async {
+    testWidgets('3. EditProfileScreen: Other Skills is removed', (WidgetTester tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() => tester.view.resetPhysicalSize());
@@ -127,17 +127,8 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
-      final otherLabel = find.text('Other Skills (Optional)');
-      expect(otherLabel, findsOneWidget);
-      await tester.tap(otherLabel);
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
-
-      expect(find.byType(SearchableCategoryMultiSelectSheet), findsOneWidget);
-
-      Navigator.pop(tester.element(find.byType(SearchableCategoryMultiSelectSheet)));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.text('Other Skills (Optional)'), findsNothing);
+      expect(find.text('Other Skills'), findsNothing);
     });
 
     testWidgets('4. EditProfileScreen: Genres/Band Types opens picker on tap and redundant "+ Add" is absent', (WidgetTester tester) async {

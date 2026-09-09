@@ -202,7 +202,7 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(find.text('Available gigs'), findsOneWidget);
-        expect(find.text('Direct Invitations'), findsOneWidget);
+        expect(find.text('Direct Invitations (Favorites List)'), findsOneWidget);
         expect(find.text('Upcoming'), findsNothing);
         expect(find.text('Upcoming (booked)'), findsNothing);
       },

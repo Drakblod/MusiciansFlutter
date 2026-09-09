@@ -621,7 +621,26 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                 labelStyle: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 14),
                 tabs: const [
                   Tab(text: 'Available gigs'),
-                  Tab(text: 'Direct Invitations'),
+                  Tab(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text.rich(
+                        TextSpan(
+                          text: 'Direct Invitations',
+                          children: [
+                            TextSpan(
+                              text: ' (Favorites List)',
+                              style: TextStyle(
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.normal,
+                              ),
+                            ),
+                          ],
+                        ),
+                        maxLines: 1,
+                      ),
+                    ),
+                  ),
                   Tab(text: 'Saved'),
                 ],
               ),

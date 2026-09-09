@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -614,11 +614,15 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
       if (result != null && result.files.isNotEmpty) {
         final file = result.files.single;
         Uint8List? bytes = file.bytes;
-        if (bytes == null && file.path != null && file.path!.isNotEmpty) {
+        String? filePath;
+        if (!kIsWeb) {
           try {
-            final f = File(file.path!);
-            if (await f.exists()) {
-              bytes = await f.readAsBytes();
+            filePath = file.path;
+            if (bytes == null && filePath != null && filePath.isNotEmpty) {
+              final f = File(filePath);
+              if (await f.exists()) {
+                bytes = await f.readAsBytes();
+              }
             }
           } catch (e) {
             debugPrint("Could not read file bytes directly from path: $e");
@@ -659,7 +663,7 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
         final url = await appState.firebaseService.uploadBandFileAsync(
           bandId,
           bytes,
-          file.path,
+          filePath,
           file.name,
         );
 

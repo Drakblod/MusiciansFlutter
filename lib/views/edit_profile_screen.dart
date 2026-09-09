@@ -34,7 +34,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   
   List<String> _primarySkills = [];
   List<String> _secondarySkills = [];
-  List<String> _otherSkills = [];
   List<String> _selectedGenres = [];
   late String _level;
   bool _isSaving = false;
@@ -74,7 +73,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       setState(() {
         _primarySkills = result;
         _secondarySkills.removeWhere((item) => _primarySkills.contains(item));
-        _otherSkills.removeWhere((item) => _primarySkills.contains(item));
       });
     }
   }
@@ -89,22 +87,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     );
     if (result != null) {
       setState(() {
-        _secondarySkills = result.where((item) => !_primarySkills.contains(item) && !_otherSkills.contains(item)).toList();
-      });
-    }
-  }
-
-  Future<void> _openOtherSkillsPicker() async {
-    final result = await SearchableCategoryMultiSelectSheet.show(
-      context: context,
-      title: 'Other Skills',
-      categoryMap: _allSkillsCategoryMap,
-      initialSelected: _otherSkills,
-      presentation: CategoryPickerPresentation.skillsHierarchy,
-    );
-    if (result != null) {
-      setState(() {
-        _otherSkills = result.where((item) => !_primarySkills.contains(item) && !_secondarySkills.contains(item)).toList();
+        _secondarySkills = result.where((item) => !_primarySkills.contains(item)).toList();
       });
     }
   }
@@ -172,11 +155,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       if (user.mainInstrument != null && user.mainInstrument!.isNotEmpty) {
         final parsedAllMain = user.mainInstrument!.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
         final secondaryFromMain = parsedAllMain.skip(1).toList();
-        _secondarySkills = [...secondaryFromMain, ...remaining.take(3 - secondaryFromMain.length)].toSet().toList();
-        _otherSkills = remaining.where((i) => !_secondarySkills.contains(i)).toList();
+        _secondarySkills = [...secondaryFromMain, ...remaining.where((i) => !secondaryFromMain.contains(i))].toSet().toList();
       } else {
-        _secondarySkills = remaining.take(3).toList();
-        _otherSkills = remaining.skip(3).toList();
+        _secondarySkills = remaining;
       }
 
       _selectedGenres = List<String>.from(user.genres);
@@ -443,9 +424,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       if (user != null) {
         final allSelectedSkills = <String>[..._primarySkills];
         for (var s in _secondarySkills) {
-          if (!allSelectedSkills.contains(s)) allSelectedSkills.add(s);
-        }
-        for (var s in _otherSkills) {
           if (!allSelectedSkills.contains(s)) allSelectedSkills.add(s);
         }
         final mainInstrumentStr = ([..._primarySkills, ..._secondarySkills]).join(', ');
@@ -914,84 +892,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                   label: Text(skill),
                                   selected: false,
                                   onDeleted: () => setState(() => _secondarySkills.remove(skill)),
-                                  deleteIcon: const Icon(Icons.close_rounded, size: 14, color: Colors.white70),
-                                  backgroundColor: const Color(0xFF1B1735),
-                                  labelStyle: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w500, color: Colors.white70),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                                  side: const BorderSide(color: Color(0xFF38325E), width: 1),
-                                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
-                                  visualDensity: VisualDensity.compact,
-                                );
-                              }).toList(),
-                            ),
-                        ],
-                      ),
-                    ),
-
-                    const SizedBox(height: 16),
-                    const Divider(color: Color(0xFF231F45), height: 1),
-                    const SizedBox(height: 16),
-
-                    // Other Skills (Optional)
-                    AnimatedTapDetector(
-                      enableFocus: true,
-                      semanticLabel: 'Other Skills',
-                      onTap: _openOtherSkillsPicker,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text.rich(
-                                TextSpan(
-                                  children: [
-                                    TextSpan(
-                                      text: 'Other Skills',
-                                      style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white70),
-                                    ),
-                                    TextSpan(
-                                      text: ' (Optional)',
-                                      style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.normal, color: Colors.white70),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              Row(
-                                children: [
-                                  if (_otherSkills.isNotEmpty)
-                                    Container(
-                                      margin: const EdgeInsets.only(right: 6),
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                      decoration: BoxDecoration(
-                                        color: AppTheme.primaryAccent.withOpacity(0.2),
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      child: Text(
-                                        '${_otherSkills.length}',
-                                        style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.primaryAccent),
-                                      ),
-                                    ),
-                                  const Icon(Icons.chevron_right_rounded, color: AppTheme.textMuted, size: 20),
-                                ],
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          if (_otherSkills.isEmpty)
-                            Text(
-                              'Tap to add other skills...',
-                              style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textMuted, fontStyle: FontStyle.italic),
-                            )
-                          else
-                            Wrap(
-                              spacing: 6,
-                              runSpacing: 6,
-                              children: _otherSkills.map((skill) {
-                                return InputChip(
-                                  label: Text(skill),
-                                  selected: false,
-                                  onDeleted: () => setState(() => _otherSkills.remove(skill)),
                                   deleteIcon: const Icon(Icons.close_rounded, size: 14, color: Colors.white70),
                                   backgroundColor: const Color(0xFF1B1735),
                                   labelStyle: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w500, color: Colors.white70),
