@@ -491,6 +491,16 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Roland Juno-DS Synthesizer'), findsOneWidget);
+
+      // Switch to I'M OFFERING -> Repairs (which has no offering listings in mock)
+      await tester.enterText(find.byType(TextField), '');
+      await tester.pumpAndSettle();
+      await tester.tap(find.text("I'M OFFERING"));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Repairs'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('No Listing Made'), findsOneWidget);
     });
 
     testWidgets('16, 17 & 18. Create Listing displays correct subcategories, preselects intent/category, and validates', (tester) async {

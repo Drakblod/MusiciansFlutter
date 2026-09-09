@@ -268,6 +268,7 @@ class _MarketplacePageState extends State<MarketplacePage> {
   }
 
   Widget _buildEmptyState() {
+    String emptyTitle = 'No Listings Found';
     String ctaLabel = 'Post a Listing';
     String? targetIntent = _selectedIntent;
     String? targetCategory = _selectedCategoryId;
@@ -275,6 +276,7 @@ class _MarketplacePageState extends State<MarketplacePage> {
     if (_selectedIntent == MarketplaceTaxonomy.intentLookingFor) {
       ctaLabel = 'Create a request';
     } else if (_selectedIntent == MarketplaceTaxonomy.intentOffering) {
+      emptyTitle = 'No Listing Made';
       ctaLabel = 'Create an offer';
     }
 
@@ -301,7 +303,7 @@ class _MarketplacePageState extends State<MarketplacePage> {
               ),
               const SizedBox(height: 20),
               Text(
-                'No Listings Found',
+                emptyTitle,
                 style: GoogleFonts.outfit(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,

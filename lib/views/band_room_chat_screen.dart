@@ -503,11 +503,11 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
               ),
               const SizedBox(height: 16),
               _buildCategoryPickerOption(
-                title: 'SHEET MUSIC',
-                label: 'Sheet Music',
-                subtitle: 'Charts, scores, lead sheets, PDFs',
-                icon: Icons.description_outlined,
-                color: AppTheme.primaryAccent,
+                title: 'MP3s',
+                label: 'MP3s / Audio',
+                subtitle: 'Demos, tracks, stems, audio recordings',
+                icon: Icons.audiotrack_outlined,
+                color: Colors.orangeAccent,
               ),
               const SizedBox(height: 10),
               _buildCategoryPickerOption(
@@ -519,11 +519,11 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
               ),
               const SizedBox(height: 10),
               _buildCategoryPickerOption(
-                title: 'MP3s',
-                label: 'MP3s / Audio',
-                subtitle: 'Demos, tracks, stems, audio recordings',
-                icon: Icons.audiotrack_outlined,
-                color: Colors.orangeAccent,
+                title: 'SHEET MUSIC',
+                label: 'Sheet Music',
+                subtitle: 'Charts, scores, lead sheets, PDFs',
+                icon: Icons.description_outlined,
+                color: AppTheme.primaryAccent,
               ),
               const SizedBox(height: 10),
               _buildCategoryPickerOption(
@@ -1485,9 +1485,9 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              _buildFileCategorySection('SHEET MUSIC', Icons.description_outlined, AppTheme.primaryAccent, sheetMusic, bandId, appState),
-              _buildFileCategorySection('VIDEOS', Icons.videocam_outlined, Colors.purpleAccent, videos, bandId, appState),
               _buildFileCategorySection('MP3s', Icons.audiotrack_outlined, Colors.orangeAccent, mp3s, bandId, appState),
+              _buildFileCategorySection('VIDEOS', Icons.videocam_outlined, Colors.purpleAccent, videos, bandId, appState),
+              _buildFileCategorySection('SHEET MUSIC', Icons.description_outlined, AppTheme.primaryAccent, sheetMusic, bandId, appState),
               _buildFileCategorySection('OTHER (Pdf, Jpeg, Png...)', Icons.insert_drive_file_outlined, Colors.blueAccent, other, bandId, appState),
             ],
           ),

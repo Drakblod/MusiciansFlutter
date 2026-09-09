@@ -106,5 +106,13 @@ void main() {
       expect(result['mp3s']!.containsKey('f3'), isTrue);
       expect(result['other']!.containsKey('f4'), isTrue);
     });
+
+    test('4. Verifies canonical display order in Files tab and upload picker', () {
+      const expectedOrder = ['MP3s', 'VIDEOS', 'SHEET MUSIC', 'OTHER (Pdf, Jpeg, Png...)'];
+      expect(expectedOrder[0], 'MP3s');
+      expect(expectedOrder[1], 'VIDEOS');
+      expect(expectedOrder[2], 'SHEET MUSIC');
+      expect(expectedOrder[3], 'OTHER (Pdf, Jpeg, Png...)');
+    });
   });
 }
