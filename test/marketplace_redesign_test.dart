@@ -625,14 +625,14 @@ void main() {
       expect(cityFinder, findsOneWidget);
       expect(photosFinder, findsOneWidget);
 
-      // Verify vertical order: LISTING INTENT < CATEGORY < OFFERING TYPE < TITLE < DESCRIPTION < PRICE < CITY < PHOTOS
+      // Verify vertical order: LISTING INTENT < CATEGORY < OFFERING TYPE < TITLE < DESCRIPTION < CITY < PRICE < PHOTOS
       expect(tester.getTopLeft(intentFinder).dy, lessThan(tester.getTopLeft(categoryFinder).dy));
       expect(tester.getTopLeft(categoryFinder).dy, lessThan(tester.getTopLeft(offeringTypeFinder).dy));
       expect(tester.getTopLeft(offeringTypeFinder).dy, lessThan(tester.getTopLeft(titleFinder).dy));
       expect(tester.getTopLeft(titleFinder).dy, lessThan(tester.getTopLeft(descFinder).dy));
-      expect(tester.getTopLeft(descFinder).dy, lessThan(tester.getTopLeft(priceFinder).dy));
-      expect(tester.getTopLeft(priceFinder).dy, lessThan(tester.getTopLeft(cityFinder).dy));
-      expect(tester.getTopLeft(cityFinder).dy, lessThan(tester.getTopLeft(photosFinder).dy));
+      expect(tester.getTopLeft(descFinder).dy, lessThan(tester.getTopLeft(cityFinder).dy));
+      expect(tester.getTopLeft(cityFinder).dy, lessThan(tester.getTopLeft(priceFinder).dy));
+      expect(tester.getTopLeft(priceFinder).dy, lessThan(tester.getTopLeft(photosFinder).dy));
 
       // 2. Verify looking_for mode: OFFERING TYPE is absent
       await tester.tap(find.text("I'M LOOKING FOR"));

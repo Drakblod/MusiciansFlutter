@@ -453,6 +453,32 @@ class _CreateListingPageState extends State<CreateListingPage> {
                       ),
                       const SizedBox(height: 20),
 
+                      // City / Location
+                      Text(
+                        'CITY / LOCATION',
+                        style: GoogleFonts.outfit(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.textSecondary,
+                          letterSpacing: 1.5,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextFormField(
+                        controller: _cityController,
+                        style: GoogleFonts.inter(color: Colors.white),
+                        decoration: const InputDecoration(
+                          hintText: 'e.g., Stockholm',
+                        ),
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Please enter location';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 20),
+
                       // Price
                       Text(
                         'PRICE (KR) (0 FOR FREE)',
@@ -478,32 +504,6 @@ class _CreateListingPageState extends State<CreateListingPage> {
                           final parsed = double.tryParse(value);
                           if (parsed == null || parsed < 0) {
                             return 'Must be >= 0';
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 20),
-
-                      // City / Location
-                      Text(
-                        'CITY / LOCATION',
-                        style: GoogleFonts.outfit(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          color: AppTheme.textSecondary,
-                          letterSpacing: 1.5,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      TextFormField(
-                        controller: _cityController,
-                        style: GoogleFonts.inter(color: Colors.white),
-                        decoration: const InputDecoration(
-                          hintText: 'e.g., Stockholm',
-                        ),
-                        validator: (value) {
-                          if (value == null || value.trim().isEmpty) {
-                            return 'Please enter location';
                           }
                           return null;
                         },

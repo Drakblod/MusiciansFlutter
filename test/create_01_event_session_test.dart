@@ -889,7 +889,7 @@ void main() {
       expect(find.text('Create New Event'), findsNothing);
     });
 
-    testWidgets('26. CREATE-EVENT-02: Live preview, quoted titles, conditional numbering, and clean save', (WidgetTester tester) async {
+    testWidgets('26. CREATE-EVENT-02: Live preview, rubrik huvudnamn, undernamn, conditional numbering, and clean save', (WidgetTester tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() => tester.view.resetPhysicalSize());
@@ -906,41 +906,44 @@ void main() {
       await tester.tap(find.byType(Switch).first);
       await tester.pumpAndSettle();
 
-      // 2. Multiple Events enabled, 1 event with empty title: shows "Name of Event", no Event 1
+      // 2. Multiple Events enabled, 1 event with empty title:
+      // Rubrik shows "Name of Event", card shows default undernamn "Rehearsal 1", no "Event 1" prefix
       expect(find.text('"Name of Event"'), findsOneWidget);
+      expect(find.text('"Rehearsal 1"'), findsOneWidget);
       expect(find.textContaining('Event 1'), findsNothing);
 
-      // 1. Typing in Name of Event updates preview immediately without touching Event Type
+      // 1. Typing in Name of Event updates rubrik preview immediately without touching Event Type
       final nameField = find.widgetWithText(TextFormField, 'Name of Event');
       await tester.enterText(nameField, 'Summer Rehearsal');
       await tester.pump();
 
-      // Live update verified immediately: shows quoted title and still no Event 1
+      // Live update verified immediately: shows quoted rubrik title and still no Event 1 prefix
       expect(find.text('"Summer Rehearsal"'), findsOneWidget);
+      expect(find.text('"Rehearsal 1"'), findsOneWidget);
       expect(find.textContaining('Event 1'), findsNothing);
 
-      // 3. Adding Event 2 displays both Event 1 and Event 2 with quoted titles
+      // 3. Adding Event 2 displays both Event 1 and Event 2 with quoted titles and undernamn
       await tester.tap(find.text('+ Add Event(s)'));
       await tester.pumpAndSettle();
 
-      // Enter title for Event 2 in dialog
-      final dialogTitleField = find.widgetWithText(TextFormField, 'Name of Event').last;
-      await tester.enterText(dialogTitleField, 'Concert in Stockholm');
+      // Default title in dialog is "Concert 1"
       await tester.tap(find.widgetWithText(ElevatedButton, 'Add Event'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Event 1 "Summer Rehearsal"'), findsOneWidget);
-      expect(find.text('Event 2 "Concert in Stockholm"'), findsOneWidget);
+      expect(find.text('"Summer Rehearsal"'), findsOneWidget);
+      expect(find.text('Event 1 "Rehearsal 1"'), findsOneWidget);
+      expect(find.text('Event 2 "Concert 1"'), findsOneWidget);
 
-      // 4. Removing Event 2 hides Event 1 again
+      // 4. Removing Event 2 hides Event 1 prefix again
       final deleteBtn = find.byIcon(Icons.delete_outline).first;
       await tester.tap(deleteBtn);
       await tester.pumpAndSettle();
 
       expect(find.text('"Summer Rehearsal"'), findsOneWidget);
+      expect(find.text('"Rehearsal 1"'), findsOneWidget);
       expect(find.textContaining('Event 1'), findsNothing);
 
-      // 5. Quotation marks are not included in the saved title
+      // 5. Quotation marks are not included in the saved title for single event
       await tester.enterText(find.widgetWithText(TextFormField, 'Location (City, Country)'), 'Stockholm');
       await tester.enterText(find.widgetWithText(TextFormField, 'Set hours here'), '24');
 
@@ -950,6 +953,55 @@ void main() {
       expect(appState.mockFirebase.saveBandEventCalls, equals(1));
       expect(appState.mockFirebase.savedBandEvents.first.title, equals('Summer Rehearsal'));
       expect(appState.mockFirebase.savedBandEvents.first.title.contains('"'), isFalse);
+    });
+
+    testWidgets('27. CREATE-EVENT-02: Multi-event batch save preserves undernamn and group linking', (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      final appState = MockAppStateForCreate01Test();
+      await tester.pumpWidget(createTestWrapper(
+        appState: appState,
+        child: const CreateEventPage(bandId: 'band_1'),
+      ));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      final nameField = find.widgetWithText(TextFormField, 'Name of Event');
+      await tester.enterText(nameField, 'Tour 2026');
+      await tester.pump();
+
+      // Enable Multiple Events
+      await tester.tap(find.byType(Switch).first);
+      await tester.pumpAndSettle();
+
+      // Add Event 2
+      await tester.tap(find.text('+ Add Event(s)'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Add Event'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Event 1 "Rehearsal 1"'), findsOneWidget);
+      expect(find.text('Event 2 "Concert 1"'), findsOneWidget);
+
+      await tester.enterText(find.widgetWithText(TextFormField, 'Location (City, Country)'), 'Gothenburg');
+      await tester.enterText(find.widgetWithText(TextFormField, 'Set hours here'), '24');
+      final publishBtn = find.text('Publish 2 Events');
+      await tester.ensureVisible(publishBtn);
+      await tester.tap(publishBtn);
+      await tester.pumpAndSettle();
+
+      expect(appState.mockFirebase.saveBandEventCalls, equals(2));
+      final saved1 = appState.mockFirebase.savedBandEvents[0];
+      final saved2 = appState.mockFirebase.savedBandEvents[1];
+
+      expect(saved1.title, equals('Rehearsal 1'));
+      expect(saved2.title, equals('Concert 1'));
+      expect(saved1.parentEventId, isNotNull);
+      expect(saved1.parentEventId, equals(saved2.parentEventId));
+      expect(saved1.subEventSequence, equals(1));
+      expect(saved2.subEventSequence, equals(2));
     });
   });
 }

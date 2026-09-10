@@ -65,7 +65,41 @@ class _CreateEventPageState extends State<CreateEventPage> {
 
   // Multiple Events Batch State
   bool _isMultipleEvents = false;
+  String? _event1SubTitle;
   final List<_EventDraft> _additionalEvents = [];
+
+  String _getResolvedPrimaryEventType() {
+    if (_eventType == 'Other' && _otherEventTypeController.text.trim().isNotEmpty) {
+      return _otherEventTypeController.text.trim();
+    }
+    return _eventType;
+  }
+
+  String _getEvent1Title() {
+    if (_event1SubTitle != null && _event1SubTitle!.trim().isNotEmpty) {
+      return _event1SubTitle!.trim();
+    }
+    return '${_getResolvedPrimaryEventType()} 1';
+  }
+
+  int _countOccurrencesOfType(String type, {int? upToIndex}) {
+    int count = 0;
+    if (_getResolvedPrimaryEventType() == type) {
+      count++;
+    }
+    final limit = upToIndex ?? _additionalEvents.length;
+    for (int i = 0; i < limit && i < _additionalEvents.length; i++) {
+      if (_additionalEvents[i].eventType == type) {
+        count++;
+      }
+    }
+    return count;
+  }
+
+  String _getDefaultDraftTitle(String type) {
+    final nextSeq = _countOccurrencesOfType(type) + 1;
+    return '$type $nextSeq';
+  }
 
   List<String> get _availableEventTypes {
     if (BandEvent.standardEventTypes.contains(_eventType)) {
@@ -125,6 +159,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
 
       if (group.length > 1) {
         _isMultipleEvents = true;
+        _event1SubTitle = first.title;
         for (int i = 1; i < group.length; i++) {
           final sub = group[i];
           final subStart = DateTime.tryParse(sub.startDateTime)?.toLocal() ?? DateTime.now();
@@ -277,12 +312,14 @@ class _CreateEventPageState extends State<CreateEventPage> {
     }
   }
 
-  void _showEditEventDraftDialog({int? editIndex}) {
-    final isEditing = editIndex != null;
-    final draftToEdit = isEditing ? _additionalEvents[editIndex] : null;
+  void _showEditEventDraftDialog({int? editIndex, bool isPrimary = false}) {
+    final isEditing = editIndex != null || isPrimary;
+    final draftToEdit = (!isPrimary && editIndex != null) ? _additionalEvents[editIndex] : null;
 
     DateTime defaultDate;
-    if (isEditing) {
+    if (isPrimary) {
+      defaultDate = _selectedDate;
+    } else if (editIndex != null) {
       defaultDate = draftToEdit!.date;
     } else if (_additionalEvents.isNotEmpty) {
       defaultDate = _additionalEvents.last.date.add(const Duration(days: 1));
@@ -290,19 +327,29 @@ class _CreateEventPageState extends State<CreateEventPage> {
       defaultDate = _selectedDate.add(const Duration(days: 1));
     }
 
-    final draftTitleController = TextEditingController(
-      text: isEditing ? draftToEdit!.title : (_titleController.text.trim().isNotEmpty ? _titleController.text.trim() : 'New Event'),
-    );
+    final initialType = isPrimary
+        ? _eventType
+        : (editIndex != null ? draftToEdit!.eventType : 'Concert');
+
+    final initialTitle = isPrimary
+        ? _getEvent1Title()
+        : (editIndex != null ? draftToEdit!.title : _getDefaultDraftTitle(initialType));
+
+    final draftTitleController = TextEditingController(text: initialTitle);
     final draftLocationController = TextEditingController(
-      text: isEditing ? draftToEdit!.location : _locationController.text.trim(),
+      text: isPrimary
+          ? _locationController.text.trim()
+          : (editIndex != null ? draftToEdit!.location : _locationController.text.trim()),
     );
     final draftDescriptionController = TextEditingController(
-      text: isEditing ? draftToEdit!.description : '',
+      text: isPrimary
+          ? _descriptionController.text.trim()
+          : (editIndex != null ? draftToEdit!.description : ''),
     );
-    String draftType = isEditing ? draftToEdit!.eventType : 'Concert';
+    String draftType = initialType;
     DateTime draftDate = defaultDate;
-    TimeOfDay draftStart = isEditing ? draftToEdit!.startTime : _startTime;
-    TimeOfDay draftEnd = isEditing ? draftToEdit!.endTime : _endTime;
+    TimeOfDay draftStart = isPrimary ? _startTime : (editIndex != null ? draftToEdit!.startTime : _startTime);
+    TimeOfDay draftEnd = isPrimary ? _endTime : (editIndex != null ? draftToEdit!.endTime : _endTime);
 
     showModalBottomSheet(
       context: context,
@@ -357,7 +404,20 @@ class _CreateEventPageState extends State<CreateEventPage> {
                       decoration: const InputDecoration(labelText: 'Event Type'),
                       items: draftAvailableTypes.map((type) => DropdownMenuItem(value: type, child: Text(type))).toList(),
                       onChanged: (val) {
-                        if (val != null) setModalState(() => draftType = val);
+                        if (val != null) {
+                          setModalState(() {
+                            final oldType = draftType;
+                            draftType = val;
+                            final oldExpected = isPrimary
+                                ? '$oldType 1'
+                                : _getDefaultDraftTitle(oldType);
+                            if (!isEditing || draftTitleController.text.trim() == oldExpected) {
+                              draftTitleController.text = isPrimary
+                                  ? '$val 1'
+                                  : _getDefaultDraftTitle(val);
+                            }
+                          });
+                        }
                       },
                     ),
                     const SizedBox(height: 12),
@@ -491,26 +551,48 @@ class _CreateEventPageState extends State<CreateEventPage> {
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryAccent),
                         onPressed: () {
-                          final title = draftTitleController.text.trim().isEmpty ? 'Event' : draftTitleController.text.trim();
+                          final defaultTitle = isPrimary
+                              ? '${draftType} 1'
+                              : _getDefaultDraftTitle(draftType);
+                          final title = draftTitleController.text.trim().isEmpty
+                              ? defaultTitle
+                              : draftTitleController.text.trim();
                           final location = draftLocationController.text.trim();
                           final description = draftDescriptionController.text.trim();
-                          final newDraft = _EventDraft(
-                            title: title,
-                            eventType: draftType,
-                            date: draftDate,
-                            startTime: draftStart,
-                            endTime: draftEnd,
-                            location: location,
-                            description: description,
-                          );
 
-                          setState(() {
-                            if (isEditing) {
-                              _additionalEvents[editIndex!] = newDraft;
-                            } else {
-                              _additionalEvents.add(newDraft);
-                            }
-                          });
+                          if (isPrimary) {
+                            setState(() {
+                              _event1SubTitle = title;
+                              _eventType = draftType;
+                              _selectedDate = draftDate;
+                              _startTime = draftStart;
+                              _endTime = draftEnd;
+                              if (location.isNotEmpty) {
+                                _locationController.text = location;
+                              }
+                              if (description.isNotEmpty) {
+                                _descriptionController.text = description;
+                              }
+                            });
+                          } else {
+                            final newDraft = _EventDraft(
+                              title: title,
+                              eventType: draftType,
+                              date: draftDate,
+                              startTime: draftStart,
+                              endTime: draftEnd,
+                              location: location,
+                              description: description,
+                            );
+
+                            setState(() {
+                              if (editIndex != null) {
+                                _additionalEvents[editIndex] = newDraft;
+                              } else {
+                                _additionalEvents.add(newDraft);
+                              }
+                            });
+                          }
 
                           Navigator.pop(ctx);
                         },
@@ -553,13 +635,15 @@ class _CreateEventPageState extends State<CreateEventPage> {
         }
       }
 
-      final resolvedPrimaryType = _eventType == 'Other'
-          ? _otherEventTypeController.text.trim()
-          : _eventType;
+      final resolvedPrimaryType = _getResolvedPrimaryEventType();
+
+      final primaryTitle = (_isMultipleEvents && _additionalEvents.isNotEmpty)
+          ? _getEvent1Title()
+          : _titleController.text.trim();
 
       final allEventsToSave = <_EventDraft>[
         _EventDraft(
-          title: _titleController.text.trim(),
+          title: primaryTitle,
           eventType: resolvedPrimaryType,
           date: _selectedDate,
           startTime: _startTime,
@@ -959,75 +1043,92 @@ class _CreateEventPageState extends State<CreateEventPage> {
                             const Divider(color: Color(0xFF2E2A4E)),
                             const SizedBox(height: 12),
 
+                            // "Name of Event" as rubrik ("huvudnamn")
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: Text(
+                                _titleController.text.trim().isEmpty
+                                    ? '"Name of Event"'
+                                    : '"${_titleController.text.trim()}"',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ),
+
                             // Event 1 (Primary Event Card)
                             Builder(
                               builder: (context) {
                                 final hasMultipleEvents = _additionalEvents.isNotEmpty;
-                                final rawTitle = _titleController.text.trim();
-                                final displayTitle = rawTitle.isEmpty ? 'Name of Event' : rawTitle;
+                                final subTitle = _getEvent1Title();
                                 final primaryTitleText = hasMultipleEvents
-                                    ? 'Event 1 "$displayTitle"'
-                                    : '"$displayTitle"';
+                                    ? 'Event 1 "$subTitle"'
+                                    : '"$subTitle"';
 
-                                return Container(
-                                  margin: const EdgeInsets.only(bottom: 8),
-                                  padding: const EdgeInsets.all(12),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF141029),
-                                    borderRadius: BorderRadius.circular(10),
-                                    border: Border.all(color: const Color(0xFF2E2A4E)),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                        decoration: BoxDecoration(
-                                          color: AppTheme.primaryAccent.withOpacity(0.2),
-                                          borderRadius: BorderRadius.circular(6),
+                                return GestureDetector(
+                                  behavior: HitTestBehavior.opaque,
+                                  onTap: () => _showEditEventDraftDialog(isPrimary: true),
+                                  child: Container(
+                                    margin: const EdgeInsets.only(bottom: 8),
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF141029),
+                                      borderRadius: BorderRadius.circular(10),
+                                      border: Border.all(color: const Color(0xFF2E2A4E)),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                          decoration: BoxDecoration(
+                                            color: AppTheme.primaryAccent.withOpacity(0.2),
+                                            borderRadius: BorderRadius.circular(6),
+                                          ),
+                                          child: Text(
+                                            _getResolvedPrimaryEventType(),
+                                            style: GoogleFonts.inter(fontSize: 11, color: Colors.white, fontWeight: FontWeight.bold),
+                                          ),
                                         ),
-                                        child: Text(
-                                          _eventType == 'Other' && _otherEventTypeController.text.trim().isNotEmpty
-                                              ? _otherEventTypeController.text.trim()
-                                              : _eventType,
-                                          style: GoogleFonts.inter(fontSize: 11, color: Colors.white, fontWeight: FontWeight.bold),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 10),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              primaryTitleText,
-                                              style: GoogleFonts.inter(fontSize: 13, color: Colors.white, fontWeight: FontWeight.bold),
-                                            ),
-                                            const SizedBox(height: 2),
-                                            Text(
-                                              '${DateFormat('EEEE, MMM d').format(_selectedDate)} (${_startTime.format(context)} - ${_endTime.format(context)})',
-                                              style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary),
-                                            ),
-                                            if (_locationController.text.trim().isNotEmpty)
+                                        const SizedBox(width: 10),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
                                               Text(
-                                                '@ ${_locationController.text.trim()}',
-                                                style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary),
+                                                primaryTitleText,
+                                                style: GoogleFonts.inter(fontSize: 13, color: Colors.white, fontWeight: FontWeight.bold),
                                               ),
-                                            if (_descriptionController.text.trim().isNotEmpty) ...[
                                               const SizedBox(height: 2),
                                               Text(
-                                                _descriptionController.text.trim(),
-                                                style: GoogleFonts.inter(fontSize: 11, color: Colors.white70),
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
+                                                '${DateFormat('EEEE, MMM d').format(_selectedDate)} (${_startTime.format(context)} - ${_endTime.format(context)})',
+                                                style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary),
                                               ),
+                                              if (_locationController.text.trim().isNotEmpty)
+                                                Text(
+                                                  '@ ${_locationController.text.trim()}',
+                                                  style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary),
+                                                ),
+                                              if (_descriptionController.text.trim().isNotEmpty) ...[
+                                                const SizedBox(height: 2),
+                                                Text(
+                                                  _descriptionController.text.trim(),
+                                                  style: GoogleFonts.inter(fontSize: 11, color: Colors.white70),
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                              ],
                                             ],
-                                          ],
+                                          ),
                                         ),
-                                      ),
-                                      Tooltip(
-                                        message: hasMultipleEvents ? 'Event 1' : 'Event',
-                                        child: const Icon(Icons.info_outline, size: 16, color: AppTheme.textSecondary),
-                                      ),
-                                    ],
+                                        IconButton(
+                                          icon: const Icon(Icons.edit_outlined, color: AppTheme.primaryAccent, size: 18),
+                                          onPressed: () => _showEditEventDraftDialog(isPrimary: true),
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                 );
                               },
