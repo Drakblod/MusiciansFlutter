@@ -586,5 +586,98 @@ void main() {
       expect(find.text('Instruments/Gear'), findsOneWidget);
       expect(find.text('5000 kr'), findsOneWidget);
     });
+
+    testWidgets('22. MARKETPLACE-02: Action standardization & Create Listing form order', (tester) async {
+      // 1. Verify CreateListingPage top bar title and field order in OFFERING mode
+      await tester.pumpWidget(createTestApp(
+        child: const CreateListingPage(
+          initialIntent: 'offering',
+          initialCategory: 'instrument_gear',
+        ),
+        mockService: mockService,
+      ));
+      await tester.pumpAndSettle();
+
+      // Top bar has 'Create Listing'
+      expect(
+        find.byWidgetPredicate(
+          (w) => w.runtimeType.toString() == 'CustomTopBar' && (w as dynamic).title == 'Create Listing',
+        ),
+        findsOneWidget,
+      );
+
+      // Verify all field headers exist in offering mode
+      final intentFinder = find.text('LISTING INTENT');
+      final categoryFinder = find.text('CATEGORY');
+      final offeringTypeFinder = find.text('OFFERING TYPE');
+      final titleFinder = find.text('TITLE');
+      final descFinder = find.text('DESCRIPTION');
+      final priceFinder = find.text('PRICE (KR) (0 FOR FREE)');
+      final cityFinder = find.text('CITY / LOCATION');
+      final photosFinder = find.text('PHOTOS (OPTIONAL, UP TO 5)');
+
+      expect(intentFinder, findsOneWidget);
+      expect(categoryFinder, findsOneWidget);
+      expect(offeringTypeFinder, findsOneWidget);
+      expect(titleFinder, findsOneWidget);
+      expect(descFinder, findsOneWidget);
+      expect(priceFinder, findsOneWidget);
+      expect(cityFinder, findsOneWidget);
+      expect(photosFinder, findsOneWidget);
+
+      // Verify vertical order: LISTING INTENT < CATEGORY < OFFERING TYPE < TITLE < DESCRIPTION < PRICE < CITY < PHOTOS
+      expect(tester.getTopLeft(intentFinder).dy, lessThan(tester.getTopLeft(categoryFinder).dy));
+      expect(tester.getTopLeft(categoryFinder).dy, lessThan(tester.getTopLeft(offeringTypeFinder).dy));
+      expect(tester.getTopLeft(offeringTypeFinder).dy, lessThan(tester.getTopLeft(titleFinder).dy));
+      expect(tester.getTopLeft(titleFinder).dy, lessThan(tester.getTopLeft(descFinder).dy));
+      expect(tester.getTopLeft(descFinder).dy, lessThan(tester.getTopLeft(priceFinder).dy));
+      expect(tester.getTopLeft(priceFinder).dy, lessThan(tester.getTopLeft(cityFinder).dy));
+      expect(tester.getTopLeft(cityFinder).dy, lessThan(tester.getTopLeft(photosFinder).dy));
+
+      // 2. Verify looking_for mode: OFFERING TYPE is absent
+      await tester.tap(find.text("I'M LOOKING FOR"));
+      await tester.pumpAndSettle();
+      expect(find.text('OFFERING TYPE'), findsNothing);
+
+      // 3. Verify MarketplacePage empty state button is 'Create Listing'
+      await tester.pumpWidget(createTestApp(
+        child: const MarketplacePage(),
+        mockService: mockService,
+      ));
+      await tester.pumpAndSettle();
+      // In initial state Roland Juno is present, filter to empty category
+      await tester.tap(find.text("I'M OFFERING"));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Repairs'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('No Listing Made'), findsOneWidget);
+      expect(find.text('Create Listing'), findsOneWidget);
+      expect(
+        find.ancestor(
+          of: find.text('Create Listing'),
+          matching: find.byWidgetPredicate((w) => w is ButtonStyleButton),
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Create an offer'), findsNothing);
+      expect(find.text('Post a Listing'), findsNothing);
+
+      // 4. Verify MyListingsPage empty state button is 'Create Listing'
+      await tester.pumpWidget(createTestApp(
+        child: const MyListingsPage(),
+        mockService: MockMarketplaceFirebaseService(),
+      ));
+      await tester.pumpAndSettle();
+      expect(find.text('Create Listing'), findsOneWidget);
+      expect(
+        find.ancestor(
+          of: find.text('Create Listing'),
+          matching: find.byWidgetPredicate((w) => w is ButtonStyleButton),
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Post a Listing'), findsNothing);
+    });
   });
 }

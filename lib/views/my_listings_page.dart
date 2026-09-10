@@ -270,7 +270,7 @@ class _MyListingsPageState extends State<MyListingsPage> {
                 Navigator.pushReplacementNamed(context, '/create-listing');
               },
               icon: const Icon(Icons.add, color: Colors.white),
-              label: Text('Post a Listing', style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+              label: Text('Create Listing', style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppTheme.primaryAccent,
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),

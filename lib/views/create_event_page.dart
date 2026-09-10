@@ -703,6 +703,9 @@ class _CreateEventPageState extends State<CreateEventPage> {
                         labelText: 'Name of Event',
                         hintText: 'e.g. Choir Rehearsal, Friday Gig',
                       ),
+                      onChanged: (_) {
+                        if (mounted) setState(() {});
+                      },
                       validator: (value) {
                         if (value == null || value.trim().isEmpty) {
                           return 'Please enter an event title';
@@ -957,66 +960,77 @@ class _CreateEventPageState extends State<CreateEventPage> {
                             const SizedBox(height: 12),
 
                             // Event 1 (Primary Event Card)
-                            Container(
-                              margin: const EdgeInsets.only(bottom: 8),
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF141029),
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(color: const Color(0xFF2E2A4E)),
-                              ),
-                              child: Row(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: AppTheme.primaryAccent.withOpacity(0.2),
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    child: Text(
-                                      _eventType == 'Other' && _otherEventTypeController.text.trim().isNotEmpty
-                                          ? _otherEventTypeController.text.trim()
-                                          : _eventType,
-                                      style: GoogleFonts.inter(fontSize: 11, color: Colors.white, fontWeight: FontWeight.bold),
-                                    ),
+                            Builder(
+                              builder: (context) {
+                                final hasMultipleEvents = _additionalEvents.isNotEmpty;
+                                final rawTitle = _titleController.text.trim();
+                                final displayTitle = rawTitle.isEmpty ? 'Name of Event' : rawTitle;
+                                final primaryTitleText = hasMultipleEvents
+                                    ? 'Event 1 "$displayTitle"'
+                                    : '"$displayTitle"';
+
+                                return Container(
+                                  margin: const EdgeInsets.only(bottom: 8),
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF141029),
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(color: const Color(0xFF2E2A4E)),
                                   ),
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          _titleController.text.trim().isEmpty ? 'Event 1' : _titleController.text.trim(),
-                                          style: GoogleFonts.inter(fontSize: 13, color: Colors.white, fontWeight: FontWeight.bold),
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: AppTheme.primaryAccent.withOpacity(0.2),
+                                          borderRadius: BorderRadius.circular(6),
                                         ),
-                                        const SizedBox(height: 2),
-                                        Text(
-                                          '${DateFormat('EEEE, MMM d').format(_selectedDate)} (${_startTime.format(context)} - ${_endTime.format(context)})',
-                                          style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary),
+                                        child: Text(
+                                          _eventType == 'Other' && _otherEventTypeController.text.trim().isNotEmpty
+                                              ? _otherEventTypeController.text.trim()
+                                              : _eventType,
+                                          style: GoogleFonts.inter(fontSize: 11, color: Colors.white, fontWeight: FontWeight.bold),
                                         ),
-                                        if (_locationController.text.trim().isNotEmpty)
-                                          Text(
-                                            '@ ${_locationController.text.trim()}',
-                                            style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary),
-                                          ),
-                                        if (_descriptionController.text.trim().isNotEmpty) ...[
-                                          const SizedBox(height: 2),
-                                          Text(
-                                            _descriptionController.text.trim(),
-                                            style: GoogleFonts.inter(fontSize: 11, color: Colors.white70),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ],
-                                      ],
-                                    ),
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              primaryTitleText,
+                                              style: GoogleFonts.inter(fontSize: 13, color: Colors.white, fontWeight: FontWeight.bold),
+                                            ),
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              '${DateFormat('EEEE, MMM d').format(_selectedDate)} (${_startTime.format(context)} - ${_endTime.format(context)})',
+                                              style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary),
+                                            ),
+                                            if (_locationController.text.trim().isNotEmpty)
+                                              Text(
+                                                '@ ${_locationController.text.trim()}',
+                                                style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary),
+                                              ),
+                                            if (_descriptionController.text.trim().isNotEmpty) ...[
+                                              const SizedBox(height: 2),
+                                              Text(
+                                                _descriptionController.text.trim(),
+                                                style: GoogleFonts.inter(fontSize: 11, color: Colors.white70),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ],
+                                          ],
+                                        ),
+                                      ),
+                                      Tooltip(
+                                        message: hasMultipleEvents ? 'Event 1' : 'Event',
+                                        child: const Icon(Icons.info_outline, size: 16, color: AppTheme.textSecondary),
+                                      ),
+                                    ],
                                   ),
-                                  const Tooltip(
-                                    message: 'Event 1',
-                                    child: Icon(Icons.info_outline, size: 16, color: AppTheme.textSecondary),
-                                  ),
-                                ],
-                              ),
+                                );
+                              },
                             ),
 
                             // Additional Events List Cards (Fully Clickable)
@@ -1052,7 +1066,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                                           crossAxisAlignment: CrossAxisAlignment.start,
                                           children: [
                                             Text(
-                                              draft.title,
+                                              'Event ${index + 2} "${draft.title}"',
                                               style: GoogleFonts.inter(fontSize: 13, color: Colors.white, fontWeight: FontWeight.bold),
                                             ),
                                             const SizedBox(height: 2),

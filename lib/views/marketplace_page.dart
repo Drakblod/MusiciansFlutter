@@ -269,15 +269,12 @@ class _MarketplacePageState extends State<MarketplacePage> {
 
   Widget _buildEmptyState() {
     String emptyTitle = 'No Listings Found';
-    String ctaLabel = 'Post a Listing';
+    const String ctaLabel = 'Create Listing';
     String? targetIntent = _selectedIntent;
     String? targetCategory = _selectedCategoryId;
 
-    if (_selectedIntent == MarketplaceTaxonomy.intentLookingFor) {
-      ctaLabel = 'Create a request';
-    } else if (_selectedIntent == MarketplaceTaxonomy.intentOffering) {
+    if (_selectedIntent == MarketplaceTaxonomy.intentOffering) {
       emptyTitle = 'No Listing Made';
-      ctaLabel = 'Create an offer';
     }
 
     return Center(

@@ -261,7 +261,7 @@ class _CreateListingPageState extends State<CreateListingPage> {
 
     return GradientScaffold(
       appBar: const CustomTopBar(
-        title: 'Post Listing',
+        title: 'Create Listing',
         showBack: true,
       ),
       body: SafeArea(
@@ -400,20 +400,6 @@ class _CreateListingPageState extends State<CreateListingPage> {
                         const SizedBox(height: 20),
                       ],
 
-                      // Image Selector Section
-                      Text(
-                        'PHOTOS (OPTIONAL, UP TO 5)',
-                        style: GoogleFonts.outfit(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          color: AppTheme.textSecondary,
-                          letterSpacing: 1.5,
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      _buildImageSelector(),
-                      const SizedBox(height: 24),
-
                       // Listing Title
                       Text(
                         'TITLE',
@@ -437,79 +423,6 @@ class _CreateListingPageState extends State<CreateListingPage> {
                           }
                           return null;
                         },
-                      ),
-                      const SizedBox(height: 20),
-
-                      // Price & City Row
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'PRICE (KR) (0 FOR FREE)',
-                                  style: GoogleFonts.outfit(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                    color: AppTheme.textSecondary,
-                                    letterSpacing: 1.5,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                TextFormField(
-                                  controller: _priceController,
-                                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                  style: GoogleFonts.inter(color: Colors.white),
-                                  decoration: const InputDecoration(
-                                    hintText: 'e.g., 4500',
-                                  ),
-                                  validator: (value) {
-                                    if (value == null || value.trim().isEmpty) {
-                                      return 'Please enter a price';
-                                    }
-                                    final parsed = double.tryParse(value);
-                                    if (parsed == null || parsed < 0) {
-                                      return 'Must be >= 0';
-                                    }
-                                    return null;
-                                  },
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'CITY / LOCATION',
-                                  style: GoogleFonts.outfit(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                    color: AppTheme.textSecondary,
-                                    letterSpacing: 1.5,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                TextFormField(
-                                  controller: _cityController,
-                                  style: GoogleFonts.inter(color: Colors.white),
-                                  decoration: const InputDecoration(
-                                    hintText: 'e.g., Stockholm',
-                                  ),
-                                  validator: (value) {
-                                    if (value == null || value.trim().isEmpty) {
-                                      return 'Please enter location';
-                                    }
-                                    return null;
-                                  },
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
                       ),
                       const SizedBox(height: 20),
 
@@ -538,6 +451,77 @@ class _CreateListingPageState extends State<CreateListingPage> {
                           return null;
                         },
                       ),
+                      const SizedBox(height: 20),
+
+                      // Price
+                      Text(
+                        'PRICE (KR) (0 FOR FREE)',
+                        style: GoogleFonts.outfit(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.textSecondary,
+                          letterSpacing: 1.5,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextFormField(
+                        controller: _priceController,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        style: GoogleFonts.inter(color: Colors.white),
+                        decoration: const InputDecoration(
+                          hintText: 'e.g., 4500',
+                        ),
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Please enter a price';
+                          }
+                          final parsed = double.tryParse(value);
+                          if (parsed == null || parsed < 0) {
+                            return 'Must be >= 0';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 20),
+
+                      // City / Location
+                      Text(
+                        'CITY / LOCATION',
+                        style: GoogleFonts.outfit(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.textSecondary,
+                          letterSpacing: 1.5,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextFormField(
+                        controller: _cityController,
+                        style: GoogleFonts.inter(color: Colors.white),
+                        decoration: const InputDecoration(
+                          hintText: 'e.g., Stockholm',
+                        ),
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Please enter location';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 20),
+
+                      // Image Selector Section
+                      Text(
+                        'PHOTOS (OPTIONAL, UP TO 5)',
+                        style: GoogleFonts.outfit(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.textSecondary,
+                          letterSpacing: 1.5,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      _buildImageSelector(),
                       const SizedBox(height: 32),
 
                       // Submit Button

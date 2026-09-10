@@ -888,5 +888,68 @@ void main() {
       expect(find.text('Create Event'), findsWidgets);
       expect(find.text('Create New Event'), findsNothing);
     });
+
+    testWidgets('26. CREATE-EVENT-02: Live preview, quoted titles, conditional numbering, and clean save', (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      final appState = MockAppStateForCreate01Test();
+      await tester.pumpWidget(createTestWrapper(
+        appState: appState,
+        child: const CreateEventPage(bandId: 'band_1'),
+      ));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      // Toggle Multiple Events switch and enable it
+      await tester.tap(find.byType(Switch).first);
+      await tester.pumpAndSettle();
+
+      // 2. Multiple Events enabled, 1 event with empty title: shows "Name of Event", no Event 1
+      expect(find.text('"Name of Event"'), findsOneWidget);
+      expect(find.textContaining('Event 1'), findsNothing);
+
+      // 1. Typing in Name of Event updates preview immediately without touching Event Type
+      final nameField = find.widgetWithText(TextFormField, 'Name of Event');
+      await tester.enterText(nameField, 'Summer Rehearsal');
+      await tester.pump();
+
+      // Live update verified immediately: shows quoted title and still no Event 1
+      expect(find.text('"Summer Rehearsal"'), findsOneWidget);
+      expect(find.textContaining('Event 1'), findsNothing);
+
+      // 3. Adding Event 2 displays both Event 1 and Event 2 with quoted titles
+      await tester.tap(find.text('+ Add Event(s)'));
+      await tester.pumpAndSettle();
+
+      // Enter title for Event 2 in dialog
+      final dialogTitleField = find.widgetWithText(TextFormField, 'Name of Event').last;
+      await tester.enterText(dialogTitleField, 'Concert in Stockholm');
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Add Event'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Event 1 "Summer Rehearsal"'), findsOneWidget);
+      expect(find.text('Event 2 "Concert in Stockholm"'), findsOneWidget);
+
+      // 4. Removing Event 2 hides Event 1 again
+      final deleteBtn = find.byIcon(Icons.delete_outline).first;
+      await tester.tap(deleteBtn);
+      await tester.pumpAndSettle();
+
+      expect(find.text('"Summer Rehearsal"'), findsOneWidget);
+      expect(find.textContaining('Event 1'), findsNothing);
+
+      // 5. Quotation marks are not included in the saved title
+      await tester.enterText(find.widgetWithText(TextFormField, 'Location (City, Country)'), 'Stockholm');
+      await tester.enterText(find.widgetWithText(TextFormField, 'Set hours here'), '24');
+
+      await tester.tap(find.text('Publish Event'));
+      await tester.pumpAndSettle();
+
+      expect(appState.mockFirebase.saveBandEventCalls, equals(1));
+      expect(appState.mockFirebase.savedBandEvents.first.title, equals('Summer Rehearsal'));
+      expect(appState.mockFirebase.savedBandEvents.first.title.contains('"'), isFalse);
+    });
   });
 }
