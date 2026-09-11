@@ -1716,6 +1716,13 @@ class FirebaseService {
         sound: true,
       );
 
+      // On iOS, present alert banner, badge, and sound even when app is in foreground
+      await messaging.setForegroundNotificationPresentationOptions(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
+
       if (settings.authorizationStatus == AuthorizationStatus.authorized ||
           settings.authorizationStatus == AuthorizationStatus.provisional) {
         print("PUSH: Permission Granted (${settings.authorizationStatus.name})");

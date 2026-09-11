@@ -63,6 +63,7 @@
 		A1B2C3021CF9000F007C0002 /* gig_rquest_response.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = gig_rquest_response.wav; sourceTree = "<group>"; };
 		A1B2C3031CF9000F007C0003 /* reminder_rsvp.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = reminder_rsvp.wav; sourceTree = "<group>"; };
 		A1B2C3041CF9000F007C0004 /* finalized_gig.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = finalized_gig.wav; sourceTree = "<group>"; };
+		A1B2C3091CF9000F007C0009 /* Runner.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Runner.entitlements; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -129,6 +130,7 @@
 				A1B2C3021CF9000F007C0002 /* gig_rquest_response.wav */,
 				A1B2C3031CF9000F007C0003 /* reminder_rsvp.wav */,
 				A1B2C3041CF9000F007C0004 /* finalized_gig.wav */,
+				A1B2C3091CF9000F007C0009 /* Runner.entitlements */,
 			);
 			path = Runner;
 			sourceTree = "<group>";
@@ -190,6 +192,11 @@
 					97C146ED1CF9000F007C117D = {
 						CreatedOnToolsVersion = 7.3.1;
 						LastSwiftMigration = 1100;
+						SystemCapabilities = {
+							com.apple.Push = {
+								enabled = 1;
+							};
+						};
 					};
 				};
 			};
@@ -377,6 +384,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements;
 				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = Runner/Info.plist;
@@ -556,6 +564,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements;
 				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = Runner/Info.plist;
@@ -578,6 +587,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements;
 				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = Runner/Info.plist;

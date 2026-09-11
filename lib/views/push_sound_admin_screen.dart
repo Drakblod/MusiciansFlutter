@@ -140,8 +140,12 @@ class _PushSoundAdminScreenState extends State<PushSoundAdminScreen> {
         statusStr = 'Denied';
       }
 
-      // On iOS, wait for APNs token to be ready before calling getToken()
       if (defaultTargetPlatform == TargetPlatform.iOS) {
+        await messaging.setForegroundNotificationPresentationOptions(
+          alert: true,
+          badge: true,
+          sound: true,
+        );
         String? apnsToken = await messaging.getAPNSToken();
         int attempts = 0;
         while (apnsToken == null && attempts < 10) {
@@ -195,6 +199,11 @@ class _PushSoundAdminScreenState extends State<PushSoundAdminScreen> {
     try {
       final messaging = FirebaseMessaging.instance;
       final settings = await messaging.requestPermission(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
+      await messaging.setForegroundNotificationPresentationOptions(
         alert: true,
         badge: true,
         sound: true,
