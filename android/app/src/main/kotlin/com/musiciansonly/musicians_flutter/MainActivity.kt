@@ -17,29 +17,64 @@ class MainActivity: FlutterActivity() {
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channelId = "event_notifications"
-            val name = "Event Invites"
-            val descriptionText = "Notifications for new events and band updates"
-            val importance = NotificationManager.IMPORTANCE_HIGH
-            
-            val soundUri = Uri.parse(
-                ContentResolver.SCHEME_ANDROID_RESOURCE + "://" + packageName + "/raw/guitarsound"
-            )
-            
+            val notificationManager: NotificationManager =
+                getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+
             val audioAttributes = AudioAttributes.Builder()
                 .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                 .setUsage(AudioAttributes.USAGE_NOTIFICATION)
                 .build()
 
-            val channel = NotificationChannel(channelId, name, importance).apply {
-                description = descriptionText
-                setSound(soundUri, audioAttributes)
+            fun registerChannel(channelId: String, name: String, descriptionText: String, rawSoundName: String) {
+                val soundUri = Uri.parse(
+                    ContentResolver.SCHEME_ANDROID_RESOURCE + "://" + packageName + "/raw/" + rawSoundName
+                )
+                val channel = NotificationChannel(channelId, name, NotificationManager.IMPORTANCE_HIGH).apply {
+                    description = descriptionText
+                    setSound(soundUri, audioAttributes)
+                }
+                notificationManager.createNotificationChannel(channel)
             }
 
-            // Register the channel with the system
-            val notificationManager: NotificationManager =
-                getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-            notificationManager.createNotificationChannel(channel)
+            // Existing channel (backward compatibility)
+            registerChannel(
+                "event_notifications",
+                "Event Invites",
+                "Notifications for new events and band updates",
+                "guitarsound"
+            )
+
+            // 1. Gig Requests (New substitute / musician request broadcasts)
+            registerChannel(
+                "gig_request_channel",
+                "Gig Requests",
+                "Notifications for new gig and substitute requests",
+                "gig_rquest"
+            )
+
+            // 2. Gig Responses & Applications
+            registerChannel(
+                "gig_response_channel",
+                "Gig Responses",
+                "Notifications for gig applications and responses",
+                "gig_rquest_response"
+            )
+
+            // 3. RSVP Reminders
+            registerChannel(
+                "rsvp_reminder_channel",
+                "RSVP Reminders",
+                "Reminders to RSVP for upcoming events",
+                "reminder_rsvp"
+            )
+
+            // 4. Finalized Gigs
+            registerChannel(
+                "finalized_gig_channel",
+                "Finalized Gigs",
+                "Notifications when gigs and substitute spots are finalized",
+                "finalized_gig"
+            )
         }
     }
 }

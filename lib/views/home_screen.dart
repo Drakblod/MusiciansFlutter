@@ -394,19 +394,45 @@ class HomeScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 30),
-            Align(
-              alignment: Alignment.bottomRight,
-              child: Padding(
-                padding: const EdgeInsets.only(bottom: 10, right: 10),
-                child: Text(
-                  '2.41.1',
-                  style: GoogleFonts.inter(
-                    color: AppTheme.textSecondary.withOpacity(0.5),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w400,
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                GestureDetector(
+                  onTap: () => Navigator.pushNamed(context, '/admin-push-sounds'),
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: 10, left: 10),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.volume_up_outlined, size: 14, color: AppTheme.textSecondary.withOpacity(0.6)),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Push Sounds Admin',
+                          style: GoogleFonts.inter(
+                            color: AppTheme.textSecondary.withOpacity(0.6),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w400,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
+                GestureDetector(
+                  onTap: () => Navigator.pushNamed(context, '/admin-push-sounds'),
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: 10, right: 10),
+                    child: Text(
+                      '2.42',
+                      style: GoogleFonts.inter(
+                        color: AppTheme.textSecondary.withOpacity(0.5),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w400,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -1163,32 +1189,53 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
                         ),
                       ),
                       const SizedBox(height: 30),
-                      Align(
-                        alignment: Alignment.bottomRight,
-                        child: Padding(
-                          padding: const EdgeInsets.only(bottom: 10, right: 10),
-                          child: GestureDetector(
-                            onLongPress: () async {
-                              await HomeUsageTracker.resetClicks();
-                              _loadUsageData();
-                              if (context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('Quick Access metrics reset successfully!'),
-                                    duration: Duration(seconds: 2),
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 10, left: 10, right: 10),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            GestureDetector(
+                              onTap: () => Navigator.pushNamed(context, '/admin-push-sounds'),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.volume_up_outlined, size: 14, color: AppTheme.textSecondary.withOpacity(0.6)),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    'Push Sounds Admin',
+                                    style: GoogleFonts.inter(
+                                      color: AppTheme.textSecondary.withOpacity(0.6),
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w400,
+                                    ),
                                   ),
-                                );
-                              }
-                            },
-                            child: Text(
-                              '2.41.1',
-                              style: GoogleFonts.inter(
-                                color: AppTheme.textSecondary.withOpacity(0.5),
-                                fontSize: 12,
-                                fontWeight: FontWeight.w400,
+                                ],
                               ),
                             ),
-                          ),
+                            GestureDetector(
+                              onTap: () => Navigator.pushNamed(context, '/admin-push-sounds'),
+                              onLongPress: () async {
+                                await HomeUsageTracker.resetClicks();
+                                _loadUsageData();
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Quick Access metrics reset successfully!'),
+                                      duration: Duration(seconds: 2),
+                                    ),
+                                  );
+                                }
+                              },
+                              child: Text(
+                                '2.42',
+                                style: GoogleFonts.inter(
+                                  color: AppTheme.textSecondary.withOpacity(0.5),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w400,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],

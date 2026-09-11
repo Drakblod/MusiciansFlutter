@@ -225,13 +225,14 @@ exports.sendSubRequestNotification = onValueCreated({
       },
       android: {
         notification: {
-          sound: 'default',
+          sound: 'gig_rquest',
+          channelId: 'gig_request_channel',
         },
       },
       apns: {
         payload: {
           aps: {
-            sound: 'default',
+            sound: 'gig_rquest.wav',
           },
         },
       },
@@ -416,8 +417,19 @@ exports.onSubRequestGroupPublished = onValueCreated({
           publicationId: publicationId,
           type: 'grouped_sub_request',
         },
-        android: { notification: { sound: 'default' } },
-        apns: { payload: { aps: { sound: 'default' } } },
+        android: {
+          notification: {
+            sound: 'gig_rquest',
+            channelId: 'gig_request_channel',
+          },
+        },
+        apns: {
+          payload: {
+            aps: {
+              sound: 'gig_rquest.wav',
+            },
+          },
+        },
       });
       messageRecipients.push(userId);
     });
@@ -749,6 +761,44 @@ exports.assignSubstitute = onCall({ region: 'europe-west1' }, async (request) =>
     await db.ref().update(updates);
   }
 
+  // Dispatch finalized gig push notification to candidate
+  try {
+    const candidateTokenSnap = await db.ref(`/users/${candidateUserId}/info/PushToken`).once('value');
+    const candidateToken = candidateTokenSnap.val();
+    if (candidateToken && typeof candidateToken === 'string' && candidateToken.trim()) {
+      const gigTitle = subReqData.VoicePart ? `Gig Confirmed: ${subReqData.VoicePart}` : 'Gig Confirmed!';
+      const bandDesc = targetBandId ? `You have been assigned to play with ${subReqData.BandName || 'the band'}!` : 'You have been confirmed for the gig!';
+      await admin.messaging().send({
+        token: candidateToken.trim(),
+        notification: {
+          title: `🎉 ${gigTitle}`,
+          body: bandDesc,
+        },
+        data: {
+          click_action: 'FLUTTER_NOTIFICATION_CLICK',
+          subRequestId: subRequestId,
+          type: 'gig_finalized',
+        },
+        android: {
+          notification: {
+            sound: 'finalized_gig',
+            channelId: 'finalized_gig_channel',
+          },
+        },
+        apns: {
+          payload: {
+            aps: {
+              sound: 'finalized_gig.wav',
+            },
+          },
+        },
+      });
+      console.log(`Sent gig finalized push notification to candidate ${candidateUserId}`);
+    }
+  } catch (pushErr) {
+    console.warn(`Failed to send gig finalized push notification to candidate: ${pushErr.message}`);
+  }
+
   return {
     success: true,
     subRequestId,
@@ -1010,14 +1060,14 @@ exports.onEventResponseChanged = functions.region(databaseTriggerRegion).databas
             },
             android: {
               notification: {
-                sound: 'guitarsound',
-                channelId: 'event_notifications',
+                sound: 'reminder_rsvp',
+                channelId: 'rsvp_reminder_channel',
               },
             },
             apns: {
               payload: {
                 aps: {
-                  sound: 'guitarsound.caf',
+                  sound: 'reminder_rsvp.wav',
                 },
               },
             },
@@ -1143,14 +1193,14 @@ exports.checkEventReminders = functions.pubsub
                   },
                   android: {
                     notification: {
-                      sound: 'guitarsound',
-                      channelId: 'event_notifications',
+                      sound: 'reminder_rsvp',
+                      channelId: 'rsvp_reminder_channel',
                     },
                   },
                   apns: {
                     payload: {
                       aps: {
-                        sound: 'guitarsound.caf',
+                        sound: 'reminder_rsvp.wav',
                       },
                     },
                   },
@@ -1222,7 +1272,20 @@ exports.onCollabSessionApplicationChanged = onValueWritten({
           type: 'session_application',
           sessionId: sessionId,
           applicantId: applicantId,
-        }
+        },
+        android: {
+          notification: {
+            sound: 'gig_rquest_response',
+            channelId: 'gig_response_channel',
+          },
+        },
+        apns: {
+          payload: {
+            aps: {
+              sound: 'gig_rquest_response.wav',
+            },
+          },
+        },
       };
 
       await admin.messaging().send(message);
@@ -1256,7 +1319,20 @@ exports.onCollabSessionApplicationChanged = onValueWritten({
             type: 'session_application_status',
             sessionId: sessionId,
             status: afterStatus,
-          }
+          },
+          android: {
+            notification: {
+              sound: 'gig_rquest_response',
+              channelId: 'gig_response_channel',
+            },
+          },
+          apns: {
+            payload: {
+              aps: {
+                sound: 'gig_rquest_response.wav',
+              },
+            },
+          },
         };
 
         await admin.messaging().send(message);
@@ -1860,14 +1936,14 @@ exports.triggerEventReminder = onCall({ region: 'europe-west1' }, async (request
     },
     android: {
       notification: {
-        sound: 'guitarsound',
-        channelId: 'event_notifications',
+        sound: 'reminder_rsvp',
+        channelId: 'rsvp_reminder_channel',
       },
     },
     apns: {
       payload: {
         aps: {
-          sound: 'guitarsound.caf',
+          sound: 'reminder_rsvp.wav',
         },
       },
     },
@@ -2613,4 +2689,108 @@ exports.updateSessionApplicationStatus = onCall({ region: 'europe-west1' }, asyn
 
   await admin.database().ref().update(updates);
   return { success: true, status };
+});
+
+/**
+ * Admin testing callable function to trigger any of the 4 push sounds to a device.
+ */
+exports.sendTestPushNotification = onCall({ region: 'europe-west1' }, async (request) => {
+  const callerId = request.auth?.uid;
+  const { soundType, customToken } = request.data || {};
+
+  if (!soundType) {
+    throw new HttpsError('invalid-argument', 'soundType is required.');
+  }
+
+  const soundConfigs = {
+    gig_rquest: {
+      channelId: 'gig_request_channel',
+      androidSound: 'gig_rquest',
+      apnsSound: 'gig_rquest.wav',
+      title: '🎸 New Gig Request',
+      body: 'Test Push: Bassist needed for Summer Fest in Gothenburg!',
+    },
+    gig_rquest_response: {
+      channelId: 'gig_response_channel',
+      androidSound: 'gig_rquest_response',
+      apnsSound: 'gig_rquest_response.wav',
+      title: '📬 Gig Request Response',
+      body: 'Test Push: A musician applied for your gig request!',
+    },
+    reminder_rsvp: {
+      channelId: 'rsvp_reminder_channel',
+      androidSound: 'reminder_rsvp',
+      apnsSound: 'reminder_rsvp.wav',
+      title: '⏰ RSVP Reminder',
+      body: 'Test Push: Rehearsal tomorrow at 18:00. Please confirm your attendance!',
+    },
+    finalized_gig: {
+      channelId: 'finalized_gig_channel',
+      androidSound: 'finalized_gig',
+      apnsSound: 'finalized_gig.wav',
+      title: '🎉 Gig Finalized!',
+      body: 'Test Push: You have been confirmed for the tour gig!',
+    },
+  };
+
+  const config = soundConfigs[soundType];
+  if (!config) {
+    throw new HttpsError('invalid-argument', `Invalid soundType. Must be one of: ${Object.keys(soundConfigs).join(', ')}`);
+  }
+
+  let token = (typeof customToken === 'string' && customToken.trim().length > 10) ? customToken.trim() : null;
+  if (!token && callerId) {
+    const tokenSnap = await admin.database().ref(`/users/${callerId}/info/PushToken`).once('value');
+    token = tokenSnap.val();
+  }
+
+  if (!token || typeof token !== 'string' || !token.trim() || token.trim().length < 15) {
+    return {
+      success: false,
+      error: 'No valid device push token provided. Please run on a mobile device or paste a valid FCM token.',
+    };
+  }
+
+  const message = {
+    token: token.trim(),
+    notification: {
+      title: config.title,
+      body: config.body,
+    },
+    data: {
+      click_action: 'FLUTTER_NOTIFICATION_CLICK',
+      type: 'sound_test',
+      soundType: soundType,
+      timestamp: Date.now().toString(),
+    },
+    android: {
+      notification: {
+        sound: config.androidSound,
+        channelId: config.channelId,
+      },
+    },
+    apns: {
+      payload: {
+        aps: {
+          sound: config.apnsSound,
+        },
+      },
+    },
+  };
+
+  try {
+    const messageId = await admin.messaging().send(message);
+    return {
+      success: true,
+      messageId,
+      soundType,
+      channelId: config.channelId,
+    };
+  } catch (err) {
+    console.error('Error sending test push notification via FCM:', err);
+    return {
+      success: false,
+      error: `FCM Error: ${err.message || err.code || err}`,
+    };
+  }
 });

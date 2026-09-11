@@ -1761,6 +1761,25 @@ class FirebaseService {
     }
   }
 
+  Future<Map<String, dynamic>> sendTestPushNotificationAsync({
+    required String soundType,
+    String? customToken,
+  }) async {
+    try {
+      final callable = FirebaseFunctions.instanceFor(region: 'europe-west1')
+          .httpsCallable('sendTestPushNotification');
+      final result = await callable.call<Map<String, dynamic>>({
+        'soundType': soundType,
+        if (customToken != null && customToken.trim().isNotEmpty)
+          'customToken': customToken.trim(),
+      });
+      return Map<String, dynamic>.from(result.data);
+    } catch (e) {
+      debugPrint("Error calling sendTestPushNotification: $e");
+      rethrow;
+    }
+  }
+
   // ==========================================
   // 9. Marketplace
   // ==========================================
