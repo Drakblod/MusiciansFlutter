@@ -85,14 +85,14 @@ exports.onBandEventCreated = functions.region(databaseTriggerRegion).database
         },
         android: {
           notification: {
-            sound: 'guitarsound',
-            channelId: 'event_notifications',
+            sound: 'reminder_rsvp',
+            channelId: 'rsvp_reminder_channel',
           },
         },
         apns: {
           payload: {
             aps: {
-              sound: 'guitarsound.caf',
+              sound: 'reminder_rsvp.wav',
             },
           },
         },
@@ -2696,7 +2696,7 @@ exports.updateSessionApplicationStatus = onCall({ region: 'europe-west1' }, asyn
  */
 exports.sendTestPushNotification = onCall({ region: 'europe-west1' }, async (request) => {
   const callerId = request.auth?.uid;
-  const { soundType, customToken } = request.data || {};
+  const { soundType, customToken, broadcastToAll } = request.data || {};
 
   if (!soundType) {
     throw new HttpsError('invalid-argument', 'soundType is required.');
@@ -2738,6 +2738,75 @@ exports.sendTestPushNotification = onCall({ region: 'europe-west1' }, async (req
     throw new HttpsError('invalid-argument', `Invalid soundType. Must be one of: ${Object.keys(soundConfigs).join(', ')}`);
   }
 
+  // If broadcastToAll is requested, deliver to all registered push tokens in RTDB
+  if (broadcastToAll === true) {
+    const usersSnap = await admin.database().ref('/users').once('value');
+    const users = usersSnap.val() || {};
+    const recipientTokens = [];
+
+    for (const [uid, u] of Object.entries(users)) {
+      const t = u.info?.PushToken;
+      if (t && typeof t === 'string' && t.trim().length > 15) {
+        recipientTokens.push({ uid, token: t.trim() });
+      }
+    }
+
+    if (recipientTokens.length === 0) {
+      return {
+        success: false,
+        error: 'No registered push tokens found in database across all users.',
+      };
+    }
+
+    const messages = recipientTokens.map(r => ({
+      token: r.token,
+      notification: {
+        title: config.title,
+        body: config.body,
+      },
+      data: {
+        click_action: 'FLUTTER_NOTIFICATION_CLICK',
+        type: 'sound_test',
+        soundType: soundType,
+        timestamp: Date.now().toString(),
+      },
+      android: {
+        notification: {
+          sound: config.androidSound,
+          channelId: config.channelId,
+        },
+      },
+      apns: {
+        payload: {
+          aps: {
+            sound: config.apnsSound,
+          },
+        },
+      },
+    }));
+
+    try {
+      const response = await admin.messaging().sendEach(messages);
+      console.log(`Broadcasted test push ${soundType}: ${response.successCount} succeeded, ${response.failureCount} failed.`);
+      return {
+        success: true,
+        broadcast: true,
+        total: messages.length,
+        successCount: response.successCount,
+        failureCount: response.failureCount,
+        soundType,
+        channelId: config.channelId,
+      };
+    } catch (err) {
+      console.error('Error broadcasting test push notification via FCM:', err);
+      return {
+        success: false,
+        error: `Broadcast Error: ${err.message || err.code || err}`,
+      };
+    }
+  }
+
+  // Single device push
   let token = (typeof customToken === 'string' && customToken.trim().length > 10) ? customToken.trim() : null;
   if (!token && callerId) {
     const tokenSnap = await admin.database().ref(`/users/${callerId}/info/PushToken`).once('value');
@@ -2782,6 +2851,7 @@ exports.sendTestPushNotification = onCall({ region: 'europe-west1' }, async (req
     const messageId = await admin.messaging().send(message);
     return {
       success: true,
+      broadcast: false,
       messageId,
       soundType,
       channelId: config.channelId,

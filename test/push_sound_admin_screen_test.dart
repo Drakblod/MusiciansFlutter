@@ -25,6 +25,7 @@ class MockPushSoundFirebaseService extends FirebaseService {
   Future<Map<String, dynamic>> sendTestPushNotificationAsync({
     required String soundType,
     String? customToken,
+    bool broadcastToAll = false,
   }) async {
     sentSoundTypes.add(soundType);
     return {
@@ -179,6 +180,41 @@ void main() {
 
       expect(find.text('Push Sound Tester'), findsOneWidget);
       expect(find.text('NOTIFICATION SOUNDS (4)'), findsOneWidget);
+    });
+
+    testWidgets('4. Enabling Broadcast switch changes buttons to Broadcast Push and sends broadcastToAll', (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      final appState = MockAppStateForPushTest();
+      await tester.pumpWidget(createTestWrapper(
+        appState: appState,
+        child: const PushSoundAdminScreen(),
+      ));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.text('Target: Single Device Only'), findsOneWidget);
+      expect(find.text('Send Push'), findsNWidgets(4));
+
+      // Toggle Broadcast switch
+      final switchFinder = find.byType(Switch);
+      expect(switchFinder, findsOneWidget);
+      await tester.tap(switchFinder);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.text('Broadcast to ALL Users'), findsOneWidget);
+      expect(find.text('Broadcast Push'), findsNWidgets(4));
+
+      // Tap Broadcast Push
+      await tester.tap(find.text('Broadcast Push').first);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(appState.mockFirebase.sentSoundTypes.length, equals(1));
+      expect(appState.mockFirebase.sentSoundTypes.first, equals('gig_rquest'));
     });
   });
 }

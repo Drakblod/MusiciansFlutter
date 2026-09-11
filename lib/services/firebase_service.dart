@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:io' show File;
 import 'dart:typed_data' show Uint8List;
-import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
+import 'package:flutter/foundation.dart' show kIsWeb, debugPrint, defaultTargetPlatform, TargetPlatform;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -1700,6 +1700,7 @@ class FirebaseService {
   }
 
   Future<void> initializePushNotifications() async {
+    if (kIsWeb) return;
     try {
       print("PUSH: Initializing Push Notification Service...");
       final messaging = FirebaseMessaging.instance;
@@ -1715,10 +1716,11 @@ class FirebaseService {
         sound: true,
       );
 
-      if (settings.authorizationStatus == AuthorizationStatus.authorized) {
-        print("PUSH: Permission Granted");
+      if (settings.authorizationStatus == AuthorizationStatus.authorized ||
+          settings.authorizationStatus == AuthorizationStatus.provisional) {
+        print("PUSH: Permission Granted (${settings.authorizationStatus.name})");
       } else {
-        print("PUSH: Permission Denied");
+        print("PUSH: Permission Not Authorized (${settings.authorizationStatus.name})");
       }
 
       // Handle token refreshes
@@ -1727,10 +1729,34 @@ class FirebaseService {
         await savePushTokenAsync(token);
       });
 
-      // Get current token
-      final currentToken = await messaging.getToken();
+      // On iOS, wait for APNs device token before calling getToken()
+      if (defaultTargetPlatform == TargetPlatform.iOS) {
+        String? apnsToken = await messaging.getAPNSToken();
+        int attempts = 0;
+        while (apnsToken == null && attempts < 10) {
+          await Future.delayed(const Duration(milliseconds: 500));
+          apnsToken = await messaging.getAPNSToken();
+          attempts++;
+        }
+        print("PUSH: iOS APNs Token received: ${apnsToken != null}");
+      }
+
+      // Get current token with retry logic for iOS readiness
+      String? currentToken;
+      try {
+        currentToken = await messaging.getToken();
+      } catch (e) {
+        print("PUSH: First getToken attempt failed: $e, retrying in 2 seconds...");
+        await Future.delayed(const Duration(seconds: 2));
+        try {
+          currentToken = await messaging.getToken();
+        } catch (e2) {
+          print("PUSH: Second getToken attempt failed: $e2");
+        }
+      }
+
       if (currentToken != null && currentToken.isNotEmpty) {
-        print("PUSH: Token already exists: $currentToken");
+        print("PUSH: Token obtained: $currentToken");
         await savePushTokenAsync(currentToken);
       }
 
@@ -1764,12 +1790,13 @@ class FirebaseService {
   Future<Map<String, dynamic>> sendTestPushNotificationAsync({
     required String soundType,
     String? customToken,
+    bool broadcastToAll = false,
   }) async {
     try {
-      final callable = FirebaseFunctions.instanceFor(region: 'europe-west1')
-          .httpsCallable('sendTestPushNotification');
+      final callable = _functions.httpsCallable('sendTestPushNotification');
       final result = await callable.call<Map<String, dynamic>>({
         'soundType': soundType,
+        'broadcastToAll': broadcastToAll,
         if (customToken != null && customToken.trim().isNotEmpty)
           'customToken': customToken.trim(),
       });

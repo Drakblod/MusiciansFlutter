@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -25,6 +25,7 @@ class _PushSoundAdminScreenState extends State<PushSoundAdminScreen> {
   String? _pushToken;
   String _permissionStatus = "Checking...";
   bool _isFetchingToken = false;
+  bool _broadcastToAll = false;
   final Map<String, bool> _isSendingPush = {};
   final List<String> _activityLogs = [];
   StreamSubscription<RemoteMessage>? _foregroundSubscription;
@@ -139,6 +140,17 @@ class _PushSoundAdminScreenState extends State<PushSoundAdminScreen> {
         statusStr = 'Denied';
       }
 
+      // On iOS, wait for APNs token to be ready before calling getToken()
+      if (defaultTargetPlatform == TargetPlatform.iOS) {
+        String? apnsToken = await messaging.getAPNSToken();
+        int attempts = 0;
+        while (apnsToken == null && attempts < 10) {
+          await Future.delayed(const Duration(milliseconds: 500));
+          apnsToken = await messaging.getAPNSToken();
+          attempts++;
+        }
+      }
+
       final token = await messaging.getToken();
 
       if (mounted) {
@@ -150,6 +162,11 @@ class _PushSoundAdminScreenState extends State<PushSoundAdminScreen> {
           }
           _isFetchingToken = false;
         });
+
+        if (token != null && token.isNotEmpty) {
+          final appState = Provider.of<AppState>(context, listen: false);
+          await appState.firebaseService.savePushTokenAsync(token);
+        }
       }
     } catch (e) {
       debugPrint("Push token fetch error: $e");
@@ -234,13 +251,14 @@ class _PushSoundAdminScreenState extends State<PushSoundAdminScreen> {
   }
 
   Future<void> _sendTestPush(String soundType, String soundTitle) async {
+    final isBroadcast = _broadcastToAll;
     final tokenToUse = _tokenController.text.trim();
-    if (kIsWeb && tokenToUse.isEmpty) {
+    if (!isBroadcast && kIsWeb && tokenToUse.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: const Text(
-              "⚠️ Web cannot receive system tray pushes. To test from Chrome, paste your Android/iOS FCM token in the field above.",
+              "⚠️ Web cannot receive system tray pushes. To test from Chrome, paste an Android/iOS FCM token above or switch on Broadcast Mode.",
             ),
             backgroundColor: Colors.amber.shade900,
             duration: const Duration(seconds: 4),
@@ -261,6 +279,7 @@ class _PushSoundAdminScreenState extends State<PushSoundAdminScreen> {
       final result = await appState.firebaseService.sendTestPushNotificationAsync(
         soundType: soundType,
         customToken: tokenToUse.isNotEmpty ? tokenToUse : null,
+        broadcastToAll: isBroadcast,
       );
 
       if (result['success'] == false) {
@@ -268,19 +287,32 @@ class _PushSoundAdminScreenState extends State<PushSoundAdminScreen> {
       }
 
       final messageId = result['messageId'] ?? 'OK';
+      final isBroadcastResult = result['broadcast'] == true;
+      final total = result['total'] ?? 0;
+      final successCount = result['successCount'] ?? 0;
+      final failureCount = result['failureCount'] ?? 0;
 
       if (mounted) {
         setState(() {
-          _activityLogs.insert(
-            0,
-            '[$timeStr] Dispatched "$soundTitle" test push (Msg ID: $messageId)',
-          );
+          if (isBroadcastResult) {
+            _activityLogs.insert(
+              0,
+              '[$timeStr] BROADCAST "$soundTitle": $successCount/$total delivered ($failureCount failed)',
+            );
+          } else {
+            _activityLogs.insert(
+              0,
+              '[$timeStr] Dispatched "$soundTitle" test push (Msg ID: $messageId)',
+            );
+          }
         });
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              "🚀 Test push for \"$soundTitle\" sent! Lock screen or background app to hear the custom sound.",
+              isBroadcastResult
+                  ? "🚀 Broadcast \"$soundTitle\" sent to $successCount active device(s)!"
+                  : "🚀 Test push for \"$soundTitle\" sent! Lock screen or background app to hear the custom sound.",
             ),
             duration: const Duration(seconds: 4),
             backgroundColor: AppTheme.success,
@@ -353,7 +385,11 @@ class _PushSoundAdminScreenState extends State<PushSoundAdminScreen> {
 
               // How-to testing banner
               _buildInstructionBanner(),
-              const SizedBox(height: 20),
+              const SizedBox(height: 16),
+
+              // Broadcast mode toggle
+              _buildBroadcastToggleCard(),
+              const SizedBox(height: 16),
 
               // Header for Sound Cards
               Text(
@@ -578,6 +614,56 @@ class _PushSoundAdminScreenState extends State<PushSoundAdminScreen> {
     );
   }
 
+  Widget _buildBroadcastToggleCard() {
+    return Container(
+      decoration: BoxDecoration(
+        color: _broadcastToAll ? const Color(0xFF2E1A47) : AppTheme.cardBackground,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: _broadcastToAll ? AppTheme.primaryAccent : const Color(0xFF2E2A4E),
+          width: _broadcastToAll ? 1.5 : 1,
+        ),
+      ),
+      child: SwitchListTile(
+        activeColor: AppTheme.primaryAccent,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        title: Row(
+          children: [
+            Icon(
+              _broadcastToAll ? Icons.campaign_rounded : Icons.person_rounded,
+              color: _broadcastToAll ? AppTheme.primaryAccent : Colors.white70,
+              size: 20,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              _broadcastToAll ? 'Broadcast to ALL Users' : 'Target: Single Device Only',
+              style: GoogleFonts.outfit(
+                fontSize: 15,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+          ],
+        ),
+        subtitle: Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Text(
+            _broadcastToAll
+                ? 'When enabled, pressing Send Push delivers this sound to EVERY registered phone (Android & iOS) simultaneously.'
+                : 'Delivers only to the device token in the input box above.',
+            style: GoogleFonts.inter(fontSize: 11, color: Colors.white60),
+          ),
+        ),
+        value: _broadcastToAll,
+        onChanged: (val) {
+          setState(() {
+            _broadcastToAll = val;
+          });
+        },
+      ),
+    );
+  }
+
   Widget _buildSoundCard(Map<String, dynamic> item) {
     final String id = item['id'];
     final String title = item['title'];
@@ -721,9 +807,11 @@ class _PushSoundAdminScreenState extends State<PushSoundAdminScreen> {
                           height: 14,
                           child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                         )
-                      : const Icon(Icons.send_rounded, size: 16),
+                      : Icon(_broadcastToAll ? Icons.campaign_rounded : Icons.send_rounded, size: 16),
                   label: Text(
-                    isSending ? 'Sending...' : 'Send Push',
+                    isSending
+                        ? (_broadcastToAll ? 'Broadcasting...' : 'Sending...')
+                        : (_broadcastToAll ? 'Broadcast Push' : 'Send Push'),
                     style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold),
                   ),
                   onPressed: isSending ? null : () => _sendTestPush(id, title),
