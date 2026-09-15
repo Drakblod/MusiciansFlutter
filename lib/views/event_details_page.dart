@@ -68,6 +68,20 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
       if (updatedEvent != null && mounted) {
         setState(() {
           _event = updatedEvent;
+          final currentUserId = appState.currentUserId;
+          if (currentUserId != null) {
+            final dbResponse = updatedEvent.responses[currentUserId]?.status ??
+                updatedEvent.externalInvitees[currentUserId]?.status;
+            final dbComment = updatedEvent.responses[currentUserId]?.comment ??
+                updatedEvent.responses[currentUserId]?.uncertainReason ??
+                updatedEvent.externalInvitees[currentUserId]?.comment;
+            if (dbResponse != null) {
+              _localSelectedResponse = dbResponse;
+              if (dbComment != null) {
+                _commentController.text = dbComment;
+              }
+            }
+          }
         });
       }
     });
@@ -276,7 +290,9 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
       );
       return;
     }
-    if (status == 'UNCERTAIN' && (comment.trim().isEmpty)) {
+
+    final statusEnum = classifyEventResponse(status);
+    if (statusEnum == EventResponseStatus.uncertain && comment.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text("Why are you uncertain? (mandatory)"),
@@ -291,13 +307,18 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
     try {
       final isExternal = _event!.externalInvitees.containsKey(userId);
       final cleanComment = comment.trim().isEmpty ? null : comment.trim();
+      final normalizedStatus = statusEnum == EventResponseStatus.yes
+          ? 'Yes'
+          : (statusEnum == EventResponseStatus.no
+              ? 'No'
+              : (statusEnum == EventResponseStatus.uncertain ? 'Uncertain' : status));
 
       if (isExternal) {
         await appState.firebaseService.updateExternalInviteeResponseAsync(
           widget.bandId,
           widget.eventId,
           userId,
-          status,
+          normalizedStatus,
           comment: cleanComment,
         );
       } else {
@@ -305,12 +326,12 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
           widget.bandId,
           widget.eventId,
           userId,
-          status,
+          normalizedStatus,
           comment: cleanComment,
         );
       }
 
-      if ((status == 'YES' || status == 'attending') && _event?.temporaryRoomId != null && _event!.temporaryRoomId!.isNotEmpty) {
+      if (statusEnum == EventResponseStatus.yes && _event?.temporaryRoomId != null && _event!.temporaryRoomId!.isNotEmpty) {
         await appState.firebaseService.addMemberToEventRoomAsync(
           widget.bandId,
           _event!.temporaryRoomId!,
@@ -321,7 +342,7 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text("RSVP saved: $status"),
+          content: Text("RSVP saved: $normalizedStatus"),
           backgroundColor: AppTheme.success,
           duration: const Duration(seconds: 1),
         ),
@@ -425,11 +446,12 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
       final comment = event.responses[userId]?.uncertainReason ?? event.responses[userId]?.comment;
       final displayName = comment != null && comment.isNotEmpty ? '$name\n"$comment"' : name;
 
-      if (response == 'YES' || response == 'attending') {
+      final statusEnum = classifyEventResponse(response);
+      if (statusEnum == EventResponseStatus.yes) {
         yesList.add(displayName);
-      } else if (response == 'UNCERTAIN' || response == 'maybe') {
+      } else if (statusEnum == EventResponseStatus.uncertain) {
         uncertainList.add(displayName);
-      } else if (response == 'NO' || response == 'declined') {
+      } else if (statusEnum == EventResponseStatus.no) {
         noList.add(displayName);
       } else {
         noResponseList.add(name);
@@ -448,11 +470,12 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
       final comment = invitee.comment;
       final displayName = comment != null && comment.isNotEmpty ? '$name\n"$comment"' : name;
 
-      if (status == 'YES' || status == 'attending') {
+      final statusEnum = classifyEventResponse(status);
+      if (statusEnum == EventResponseStatus.yes) {
         extYesList.add(displayName);
-      } else if (status == 'UNCERTAIN' || status == 'maybe') {
+      } else if (statusEnum == EventResponseStatus.uncertain) {
         extUncertainList.add(displayName);
-      } else if (status == 'NO' || status == 'declined') {
+      } else if (statusEnum == EventResponseStatus.no) {
         extNoList.add(displayName);
       } else {
         extPendingList.add(name);
@@ -856,7 +879,7 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
 
                 final dbComment = currentUserId != null
                     ? (event.responses.containsKey(currentUserId)
-                        ? event.responses[currentUserId]?.comment
+                        ? (event.responses[currentUserId]?.comment ?? event.responses[currentUserId]?.uncertainReason)
                         : event.externalInvitees[currentUserId]?.comment)
                     : null;
 
@@ -865,6 +888,11 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                   _commentController.text = dbComment ?? '';
                   _hasInitializedLocalResponse = true;
                 }
+
+                final selectedEnum = classifyEventResponse(_localSelectedResponse);
+                final isYes = selectedEnum == EventResponseStatus.yes;
+                final isNo = selectedEnum == EventResponseStatus.no;
+                final isUncertain = selectedEnum == EventResponseStatus.uncertain;
 
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -886,18 +914,18 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                           child: GestureDetector(
                             onTap: () {
                               setState(() {
-                                _localSelectedResponse = 'YES';
+                                _localSelectedResponse = 'Yes';
                               });
                             },
                             child: Container(
                               padding: const EdgeInsets.symmetric(vertical: 12),
                               decoration: BoxDecoration(
-                                color: (_localSelectedResponse == 'YES' || _localSelectedResponse == 'attending')
+                                color: isYes
                                     ? AppTheme.success.withOpacity(0.2)
                                     : AppTheme.cardBackground,
                                 borderRadius: BorderRadius.circular(10),
                                 border: Border.all(
-                                  color: (_localSelectedResponse == 'YES' || _localSelectedResponse == 'attending') ? AppTheme.success : const Color(0xFF2E2A4E),
+                                  color: isYes ? AppTheme.success : const Color(0xFF2E2A4E),
                                   width: 1.5,
                                 ),
                               ),
@@ -905,14 +933,14 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                                 children: [
                                   Icon(
                                     Icons.check_circle_outline_rounded,
-                                    color: (_localSelectedResponse == 'YES' || _localSelectedResponse == 'attending') ? AppTheme.success : AppTheme.textSecondary,
+                                    color: isYes ? AppTheme.success : AppTheme.textSecondary,
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
                                     'YES',
                                     style: GoogleFonts.inter(
                                       fontSize: 13,
-                                      color: (_localSelectedResponse == 'YES' || _localSelectedResponse == 'attending') ? Colors.white : AppTheme.textSecondary,
+                                      color: isYes ? Colors.white : AppTheme.textSecondary,
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
@@ -928,18 +956,18 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                           child: GestureDetector(
                             onTap: () {
                               setState(() {
-                                _localSelectedResponse = 'NO';
+                                _localSelectedResponse = 'No';
                               });
                             },
                             child: Container(
                               padding: const EdgeInsets.symmetric(vertical: 12),
                               decoration: BoxDecoration(
-                                color: (_localSelectedResponse == 'NO' || _localSelectedResponse == 'declined')
+                                color: isNo
                                     ? AppTheme.danger.withOpacity(0.2)
                                     : AppTheme.cardBackground,
                                 borderRadius: BorderRadius.circular(10),
                                 border: Border.all(
-                                  color: (_localSelectedResponse == 'NO' || _localSelectedResponse == 'declined') ? AppTheme.danger : const Color(0xFF2E2A4E),
+                                  color: isNo ? AppTheme.danger : const Color(0xFF2E2A4E),
                                   width: 1.5,
                                 ),
                               ),
@@ -947,14 +975,14 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                                 children: [
                                   Icon(
                                     Icons.cancel_outlined,
-                                    color: (_localSelectedResponse == 'NO' || _localSelectedResponse == 'declined') ? AppTheme.danger : AppTheme.textSecondary,
+                                    color: isNo ? AppTheme.danger : AppTheme.textSecondary,
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
                                     'NO',
                                     style: GoogleFonts.inter(
                                       fontSize: 13,
-                                      color: (_localSelectedResponse == 'NO' || _localSelectedResponse == 'declined') ? Colors.white : AppTheme.textSecondary,
+                                      color: isNo ? Colors.white : AppTheme.textSecondary,
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
@@ -970,18 +998,18 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                           child: GestureDetector(
                             onTap: () {
                               setState(() {
-                                _localSelectedResponse = 'UNCERTAIN';
+                                _localSelectedResponse = 'Uncertain';
                               });
                             },
                             child: Container(
                               padding: const EdgeInsets.symmetric(vertical: 12),
                               decoration: BoxDecoration(
-                                color: (_localSelectedResponse == 'UNCERTAIN' || _localSelectedResponse == 'maybe')
+                                color: isUncertain
                                     ? AppTheme.warning.withOpacity(0.2)
                                     : AppTheme.cardBackground,
                                 borderRadius: BorderRadius.circular(10),
                                 border: Border.all(
-                                  color: (_localSelectedResponse == 'UNCERTAIN' || _localSelectedResponse == 'maybe') ? AppTheme.warning : const Color(0xFF2E2A4E),
+                                  color: isUncertain ? AppTheme.warning : const Color(0xFF2E2A4E),
                                   width: 1.5,
                                 ),
                               ),
@@ -989,14 +1017,14 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                                 children: [
                                   Icon(
                                     Icons.help_outline_rounded,
-                                    color: (_localSelectedResponse == 'UNCERTAIN' || _localSelectedResponse == 'maybe') ? AppTheme.warning : AppTheme.textSecondary,
+                                    color: isUncertain ? AppTheme.warning : AppTheme.textSecondary,
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
                                     'UNCERTAIN',
                                     style: GoogleFonts.inter(
                                       fontSize: 12,
-                                      color: (_localSelectedResponse == 'UNCERTAIN' || _localSelectedResponse == 'maybe') ? Colors.white : AppTheme.textSecondary,
+                                      color: isUncertain ? Colors.white : AppTheme.textSecondary,
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
@@ -1007,7 +1035,7 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                         ),
                       ],
                     ),
-                    if (_localSelectedResponse == 'UNCERTAIN' || _localSelectedResponse == 'maybe') ...[
+                    if (isUncertain) ...[
                       const SizedBox(height: 16),
                       Text(
                         'WHY ARE YOU UNCERTAIN? (mandatory)',
