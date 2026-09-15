@@ -895,6 +895,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
               location: _locationController.text.trim(),
               additionalTerms: 'Substitute staffing assignment.',
               bandName: bandName,
+              subRequestId: subRequestId,
             );
 
             final message = Message(

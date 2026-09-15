@@ -1117,10 +1117,23 @@ class FirebaseService {
     String subRequestId,
     String applicantId,
   ) async {
-    final result = await _functions
-        .httpsCallable('createAgreementConversation')
-        .call({'subRequestId': subRequestId, 'applicantId': applicantId});
-    return result.data['conversationId']?.toString() ?? '';
+    try {
+      if (subRequestId.isNotEmpty) {
+        final result = await _functions
+            .httpsCallable('createAgreementConversation')
+            .call({'subRequestId': subRequestId, 'applicantId': applicantId});
+        final convId = result.data['conversationId']?.toString() ?? '';
+        if (convId.isNotEmpty) {
+          return convId;
+        }
+      }
+    } catch (e) {
+      debugPrint('[FirebaseService] createAgreementConversation error: $e. Falling back to direct conversation.');
+    }
+    return await getOrCreateDirectConversationAsync(
+      currentUserId ?? '',
+      applicantId,
+    );
   }
 
   // ==========================================

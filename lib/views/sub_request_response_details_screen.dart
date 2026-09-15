@@ -115,6 +115,7 @@ class _SubRequestResponseDetailsScreenState
         location: widget.subRequest.location,
         additionalTerms: "Rehearsal replacement agreement.",
         bandName: widget.subRequest.bandName,
+        subRequestId: reqId,
       );
 
       // 2. Create the system message for the conversation
@@ -445,7 +446,19 @@ class _SubRequestResponseDetailsScreenState
               if (_responders.isNotEmpty) ...[
                 const SizedBox(height: 16),
                 AnimatedTapDetector(
-                  onTap: _selectedUserId != null ? _confirmSelection : () {},
+                  onTap: () {
+                    if (_selectedUserId == null) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Please select a musician candidate to confirm.'),
+                          backgroundColor: Colors.amber,
+                          duration: Duration(seconds: 2),
+                        ),
+                      );
+                      return;
+                    }
+                    _confirmSelection();
+                  },
                   child: Container(
                     width: double.infinity,
                     height: 50,
