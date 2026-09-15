@@ -1740,12 +1740,15 @@ class FirebaseService {
       if (defaultTargetPlatform == TargetPlatform.iOS) {
         String? apnsToken = await messaging.getAPNSToken();
         int attempts = 0;
-        while (apnsToken == null && attempts < 10) {
+        while (apnsToken == null && attempts < 20) {
           await Future.delayed(const Duration(milliseconds: 500));
           apnsToken = await messaging.getAPNSToken();
           attempts++;
         }
-        print("PUSH: iOS APNs Token received: ${apnsToken != null}");
+        print("PUSH: iOS APNs Token received: ${apnsToken != null} (attempts: $attempts)");
+        if (apnsToken == null) {
+          print("PUSH: [WARNING] APNs token is null from iOS. Device may be missing Push Notifications capability or running with free developer team.");
+        }
       }
 
       // Get current token with retry logic for iOS readiness

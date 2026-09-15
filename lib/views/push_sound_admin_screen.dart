@@ -23,6 +23,8 @@ class _PushSoundAdminScreenState extends State<PushSoundAdminScreen> {
   final TextEditingController _tokenController = TextEditingController();
   String? _currentlyPlayingId;
   String? _pushToken;
+  String? _apnsToken;
+  String? _fetchError;
   String _permissionStatus = "Checking...";
   bool _isFetchingToken = false;
   bool _broadcastToAll = false;
@@ -121,15 +123,29 @@ class _PushSoundAdminScreenState extends State<PushSoundAdminScreen> {
         setState(() {
           _permissionStatus = 'Web Mode';
           _pushToken = null;
+          _apnsToken = null;
+          _fetchError = null;
           _isFetchingToken = false;
         });
       }
       return;
     }
-    setState(() => _isFetchingToken = true);
+    setState(() {
+      _isFetchingToken = true;
+      _fetchError = null;
+    });
     try {
       final messaging = FirebaseMessaging.instance;
-      final settings = await messaging.getNotificationSettings();
+      NotificationSettings settings = await messaging.getNotificationSettings();
+
+      // If permissions have not been determined yet on iOS, prompt user immediately
+      if (settings.authorizationStatus == AuthorizationStatus.notDetermined) {
+        settings = await messaging.requestPermission(
+          alert: true,
+          badge: true,
+          sound: true,
+        );
+      }
 
       String statusStr = 'Not Determined';
       if (settings.authorizationStatus == AuthorizationStatus.authorized) {
@@ -140,18 +156,38 @@ class _PushSoundAdminScreenState extends State<PushSoundAdminScreen> {
         statusStr = 'Denied';
       }
 
+      String? apnsToken;
       if (defaultTargetPlatform == TargetPlatform.iOS) {
         await messaging.setForegroundNotificationPresentationOptions(
           alert: true,
           badge: true,
           sound: true,
         );
-        String? apnsToken = await messaging.getAPNSToken();
+        apnsToken = await messaging.getAPNSToken();
         int attempts = 0;
-        while (apnsToken == null && attempts < 10) {
+        while (apnsToken == null && attempts < 20) {
           await Future.delayed(const Duration(milliseconds: 500));
           apnsToken = await messaging.getAPNSToken();
           attempts++;
+        }
+        _apnsToken = apnsToken;
+
+        if (apnsToken == null) {
+          if (mounted) {
+            setState(() {
+              _permissionStatus = statusStr;
+              _pushToken = null;
+              _isFetchingToken = false;
+              _fetchError =
+                  "Apple APNs device token was not issued by iOS.\n\n"
+                  "Possible reasons:\n"
+                  "1. 'Push Notifications' capability missing in Xcode (Runner > Signing & Capabilities > + Capability).\n"
+                  "2. Free Personal Apple ID Team used for signing (APNs requires paid Apple Developer Program membership).\n"
+                  "3. Simulator used instead of a physical iPhone.\n"
+                  "4. Bundle ID mismatch (Xcode must match GoogleService-Info.plist: com.musiciansonly.musicians).";
+            });
+          }
+          return;
         }
       }
 
@@ -161,6 +197,7 @@ class _PushSoundAdminScreenState extends State<PushSoundAdminScreen> {
         setState(() {
           _permissionStatus = statusStr;
           _pushToken = token;
+          _fetchError = null;
           if (token != null && token.isNotEmpty) {
             _tokenController.text = token;
           }
@@ -178,6 +215,7 @@ class _PushSoundAdminScreenState extends State<PushSoundAdminScreen> {
         setState(() {
           _permissionStatus = 'Unavailable';
           _pushToken = null;
+          _fetchError = e.toString();
           _isFetchingToken = false;
         });
       }
@@ -557,6 +595,86 @@ class _PushSoundAdminScreenState extends State<PushSoundAdminScreen> {
                         );
                       }
                     },
+                  ),
+                ],
+              ),
+            ),
+          ],
+          if (defaultTargetPlatform == TargetPlatform.iOS) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Icon(
+                  _apnsToken != null ? Icons.check_circle_outline : Icons.pending_outlined,
+                  size: 14,
+                  color: _apnsToken != null ? AppTheme.success : Colors.amber,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  _apnsToken != null
+                      ? 'APNs Device Token: Connected'
+                      : 'APNs Device Token: Not Received from Apple',
+                  style: GoogleFonts.inter(
+                    fontSize: 11,
+                    color: _apnsToken != null ? AppTheme.success : Colors.amber,
+                  ),
+                ),
+              ],
+            ),
+          ],
+          if (_fetchError != null && _fetchError!.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.red.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.red.withOpacity(0.3)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.error_outline, color: Colors.redAccent, size: 16),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Push Token Diagnostic:',
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.redAccent,
+                        ),
+                      ),
+                      const Spacer(),
+                      TextButton.icon(
+                        icon: const Icon(Icons.copy, size: 12, color: Colors.white70),
+                        label: const Text('Copy', style: TextStyle(fontSize: 11, color: Colors.white70)),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        onPressed: () {
+                          Clipboard.setData(ClipboardData(text: _fetchError!));
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text("Diagnostic error copied to clipboard!"),
+                              duration: Duration(seconds: 2),
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    _fetchError!,
+                    style: GoogleFonts.jetBrainsMono(
+                      fontSize: 11,
+                      color: Colors.white70,
+                      height: 1.3,
+                    ),
                   ),
                 ],
               ),
