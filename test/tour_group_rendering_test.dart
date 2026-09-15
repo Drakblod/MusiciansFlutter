@@ -188,5 +188,83 @@ void main() {
           '${DateFormat('EEE, MMM d').format(startLocal)} • ${DateFormat('HH:mm').format(startLocal)} - ${DateFormat('HH:mm').format(endLocal)}';
       expect(formattedTime, contains('18:00 - 21:00'));
     });
+
+    test('Multi-event tour group uses Event 1 (sequence 1) title as the group title', () {
+      final ev1 = BandEvent(
+        title: 'Tour Stockholm',
+        description: 'Tour kickoff',
+        eventType: 'Tour',
+        location: 'Stockholm',
+        startDateTime: '2026-09-20T19:00:00',
+        endDateTime: '2026-09-20T22:00:00',
+        additionalNotes: '',
+        createdBy: 'user1',
+        createdAt: nowMs,
+        updatedAt: nowMs,
+        requireResponse: true,
+        parentEventId: 'group_tour_101',
+        subEventSequence: 1,
+      );
+
+      final ev2 = BandEvent(
+        title: 'Rehearsal 1',
+        description: 'Rehearsal 1',
+        eventType: 'Rehearsal',
+        location: 'Stockholm',
+        startDateTime: '2026-09-21T19:00:00',
+        endDateTime: '2026-09-21T21:00:00',
+        additionalNotes: '',
+        createdBy: 'user1',
+        createdAt: nowMs,
+        updatedAt: nowMs,
+        requireResponse: true,
+        parentEventId: 'group_tour_101',
+        subEventSequence: 2,
+      );
+
+      final ev3 = BandEvent(
+        title: 'Rehearsal 2',
+        description: 'Rehearsal 2',
+        eventType: 'Rehearsal',
+        location: 'Stockholm',
+        startDateTime: '2026-09-22T19:00:00',
+        endDateTime: '2026-09-22T21:00:00',
+        additionalNotes: '',
+        createdBy: 'user1',
+        createdAt: nowMs,
+        updatedAt: nowMs,
+        requireResponse: true,
+        parentEventId: 'group_tour_101',
+        subEventSequence: 3,
+      );
+
+      final ev4 = BandEvent(
+        title: 'Club gig 1',
+        description: 'Club gig 1',
+        eventType: 'Club gig',
+        location: 'Stockholm',
+        startDateTime: '2026-09-23T20:00:00',
+        endDateTime: '2026-09-23T23:00:00',
+        additionalNotes: '',
+        createdBy: 'user1',
+        createdAt: nowMs,
+        updatedAt: nowMs,
+        requireResponse: true,
+        parentEventId: 'group_tour_101',
+        subEventSequence: 4,
+      );
+
+      final subEvents = [ev1, ev2, ev3, ev4];
+      subEvents.sort((a, b) => (a.subEventSequence ?? 0).compareTo(b.subEventSequence ?? 0));
+
+      final group = TestEventGroup(mainEvent: subEvents.first, subEvents: subEvents);
+
+      expect(group.mainEvent.title, equals('Tour Stockholm'));
+      expect(group.subEvents.length, equals(4));
+      expect(group.subEvents[0].title, equals('Tour Stockholm'));
+      expect(group.subEvents[1].title, equals('Rehearsal 1'));
+      expect(group.subEvents[2].title, equals('Rehearsal 2'));
+      expect(group.subEvents[3].title, equals('Club gig 1'));
+    });
   });
 }

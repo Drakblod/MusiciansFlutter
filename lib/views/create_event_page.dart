@@ -79,6 +79,10 @@ class _CreateEventPageState extends State<CreateEventPage> {
     if (_event1SubTitle != null && _event1SubTitle!.trim().isNotEmpty) {
       return _event1SubTitle!.trim();
     }
+    final enteredTitle = _titleController.text.trim();
+    if (enteredTitle.isNotEmpty) {
+      return enteredTitle;
+    }
     return '${_getResolvedPrimaryEventType()} 1';
   }
 
@@ -552,7 +556,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                         style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryAccent),
                         onPressed: () {
                           final defaultTitle = isPrimary
-                              ? '${draftType} 1'
+                              ? (_titleController.text.trim().isNotEmpty ? _titleController.text.trim() : '${draftType} 1')
                               : _getDefaultDraftTitle(draftType);
                           final title = draftTitleController.text.trim().isEmpty
                               ? defaultTitle
