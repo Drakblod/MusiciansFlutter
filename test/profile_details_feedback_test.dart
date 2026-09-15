@@ -286,8 +286,37 @@ void main() {
       expect(find.text('Collaborations'), findsOneWidget);
       expect(find.text('Social Links'), findsOneWidget);
       expect(find.text('Track'), findsOneWidget);
-
       expect(find.text('None specified'), findsWidgets);
+    });
+
+    testWidgets('MusicianProfileScreen does not duplicate genre pills inside header card', (tester) async {
+      final musician = UserProfile(
+        userId: 'm1',
+        displayName: 'Matsledare',
+        instruments: ['Alto Sax', 'Flute'],
+        mainInstrument: 'Alto Sax, BANDLEADER, Flute',
+        genres: ['Big Band', 'Modern/Contemporary'],
+        location: 'Lidingö, SWEDEN',
+      );
+
+      final mockAppState = MockAppStateForProfile();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ChangeNotifierProvider<AppState>.value(
+            value: mockAppState,
+            child: MusicianProfileScreen(musician: musician),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Header displays the formatted subtitle
+      expect(find.text('Big Band • Modern/Contemporary'), findsOneWidget);
+      // Section in body displays each genre badge exactly once
+      expect(find.text('Big Band'), findsOneWidget);
+      expect(find.text('Modern/Contemporary'), findsOneWidget);
     });
   });
 }
+

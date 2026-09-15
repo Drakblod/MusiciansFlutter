@@ -282,7 +282,7 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
                                 size: 24,
                               ),
                               onPressed: () =>
-                                  _launchUrl(widget.musician.spotifyUrl!),
+                                   _launchUrl(widget.musician.spotifyUrl!),
                               style: IconButton.styleFrom(
                                 backgroundColor: AppTheme.inputBackground,
                                 side: const BorderSide(
@@ -318,43 +318,6 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
                       ],
                     ),
                   ],
-                  const SizedBox(height: 16),
-
-                  // Genres
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    alignment: WrapAlignment.center,
-                    children:
-                        (widget.musician.genres.isEmpty
-                                ? ['Rock', 'Pop', 'Indie']
-                                : widget.musician.genres)
-                            .map(
-                              (genre) => Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 6,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: AppTheme.inputBackground,
-                                  borderRadius: BorderRadius.circular(20),
-                                  border: Border.all(
-                                    color: const Color(0xFF2E2A4E),
-                                    width: 1,
-                                  ),
-                                ),
-                                child: Text(
-                                  genre,
-                                  style: GoogleFonts.inter(
-                                    fontSize: 11,
-                                    color: AppTheme.secondaryAccent,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ),
-                            )
-                            .toList(),
-                  ),
                 ],
               ),
             ),
