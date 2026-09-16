@@ -369,10 +369,12 @@ class _PushSoundAdminScreenState extends State<PushSoundAdminScreen> {
       _isSendingPush[soundType] = true;
     });
 
+    final effectiveSoundType = soundType.startsWith('reminder_') ? 'reminder_rsvp' : soundType;
+
     try {
       final timeStr = TimeOfDay.now().format(context);
       final result = await appState.firebaseService.sendTestPushNotificationAsync(
-        soundType: soundType,
+        soundType: effectiveSoundType,
         customToken: tokenToUse.isNotEmpty ? tokenToUse : null,
         broadcastToAll: isBroadcast,
       );

@@ -152,7 +152,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
 
       expect(appState.mockFirebase.sentSoundTypes.length, equals(2));
-      expect(appState.mockFirebase.sentSoundTypes[1], equals('reminder_24h'));
+      expect(appState.mockFirebase.sentSoundTypes[1], equals('reminder_rsvp'));
 
       // Check Activity Log updated
       expect(find.textContaining('BROADCAST "Gig Request"'), findsOneWidget);
