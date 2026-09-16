@@ -197,6 +197,12 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
         final failureCount = result['failureCount'] is int
             ? result['failureCount'] as int
             : int.tryParse(result['failureCount']?.toString() ?? '0') ?? 0;
+        final totalMembers = result['totalMembersCount'] is int
+            ? result['totalMembersCount'] as int
+            : int.tryParse(result['totalMembersCount']?.toString() ?? '0') ?? 0;
+        final missingTokens = result['missingTokensCount'] is int
+            ? result['missingTokensCount'] as int
+            : int.tryParse(result['missingTokensCount']?.toString() ?? '0') ?? 0;
 
         if (status == 'error') {
           final msg = result['message'] ?? 'Unknown error';
@@ -207,18 +213,22 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
             ),
           );
         } else if (status == 'no_valid_tokens') {
+          final memberNote = totalMembers > 0 ? "none of the $totalMembers member(s)" : "no members";
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text("⚠️ [GOD MODE] Triggered $label reminder, but no members have active push tokens registered."),
+              content: Text("⚠️ [GOD MODE] Triggered $label reminder, but $memberNote have active push tokens registered."),
               backgroundColor: Colors.orange.shade800,
             ),
           );
         } else if (successCount > 0) {
-          final failNote = failureCount > 0 ? " ($failureCount failed)" : "";
+          final failNote = failureCount > 0 ? " ($failureCount failed delivery)" : "";
+          final tokenNote = missingTokens > 0 ? " ($missingTokens member(s) have no registered push token yet)" : "";
+          final ratioStr = totalMembers > successCount ? "$successCount of $totalMembers" : "$successCount";
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text("⚡ [GOD MODE] Sent $label RSVP reminder to $successCount member(s)!$failNote"),
+              content: Text("⚡ [GOD MODE] Sent $label RSVP reminder to $ratioStr member(s)!$tokenNote$failNote"),
               backgroundColor: AppTheme.success,
+              duration: const Duration(seconds: 4),
             ),
           );
         } else {

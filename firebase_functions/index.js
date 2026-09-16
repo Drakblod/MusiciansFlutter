@@ -1822,12 +1822,44 @@ exports.triggerEventReminder = onCall({ region: 'europe-west1' }, async (request
   const membersSnap = await admin.database().ref(`/Bands/${bandId}/Members_band`).once('value');
   const members = membersSnap.val() || {};
   const memberIdsSet = new Set(Object.keys(members));
+
+  if (memberIdsSet.size === 0) {
+    const altMembersSnap = await admin.database().ref(`/Bands/${bandId}/Members`).once('value');
+    const altMembers = altMembersSnap.val() || {};
+    Object.keys(altMembers).forEach(uid => memberIdsSet.add(uid));
+  }
+
   if (callerUid) memberIdsSet.add(callerUid);
   if (eventData.createdBy) memberIdsSet.add(eventData.createdBy);
-  const memberIds = Array.from(memberIdsSet);
+
+  if (eventData.responses && typeof eventData.responses === 'object') {
+    Object.keys(eventData.responses).forEach(uid => memberIdsSet.add(uid));
+  }
+  if (eventData.externalInvitees && typeof eventData.externalInvitees === 'object') {
+    Object.keys(eventData.externalInvitees).forEach(uid => memberIdsSet.add(uid));
+  }
+  if (eventData.members && typeof eventData.members === 'object') {
+    Object.keys(eventData.members).forEach(uid => memberIdsSet.add(uid));
+  }
+  if (eventData.invitedMembers && typeof eventData.invitedMembers === 'object') {
+    Object.keys(eventData.invitedMembers).forEach(uid => memberIdsSet.add(uid));
+  }
+  if (eventData.attendees && typeof eventData.attendees === 'object') {
+    Object.keys(eventData.attendees).forEach(uid => memberIdsSet.add(uid));
+  }
+
+  const memberIds = Array.from(memberIdsSet).filter(uid => uid && typeof uid === 'string' && uid.trim().length > 0);
 
   if (memberIds.length === 0) {
-    return { status: 'no_recipients', successCount: 0, attemptedCount: 0, failureCount: 0 };
+    return {
+      status: 'no_recipients',
+      successCount: 0,
+      attemptedCount: 0,
+      failureCount: 0,
+      totalMembersCount: 0,
+      tokensFoundCount: 0,
+      missingTokensCount: 0,
+    };
   }
 
   const auditRef = admin.database().ref(`/eventReminderAudit/${bandId}/${eventId}/${reminderType}`);
@@ -1835,13 +1867,19 @@ exports.triggerEventReminder = onCall({ region: 'europe-west1' }, async (request
   const recipientsWithTokens = [];
   const tokenPromises = memberIds.map(async (uid) => {
     let token = null;
-    const tokenSnap = await admin.database().ref(`/users/${uid}/info/PushToken`).once('value');
-    if (tokenSnap.exists() && typeof tokenSnap.val() === 'string' && tokenSnap.val().trim().length > 15) {
-      token = tokenSnap.val().trim();
-    } else {
-      const rootTokenSnap = await admin.database().ref(`/users/${uid}/PushToken`).once('value');
-      if (rootTokenSnap.exists() && typeof rootTokenSnap.val() === 'string' && rootTokenSnap.val().trim().length > 15) {
-        token = rootTokenSnap.val().trim();
+    const tokenPaths = [
+      `/users/${uid}/info/PushToken`,
+      `/users/${uid}/PushToken`,
+      `/users/${uid}/info/pushToken`,
+      `/users/${uid}/pushToken`,
+      `/users/${uid}/fcmToken`,
+      `/users/${uid}/info/fcmToken`,
+    ];
+    for (const path of tokenPaths) {
+      if (token) break;
+      const snap = await admin.database().ref(path).once('value');
+      if (snap.exists() && typeof snap.val() === 'string' && snap.val().trim().length > 15) {
+        token = snap.val().trim();
       }
     }
     if (token) {
@@ -1857,8 +1895,18 @@ exports.triggerEventReminder = onCall({ region: 'europe-west1' }, async (request
       completedAt: new Date().toISOString(),
       failureReason: 'no_valid_tokens',
       triggeredBy: callerUid,
+      totalMembersCount: memberIds.length,
+      tokensFoundCount: 0,
     });
-    return { status: 'no_valid_tokens', successCount: 0, attemptedCount: 0, failureCount: memberIds.length };
+    return {
+      status: 'no_valid_tokens',
+      successCount: 0,
+      attemptedCount: 0,
+      failureCount: 0,
+      totalMembersCount: memberIds.length,
+      tokensFoundCount: 0,
+      missingTokensCount: memberIds.length,
+    };
   }
 
   const reminderLabels = {
@@ -1935,6 +1983,9 @@ exports.triggerEventReminder = onCall({ region: 'europe-west1' }, async (request
     attemptedCount: recipientsWithTokens.length,
     successCount: batchSuccess,
     failureCount: batchFailure,
+    totalMembersCount: memberIds.length,
+    tokensFoundCount: recipientsWithTokens.length,
+    missingTokensCount: memberIds.length - recipientsWithTokens.length,
     completedAt: new Date().toISOString(),
     triggeredBy: callerUid,
   };
@@ -1957,6 +2008,9 @@ exports.triggerEventReminder = onCall({ region: 'europe-west1' }, async (request
     successCount: batchSuccess,
     failureCount: batchFailure,
     attemptedCount: recipientsWithTokens.length,
+    totalMembersCount: memberIds.length,
+    tokensFoundCount: recipientsWithTokens.length,
+    missingTokensCount: memberIds.length - recipientsWithTokens.length,
   };
 });
 
