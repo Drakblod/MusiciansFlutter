@@ -2716,6 +2716,41 @@ exports.sendTestPushNotification = onCall({ region: 'europe-west1' }, async (req
       title: '⏰ RSVP Reminder',
       body: 'Test Push: Rehearsal tomorrow at 18:00. Please confirm your attendance!',
     },
+    reminder_24h: {
+      channelId: 'rsvp_reminder_channel',
+      androidSound: 'reminder_rsvp',
+      apnsSound: 'reminder_rsvp.wav',
+      title: '⏰ 24h RSVP Reminder',
+      body: 'Test Push: Rehearsal in 24 hours! Please confirm your attendance.',
+    },
+    reminder_48h: {
+      channelId: 'rsvp_reminder_channel',
+      androidSound: 'reminder_rsvp',
+      apnsSound: 'reminder_rsvp.wav',
+      title: '⏰ 48h RSVP Reminder',
+      body: 'Test Push: Rehearsal in 48 hours! Please confirm if you can make it.',
+    },
+    reminder_72h: {
+      channelId: 'rsvp_reminder_channel',
+      androidSound: 'reminder_rsvp',
+      apnsSound: 'reminder_rsvp.wav',
+      title: '⏰ 72h RSVP Reminder',
+      body: 'Test Push: Upcoming gig in 72 hours! Please let the band know if you can make it.',
+    },
+    reminder_final: {
+      channelId: 'rsvp_reminder_channel',
+      androidSound: 'reminder_rsvp',
+      apnsSound: 'reminder_rsvp.wav',
+      title: '🚨 Final RSVP Reminder',
+      body: 'Test Push: Final reminder! RSVP attendance before line-up locks!',
+    },
+    reminder_last: {
+      channelId: 'rsvp_reminder_channel',
+      androidSound: 'reminder_rsvp',
+      apnsSound: 'reminder_rsvp.wav',
+      title: '🚨 Final RSVP Reminder',
+      body: 'Test Push: Final reminder! RSVP attendance before line-up locks!',
+    },
     finalized_gig: {
       channelId: 'finalized_gig_channel',
       androidSound: 'finalized_gig',
@@ -2735,11 +2770,24 @@ exports.sendTestPushNotification = onCall({ region: 'europe-west1' }, async (req
     const usersSnap = await admin.database().ref('/users').once('value');
     const users = usersSnap.val() || {};
     const recipientTokens = [];
+    const seenTokens = new Set();
 
     for (const [uid, u] of Object.entries(users)) {
-      const t = u.info?.PushToken;
-      if (t && typeof t === 'string' && t.trim().length > 15) {
-        recipientTokens.push({ uid, token: t.trim() });
+      if (!u || typeof u !== 'object') continue;
+      const candidates = [
+        u.info?.PushToken,
+        u.PushToken,
+        u.info?.pushToken,
+        u.pushToken,
+        u.info?.fcmToken,
+        u.fcmToken,
+      ];
+      for (const t of candidates) {
+        if (t && typeof t === 'string' && t.trim().length > 15 && !seenTokens.has(t.trim())) {
+          seenTokens.add(t.trim());
+          recipientTokens.push({ uid, token: t.trim() });
+          break;
+        }
       }
     }
 

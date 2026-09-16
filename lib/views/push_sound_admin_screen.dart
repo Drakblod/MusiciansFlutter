@@ -27,7 +27,7 @@ class _PushSoundAdminScreenState extends State<PushSoundAdminScreen> {
   String? _fetchError;
   String _permissionStatus = "Checking...";
   bool _isFetchingToken = false;
-  bool _broadcastToAll = false;
+  bool _broadcastToAll = true;
   final Map<String, bool> _isSendingPush = {};
   final List<String> _activityLogs = [];
   StreamSubscription<RemoteMessage>? _foregroundSubscription;
@@ -56,6 +56,54 @@ class _PushSoundAdminScreenState extends State<PushSoundAdminScreen> {
       'duration': '5.14s',
       'assetPath': 'audio/gig_rquest_response.mp3',
       'description': 'Dispatched when a musician submits an application or response to a gig.',
+    },
+    {
+      'id': 'reminder_24h',
+      'title': '24h RSVP Reminder',
+      'icon': Icons.schedule_rounded,
+      'color': const Color(0xFFFFB830),
+      'channel': 'rsvp_reminder_channel',
+      'androidSound': 'reminder_rsvp.mp3',
+      'iosSound': 'reminder_rsvp.wav',
+      'duration': '8.57s',
+      'assetPath': 'audio/reminder_rsvp.mp3',
+      'description': 'Dispatched 24 hours prior to event start for pending attendees.',
+    },
+    {
+      'id': 'reminder_48h',
+      'title': '48h RSVP Reminder',
+      'icon': Icons.hourglass_top_rounded,
+      'color': const Color(0xFFFF9A3C),
+      'channel': 'rsvp_reminder_channel',
+      'androidSound': 'reminder_rsvp.mp3',
+      'iosSound': 'reminder_rsvp.wav',
+      'duration': '8.57s',
+      'assetPath': 'audio/reminder_rsvp.mp3',
+      'description': 'Dispatched 48 hours prior to event start for unconfirmed members.',
+    },
+    {
+      'id': 'reminder_72h',
+      'title': '72h RSVP Reminder',
+      'icon': Icons.calendar_month_rounded,
+      'color': const Color(0xFFFF6F59),
+      'channel': 'rsvp_reminder_channel',
+      'androidSound': 'reminder_rsvp.mp3',
+      'iosSound': 'reminder_rsvp.wav',
+      'duration': '8.57s',
+      'assetPath': 'audio/reminder_rsvp.mp3',
+      'description': 'Dispatched 72 hours prior to event start for early RSVP confirmations.',
+    },
+    {
+      'id': 'reminder_final',
+      'title': 'Final RSVP Reminder',
+      'icon': Icons.warning_amber_rounded,
+      'color': const Color(0xFFEF476F),
+      'channel': 'rsvp_reminder_channel',
+      'androidSound': 'reminder_rsvp.mp3',
+      'iosSound': 'reminder_rsvp.wav',
+      'duration': '8.57s',
+      'assetPath': 'audio/reminder_rsvp.mp3',
+      'description': 'Final deadline alert before attendance is locked and substitute search begins.',
     },
     {
       'id': 'reminder_rsvp',
@@ -440,7 +488,7 @@ class _PushSoundAdminScreenState extends State<PushSoundAdminScreen> {
 
               // Header for Sound Cards
               Text(
-                'NOTIFICATION SOUNDS (4)',
+                'NOTIFICATION SOUNDS (${_soundItems.length})',
                 style: GoogleFonts.outfit(
                   fontSize: 13,
                   fontWeight: FontWeight.bold,

@@ -30,6 +30,10 @@ class MockPushSoundFirebaseService extends FirebaseService {
     sentSoundTypes.add(soundType);
     return {
       'success': true,
+      'broadcast': broadcastToAll,
+      'total': 5,
+      'successCount': 5,
+      'failureCount': 0,
       'messageId': 'mock_msg_$soundType',
       'soundType': soundType,
     };
@@ -80,7 +84,7 @@ void main() {
   });
 
   group('PushSoundAdminScreen Widget Tests', () {
-    testWidgets('1. Admin screen renders all 4 sound cards with exact titles and channels', (WidgetTester tester) async {
+    testWidgets('1. Admin screen renders all sound cards with exact titles and channels', (WidgetTester tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() => tester.view.resetPhysicalSize());
@@ -99,30 +103,28 @@ void main() {
       // Check Device Push Token card
       expect(find.text('Device Push Token'), findsOneWidget);
 
-      // Check all 4 Sound Card titles
+      // Check Sound Card titles
       expect(find.text('Gig Request'), findsOneWidget);
       expect(find.text('Gig Response'), findsOneWidget);
+      expect(find.text('24h RSVP Reminder'), findsOneWidget);
+      expect(find.text('48h RSVP Reminder'), findsOneWidget);
+      expect(find.text('72h RSVP Reminder'), findsOneWidget);
+      expect(find.text('Final RSVP Reminder'), findsOneWidget);
       expect(find.text('RSVP Reminder'), findsOneWidget);
       expect(find.text('Finalized Gig'), findsOneWidget);
 
       // Check channel IDs
       expect(find.textContaining('gig_request_channel'), findsOneWidget);
       expect(find.textContaining('gig_response_channel'), findsOneWidget);
-      expect(find.textContaining('rsvp_reminder_channel'), findsOneWidget);
+      expect(find.textContaining('rsvp_reminder_channel'), findsNWidgets(5));
       expect(find.textContaining('finalized_gig_channel'), findsOneWidget);
 
-      // Check format mappings for Android & iOS
-      expect(find.textContaining('Android: gig_rquest.mp3  •  iOS: gig_rquest.wav'), findsOneWidget);
-      expect(find.textContaining('Android: gig_rquest_response.mp3  •  iOS: gig_rquest_response.wav'), findsOneWidget);
-      expect(find.textContaining('Android: reminder_rsvp.mp3  •  iOS: reminder_rsvp.wav'), findsOneWidget);
-      expect(find.textContaining('Android: finalized_gig.mp3  •  iOS: finalized_gig.wav'), findsOneWidget);
-
-      // Check Preview and Send Push buttons exist for all 4 cards
-      expect(find.text('Preview'), findsNWidgets(4));
-      expect(find.text('Send Push'), findsNWidgets(4));
+      // Check Preview and Broadcast Push buttons exist for all cards
+      expect(find.text('Preview'), findsNWidgets(8));
+      expect(find.text('Broadcast Push'), findsNWidgets(8));
     });
 
-    testWidgets('2. Tapping Send Push dispatches correct soundType to service contract', (WidgetTester tester) async {
+    testWidgets('2. Tapping Broadcast Push dispatches correct soundType to service contract', (WidgetTester tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() => tester.view.resetPhysicalSize());
@@ -135,26 +137,26 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
-      // Tap Send Push for Gig Request (first Send Push button)
-      final sendPushButtons = find.text('Send Push');
-      await tester.tap(sendPushButtons.at(0));
+      // Tap Broadcast Push for Gig Request (first button)
+      final pushButtons = find.text('Broadcast Push');
+      await tester.tap(pushButtons.at(0));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
       expect(appState.mockFirebase.sentSoundTypes.length, equals(1));
       expect(appState.mockFirebase.sentSoundTypes.first, equals('gig_rquest'));
 
-      // Tap Send Push for Gig Response (second button)
-      await tester.tap(sendPushButtons.at(1));
+      // Tap Broadcast Push for 24h RSVP Reminder (third button)
+      await tester.tap(pushButtons.at(2));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
       expect(appState.mockFirebase.sentSoundTypes.length, equals(2));
-      expect(appState.mockFirebase.sentSoundTypes[1], equals('gig_rquest_response'));
+      expect(appState.mockFirebase.sentSoundTypes[1], equals('reminder_24h'));
 
       // Check Activity Log updated
-      expect(find.textContaining('Dispatched "Gig Request" test push'), findsOneWidget);
-      expect(find.textContaining('Dispatched "Gig Response" test push'), findsOneWidget);
+      expect(find.textContaining('BROADCAST "Gig Request"'), findsOneWidget);
+      expect(find.textContaining('BROADCAST "24h RSVP Reminder"'), findsOneWidget);
     });
 
     testWidgets('3. Home screen footer link navigates to PushSoundAdminScreen', (WidgetTester tester) async {
@@ -179,10 +181,10 @@ void main() {
       await tester.pump(const Duration(milliseconds: 500));
 
       expect(find.text('Push Sound Tester'), findsOneWidget);
-      expect(find.text('NOTIFICATION SOUNDS (4)'), findsOneWidget);
+      expect(find.text('NOTIFICATION SOUNDS (8)'), findsOneWidget);
     });
 
-    testWidgets('4. Enabling Broadcast switch changes buttons to Broadcast Push and sends broadcastToAll', (WidgetTester tester) async {
+    testWidgets('4. Toggling Broadcast switch changes buttons between Broadcast Push and Send Push', (WidgetTester tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() => tester.view.resetPhysicalSize());
@@ -195,21 +197,21 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
-      expect(find.text('Target: Single Device Only'), findsOneWidget);
-      expect(find.text('Send Push'), findsNWidgets(4));
+      expect(find.text('Broadcast to ALL Users'), findsOneWidget);
+      expect(find.text('Broadcast Push'), findsNWidgets(8));
 
-      // Toggle Broadcast switch
+      // Toggle Broadcast switch off
       final switchFinder = find.byType(Switch);
       expect(switchFinder, findsOneWidget);
       await tester.tap(switchFinder);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
-      expect(find.text('Broadcast to ALL Users'), findsOneWidget);
-      expect(find.text('Broadcast Push'), findsNWidgets(4));
+      expect(find.text('Target: Single Device Only'), findsOneWidget);
+      expect(find.text('Send Push'), findsNWidgets(8));
 
-      // Tap Broadcast Push
-      await tester.tap(find.text('Broadcast Push').first);
+      // Tap Send Push for first item
+      await tester.tap(find.text('Send Push').first);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
