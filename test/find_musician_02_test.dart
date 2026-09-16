@@ -778,7 +778,7 @@ void main() {
         isPaid: true,
         payAmount: 1500,
         currency: 'SEK',
-        date: '2026-09-15T18:00:00Z',
+        date: DateTime.now().add(const Duration(days: 5)).toIso8601String(),
         startTime: '18:00',
         endTime: '21:00',
       );
@@ -795,7 +795,7 @@ void main() {
         isPaid: true,
         payAmount: 1500,
         currency: 'SEK',
-        date: '2026-09-16T18:00:00Z',
+        date: DateTime.now().add(const Duration(days: 6)).toIso8601String(),
         startTime: '18:00',
         endTime: '21:00',
       );

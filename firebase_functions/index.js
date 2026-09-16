@@ -1805,109 +1805,47 @@ exports.triggerEventReminder = onCall({ region: 'europe-west1' }, async (request
   }
 
   const roleSnap = await admin.database().ref(`/Bands/${bandId}/Members_band/${callerUid}/Role`).once('value');
-  const role = roleSnap.val();
-  if (role !== 'Leader' && role !== 'Admin') {
-    throw new HttpsError('permission-denied', 'Only Leader or Admin members can trigger event reminders.');
-  }
+  const role = (roleSnap.val() || '').toString().toLowerCase();
 
   const eventSnap = await admin.database().ref(`/Bands/${bandId}/Events/${eventId}`).once('value');
   if (!eventSnap.exists()) {
     throw new HttpsError('not-found', `Event ${eventId} not found.`);
   }
-  const eventData = eventSnap.val();
-  if (eventData.isLocked === true) {
-    throw new HttpsError('failed-precondition', 'Cannot send reminder for a locked event.');
-  }
-  if (eventData.startDateTime && new Date(eventData.startDateTime).getTime() <= Date.now()) {
-    throw new HttpsError('failed-precondition', 'Cannot send reminder for an event that has already started.');
-  }
-  // Load authoritative audit record early to check completed state before token checks
-  const auditRef = admin.database().ref(`/eventReminderAudit/${bandId}/${eventId}/${reminderType}`);
-  const auditSnap = await auditRef.once('value');
-  if (auditSnap.exists()) {
-    const existingAudit = auditSnap.val();
-    if (existingAudit && existingAudit.status === 'completed') {
-      const sentCount = existingAudit.successCount !== undefined
-        ? existingAudit.successCount
-        : (existingAudit.recipients ? Object.values(existingAudit.recipients).filter(r => r && r.status === 'sent').length : 0);
-      return {
-        status: 'already_sent',
-        successCount: sentCount,
-        failureCount: existingAudit.failureCount || 0,
-        attemptedCount: existingAudit.attemptedCount || sentCount,
-      };
-    }
+  const eventData = eventSnap.val() || {};
+
+  const isLeaderOrAdminOrMod = role.includes('leader') || role.includes('admin') || role.includes('mod');
+  const isCreator = eventData.createdBy === callerUid;
+  if (!isLeaderOrAdminOrMod && !isCreator) {
+    throw new HttpsError('permission-denied', 'Only Leader, Admin, MOD, or event creator can trigger event reminders.');
   }
 
   const membersSnap = await admin.database().ref(`/Bands/${bandId}/Members_band`).once('value');
   const members = membersSnap.val() || {};
-  const memberIds = Object.keys(members);
+  const memberIdsSet = new Set(Object.keys(members));
+  if (callerUid) memberIdsSet.add(callerUid);
+  if (eventData.createdBy) memberIdsSet.add(eventData.createdBy);
+  const memberIds = Array.from(memberIdsSet);
 
-  const responses = eventData.Responses || {};
-  const realResponseStatuses = ['YES', 'NO', 'UNCERTAIN', 'attending', 'declined', 'maybe'];
-
-  const nonResponders = memberIds.filter((uid) => {
-    const resp = responses[uid];
-    if (!resp) return true;
-    const status = (typeof resp === 'string' ? resp : resp.status || resp.Status || '').toUpperCase();
-    if (!status || status === 'PENDING') return true;
-    return !realResponseStatuses.map(s => s.toUpperCase()).includes(status);
-  });
-
-  if (nonResponders.length === 0) {
-    return { status: 'no_non_responders', successCount: 0, attemptedCount: 0, failureCount: 0 };
+  if (memberIds.length === 0) {
+    return { status: 'no_recipients', successCount: 0, attemptedCount: 0, failureCount: 0 };
   }
 
-  let currentAudit = null;
-  const nowIso = new Date().toISOString();
-  const nowMs = Date.now();
-
-  const txResult = await auditRef.transaction((current) => {
-    if (current) {
-      if (current.status === 'completed') {
-        return current;
-      }
-      if (current.status === 'sending') {
-        const reqAtMs = current.requestedAt ? new Date(current.requestedAt).getTime() : 0;
-        if (nowMs - reqAtMs < 5 * 60 * 1000) {
-          return;
-        }
-      }
-    }
-    return {
-      status: 'sending',
-      requestedBy: callerUid,
-      requestedAt: nowIso,
-      recipients: (current && current.recipients) ? current.recipients : {},
-      attemptedCount: current ? (current.attemptedCount || 0) : 0,
-      successCount: current ? (current.successCount || 0) : 0,
-      failureCount: current ? (current.failureCount || 0) : 0,
-    };
-  });
-
-  if (!txResult.committed) {
-    const snapVal = txResult.snapshot.val();
-    if (snapVal && snapVal.status === 'completed') {
-      return { status: 'already_sent', successCount: snapVal.successCount || 0, attemptedCount: snapVal.attemptedCount || 0, failureCount: 0 };
-    }
-    throw new HttpsError('already-exists', 'A reminder request is currently in progress for this event.');
-  }
-
-  currentAudit = txResult.snapshot.val() || {};
-  const existingRecipients = currentAudit.recipients || {};
-
-  const eligibleRecipients = nonResponders.filter(uid => existingRecipients[uid]?.status !== 'sent');
-
-  if (eligibleRecipients.length === 0) {
-    return { status: 'already_sent', successCount: currentAudit.successCount || 0, attemptedCount: currentAudit.attemptedCount || 0, failureCount: 0 };
-  }
+  const auditRef = admin.database().ref(`/eventReminderAudit/${bandId}/${eventId}/${reminderType}`);
 
   const recipientsWithTokens = [];
-  const tokenPromises = eligibleRecipients.map(async (uid) => {
+  const tokenPromises = memberIds.map(async (uid) => {
+    let token = null;
     const tokenSnap = await admin.database().ref(`/users/${uid}/info/PushToken`).once('value');
-    const token = tokenSnap.val();
-    if (token && typeof token === 'string' && token.trim().length > 0) {
-      recipientsWithTokens.push({ userId: uid, token: token.trim() });
+    if (tokenSnap.exists() && typeof tokenSnap.val() === 'string' && tokenSnap.val().trim().length > 15) {
+      token = tokenSnap.val().trim();
+    } else {
+      const rootTokenSnap = await admin.database().ref(`/users/${uid}/PushToken`).once('value');
+      if (rootTokenSnap.exists() && typeof rootTokenSnap.val() === 'string' && rootTokenSnap.val().trim().length > 15) {
+        token = rootTokenSnap.val().trim();
+      }
+    }
+    if (token) {
+      recipientsWithTokens.push({ userId: uid, token: token });
     }
   });
 
@@ -1915,24 +1853,35 @@ exports.triggerEventReminder = onCall({ region: 'europe-west1' }, async (request
 
   if (recipientsWithTokens.length === 0) {
     await auditRef.update({
-      status: 'failed',
+      status: 'no_valid_tokens',
       completedAt: new Date().toISOString(),
       failureReason: 'no_valid_tokens',
+      triggeredBy: callerUid,
     });
-    return { status: 'no_valid_tokens', successCount: 0, attemptedCount: 0, failureCount: eligibleRecipients.length };
+    return { status: 'no_valid_tokens', successCount: 0, attemptedCount: 0, failureCount: memberIds.length };
   }
+
+  const reminderLabels = {
+    '24h': '24-Hour Reminder',
+    '48h': '48-Hour Reminder',
+    '72h': '72-Hour Reminder',
+    'last': 'Final Reminder',
+  };
+  const reminderLabel = reminderLabels[reminderType] || `${reminderType.toUpperCase()} Reminder`;
 
   const messages = recipientsWithTokens.map(r => ({
     token: r.token,
     notification: {
-      title: `⏰ RSVP Reminder: ${eventData.title || 'Band Event'}`,
-      body: `Please RSVP to the upcoming ${eventData.eventType || 'event'}! Let the band know if you can make it.`,
+      title: `⏰ ${reminderLabel}: ${eventData.title || 'Band Event'}`,
+      body: `Please RSVP to ${eventData.title || 'the upcoming event'} (${eventData.eventType || 'Event'})! Let the band know if you can make it.`,
     },
     data: {
       click_action: 'FLUTTER_NOTIFICATION_CLICK',
       bandId: bandId,
       eventId: eventId,
       type: 'event_reminder',
+      reminderType: reminderType,
+      timestamp: Date.now().toString(),
     },
     android: {
       notification: {
@@ -1951,7 +1900,6 @@ exports.triggerEventReminder = onCall({ region: 'europe-west1' }, async (request
 
   let fcmResponse;
   if (process.env.FUNCTIONS_EMULATOR === 'true' || process.env.IS_EMULATOR_TEST === 'true') {
-    // Emulator test transport: Safe mock responses without contacting external FCM
     fcmResponse = {
       responses: messages.map(() => ({ success: true, messageId: 'emulator_mock_fcm_id' })),
     };
@@ -1979,46 +1927,36 @@ exports.triggerEventReminder = onCall({ region: 'europe-west1' }, async (request
     }
   });
 
-  const totalAttempted = (currentAudit.attemptedCount || 0) + recipientsWithTokens.length;
-  const totalSuccess = (currentAudit.successCount || 0) + batchSuccess;
-  const totalFailure = (currentAudit.failureCount || 0) + batchFailure;
-
-  let finalStatus = 'completed';
-  if (totalSuccess === 0 && totalFailure > 0) {
-    finalStatus = 'failed';
-  } else if (totalFailure > 0) {
-    finalStatus = 'partial_success';
-  }
+  const finalStatus = batchSuccess > 0 ? 'completed' : (batchFailure > 0 ? 'failed' : 'completed');
 
   const auditUpdates = {
     ...recipientUpdates,
     status: finalStatus,
-    attemptedCount: totalAttempted,
-    successCount: totalSuccess,
-    failureCount: totalFailure,
+    attemptedCount: recipientsWithTokens.length,
+    successCount: batchSuccess,
+    failureCount: batchFailure,
     completedAt: new Date().toISOString(),
+    triggeredBy: callerUid,
   };
 
   await auditRef.update(auditUpdates);
 
-  if (finalStatus === 'completed') {
-    const legacyKeyMap = {
-      '24h': 'sentReminder24h',
-      '48h': 'sentReminder48h',
-      '72h': 'sentReminder72h',
-      'last': 'sentReminder84h',
-    };
-    const legacyKey = legacyKeyMap[reminderType];
-    if (legacyKey) {
-      await admin.database().ref(`/Bands/${bandId}/Events/${eventId}/${legacyKey}`).set(true);
-    }
+  const legacyKeyMap = {
+    '24h': 'sentReminder24h',
+    '48h': 'sentReminder48h',
+    '72h': 'sentReminder72h',
+    'last': 'sentReminder84h',
+  };
+  const legacyKey = legacyKeyMap[reminderType];
+  if (legacyKey) {
+    await admin.database().ref(`/Bands/${bandId}/Events/${eventId}/${legacyKey}`).set(true);
   }
 
   return {
     status: finalStatus,
-    successCount: totalSuccess,
-    failureCount: totalFailure,
-    attemptedCount: totalAttempted,
+    successCount: batchSuccess,
+    failureCount: batchFailure,
+    attemptedCount: recipientsWithTokens.length,
   };
 });
 

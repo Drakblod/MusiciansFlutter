@@ -183,19 +183,52 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
   Future<void> _triggerReminder(String reminderType) async {
     final appState = Provider.of<AppState>(context, listen: false);
     try {
-      final count = await appState.firebaseService.triggerEventReminderAsync(
+      final result = await appState.firebaseService.triggerEventReminderAsync(
         widget.bandId,
         widget.eventId,
         reminderType,
       );
       if (mounted) {
         final label = reminderType == 'last' ? 'Final' : reminderType.toUpperCase();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("⚡ [GOD MODE] Sent $label RSVP reminder to $count pending members!"),
-            backgroundColor: AppTheme.success,
-          ),
-        );
+        final status = result['status']?.toString() ?? 'completed';
+        final successCount = result['successCount'] is int
+            ? result['successCount'] as int
+            : int.tryParse(result['successCount']?.toString() ?? '0') ?? 0;
+        final failureCount = result['failureCount'] is int
+            ? result['failureCount'] as int
+            : int.tryParse(result['failureCount']?.toString() ?? '0') ?? 0;
+
+        if (status == 'error') {
+          final msg = result['message'] ?? 'Unknown error';
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text("❌ Failed to trigger reminder: $msg"),
+              backgroundColor: AppTheme.danger,
+            ),
+          );
+        } else if (status == 'no_valid_tokens') {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text("⚠️ [GOD MODE] Triggered $label reminder, but no members have active push tokens registered."),
+              backgroundColor: Colors.orange.shade800,
+            ),
+          );
+        } else if (successCount > 0) {
+          final failNote = failureCount > 0 ? " ($failureCount failed)" : "";
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text("⚡ [GOD MODE] Sent $label RSVP reminder to $successCount member(s)!$failNote"),
+              backgroundColor: AppTheme.success,
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text("⚡ [GOD MODE] Triggered $label RSVP reminder ($status)"),
+              backgroundColor: AppTheme.primaryAccent,
+            ),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {

@@ -386,33 +386,18 @@ async function handleTriggerEventReminder(request, db, mockMessaging = { sent: [
   const { bandId, eventId, reminderType } = request.data || {};
 
   const roleSnap = await db.ref(`Bands/${bandId}/Members_band/${uid}/Role`).get();
-  const role = roleSnap.exists() ? roleSnap.val() : null;
-  if (role !== 'Leader' && role !== 'Admin') throw new Error('permission-denied');
+  const role = roleSnap.exists() ? (roleSnap.val() || '').toLowerCase() : '';
+  if (!role.includes('leader') && !role.includes('admin') && !role.includes('mod')) throw new Error('permission-denied');
 
   const auditRef = db.ref(`eventReminderAudit/${bandId}/${eventId}/${reminderType}`);
-  const auditSnap = await auditRef.get();
-  if (auditSnap.exists()) {
-    const audit = auditSnap.val();
-    if (audit.status === 'completed') {
-      return { status: 'already_sent', successCount: 0 };
-    }
-  }
 
-  // Record active claim
-  await auditRef.set({
-    status: 'sending',
-    requestedBy: uid,
-    requestedAt: new Date().toISOString()
-  });
-
-  // Mock members and dispatch
+  // Mock members and dispatch to all members
   const membersSnap = await db.ref(`Bands/${bandId}/Members_band`).get();
   const members = membersSnap.exists() ? membersSnap.val() : {};
   let successCount = 0;
   let failureCount = 0;
 
   for (const mId of Object.keys(members)) {
-    if (mId === uid) continue;
     if (mockMessaging.failFor && mockMessaging.failFor.includes(mId)) {
       failureCount++;
     } else {
@@ -978,15 +963,31 @@ describe('v2 Callable Cloud Functions Logic Tests', () => {
     );
   });
 
-  it('9. Duplicate reminder claims rejected with already_sent', async () => {
+  it('9. Repeated manual reminder triggers succeed and deliver to all members on every button click', async () => {
     db.data['Bands/band_1/Members_band/leader_1/Role'] = 'Leader';
-    db.data['eventReminderAudit/band_1/evt_1/24h'] = { status: 'completed' };
+    db.data['Bands/band_1/Members_band'] = {
+      leader_1: { Role: 'Leader' },
+      member_1: { Role: 'Member' }
+    };
 
-    const res = await handleTriggerEventReminder(
+    const mockMessaging1 = { sent: [] };
+    const res1 = await handleTriggerEventReminder(
       { auth: { uid: 'leader_1' }, data: { bandId: 'band_1', eventId: 'evt_1', reminderType: '24h' } },
-      db
+      db,
+      mockMessaging1
     );
-    assert.strictEqual(res.status, 'already_sent');
+    assert.strictEqual(res1.status, 'completed');
+    assert.strictEqual(res1.successCount, 2);
+
+    // Second trigger still succeeds and delivers to all members
+    const mockMessaging2 = { sent: [] };
+    const res2 = await handleTriggerEventReminder(
+      { auth: { uid: 'leader_1' }, data: { bandId: 'band_1', eventId: 'evt_1', reminderType: '24h' } },
+      db,
+      mockMessaging2
+    );
+    assert.strictEqual(res2.status, 'completed');
+    assert.strictEqual(res2.successCount, 2);
   });
 
   it('10. Partial FCM failure and retry status tracking', async () => {
@@ -1005,7 +1006,7 @@ describe('v2 Callable Cloud Functions Logic Tests', () => {
     );
 
     assert.strictEqual(res.status, 'partial_success');
-    assert.strictEqual(res.successCount, 1);
+    assert.strictEqual(res.successCount, 2);
     assert.strictEqual(res.failureCount, 1);
   });
 

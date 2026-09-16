@@ -45,6 +45,23 @@ class MockEventDetailsFirebaseService extends FirebaseService {
     String status, {
     String? comment,
   }) async {}
+
+  @override
+  Future<Map<String, dynamic>> triggerEventReminderAsync(
+    String bandId,
+    String eventId,
+    String reminderType,
+  ) async {
+    lastTriggerReminderType = reminderType;
+    return {
+      'status': 'completed',
+      'successCount': 3,
+      'failureCount': 0,
+      'attemptedCount': 3,
+    };
+  }
+
+  String? lastTriggerReminderType;
 }
 
 class MockEventDetailsAppState extends AppState {
@@ -101,10 +118,11 @@ void main() {
   Widget createTestWidget({
     required BandEvent event,
     required MockEventDetailsFirebaseService mockFirebase,
+    String role = 'Member',
   }) {
     mockFirebase.mockEvent = event;
     mockFirebase.mockMembers = [
-      BandMember(userId: 'user_1', role: 'Member', nickname: 'Alex'),
+      BandMember(userId: 'user_1', role: role, nickname: 'Alex'),
     ];
 
     return ChangeNotifierProvider<AppState>(
@@ -170,6 +188,35 @@ void main() {
 
       expect(find.text('WHY ARE YOU UNCERTAIN? (mandatory)'), findsOneWidget);
       expect(find.text('Might be late'), findsOneWidget);
+    });
+
+    testWidgets('3. Leader sees Reminder Settings buttons and triggers 24h reminder to all members', (tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      final mockFb = MockEventDetailsFirebaseService();
+      final event = createTestBandEvent(title: 'Stockholm Gig');
+
+      await tester.pumpWidget(createTestWidget(
+        event: event,
+        mockFirebase: mockFb,
+        role: 'Leader',
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.text('REMINDER SETTINGS'), findsOneWidget);
+      expect(find.text('Trigger 24h Reminder'), findsOneWidget);
+      expect(find.text('Trigger 48h Reminder'), findsOneWidget);
+      expect(find.text('Trigger 72h Reminder'), findsOneWidget);
+      expect(find.text('Trigger Final Reminder'), findsOneWidget);
+
+      // Tap Trigger 24h Reminder
+      await tester.tap(find.text('Trigger 24h Reminder'));
+      await tester.pumpAndSettle();
+
+      expect(mockFb.lastTriggerReminderType, equals('24h'));
+      expect(find.text('⚡ [GOD MODE] Sent 24H RSVP reminder to 3 member(s)!'), findsOneWidget);
     });
   });
 }
