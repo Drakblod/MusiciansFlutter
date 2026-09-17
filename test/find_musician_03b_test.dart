@@ -1539,8 +1539,8 @@ void main() {
       expect(find.textContaining('·'), findsNothing);
     });
 
-    // 53. Create Event does not display Generated Dates Summary, while Multiple Events generation still works.
-    testWidgets('53. Create Event omits Generated Dates Summary and preserves Multiple Events generation', (tester) async {
+    // 53. SIMPLE-EVENT-01: Create Event supports attached rehearsals with + Add Rehearsal.
+    testWidgets('53. Create Event supports attached rehearsals with + Add Rehearsal', (tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -1558,20 +1558,12 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
-      // Toggle Multiple Events switch
-      await tester.tap(find.byType(Switch).first);
+      // Rehearsals section is available
+      expect(find.text('+ Add Rehearsal'), findsOneWidget);
+      await tester.tap(find.text('+ Add Rehearsal'));
       await tester.pumpAndSettle();
 
-      // Generated Dates Summary is NO LONGER visible
-      expect(find.text('Generated Dates, Summary'), findsNothing);
-      expect(find.text('Generated Dates Summary'), findsNothing);
-
-      // Multiple Events generation still works: '+ Add Event(s)' is functional
-      expect(find.text('+ Add Event(s)'), findsOneWidget);
-      await tester.tap(find.text('+ Add Event(s)'));
-      await tester.pumpAndSettle();
-
-      expect(find.text('Add Event'), findsWidgets);
+      expect(find.text('Add Rehearsal'), findsWidgets);
     });
   });
 }

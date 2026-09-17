@@ -245,5 +245,112 @@ void main() {
       expect(event.substituteAssignments['slot_1']?.isConfirmedAssignment, isTrue);
       expect(event.substituteAssignments['slot_2']?.isConfirmedAssignment, isFalse);
     });
+
+    test('EventRehearsal serialization, copyWith, and defaults', () {
+      final rehearsal = EventRehearsal(
+        id: 'reh_1',
+        date: '2026-10-24',
+        startTime: '19:00',
+        endTime: '21:00',
+        location: 'Studio A',
+        description: 'Warmup session',
+      );
+
+      final json = rehearsal.toJson();
+      expect(json['id'], 'reh_1');
+      expect(json['date'], '2026-10-24');
+      expect(json['startTime'], '19:00');
+      expect(json['endTime'], '21:00');
+      expect(json['location'], 'Studio A');
+      expect(json['description'], 'Warmup session');
+
+      final parsed = EventRehearsal.fromJson(json);
+      expect(parsed.id, 'reh_1');
+      expect(parsed.date, '2026-10-24');
+      expect(parsed.startTime, '19:00');
+      expect(parsed.endTime, '21:00');
+      expect(parsed.location, 'Studio A');
+      expect(parsed.description, 'Warmup session');
+
+      final copied = parsed.copyWith(location: 'Studio B');
+      expect(copied.location, 'Studio B');
+      expect(copied.id, 'reh_1');
+    });
+
+    test('BandEvent serializes and deserializes rehearsals list and preserves legacy fields', () {
+      final json = {
+        'title': 'Club gig – Summer Tour',
+        'description': 'Main show at Globen',
+        'eventType': 'Club gig',
+        'location': 'Globen, Stockholm',
+        'startDateTime': '2026-11-01T20:00:00Z',
+        'endDateTime': '2026-11-01T23:00:00Z',
+        'additionalNotes': 'Stage wear required',
+        'createdBy': 'user_leader',
+        'createdAt': 1700000000000,
+        'updatedAt': 1700000000000,
+        'requireResponse': true,
+        'parentEventId': 'legacy_parent_123',
+        'subEventSequence': 1,
+        'rehearsals': [
+          {
+            'id': 'reh_101',
+            'date': '2026-10-28',
+            'startTime': '18:00',
+            'endTime': '20:00',
+            'location': 'Rehearsal Room 1',
+            'description': 'Tutti run-through',
+          },
+          {
+            'id': 'reh_102',
+            'date': '2026-10-30',
+            'startTime': '19:00',
+            'endTime': '21:00',
+            'location': 'Rehearsal Room 2',
+            'description': 'Dress rehearsal',
+          }
+        ],
+      };
+
+      final event = BandEvent.fromJson(json, 'evt_main');
+      expect(event.id, 'evt_main');
+      expect(event.title, 'Club gig – Summer Tour');
+      expect(event.eventType, 'Club gig');
+      expect(event.parentEventId, 'legacy_parent_123');
+      expect(event.subEventSequence, 1);
+      expect(event.rehearsals.length, 2);
+      expect(event.rehearsals[0].id, 'reh_101');
+      expect(event.rehearsals[0].date, '2026-10-28');
+      expect(event.rehearsals[0].description, 'Tutti run-through');
+      expect(event.rehearsals[1].id, 'reh_102');
+
+      final exported = event.toJson();
+      expect(exported['rehearsals'], isNotNull);
+      expect((exported['rehearsals'] as List).length, 2);
+      expect(exported['parentEventId'], 'legacy_parent_123');
+      expect(exported['subEventSequence'], 1);
+    });
+
+    test('BandEvent with empty or missing rehearsals defaults safely', () {
+      final json = {
+        'title': 'Simple Gig',
+        'description': 'No rehearsals',
+        'location': 'Local Pub',
+        'startDateTime': '2026-11-01T20:00:00Z',
+        'endDateTime': '2026-11-01T23:00:00Z',
+        'additionalNotes': '',
+        'createdBy': 'user_leader',
+        'createdAt': 1700000000000,
+        'updatedAt': 1700000000000,
+        'requireResponse': true,
+      };
+
+      final event = BandEvent.fromJson(json, 'evt_simple');
+      expect(event.rehearsals, isEmpty);
+      expect(event.eventType, 'Event');
+
+      final exported = event.toJson();
+      expect(exported.containsKey('rehearsals'), isFalse);
+    });
   });
 }

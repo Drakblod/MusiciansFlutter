@@ -180,112 +180,6 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
     return _currentUserRole == 'Leader' || _currentUserRole == 'Admin';
   }
 
-  Future<void> _triggerReminder(String reminderType) async {
-    final appState = Provider.of<AppState>(context, listen: false);
-    try {
-      final result = await appState.firebaseService.triggerEventReminderAsync(
-        widget.bandId,
-        widget.eventId,
-        reminderType,
-      );
-      if (mounted) {
-        final label = reminderType == 'last' ? 'Final' : reminderType.toUpperCase();
-        final status = result['status']?.toString() ?? 'completed';
-        final successCount = result['successCount'] is int
-            ? result['successCount'] as int
-            : int.tryParse(result['successCount']?.toString() ?? '0') ?? 0;
-        final failureCount = result['failureCount'] is int
-            ? result['failureCount'] as int
-            : int.tryParse(result['failureCount']?.toString() ?? '0') ?? 0;
-        final totalMembers = result['totalMembersCount'] is int
-            ? result['totalMembersCount'] as int
-            : int.tryParse(result['totalMembersCount']?.toString() ?? '0') ?? 0;
-        final missingTokens = result['missingTokensCount'] is int
-            ? result['missingTokensCount'] as int
-            : int.tryParse(result['missingTokensCount']?.toString() ?? '0') ?? 0;
-
-        if (status == 'error') {
-          final msg = result['message'] ?? 'Unknown error';
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text("❌ Failed to trigger reminder: $msg"),
-              backgroundColor: AppTheme.danger,
-            ),
-          );
-        } else if (status == 'no_valid_tokens') {
-          final memberNote = totalMembers > 0 ? "none of the $totalMembers member(s)" : "no members";
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text("⚠️ [GOD MODE] Triggered $label reminder, but $memberNote have active push tokens registered."),
-              backgroundColor: Colors.orange.shade800,
-            ),
-          );
-        } else if (successCount > 0) {
-          final failNote = failureCount > 0 ? " ($failureCount failed delivery)" : "";
-          final tokenNote = missingTokens > 0 ? " ($missingTokens member(s) have no registered push token yet)" : "";
-          final ratioStr = totalMembers > successCount ? "$successCount of $totalMembers" : "$successCount";
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text("⚡ [GOD MODE] Sent $label RSVP reminder to $ratioStr member(s)!$tokenNote$failNote"),
-              backgroundColor: AppTheme.success,
-              duration: const Duration(seconds: 4),
-            ),
-          );
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text("⚡ [GOD MODE] Triggered $label RSVP reminder ($status)"),
-              backgroundColor: AppTheme.primaryAccent,
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("Failed to trigger reminder: $e"),
-            backgroundColor: AppTheme.danger,
-          ),
-        );
-      }
-    }
-  }
-
-  Widget _buildGodModeButton({
-    required String label,
-    required IconData icon,
-    required Color color,
-    required VoidCallback onTap,
-  }) {
-    return AnimatedTapDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.18),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: color.withOpacity(0.6), width: 1),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, color: color, size: 16),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: GoogleFonts.inter(
-                fontSize: 12,
-                color: Colors.white,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _getEventIcon(String type) {
     String emoji = '📅';
     switch (type) {
@@ -605,15 +499,17 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                             color: Colors.white,
                           ),
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          event.eventType,
-                          style: GoogleFonts.inter(
-                            fontSize: 13,
-                            color: AppTheme.primaryAccent,
-                            fontWeight: FontWeight.w600,
+                        if (event.eventType.isNotEmpty && event.eventType.toLowerCase() != 'event') ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            event.eventType,
+                            style: GoogleFonts.inter(
+                              fontSize: 13,
+                              color: AppTheme.primaryAccent,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
-                        ),
+                        ],
                         const SizedBox(height: 12),
                         Row(
                           children: [
@@ -843,6 +739,137 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                           ),
                         );
                       }).toList(),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+
+            // Attached Rehearsals Section
+            if (event.rehearsals.isNotEmpty) ...[
+              Container(
+                padding: const EdgeInsets.all(16),
+                margin: const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(
+                  color: AppTheme.cardBackground,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFF2E2A4E), width: 1.5),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.music_note_rounded, color: AppTheme.primaryAccent, size: 18),
+                            const SizedBox(width: 8),
+                            Text(
+                              "ATTACHED REHEARSALS",
+                              style: GoogleFonts.outfit(
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                                color: AppTheme.primaryAccent,
+                                letterSpacing: 1.2,
+                              ),
+                            ),
+                          ],
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: AppTheme.primaryAccent.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            '${event.rehearsals.length} Rehearsal${event.rehearsals.length == 1 ? '' : 's'}',
+                            style: GoogleFonts.inter(
+                              fontSize: 10,
+                              color: AppTheme.primaryAccent,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Column(
+                      children: List.generate(event.rehearsals.length, (index) {
+                        final rehearsal = event.rehearsals[index];
+                        final parsedDate = DateTime.tryParse(rehearsal.date);
+                        final dateFormatted = parsedDate != null
+                            ? DateFormat('EEEE, MMM d').format(parsedDate)
+                            : rehearsal.date;
+
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF16132D),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: const Color(0xFF2E2A4E)),
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.primaryAccent.withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  'Rehearsal ${index + 1}',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 11,
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      '$dateFormatted (${rehearsal.startTime} - ${rehearsal.endTime})',
+                                      style: GoogleFonts.inter(
+                                        fontSize: 13,
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    if (rehearsal.location.isNotEmpty) ...[
+                                      const SizedBox(height: 2),
+                                      Row(
+                                        children: [
+                                          const Icon(Icons.location_on_outlined, size: 12, color: AppTheme.textSecondary),
+                                          const SizedBox(width: 4),
+                                          Expanded(
+                                            child: Text(
+                                              rehearsal.location,
+                                              style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                    if (rehearsal.description.isNotEmpty) ...[
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        rehearsal.description,
+                                        style: GoogleFonts.inter(fontSize: 11, color: Colors.white70),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }),
                     ),
                   ],
                 ),
@@ -1243,82 +1270,6 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
               const SizedBox(height: 12),
             ],
 
-            // ⚡ REMINDER SETTINGS (CEO Page 3)
-            if (currentUserId == event.createdBy || _isAdmin) ...[
-              const SizedBox(height: 10),
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1E1535),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.amber.withOpacity(0.6), width: 1.5),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.amber.withOpacity(0.15),
-                      blurRadius: 10,
-                      spreadRadius: 1,
-                    )
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.notifications_active_rounded, color: Colors.amber, size: 22),
-                        const SizedBox(width: 8),
-                        Text(
-                          'REMINDER SETTINGS',
-                          style: GoogleFonts.outfit(
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.amber,
-                            letterSpacing: 1.2,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'Automated reminders count down from when the event is published. Tap below to send manual override reminders.',
-                      style: GoogleFonts.inter(fontSize: 11.5, color: AppTheme.textSecondary, height: 1.3),
-                    ),
-                    const SizedBox(height: 14),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        _buildGodModeButton(
-                          label: 'Trigger 24h Reminder',
-                          icon: Icons.notifications_active_outlined,
-                          color: AppTheme.primaryAccent,
-                          onTap: () => _triggerReminder('24h'),
-                        ),
-                        _buildGodModeButton(
-                          label: 'Trigger 48h Reminder',
-                          icon: Icons.notifications_active_outlined,
-                          color: Colors.deepPurpleAccent,
-                          onTap: () => _triggerReminder('48h'),
-                        ),
-                        _buildGodModeButton(
-                          label: 'Trigger 72h Reminder',
-                          icon: Icons.notifications_active_outlined,
-                          color: Colors.blueAccent,
-                          onTap: () => _triggerReminder('72h'),
-                        ),
-                        _buildGodModeButton(
-                          label: 'Trigger Final Reminder',
-                          icon: Icons.warning_amber_rounded,
-                          color: Colors.orangeAccent,
-                          onTap: () => _triggerReminder('last'),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 20),
-            ],
 
             // Creator Actions Section
             if (currentUserId == event.createdBy || _isAdmin) ...[
@@ -1333,42 +1284,42 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                 ),
               ),
               const SizedBox(height: 10),
-              if (_linkedSubEvents.length > 1)
-                AnimatedTapDetector(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => CreateEventPage(
-                          bandId: widget.bandId,
-                          existingGroupEvents: _linkedSubEvents,
-                        ),
+              AnimatedTapDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => CreateEventPage(
+                        bandId: widget.bandId,
+                        existingEvent: _event,
+                        existingGroupEvents: _linkedSubEvents.isNotEmpty ? _linkedSubEvents : (_event != null ? [_event!] : null),
                       ),
-                    );
-                  },
-                  child: Container(
-                    height: 50,
-                    margin: const EdgeInsets.only(bottom: 12),
-                    decoration: BoxDecoration(
-                      color: AppTheme.primaryAccent.withOpacity(0.18),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppTheme.primaryAccent, width: 1.5),
                     ),
-                    child: Center(
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(Icons.edit_calendar_outlined, color: AppTheme.primaryAccent),
-                          const SizedBox(width: 8),
-                          Text(
-                            "Edit Event Series",
-                            style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold),
-                          ),
-                        ],
-                      ),
+                  );
+                },
+                child: Container(
+                  height: 50,
+                  margin: const EdgeInsets.only(bottom: 12),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primaryAccent.withOpacity(0.18),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppTheme.primaryAccent, width: 1.5),
+                  ),
+                  child: Center(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.edit_calendar_outlined, color: AppTheme.primaryAccent),
+                        const SizedBox(width: 8),
+                        Text(
+                          _linkedSubEvents.length > 1 ? "Edit Event Series" : "Edit Event",
+                          style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold),
+                        ),
+                      ],
                     ),
                   ),
                 ),
+              ),
               if (!event.isLocked)
                 AnimatedTapDetector(
                   onTap: () async {

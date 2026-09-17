@@ -3301,26 +3301,28 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: AppTheme.primaryAccent.withOpacity(0.18),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          event.eventType,
-                          style: GoogleFonts.inter(
-                            fontSize: 10,
-                            color: AppTheme.primaryAccent,
-                            fontWeight: FontWeight.bold,
+                  if (event.eventType.isNotEmpty && event.eventType.toLowerCase() != 'event') ...[
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: AppTheme.primaryAccent.withOpacity(0.18),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            event.eventType,
+                            style: GoogleFonts.inter(
+                              fontSize: 10,
+                              color: AppTheme.primaryAccent,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                  ],
                   Text(
                     event.title,
                     style: GoogleFonts.outfit(

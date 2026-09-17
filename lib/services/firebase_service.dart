@@ -898,30 +898,68 @@ class FirebaseService {
         updates['users/$currentUserId/SubRequests/$subRequestId/AssignedBy'] = currentUserId;
       }
 
-      updates['Bands/$bandId/Events/$eventId/substituteAssignments/$actualSlotId'] = {
-        'slotId': actualSlotId,
-        'subRequestId': subRequestId,
-        'assignedUserId': candidateUserId,
-        if (candidateName != null) 'assignedUserName': candidateName,
-        'instrument': roleOrInstrument,
-        if (replacedMemberId != null) 'replacedMemberId': replacedMemberId,
-        if (replacedMemberName != null) 'replacedMemberName': replacedMemberName,
-        'status': 'assigned',
-        'assignedAt': now,
-        if (currentUserId != null) 'assignedBy': currentUserId,
-      };
+      if (bandId.isNotEmpty && eventId.isNotEmpty) {
+        updates['Bands/$bandId/Events/$eventId/substituteAssignments/$actualSlotId'] = {
+          'slotId': actualSlotId,
+          'subRequestId': subRequestId,
+          'assignedUserId': candidateUserId,
+          if (candidateName != null) 'assignedUserName': candidateName,
+          'instrument': roleOrInstrument,
+          if (replacedMemberId != null) 'replacedMemberId': replacedMemberId,
+          if (replacedMemberName != null) 'replacedMemberName': replacedMemberName,
+          'status': 'assigned',
+          'assignedAt': now,
+          if (currentUserId != null) 'assignedBy': currentUserId,
+        };
 
-      updates['Bands/$bandId/Events/$eventId/externalInvitees/$candidateUserId/userId'] = candidateUserId;
-      updates['Bands/$bandId/Events/$eventId/externalInvitees/$candidateUserId/status'] = 'attending';
-      updates['Bands/$bandId/Events/$eventId/externalInvitees/$candidateUserId/instrument'] = roleOrInstrument;
-      if (candidateName != null) {
-        updates['Bands/$bandId/Events/$eventId/externalInvitees/$candidateUserId/displayName'] = candidateName;
+        final isoTimestamp = DateTime.fromMillisecondsSinceEpoch(now).toUtc().toIso8601String();
+        updates['Bands/$bandId/Events/$eventId/Responses/$candidateUserId'] = {
+          'status': 'YES',
+          'timestamp': isoTimestamp,
+        };
+
+        updates['Bands/$bandId/Events/$eventId/externalInvitees/$candidateUserId/userId'] = candidateUserId;
+        updates['Bands/$bandId/Events/$eventId/externalInvitees/$candidateUserId/status'] = 'attending';
+        updates['Bands/$bandId/Events/$eventId/externalInvitees/$candidateUserId/instrument'] = roleOrInstrument;
+        if (candidateName != null) {
+          updates['Bands/$bandId/Events/$eventId/externalInvitees/$candidateUserId/displayName'] = candidateName;
+        }
+        updates['Bands/$bandId/Events/$eventId/externalInvitees/$candidateUserId/source'] = 'subRequest';
+        updates['Bands/$bandId/Events/$eventId/externalInvitees/$candidateUserId/subRequestId'] = subRequestId;
+        updates['Bands/$bandId/Events/$eventId/updatedAt'] = now;
       }
-      updates['Bands/$bandId/Events/$eventId/externalInvitees/$candidateUserId/source'] = 'subRequest';
-      updates['Bands/$bandId/Events/$eventId/externalInvitees/$candidateUserId/subRequestId'] = subRequestId;
-      updates['Bands/$bandId/Events/$eventId/updatedAt'] = now;
+
+      if (bandId.isNotEmpty) {
+        updates['Bands/$bandId/Members_band/$candidateUserId'] = {
+          'Nickname': candidateName ?? 'Substitute',
+          'Role': 'Substitute',
+        };
+        updates['bandconversations/$bandId/members/$candidateUserId'] = true;
+      }
 
       await _dbRef('').update(updates);
+
+      if (bandId.isNotEmpty) {
+        try {
+          final band = await getBandInfoAsync(bandId);
+          if (band != null) {
+            await _dbRef('users/$candidateUserId/Bands/$bandId').set(band.toJson());
+          }
+        } catch (e) {
+          debugPrint('[FirebaseService] Could not set users/$candidateUserId/Bands/$bandId: $e');
+        }
+
+        if (eventId.isNotEmpty) {
+          try {
+            final event = await getBandEventOnceAsync(bandId, eventId);
+            if (event?.temporaryRoomId != null && event!.temporaryRoomId!.isNotEmpty) {
+              await addMemberToEventRoomAsync(bandId, event.temporaryRoomId!, candidateUserId, 'substitute');
+            }
+          } catch (e) {
+            debugPrint('[FirebaseService] Could not add substitute to temporary room: $e');
+          }
+        }
+      }
     }
   }
 
@@ -1974,6 +2012,7 @@ class FirebaseService {
     'requireResponse',
     'rsvpDeadline',
     'reminderIntervalHours',
+    'rehearsals',
     'updatedAt',
   };
 
@@ -2004,6 +2043,7 @@ class FirebaseService {
       temporaryRoomId: event.temporaryRoomId,
       parentEventId: event.parentEventId,
       subEventSequence: event.subEventSequence,
+      rehearsals: event.rehearsals,
     );
     await _dbRef('Bands/$bandId/Events/$eventId').set(created.toJson());
     return eventId;
@@ -2056,6 +2096,7 @@ class FirebaseService {
         'requireResponse': event.requireResponse,
         'rsvpDeadline': event.rsvpDeadline,
         'reminderIntervalHours': event.reminderIntervalHours,
+        'rehearsals': event.rehearsals.map((r) => r.toJson()).toList(),
       });
       return event.id!;
     }

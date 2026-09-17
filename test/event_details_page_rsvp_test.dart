@@ -190,7 +190,7 @@ void main() {
       expect(find.text('Might be late'), findsOneWidget);
     });
 
-    testWidgets('3. Leader sees Reminder Settings buttons and triggers 24h reminder to all members', (tester) async {
+    testWidgets('3. Reminder Settings buttons are removed from Event Overview', (tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() => tester.view.resetPhysicalSize());
@@ -205,18 +205,11 @@ void main() {
       ));
       await tester.pumpAndSettle();
 
-      expect(find.text('REMINDER SETTINGS'), findsOneWidget);
-      expect(find.text('Trigger 24h Reminder'), findsOneWidget);
-      expect(find.text('Trigger 48h Reminder'), findsOneWidget);
-      expect(find.text('Trigger 72h Reminder'), findsOneWidget);
-      expect(find.text('Trigger Final Reminder'), findsOneWidget);
-
-      // Tap Trigger 24h Reminder
-      await tester.tap(find.text('Trigger 24h Reminder'));
-      await tester.pumpAndSettle();
-
-      expect(mockFb.lastTriggerReminderType, equals('24h'));
-      expect(find.text('⚡ [GOD MODE] Sent 24H RSVP reminder to 3 member(s)!'), findsOneWidget);
+      expect(find.text('REMINDER SETTINGS'), findsNothing);
+      expect(find.text('Trigger 24h Reminder'), findsNothing);
+      expect(find.text('Trigger 48h Reminder'), findsNothing);
+      expect(find.text('Trigger 72h Reminder'), findsNothing);
+      expect(find.text('Trigger Final Reminder'), findsNothing);
     });
   });
 }

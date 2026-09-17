@@ -183,6 +183,64 @@ class SubstituteAssignment {
   }
 }
 
+class EventRehearsal {
+  final String id;
+  final String date; // 'YYYY-MM-DD' or ISO-8601 string
+  final String startTime; // 'HH:mm'
+  final String endTime; // 'HH:mm'
+  final String location;
+  final String description;
+
+  EventRehearsal({
+    required this.id,
+    required this.date,
+    required this.startTime,
+    required this.endTime,
+    this.location = '',
+    this.description = '',
+  });
+
+  factory EventRehearsal.fromJson(Map<dynamic, dynamic> json, [String? id]) {
+    return EventRehearsal(
+      id: json['id']?.toString() ?? id ?? '',
+      date: json['date']?.toString() ?? '',
+      startTime: json['startTime']?.toString() ?? '',
+      endTime: json['endTime']?.toString() ?? '',
+      location: json['location']?.toString() ?? '',
+      description: json['description']?.toString() ?? '',
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'date': date,
+      'startTime': startTime,
+      'endTime': endTime,
+      if (location.isNotEmpty) 'location': location,
+      if (description.isNotEmpty) 'description': description,
+    };
+  }
+
+  EventRehearsal copyWith({
+    String? id,
+    String? date,
+    String? startTime,
+    String? endTime,
+    String? location,
+    String? description,
+  }) {
+    return EventRehearsal(
+      id: id ?? this.id,
+      date: date ?? this.date,
+      startTime: startTime ?? this.startTime,
+      endTime: endTime ?? this.endTime,
+      location: location ?? this.location,
+      description: description ?? this.description,
+    );
+  }
+}
+
 class BandEvent {
   /// Standard active creation choices for newly created events in owner-approved order.
   static const List<String> standardEventTypes = [
@@ -199,7 +257,7 @@ class BandEvent {
   final String title;
   final String description;
   /// Active creation choices: 'Rehearsal', 'Concert', 'Club gig', 'Private Event', 'Tour', 'Show', 'Other'.
-  /// Legacy values: 'Recording Session', 'Meeting', 'Gig'.
+  /// Legacy values: 'Recording Session', 'Meeting', 'Gig', 'Event'.
   final String eventType;
   final String location;
   final String startDateTime; // ISO 8601 string
@@ -225,12 +283,13 @@ class BandEvent {
   final String? temporaryRoomId;
   final String? parentEventId;
   final int? subEventSequence;
+  final List<EventRehearsal> rehearsals;
 
   BandEvent({
     this.id,
     required this.title,
     required this.description,
-    required this.eventType,
+    this.eventType = 'Event',
     required this.location,
     required this.startDateTime,
     required this.endDateTime,
@@ -255,6 +314,7 @@ class BandEvent {
     this.temporaryRoomId,
     this.parentEventId,
     this.subEventSequence,
+    this.rehearsals = const [],
   });
 
   factory BandEvent.fromJson(Map<dynamic, dynamic> json, String keyId) {
@@ -294,11 +354,27 @@ class BandEvent {
       });
     }
 
+    final List<EventRehearsal> parsedRehearsals = [];
+    final rehearsalsRaw = json['rehearsals'];
+    if (rehearsalsRaw is List) {
+      for (final item in rehearsalsRaw) {
+        if (item is Map) {
+          parsedRehearsals.add(EventRehearsal.fromJson(item));
+        }
+      }
+    } else if (rehearsalsRaw is Map) {
+      rehearsalsRaw.forEach((k, v) {
+        if (v is Map) {
+          parsedRehearsals.add(EventRehearsal.fromJson(v, k.toString()));
+        }
+      });
+    }
+
     return BandEvent(
       id: keyId,
       title: json['title']?.toString() ?? '',
       description: json['description']?.toString() ?? '',
-      eventType: json['eventType']?.toString() ?? 'Other',
+      eventType: json['eventType']?.toString() ?? 'Event',
       location: json['location']?.toString() ?? '',
       startDateTime: json['startDateTime']?.toString() ?? '',
       endDateTime: json['endDateTime']?.toString() ?? '',
@@ -335,6 +411,7 @@ class BandEvent {
       subEventSequence: json['subEventSequence'] is int
           ? json['subEventSequence'] as int
           : int.tryParse(json['subEventSequence']?.toString() ?? ''),
+      rehearsals: parsedRehearsals,
     );
   }
 
@@ -353,6 +430,9 @@ class BandEvent {
     substituteAssignments.forEach((k, v) {
       subAssignmentsMap[k] = v.toJson();
     });
+
+    final List<Map<String, dynamic>> rehearsalsList =
+        rehearsals.map((r) => r.toJson()).toList();
 
     return {
       'title': title,
@@ -377,6 +457,7 @@ class BandEvent {
       'sentReminder84h': sentReminder84h,
       'externalInvitees': externalInviteesMap,
       if (subAssignmentsMap.isNotEmpty) 'substituteAssignments': subAssignmentsMap,
+      if (rehearsalsList.isNotEmpty) 'rehearsals': rehearsalsList,
       if (rsvpDeadline != null) 'rsvpDeadline': rsvpDeadline,
       if (reminderIntervalHours != null)
         'reminderIntervalHours': reminderIntervalHours,

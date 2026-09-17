@@ -735,6 +735,11 @@ exports.assignSubstitute = onCall({ region: 'europe-west1' }, async (request) =>
       assignedBy: callerId,
     };
 
+    updates[`/Bands/${targetBandId}/Events/${targetEventId}/Responses/${candidateUserId}`] = {
+      status: 'YES',
+      timestamp: new Date(now).toISOString(),
+    };
+
     updates[`/Bands/${targetBandId}/Events/${targetEventId}/externalInvitees/${candidateUserId}/userId`] = candidateUserId;
     updates[`/Bands/${targetBandId}/Events/${targetEventId}/externalInvitees/${candidateUserId}/status`] = 'attending';
     updates[`/Bands/${targetBandId}/Events/${targetEventId}/externalInvitees/${candidateUserId}/instrument`] = roleOrInstrument || subReqData.VoicePart || '';
@@ -744,6 +749,23 @@ exports.assignSubstitute = onCall({ region: 'europe-west1' }, async (request) =>
     updates[`/Bands/${targetBandId}/Events/${targetEventId}/externalInvitees/${candidateUserId}/source`] = 'subRequest';
     updates[`/Bands/${targetBandId}/Events/${targetEventId}/externalInvitees/${candidateUserId}/subRequestId`] = subRequestId;
     updates[`/Bands/${targetBandId}/Events/${targetEventId}/updatedAt`] = now;
+
+    updates[`/Bands/${targetBandId}/Members_band/${candidateUserId}`] = {
+      Nickname: candidateName || 'Substitute',
+      Role: 'Substitute',
+    };
+    updates[`/bandconversations/${targetBandId}/members/${candidateUserId}`] = true;
+  }
+
+  if (targetBandId) {
+    try {
+      const bandSnap = await db.ref(`/Bands/${targetBandId}`).once('value');
+      if (bandSnap.exists()) {
+        updates[`/users/${candidateUserId}/Bands/${targetBandId}`] = bandSnap.val();
+      }
+    } catch (e) {
+      console.error('Error fetching band for user index:', e);
+    }
   }
 
   if (callerId) {

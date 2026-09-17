@@ -233,6 +233,11 @@ class MockMultiSubsFirebaseService extends FirebaseService {
         invitedAt: DateTime.now().millisecondsSinceEpoch,
         displayName: candidateName,
       );
+      final updatedResponses = Map<String, EventResponse>.from(event.responses);
+      updatedResponses[candidateUserId] = EventResponse(
+        status: 'YES',
+        timestamp: DateTime.now(),
+      );
       storedBandEvents[eventId] = BandEvent(
         id: event.id,
         title: event.title,
@@ -246,7 +251,7 @@ class MockMultiSubsFirebaseService extends FirebaseService {
         createdAt: event.createdAt,
         updatedAt: DateTime.now().millisecondsSinceEpoch,
         requireResponse: event.requireResponse,
-        responses: event.responses,
+        responses: updatedResponses,
         externalInvitees: updatedInvitees,
       );
     }
@@ -1992,6 +1997,50 @@ void main() {
       expect(ids1.first, equals('sub_band_alpha_event_x_slot_lead'));
       expect(ids2.first, equals('sub_band_beta_event_x_slot_lead'));
       expect(mock.storedSubRequests.length, equals(2));
+    });
+
+    testWidgets('47. Assigning substitute automatically sets attendance to YES and adds to external invitees', (tester) async {
+      final mock = MockMultiSubsFirebaseService();
+      final event = BandEvent(
+        id: 'event_sub_test',
+        title: 'Gig with sub',
+        description: 'Test gig',
+        location: 'Stockholm',
+        additionalNotes: '',
+        requireResponse: true,
+        startDateTime: '2026-10-01T20:00:00Z',
+        endDateTime: '2026-10-01T23:00:00Z',
+        createdBy: 'user_leader',
+        createdAt: 1000,
+        updatedAt: 1000,
+        responses: {
+          'user_leader': EventResponse(status: 'YES', timestamp: DateTime.now()),
+        },
+      );
+      mock.storedBandEvents['event_sub_test'] = event;
+
+      final req = SubRequest(
+        id: 'sub_test_slot_1',
+        bandId: 'band_alpha',
+        eventId: 'event_sub_test',
+        slotId: 'slot_guitar',
+        voicePart: 'Guitar',
+      );
+      mock.storedSubRequests['sub_test_slot_1'] = req;
+
+      await mock.assignSubstituteCandidateAsync(
+        subRequestId: 'sub_test_slot_1',
+        candidateUserId: 'sub_user_42',
+        bandId: 'band_alpha',
+        eventId: 'event_sub_test',
+        roleOrInstrument: 'Guitar',
+        candidateName: 'John Sub',
+      );
+
+      final updatedEvent = mock.storedBandEvents['event_sub_test']!;
+      expect(updatedEvent.responses['sub_user_42']?.status, equals('YES'));
+      expect(updatedEvent.externalInvitees['sub_user_42']?.status, equals('attending'));
+      expect(updatedEvent.externalInvitees['sub_user_42']?.displayName, equals('John Sub'));
     });
   });
 }
