@@ -438,7 +438,7 @@ void main() {
       expect(appState.mockFirebase.savedBandEvents.first.eventType, equals('Recording Session'));
     });
 
-    testWidgets('17, 18. New event starts in custom mode with empty "Set hours here" text field', (WidgetTester tester) async {
+    testWidgets('17, 18. New event starts with 48h response time selected by default and info text removed', (WidgetTester tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() => tester.view.resetPhysicalSize());
@@ -451,18 +451,18 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
-      // Dropdown selected is 'Set your own'
-      expect(find.text('Set your own'), findsOneWidget);
+      // Dropdown selected is 48 hours preset
+      expect(find.text('48 hours (From event is published)'), findsOneWidget);
 
-      // Custom-hours input is visible with label 'Set hours here'
-      expect(find.widgetWithText(TextFormField, 'Set hours here'), findsOneWidget);
+      // Info text box and Additional Notes are removed
+      expect(find.textContaining('50% shorter'), findsNothing);
+      expect(find.widgetWithText(TextFormField, 'Additional Notes (Optional)'), findsNothing);
 
-      // Custom-hours controller is empty by default (not pre-filled with 48)
-      final customField = tester.widget<TextFormField>(find.widgetWithText(TextFormField, 'Set hours here'));
-      expect(customField.controller?.text, equals(''));
+      // Custom-hours input is not visible by default
+      expect(find.widgetWithText(TextFormField, 'Set hours here'), findsNothing);
     });
 
-    testWidgets('19, 20. RSVP validation: empty/invalid blocks save, valid positive hours calculates deadline', (WidgetTester tester) async {
+    testWidgets('19, 20. RSVP validation: custom mode empty/invalid blocks save, valid positive hours calculates deadline', (WidgetTester tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() => tester.view.resetPhysicalSize());
@@ -478,6 +478,14 @@ void main() {
       // Enter basic event info
       await tester.enterText(find.widgetWithText(TextFormField, 'Name of Event'), 'Test Rehearsal');
       await tester.enterText(find.widgetWithText(TextFormField, 'Location (City, Country)'), 'Berlin');
+
+      // Switch to custom mode "Set your own"
+      await tester.tap(find.byType(DropdownButtonFormField<int>));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.tap(find.text('Set your own').last);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
 
       // 1. Missing custom hours blocks submission
       await tester.tap(find.text('Publish Event'));
@@ -911,9 +919,6 @@ void main() {
 
       final descField = find.widgetWithText(TextFormField, 'Description');
       await tester.enterText(descField, 'Main arena performance');
-
-      final rsvpField = find.widgetWithText(TextFormField, 'Set hours here');
-      await tester.enterText(rsvpField, '24');
 
       // Add Session 1
       await tester.tap(find.text('+ Add Session'));

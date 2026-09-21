@@ -40,8 +40,8 @@ class _CreateEventPageState extends State<CreateEventPage> {
   TimeOfDay _endTime = const TimeOfDay(hour: 21, minute: 0);
   bool _requireResponse = true;
   bool _createEventRoom = true;
-  int _reminderIntervalHours = 0;
-  bool _isCustomReminderHours = true;
+  int _reminderIntervalHours = 48;
+  bool _isCustomReminderHours = false;
   bool _isSaving = false;
   bool _isLoadingRole = true;
 
@@ -1129,23 +1129,6 @@ class _CreateEventPageState extends State<CreateEventPage> {
                             ),
                           ),
                           const SizedBox(height: 6),
-                          Container(
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              color: AppTheme.primaryAccent.withOpacity(0.12),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.3)),
-                            ),
-                            child: Text(
-                              'The response time for answering a Reminder will be 50% shorter than the initial response time. An initial response time of 48 hours will become 24 hours after the first Reminder, etc.',
-                              style: GoogleFonts.inter(
-                                fontSize: 11,
-                                color: Colors.white70,
-                                height: 1.3,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
                           Text(
                             'Response Time Settings:',
                             style: GoogleFonts.inter(
@@ -1165,10 +1148,10 @@ class _CreateEventPageState extends State<CreateEventPage> {
                               border: OutlineInputBorder(),
                             ),
                             items: const [
-                              DropdownMenuItem(value: -1, child: Text('Set your own', overflow: TextOverflow.ellipsis)),
                               DropdownMenuItem(value: 48, child: Text('48 hours (From event is published)', overflow: TextOverflow.ellipsis)),
                               DropdownMenuItem(value: 24, child: Text('24 hours (From event is published)', overflow: TextOverflow.ellipsis)),
                               DropdownMenuItem(value: 12, child: Text('12 hours (From event is published)', overflow: TextOverflow.ellipsis)),
+                              DropdownMenuItem(value: -1, child: Text('Set your own', overflow: TextOverflow.ellipsis)),
                               DropdownMenuItem(value: 0, child: Text('No automatic Reminders', overflow: TextOverflow.ellipsis)),
                             ],
                             onChanged: (val) {
@@ -1225,19 +1208,6 @@ class _CreateEventPageState extends State<CreateEventPage> {
                             ),
                           ],
                         ],
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Additional Notes
-                    TextFormField(
-                      controller: _notesController,
-                      style: GoogleFonts.inter(color: Colors.white),
-                      maxLines: 2,
-                      decoration: const InputDecoration(
-                        labelText: 'Additional Notes (Optional)',
-                        hintText: 'Bring your instruments, setlists, dress code...',
-                        prefixIcon: Icon(Icons.notes_outlined, color: AppTheme.textSecondary),
                       ),
                     ),
                     const SizedBox(height: 16),
