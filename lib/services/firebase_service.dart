@@ -19,6 +19,7 @@ import '../models/band_event.dart';
 import '../models/event_room.dart';
 import '../models/collab_session.dart';
 import '../models/collab_studio.dart';
+import '../models/app_notification.dart';
 import '../utils/date_parser.dart';
 
 class FirebaseService {
@@ -1381,6 +1382,61 @@ class FirebaseService {
       }
     }
     return false;
+  }
+
+  Stream<List<AppNotification>> subscribeToUserNotifications([String? userId]) {
+    final uid = userId ?? currentUserId;
+    if (uid == null || uid.isEmpty) return Stream.value([]);
+
+    return _dbRef('userNotifications/$uid').onValue.map((event) {
+      final List<AppNotification> list = [];
+      final data = event.snapshot.value;
+      if (data is Map) {
+        data.forEach((k, v) {
+          if (v is Map) {
+            list.add(AppNotification.fromJson(v, k.toString()));
+          }
+        });
+        list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      }
+      return list;
+    });
+  }
+
+  Stream<int> subscribeToUnreadNotificationCount([String? userId]) {
+    final uid = userId ?? currentUserId;
+    if (uid == null || uid.isEmpty) return Stream.value(0);
+
+    return _dbRef('userNotifications/$uid').onValue.map((event) {
+      int count = 0;
+      final data = event.snapshot.value;
+      if (data is Map) {
+        data.forEach((k, v) {
+          if (v is Map) {
+            final isRead = v['isRead'] == true ||
+                v['IsRead'] == true ||
+                v['isRead'] == 'true' ||
+                v['IsRead'] == 'true';
+            if (!isRead) {
+              count++;
+            }
+          }
+        });
+      }
+      return count;
+    });
+  }
+
+  Future<void> markNotificationReadAsync(String notificationId) async {
+    final callable = _functions.httpsCallable('markNotificationRead');
+    await callable.call<Map<String, dynamic>>({
+      'notificationId': notificationId,
+    });
+  }
+
+  Future<void> markAllNotificationsReadAsync() async {
+    final callable = _functions.httpsCallable('markAllNotificationsRead');
+    await callable.call<Map<String, dynamic>>();
   }
 
   Future<List<Map<String, dynamic>>> getActiveConversationsAsync() async {

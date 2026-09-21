@@ -1401,7 +1401,7 @@ void main() {
         role: 'Substitute',
         voicePart: 'Lead Guitar',
         description: 'Need a shredder for weekend show',
-        date: '2026-09-20T18:00:00Z',
+        date: '2026-10-20T18:00:00Z',
         startTime: '19:00',
         endTime: '22:00',
         location: 'Stockholm Club',
@@ -1412,6 +1412,7 @@ void main() {
         eventTitle: 'Rock Fest 2026',
         requestGroupId: 'grp_rock_fest',
       );
+      mockService.allSubRequests.clear();
       mockService.allSubRequests.add(req1);
 
       await tester.pumpWidget(
@@ -1460,7 +1461,7 @@ void main() {
         role: 'Substitute',
         voicePart: 'Lead Guitar',
         description: 'Tour gig',
-        date: '2026-09-20T18:00:00Z',
+        date: '2026-10-20T18:00:00Z',
         eventSequence: 1,
         eventTitle: 'Tour Stop Oslo',
         requestGroupId: 'grp_tour_distinct',
@@ -1474,7 +1475,7 @@ void main() {
         role: 'Substitute',
         voicePart: 'Rhythm Guitar',
         description: 'Tour gig',
-        date: '2026-09-21T18:00:00Z',
+        date: '2026-10-21T18:00:00Z',
         eventSequence: 2,
         eventTitle: 'Tour Stop Stockholm',
         requestGroupId: 'grp_tour_distinct',
@@ -1539,8 +1540,8 @@ void main() {
       expect(find.textContaining('·'), findsNothing);
     });
 
-    // 53. SIMPLE-EVENT-01: Create Event supports attached rehearsals with + Add Rehearsal.
-    testWidgets('53. Create Event supports attached rehearsals with + Add Rehearsal', (tester) async {
+    // 53. SIMPLE-EVENT-01: Create Event supports attached sessions with + Add Session.
+    testWidgets('53. Create Event supports attached sessions with + Add Session', (tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -1558,12 +1559,12 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
-      // Rehearsals section is available
-      expect(find.text('+ Add Rehearsal'), findsOneWidget);
-      await tester.tap(find.text('+ Add Rehearsal'));
+      // Sessions section is available
+      expect(find.text('+ Add Session'), findsOneWidget);
+      await tester.tap(find.text('+ Add Session'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Add Rehearsal'), findsWidgets);
+      expect(find.text('Add Session'), findsWidgets);
     });
   });
 }

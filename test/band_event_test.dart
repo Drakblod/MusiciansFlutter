@@ -352,5 +352,29 @@ void main() {
       final exported = event.toJson();
       expect(exported.containsKey('rehearsals'), isFalse);
     });
+
+    test('EventRehearsal parses session types correctly and defaults to Rehearsal', () {
+      final jsonLegacy = {
+        'id': 'reh_1',
+        'date': '2026-10-28',
+        'startTime': '18:00',
+        'endTime': '19:00',
+        'location': 'Studio A',
+      };
+      final parsedLegacy = EventRehearsal.fromJson(jsonLegacy);
+      expect(parsedLegacy.type, equals('Rehearsal'));
+
+      final jsonCustom = {
+        'id': 'reh_2',
+        'date': '2026-10-28',
+        'startTime': '17:00',
+        'endTime': '18:00',
+        'location': 'Main Stage',
+        'type': 'Soundcheck',
+      };
+      final parsedCustom = EventRehearsal.fromJson(jsonCustom);
+      expect(parsedCustom.type, equals('Soundcheck'));
+      expect(parsedCustom.toJson()['type'], equals('Soundcheck'));
+    });
   });
 }

@@ -127,6 +127,13 @@
         ".write": false
       }
     },
+    "userNotifications": {
+      "$userId": {
+        ".read": "auth != null && auth.uid == $userId",
+        ".write": false,
+        ".indexOn": ["createdAt", "isRead"]
+      }
+    },
     "subRequestPublications": {
       ".read": false,
       ".write": false

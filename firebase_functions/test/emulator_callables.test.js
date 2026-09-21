@@ -993,4 +993,96 @@ describe('Real Cloud Functions Emulator Integration Tests (JS Client SDK + Emula
     const eventAssignSnap = await adminDb.ref('Bands/band_tour_test/Events/event_day1/substituteAssignments/slot_revoke_test').get();
     assert.strictEqual(eventAssignSnap.exists(), false);
   });
+
+  it('30. markNotificationRead marks notification read in caller feed and prevents cross-user modification', async () => {
+    // Seed notifications for user_a and user_b
+    await adminDb.ref('userNotifications/user_a/notif_test_a1').set({
+      id: 'notif_test_a1',
+      type: 'event_invite',
+      category: 'events',
+      title: 'Event Invite A',
+      body: 'Invite details',
+      createdAt: Date.now(),
+      isRead: false,
+      readAt: null,
+    });
+    await adminDb.ref('userNotifications/user_b/notif_test_b1').set({
+      id: 'notif_test_b1',
+      type: 'direct_message',
+      category: 'messages',
+      title: 'DM for B',
+      body: 'Hello B',
+      createdAt: Date.now(),
+      isRead: false,
+      readAt: null,
+    });
+
+    // Unauthenticated call should fail
+    const unauthFn = httpsCallable(functionsUnauth, 'markNotificationRead');
+    await assert.rejects(
+      unauthFn({ notificationId: 'notif_test_a1' }),
+      (err) => isAuthError(err)
+    );
+
+    // User A marking own notification should succeed
+    const markReadFnA = httpsCallable(functionsUserA, 'markNotificationRead');
+    const resA = await markReadFnA({ notificationId: 'notif_test_a1' });
+    assert.strictEqual(resA.data.success, true);
+
+    const snapA = await adminDb.ref('userNotifications/user_a/notif_test_a1').get();
+    assert.strictEqual(snapA.val().isRead, true);
+    assert(snapA.val().readAt !== null);
+
+    // User A trying to mark User B's notification should fail with not-found
+    await assert.rejects(
+      markReadFnA({ notificationId: 'notif_test_b1' }),
+      (err) => err && (err.code === 'functions/not-found' || err.code === 'not-found' || err.message.includes('not found'))
+    );
+
+    // Verify User B's notification remains unread
+    const snapB = await adminDb.ref('userNotifications/user_b/notif_test_b1').get();
+    assert.strictEqual(snapB.val().isRead, false);
+  });
+
+  it('31. markAllNotificationsRead marks all notifications read for caller and returns count', async () => {
+    // Seed 2 unread notifications for user_a and 1 for user_b
+    await adminDb.ref('userNotifications/user_a/notif_a_batch1').set({
+      id: 'notif_a_batch1',
+      type: 'event_reminder',
+      category: 'events',
+      title: 'Reminder 1',
+      createdAt: Date.now(),
+      isRead: false,
+    });
+    await adminDb.ref('userNotifications/user_a/notif_a_batch2').set({
+      id: 'notif_a_batch2',
+      type: 'gig_finalized',
+      category: 'requests',
+      title: 'Gig Finalized',
+      createdAt: Date.now(),
+      isRead: false,
+    });
+    await adminDb.ref('userNotifications/user_b/notif_b_batch1').set({
+      id: 'notif_b_batch1',
+      type: 'event_reminder',
+      category: 'events',
+      title: 'Reminder B',
+      createdAt: Date.now(),
+      isRead: false,
+    });
+
+    const markAllFnA = httpsCallable(functionsUserA, 'markAllNotificationsRead');
+    const resA = await markAllFnA();
+    assert.strictEqual(resA.data.success, true);
+    assert(resA.data.updatedCount >= 2);
+
+    const snapA1 = await adminDb.ref('userNotifications/user_a/notif_a_batch1').get();
+    const snapA2 = await adminDb.ref('userNotifications/user_a/notif_a_batch2').get();
+    assert.strictEqual(snapA1.val().isRead, true);
+    assert.strictEqual(snapA2.val().isRead, true);
+
+    // User B's notification must still be unread
+    const snapB1 = await adminDb.ref('userNotifications/user_b/notif_b_batch1').get();
+    assert.strictEqual(snapB1.val().isRead, false);
+  });
 });

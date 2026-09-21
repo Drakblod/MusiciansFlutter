@@ -7,6 +7,7 @@ import '../theme/app_theme.dart';
 import 'animated_tap_detector.dart';
 import '../config/feature_toggles.dart';
 import '../views/edit_band_info_screen.dart';
+import '../views/notification_center_screen.dart';
 
 class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
   final String title;
@@ -74,7 +75,11 @@ class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
                   Expanded(
                     child: _buildInbox(context, appState),
                   ),
-                  // Column 4: Settings Menu
+                  // Column 4: Notifications Bell
+                  Expanded(
+                    child: _buildNotificationBell(context, appState),
+                  ),
+                  // Column 5: Settings Menu
                   Expanded(
                     child: _buildSettings(context, appState),
                   ),
@@ -213,6 +218,57 @@ class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
                   decoration: const BoxDecoration(
                     color: Colors.redAccent,
                     shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNotificationBell(BuildContext context, AppState appState) {
+    final unreadCount = appState.unreadNotificationCount;
+    final hasUnread = unreadCount > 0;
+    final badgeText = unreadCount > 99 ? '99+' : '$unreadCount';
+
+    return AnimatedTapDetector(
+      onTap: () => showNotificationPanel(context),
+      child: Center(
+        child: Stack(
+          clipBehavior: Clip.none,
+          alignment: Alignment.center,
+          children: [
+            const Icon(
+              Icons.notifications_outlined,
+              color: Colors.white,
+              size: 24,
+            ),
+            if (hasUnread)
+              Positioned(
+                right: -4,
+                top: -2,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1.5),
+                  constraints: const BoxConstraints(
+                    minWidth: 16,
+                    minHeight: 16,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE11D48),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFF0F0C22), width: 1.5),
+                  ),
+                  child: Center(
+                    child: Text(
+                      badgeText,
+                      style: GoogleFonts.inter(
+                        color: Colors.white,
+                        fontSize: 9,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
                   ),
                 ),
               ),

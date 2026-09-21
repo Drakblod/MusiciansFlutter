@@ -763,10 +763,10 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                       children: [
                         Row(
                           children: [
-                            const Icon(Icons.music_note_rounded, color: AppTheme.primaryAccent, size: 18),
+                            const Icon(Icons.schedule_rounded, color: AppTheme.primaryAccent, size: 18),
                             const SizedBox(width: 8),
                             Text(
-                              "ATTACHED REHEARSALS",
+                              "SCHEDULE & SESSIONS",
                               style: GoogleFonts.outfit(
                                 fontSize: 13,
                                 fontWeight: FontWeight.bold,
@@ -783,7 +783,7 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
-                            '${event.rehearsals.length} Rehearsal${event.rehearsals.length == 1 ? '' : 's'}',
+                            '${event.rehearsals.length} Session${event.rehearsals.length == 1 ? '' : 's'}',
                             style: GoogleFonts.inter(
                               fontSize: 10,
                               color: AppTheme.primaryAccent,
@@ -801,6 +801,7 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                         final dateFormatted = parsedDate != null
                             ? DateFormat('EEEE, MMM d').format(parsedDate)
                             : rehearsal.date;
+                        final sessionType = rehearsal.type.isNotEmpty ? rehearsal.type : 'Session';
 
                         return Container(
                           margin: const EdgeInsets.only(bottom: 8),
@@ -820,7 +821,7 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                                   borderRadius: BorderRadius.circular(6),
                                 ),
                                 child: Text(
-                                  'Rehearsal ${index + 1}',
+                                  sessionType,
                                   style: GoogleFonts.inter(
                                     fontSize: 11,
                                     color: Colors.white,

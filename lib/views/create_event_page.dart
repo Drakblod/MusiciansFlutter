@@ -274,6 +274,8 @@ class _CreateEventPageState extends State<CreateEventPage> {
         ? _parseTimeOfDay(rehearsalToEdit!.endTime, _endTime)
         : _endTime;
 
+    String draftType = isEditing ? rehearsalToEdit!.type : 'Rehearsal';
+
     final draftLocationController = TextEditingController(
       text: isEditing
           ? rehearsalToEdit!.location
@@ -309,7 +311,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          isEditing ? "Edit Rehearsal" : "Add Rehearsal",
+                          isEditing ? "Edit Session" : "Add Session",
                           style: GoogleFonts.outfit(
                             fontSize: 18,
                             color: Colors.white,
@@ -323,6 +325,45 @@ class _CreateEventPageState extends State<CreateEventPage> {
                       ],
                     ),
                     const SizedBox(height: 16),
+
+                    // Session Type Dropdown
+                    DropdownButtonFormField<String>(
+                      value: EventRehearsal.standardSessionTypes.contains(draftType)
+                          ? draftType
+                          : EventRehearsal.standardSessionTypes.first,
+                      dropdownColor: const Color(0xFF16132D),
+                      style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
+                      decoration: const InputDecoration(
+                        labelText: 'Session Type',
+                        prefixIcon: Icon(Icons.category_outlined, color: AppTheme.primaryAccent),
+                      ),
+                      items: EventRehearsal.standardSessionTypes.map((type) {
+                        IconData typeIcon = Icons.music_note_rounded;
+                        if (type == 'Soundcheck') typeIcon = Icons.tune_rounded;
+                        if (type == 'Club gig') typeIcon = Icons.nightlife_rounded;
+                        if (type == 'Concert') typeIcon = Icons.stadium_rounded;
+                        if (type == 'Load-in / Setup') typeIcon = Icons.local_shipping_outlined;
+                        if (type == 'Meeting') typeIcon = Icons.groups_outlined;
+                        if (type == 'Other') typeIcon = Icons.more_horiz_rounded;
+
+                        return DropdownMenuItem<String>(
+                          value: type,
+                          child: Row(
+                            children: [
+                              Icon(typeIcon, color: AppTheme.primaryAccent, size: 16),
+                              const SizedBox(width: 8),
+                              Text(type, style: GoogleFonts.inter(color: Colors.white)),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                      onChanged: (val) {
+                        if (val != null) {
+                          setModalState(() => draftType = val);
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 12),
 
                     // Date Picker Row
                     InkWell(
@@ -465,6 +506,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                             endTime: endStr,
                             location: location,
                             description: description,
+                            type: draftType,
                           );
 
                           setState(() {
@@ -478,7 +520,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                           Navigator.pop(ctx);
                         },
                         child: Text(
-                          isEditing ? "Save Changes" : "Add Rehearsal",
+                          isEditing ? "Save Changes" : "Add Session",
                           style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold),
                         ),
                       ),
@@ -778,7 +820,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                     ),
                     const SizedBox(height: 16),
 
-                    // 5 & 6. Attached Rehearsals Section
+                    // 5 & 6. Attached Sessions Section
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
@@ -792,22 +834,28 @@ class _CreateEventPageState extends State<CreateEventPage> {
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Row(
-                                children: [
-                                  const Icon(Icons.music_note_rounded, color: AppTheme.primaryAccent, size: 20),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    'REHEARSALS',
-                                    style: GoogleFonts.outfit(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
-                                      color: AppTheme.primaryAccent,
-                                      letterSpacing: 1.2,
+                              Expanded(
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.schedule_rounded, color: AppTheme.primaryAccent, size: 20),
+                                    const SizedBox(width: 8),
+                                    Flexible(
+                                      child: Text(
+                                        'SCHEDULE & SESSIONS',
+                                        style: GoogleFonts.outfit(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.bold,
+                                          color: AppTheme.primaryAccent,
+                                          letterSpacing: 1.1,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
-                              if (_rehearsals.isNotEmpty)
+                              if (_rehearsals.isNotEmpty) ...[
+                                const SizedBox(width: 8),
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                                   decoration: BoxDecoration(
@@ -815,7 +863,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                                     borderRadius: BorderRadius.circular(8),
                                   ),
                                   child: Text(
-                                    '${_rehearsals.length} Rehearsal${_rehearsals.length == 1 ? '' : 's'}',
+                                    '${_rehearsals.length} Session${_rehearsals.length == 1 ? '' : 's'}',
                                     style: GoogleFonts.inter(
                                       fontSize: 11,
                                       color: Colors.white,
@@ -823,16 +871,17 @@ class _CreateEventPageState extends State<CreateEventPage> {
                                     ),
                                   ),
                                 ),
+                              ],
                             ],
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            'Attach optional rehearsals directly to this event.',
+                            'Attach scheduled sessions, rehearsals, soundchecks, gigs, or meetings.',
                             style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary),
                           ),
                           const SizedBox(height: 12),
 
-                          // List of attached rehearsals
+                          // List of attached sessions
                           if (_rehearsals.isNotEmpty) ...[
                             ...List.generate(_rehearsals.length, (index) {
                               final rehearsal = _rehearsals[index];
@@ -840,6 +889,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                               final dateFormatted = parsedDate != null
                                   ? DateFormat('EEEE, MMM d').format(parsedDate)
                                   : rehearsal.date;
+                              final sessionType = rehearsal.type.isNotEmpty ? rehearsal.type : 'Session';
 
                               return Container(
                                 margin: const EdgeInsets.only(bottom: 8),
@@ -858,7 +908,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                                         borderRadius: BorderRadius.circular(6),
                                       ),
                                       child: Text(
-                                        'Rehearsal ${index + 1}',
+                                        sessionType,
                                         style: GoogleFonts.inter(
                                           fontSize: 11,
                                           color: Colors.white,
@@ -917,7 +967,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                             const SizedBox(height: 8),
                           ],
 
-                          // + Add Rehearsal Button
+                          // + Add Session Button
                           OutlinedButton.icon(
                             style: OutlinedButton.styleFrom(
                               side: const BorderSide(color: AppTheme.primaryAccent),
@@ -926,7 +976,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                             ),
                             icon: const Icon(Icons.add_circle_outline, color: AppTheme.primaryAccent, size: 18),
                             label: Text(
-                              "+ Add Rehearsal",
+                              "+ Add Session",
                               style: GoogleFonts.inter(
                                 color: AppTheme.primaryAccent,
                                 fontWeight: FontWeight.bold,
@@ -1051,7 +1101,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                             ),
                             const SizedBox(height: 6),
                             Text(
-                              'Initial response window will be ${_reminderIntervalHours} hours from when event is published.',
+                              'Initial response window will be $_reminderIntervalHours hours from when event is published.',
                               style: GoogleFonts.inter(fontSize: 11, color: AppTheme.primaryAccent),
                             ),
                           ],

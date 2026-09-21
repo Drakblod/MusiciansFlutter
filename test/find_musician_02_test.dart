@@ -1069,7 +1069,7 @@ void main() {
         bandName: 'Solo Jazz Trio',
         isPaid: false,
         status: 'published',
-        date: '2026-09-20T18:00:00Z',
+        date: '2026-10-20T18:00:00Z',
         requestGroupId: null,
       );
 

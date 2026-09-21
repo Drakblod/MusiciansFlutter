@@ -356,7 +356,7 @@ class HomeScreen extends StatelessWidget {
                 color: AppTheme.textSecondary,
               ),
             ),
-            const SizedBox(height: 30),
+            const SizedBox(height: 20),
 
             // Action Cards List (Dynamically sorted)
             ...actionItems.expand((item) => [
@@ -423,7 +423,7 @@ class HomeScreen extends StatelessWidget {
                   child: Padding(
                     padding: const EdgeInsets.only(bottom: 10, right: 10),
                     child: Text(
-                      '2.43.3',
+                      '2.44.0',
                       style: GoogleFonts.inter(
                         color: AppTheme.textSecondary.withOpacity(0.5),
                         fontSize: 12,
@@ -1111,7 +1111,7 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
                     ],
                   ),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 20),
 
                 // Curved/glow background behind the bubble row (FULL WIDTH BLEED)
                 Stack(
@@ -1227,7 +1227,7 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
                                 }
                               },
                               child: Text(
-                                '2.43.3',
+                                '2.44.0',
                                 style: GoogleFonts.inter(
                                   color: AppTheme.textSecondary.withOpacity(0.5),
                                   fontSize: 12,

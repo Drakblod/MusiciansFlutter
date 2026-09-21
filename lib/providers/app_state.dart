@@ -5,7 +5,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../services/firebase_service.dart';
 import '../models/user_profile.dart';
 import '../main.dart';
-import '../models/band_event.dart';
 import '../models/sub_request.dart';
 import '../views/event_details_page.dart';
 import '../views/sub_request_details_screen.dart';
@@ -17,10 +16,12 @@ class AppState extends ChangeNotifier {
   String? _activeBandId;
   String? _activeBandName;
   bool _hasUnreadMessages = false;
+  int _unreadNotificationCount = 0;
   bool _isLoading = true;
   int _currentTab = 0;
   Map<String, int> _buttonClicks = {};
   Map<String, dynamic>? _pendingNotificationPayload;
+  StreamSubscription? _unreadNotificationsSubscription;
 
   static const List<String> validBubbleIds = [
     'find_musicians',
@@ -164,6 +165,7 @@ class AppState extends ChangeNotifier {
   String? get activeBandId => _activeBandId;
   String? get activeBandName => _activeBandName;
   bool get hasUnreadMessages => _hasUnreadMessages;
+  int get unreadNotificationCount => _unreadNotificationCount;
   bool get isLoading => _isLoading;
   String? get currentUserId => firebaseService.currentUserId;
   int get currentTab => _currentTab;
@@ -174,14 +176,22 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setUnreadNotificationCountForTest(int count) {
+    _unreadNotificationCount = count;
+    notifyListeners();
+  }
+
   void _clearProfileState() {
     _currentUserProfile = null;
     _activeBandId = null;
     _activeBandName = null;
     _hasUnreadMessages = false;
+    _unreadNotificationCount = 0;
     _buttonClicks = {};
     _unreadSubscription?.cancel();
     _unreadSubscription = null;
+    _unreadNotificationsSubscription?.cancel();
+    _unreadNotificationsSubscription = null;
   }
 
   void _initializeAuthListener() {
@@ -240,6 +250,19 @@ class AppState extends ChangeNotifier {
           },
           onError: (err) {
             debugPrint("Error in unread stream: $err");
+          },
+        );
+
+    _unreadNotificationsSubscription?.cancel();
+    _unreadNotificationsSubscription = firebaseService
+        .subscribeToUnreadNotificationCount()
+        .listen(
+          (count) {
+            _unreadNotificationCount = count;
+            notifyListeners();
+          },
+          onError: (err) {
+            debugPrint("Error in unread notifications stream: $err");
           },
         );
   }

@@ -184,12 +184,23 @@ class SubstituteAssignment {
 }
 
 class EventRehearsal {
+  static const List<String> standardSessionTypes = [
+    'Rehearsal',
+    'Soundcheck',
+    'Club gig',
+    'Concert',
+    'Load-in / Setup',
+    'Meeting',
+    'Other',
+  ];
+
   final String id;
   final String date; // 'YYYY-MM-DD' or ISO-8601 string
   final String startTime; // 'HH:mm'
   final String endTime; // 'HH:mm'
   final String location;
   final String description;
+  final String type; // e.g. 'Rehearsal', 'Soundcheck', 'Club gig', etc.
 
   EventRehearsal({
     required this.id,
@@ -198,6 +209,7 @@ class EventRehearsal {
     required this.endTime,
     this.location = '',
     this.description = '',
+    this.type = 'Rehearsal',
   });
 
   factory EventRehearsal.fromJson(Map<dynamic, dynamic> json, [String? id]) {
@@ -208,6 +220,7 @@ class EventRehearsal {
       endTime: json['endTime']?.toString() ?? '',
       location: json['location']?.toString() ?? '',
       description: json['description']?.toString() ?? '',
+      type: json['type']?.toString() ?? 'Rehearsal',
     );
   }
 
@@ -217,6 +230,7 @@ class EventRehearsal {
       'date': date,
       'startTime': startTime,
       'endTime': endTime,
+      'type': type,
       if (location.isNotEmpty) 'location': location,
       if (description.isNotEmpty) 'description': description,
     };
@@ -229,6 +243,7 @@ class EventRehearsal {
     String? endTime,
     String? location,
     String? description,
+    String? type,
   }) {
     return EventRehearsal(
       id: id ?? this.id,
@@ -237,9 +252,13 @@ class EventRehearsal {
       endTime: endTime ?? this.endTime,
       location: location ?? this.location,
       description: description ?? this.description,
+      type: type ?? this.type,
     );
   }
 }
+
+typedef EventSession = EventRehearsal;
+
 
 class BandEvent {
   /// Standard active creation choices for newly created events in owner-approved order.

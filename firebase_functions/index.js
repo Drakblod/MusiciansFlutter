@@ -16,6 +16,65 @@ const isEmulator = process.env.FUNCTIONS_EMULATOR === 'true' ||
 const databaseTriggerRegion = isEmulator ? 'us-central1' : 'europe-west1';
 
 /**
+ * Helper to record a single user notification in /userNotifications/{recipientUserId}/{notificationId}
+ */
+async function recordUserNotification(recipientUserId, notificationData) {
+  if (!recipientUserId) return;
+  try {
+    const now = Date.now();
+    const notificationId = notificationData.id || `notif_${now}_${recipientUserId}_${Math.random().toString(36).substring(2, 8)}`;
+    const payload = {
+      id: notificationId,
+      type: notificationData.type || 'system',
+      category: notificationData.category || 'system',
+      title: notificationData.title || '',
+      body: notificationData.body || '',
+      createdAt: notificationData.createdAt || now,
+      isRead: false,
+      readAt: null,
+      data: notificationData.data || {},
+    };
+    await admin.database().ref(`/userNotifications/${recipientUserId}/${notificationId}`).set(payload);
+  } catch (err) {
+    console.error(`Error recording user notification for ${recipientUserId}:`, err);
+  }
+}
+
+/**
+ * Helper to record multiple user notifications in batch
+ */
+async function recordUserNotificationsBatch(recipientUserIds, notificationDataBuilder) {
+  if (!recipientUserIds || recipientUserIds.length === 0) return;
+  try {
+    const updates = {};
+    const now = Date.now();
+    for (const recipientId of recipientUserIds) {
+      if (!recipientId) continue;
+      const notif = typeof notificationDataBuilder === 'function'
+        ? notificationDataBuilder(recipientId)
+        : notificationDataBuilder;
+      const notificationId = notif.id || `notif_${now}_${recipientId}_${Math.random().toString(36).substring(2, 8)}`;
+      updates[`/userNotifications/${recipientId}/${notificationId}`] = {
+        id: notificationId,
+        type: notif.type || 'system',
+        category: notif.category || 'system',
+        title: notif.title || '',
+        body: notif.body || '',
+        createdAt: notif.createdAt || now,
+        isRead: false,
+        readAt: null,
+        data: notif.data || {},
+      };
+    }
+    if (Object.keys(updates).length > 0) {
+      await admin.database().ref().update(updates);
+    }
+  } catch (err) {
+    console.error('Error batch recording user notifications:', err);
+  }
+}
+
+/**
  * Triggered when a new event is created under /Bands/{bandId}/Events/{eventId}.
  * Sends a push notification to all band members except the event creator.
  */
@@ -40,11 +99,42 @@ exports.onBandEventCreated = functions.region(databaseTriggerRegion).database
       }
 
       const memberIds = Object.keys(members);
+      const otherMemberIds = memberIds.filter(userId => userId !== creatorId);
+
+      // 1. Format Date/Time, Event Type, and Notification content safely
+      const rawEventType = eventData.eventType || eventData.EventType;
+      const normalizedEventType = (typeof rawEventType === 'string' && rawEventType.trim().length > 0)
+        ? rawEventType.trim().toLowerCase()
+        : 'event';
+
+      const startLocal = eventData.startDateTime
+        ? new Date(eventData.startDateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        : 'TBD';
+
+      const eventTitle = eventData.title || 'Band Event';
+      const eventLocation = eventData.location || 'TBD';
+      const notificationTitle = `🎼 New Event: ${eventTitle}`;
+      const notificationBody = `New ${normalizedEventType} at ${eventLocation} starting at ${startLocal}. Please RSVP!`;
+
+      // Record Notification Center entries for all other band members independently of push tokens
+      await recordUserNotificationsBatch(otherMemberIds, (uid) => ({
+        id: `notif_evt_inv_${bandId}_${eventId}_${uid}`,
+        type: 'event_invite',
+        category: 'events',
+        title: notificationTitle,
+        body: notificationBody,
+        createdAt: Date.now(),
+        data: {
+          bandId,
+          eventId,
+          type: 'event_invite',
+        },
+      }));
+
       const recipients = []; // Array of { userId, token }
 
       // 2. Fetch the FCM push token for each member in parallel (excluding creator)
-      const tokenPromises = memberIds
-        .filter(userId => userId !== creatorId)
+      const tokenPromises = otherMemberIds
         .map(async (userId) => {
           const tokenSnapshot = await admin.database().ref(`/users/${userId}/info/PushToken`).once('value');
           const token = tokenSnapshot.val();
@@ -60,22 +150,12 @@ exports.onBandEventCreated = functions.region(databaseTriggerRegion).database
         return null;
       }
 
-      // 3. Format Date/Time and Event Type safely
-      const rawEventType = eventData.eventType || eventData.EventType;
-      const normalizedEventType = (typeof rawEventType === 'string' && rawEventType.trim().length > 0)
-        ? rawEventType.trim().toLowerCase()
-        : 'event';
-
-      const startLocal = eventData.startDateTime
-        ? new Date(eventData.startDateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        : 'TBD';
-
-      // 4. Construct push notification messages for each token using FCM v1
+      // 3. Construct push notification messages for each token using FCM v1
       const messages = recipients.map(r => ({
         token: r.token,
         notification: {
-          title: `🎼 New Event: ${eventData.title || 'Band Event'}`,
-          body: `New ${normalizedEventType} at ${eventData.location || 'TBD'} starting at ${startLocal}. Please RSVP!`,
+          title: notificationTitle,
+          body: notificationBody,
         },
         data: {
           click_action: 'FLUTTER_NOTIFICATION_CLICK',
@@ -172,6 +252,7 @@ exports.sendSubRequestNotification = onValueCreated({
       return null;
     }
 
+    const matchingUserIds = [];
     const recipients = [];
 
     // 2. Identify target recipients and their tokens
@@ -181,9 +262,6 @@ exports.sendSubRequestNotification = onValueCreated({
 
       const userInfo = users[userId].info;
       if (!userInfo) return;
-
-      const token = userInfo.PushToken;
-      if (!token || token.trim().length === 0) return;
 
       let shouldNotify = false;
       if (targetUserIds && Array.isArray(targetUserIds) && targetUserIds.length > 0) {
@@ -202,9 +280,29 @@ exports.sendSubRequestNotification = onValueCreated({
       }
 
       if (shouldNotify) {
-        recipients.push({ userId, token });
+        matchingUserIds.push(userId);
+        const token = userInfo.PushToken;
+        if (token && token.trim().length > 0) {
+          recipients.push({ userId, token: token.trim() });
+        }
       }
     });
+
+    // Record Notification Center entries for all matching users
+    await recordUserNotificationsBatch(matchingUserIds, (uid) => ({
+      id: `notif_sub_${subRequestId}_${uid}`,
+      type: 'sub_request_invite',
+      category: 'requests',
+      title: `🎼 Musician Request`,
+      body: `${voicePart} needed for ${bandName} in ${location}!`,
+      createdAt: Date.now(),
+      data: {
+        subRequestId: subRequestId,
+        type: 'sub_request_invite',
+        bandId: subRequestData.bandId || subRequestData.BandId || '',
+        eventId: subRequestData.eventId || subRequestData.EventId || '',
+      },
+    }));
 
     if (recipients.length === 0) {
       console.log('No matching recipients with push tokens found.');
@@ -356,15 +454,37 @@ exports.onSubRequestGroupPublished = onValueCreated({
         }
       });
 
-      // Recipient for push notifications (exclude creator and already notified recipients)
-      if (userId !== creatorUserId && userMatchingSlots.length > 0 && token && token.trim()) {
-        if (!existingNotifiedRecipients[userId]) {
+      // Eligible non-creator users with matching slots
+      if (userId !== creatorUserId && userMatchingSlots.length > 0) {
+        if (token && token.trim() && !existingNotifiedRecipients[userId]) {
           recipientMap.set(userId, { token, matchingSlots: userMatchingSlots });
         }
+        // Record Notification Center entry
+        const matchCount = userMatchingSlots.length;
+        const firstSlot = userMatchingSlots[0];
+        const title = `🎼 Musician Request`;
+        const body = matchCount === 1
+          ? `${firstSlot.voicePart} needed for ${bandName}!`
+          : `Multiple substitute positions (${matchCount}) open for ${bandName}!`;
+        indexUpdates[`/userNotifications/${userId}/notif_sub_grp_${publicationId}_${userId}`] = {
+          id: `notif_sub_grp_${publicationId}_${userId}`,
+          type: 'grouped_sub_request',
+          category: 'requests',
+          title,
+          body,
+          createdAt: pubData.publishedAt || Date.now(),
+          isRead: false,
+          readAt: null,
+          data: {
+            requestGroupId,
+            publicationId,
+            type: 'grouped_sub_request',
+          },
+        };
       }
     });
 
-    // Write server-maintained audience and feed indexes in bulk
+    // Write server-maintained audience, feed, and notification indexes in bulk
     if (Object.keys(indexUpdates).length > 0) {
       await db.ref().update(indexUpdates);
     }
@@ -783,13 +903,29 @@ exports.assignSubstitute = onCall({ region: 'europe-west1' }, async (request) =>
     await db.ref().update(updates);
   }
 
+  // Record Notification Center entry for candidate
+  const gigTitle = subReqData.VoicePart ? `Gig Confirmed: ${subReqData.VoicePart}` : 'Gig Confirmed!';
+  const bandDesc = targetBandId ? `You have been assigned to play with ${subReqData.BandName || 'the band'}!` : 'You have been confirmed for the gig!';
+  await recordUserNotification(candidateUserId, {
+    id: `notif_gig_fin_${subRequestId}_${candidateUserId}`,
+    type: 'gig_finalized',
+    category: 'requests',
+    title: `🎉 ${gigTitle}`,
+    body: bandDesc,
+    createdAt: now,
+    data: {
+      subRequestId: subRequestId,
+      bandId: targetBandId || '',
+      eventId: targetEventId || '',
+      type: 'gig_finalized',
+    },
+  });
+
   // Dispatch finalized gig push notification to candidate
   try {
     const candidateTokenSnap = await db.ref(`/users/${candidateUserId}/info/PushToken`).once('value');
     const candidateToken = candidateTokenSnap.val();
     if (candidateToken && typeof candidateToken === 'string' && candidateToken.trim()) {
-      const gigTitle = subReqData.VoicePart ? `Gig Confirmed: ${subReqData.VoicePart}` : 'Gig Confirmed!';
-      const bandDesc = targetBandId ? `You have been assigned to play with ${subReqData.BandName || 'the band'}!` : 'You have been confirmed for the gig!';
       await admin.messaging().send({
         token: candidateToken.trim(),
         notification: {
@@ -1063,6 +1199,21 @@ exports.onEventResponseChanged = functions.region(databaseTriggerRegion).databas
           return null;
         }
 
+        // Record Notification Center entry for creator
+        await recordUserNotification(creatorId, {
+          id: `notif_evt_thresh_${bandId}_${eventId}_${creatorId}`,
+          type: 'event_threshold',
+          category: 'events',
+          title: `📈 Event RSVP Milestone!`,
+          body: `70% or more of invited members have responded to your event: "${eventData.title || 'Band Event'}"`,
+          createdAt: Date.now(),
+          data: {
+            bandId: bandId,
+            eventId: eventId,
+            type: 'event_threshold',
+          },
+        });
+
         // Fetch creator push token
         const tokenSnapshot = await admin.database().ref(`/users/${creatorId}/info/PushToken`).once('value');
         const token = tokenSnapshot.val();
@@ -1189,6 +1340,21 @@ exports.checkEventReminders = functions.pubsub
             const nonRespondedMemberIds = memberIds.filter(userId => !responses[userId]);
 
             if (nonRespondedMemberIds.length > 0) {
+              const reminderHours = send84 ? '84h' : (send72 ? '72h' : (send48 ? '48h' : 'rem'));
+              await recordUserNotificationsBatch(nonRespondedMemberIds, (uid) => ({
+                id: `notif_evt_rem_${bandId}_${eventId}_${uid}_${reminderHours}`,
+                type: 'event_reminder',
+                category: 'events',
+                title: `⏰ RSVP Reminder: ${event.title || 'Band Event'}`,
+                body: `Please RSVP to the upcoming ${(event.eventType || 'event').toLowerCase()}! Let the band know if you can make it.`,
+                createdAt: Date.now(),
+                data: {
+                  bandId,
+                  eventId,
+                  type: 'event_reminder',
+                },
+              }));
+
               const recipients = [];
               const tokenPromises = nonRespondedMemberIds.map(async (userId) => {
                 const tokenSnapshot = await admin.database().ref(`/users/${userId}/info/PushToken`).once('value');
@@ -1276,6 +1442,21 @@ exports.onCollabSessionApplicationChanged = onValueWritten({
       const sessionSnapshot = await admin.database().ref(`/Collabs/Sessions/${sessionId}/Title`).once('value');
       const sessionTitle = sessionSnapshot.val() || 'Collab Session';
 
+      // Record Notification Center entry for session creator
+      await recordUserNotification(creatorId, {
+        id: `notif_collab_app_${sessionId}_${applicantId}`,
+        type: 'session_application',
+        category: 'requests',
+        title: 'New Session Application',
+        body: `A user has requested to join your session: "${sessionTitle}"`,
+        createdAt: Date.now(),
+        data: {
+          sessionId: sessionId,
+          applicantId: applicantId,
+          type: 'session_application',
+        },
+      });
+
       const tokenSnapshot = await admin.database().ref(`/users/${creatorId}/info/PushToken`).once('value');
       const token = tokenSnapshot.val();
 
@@ -1322,6 +1503,21 @@ exports.onCollabSessionApplicationChanged = onValueWritten({
       if (afterStatus === 'accepted' || afterStatus === 'declined') {
         const sessionSnapshot = await admin.database().ref(`/Collabs/Sessions/${sessionId}/Title`).once('value');
         const sessionTitle = sessionSnapshot.val() || 'Collab Session';
+
+        // Record Notification Center entry for applicant
+        await recordUserNotification(applicantId, {
+          id: `notif_collab_status_${sessionId}_${applicantId}_${afterStatus}`,
+          type: 'session_application_status',
+          category: 'requests',
+          title: `Session Request ${afterStatus.toUpperCase()}`,
+          body: `Your request to join "${sessionTitle}" has been ${afterStatus}.`,
+          createdAt: Date.now(),
+          data: {
+            sessionId: sessionId,
+            status: afterStatus,
+            type: 'session_application_status',
+          },
+        });
 
         const tokenSnapshot = await admin.database().ref(`/users/${applicantId}/info/PushToken`).once('value');
         const token = tokenSnapshot.val();
@@ -1695,6 +1891,56 @@ exports.sendDirectMessage = onCall({ region: 'europe-west1' }, async (request) =
 
   await admin.database().ref().update(updates);
 
+  // Record user notifications in Notification Center
+  try {
+    let senderName = 'Musician';
+    const senderSnap = await admin.database().ref(`/users/${senderUid}/info`).once('value');
+    if (senderSnap.exists()) {
+      const info = senderSnap.val();
+      senderName = info.DisplayName || info.displayName || info.Nickname || info.nickname || 'Musician';
+    }
+
+    if (isSessionChat) {
+      const sessionTitle = convVal.sessionTitle || 'Session Chat';
+      const participantList = (pMap && typeof pMap === 'object')
+        ? Object.keys(pMap).filter(id => isParticipantMember(pMap, id))
+        : (Array.isArray(pMap) ? pMap.map(String) : [senderUid]);
+      const otherParticipants = participantList.filter(pUid => pUid !== senderUid);
+      if (otherParticipants.length > 0) {
+        await recordUserNotificationsBatch(otherParticipants, (uid) => ({
+          id: `notif_sess_${conversationId}_${msgId}_${uid}`,
+          type: 'session_message',
+          category: 'messages',
+          title: `💬 ${sessionTitle}`,
+          body: `${senderName}: ${text.trim().length > 100 ? `${text.trim().substring(0, 97)}...` : text.trim()}`,
+          createdAt: Date.now(),
+          data: {
+            conversationId: conversationId,
+            sessionId: convVal.sessionId || '',
+            senderId: senderUid,
+            type: 'session_message',
+          },
+        }));
+      }
+    } else if (receiverUid) {
+      await recordUserNotification(receiverUid, {
+        id: `notif_dm_${conversationId}_${msgId}`,
+        type: 'direct_message',
+        category: 'messages',
+        title: `Message from ${senderName}`,
+        body: text.trim().length > 100 ? `${text.trim().substring(0, 97)}...` : text.trim(),
+        createdAt: Date.now(),
+        data: {
+          conversationId: conversationId,
+          senderId: senderUid,
+          type: 'direct_message',
+        },
+      });
+    }
+  } catch (notifErr) {
+    console.error('Error recording direct/session message notification:', notifErr);
+  }
+
   return { messageId: msgId };
 });
 
@@ -1841,6 +2087,32 @@ exports.triggerEventReminder = onCall({ region: 'europe-west1' }, async (request
     throw new HttpsError('permission-denied', 'Only Leader, Admin, MOD, or event creator can trigger event reminders.');
   }
 
+  // Check if reminder was already completed before resolving tokens
+  const auditRef = admin.database().ref(`/eventReminderAudit/${bandId}/${eventId}/${reminderType}`);
+  const auditSnap = await auditRef.once('value');
+  const auditData = auditSnap.val();
+
+  const legacyKeyMap = {
+    '24h': 'sentReminder24h',
+    '48h': 'sentReminder48h',
+    '72h': 'sentReminder72h',
+    'last': 'sentReminder84h',
+  };
+  const legacyKey = legacyKeyMap[reminderType];
+  const isLegacyAlreadySent = legacyKey ? (eventData[legacyKey] === true) : false;
+
+  if ((auditData && (auditData.status === 'completed' || auditData.status === 'already_sent')) || isLegacyAlreadySent) {
+    return {
+      status: 'already_sent',
+      successCount: auditData?.successCount || 0,
+      failureCount: auditData?.failureCount || 0,
+      attemptedCount: auditData?.attemptedCount || 0,
+      totalMembersCount: auditData?.totalMembersCount || 0,
+      tokensFoundCount: auditData?.tokensFoundCount || 0,
+      missingTokensCount: auditData?.missingTokensCount || 0,
+    };
+  }
+
   const membersSnap = await admin.database().ref(`/Bands/${bandId}/Members_band`).once('value');
   const members = membersSnap.val() || {};
   const memberIdsSet = new Set(Object.keys(members));
@@ -1883,8 +2155,6 @@ exports.triggerEventReminder = onCall({ region: 'europe-west1' }, async (request
       missingTokensCount: 0,
     };
   }
-
-  const auditRef = admin.database().ref(`/eventReminderAudit/${bandId}/${eventId}/${reminderType}`);
 
   const recipientsWithTokens = [];
   const tokenPromises = memberIds.map(async (uid) => {
@@ -2014,13 +2284,6 @@ exports.triggerEventReminder = onCall({ region: 'europe-west1' }, async (request
 
   await auditRef.update(auditUpdates);
 
-  const legacyKeyMap = {
-    '24h': 'sentReminder24h',
-    '48h': 'sentReminder48h',
-    '72h': 'sentReminder72h',
-    'last': 'sentReminder84h',
-  };
-  const legacyKey = legacyKeyMap[reminderType];
   if (legacyKey) {
     await admin.database().ref(`/Bands/${bandId}/Events/${eventId}/${legacyKey}`).set(true);
   }
@@ -2239,11 +2502,28 @@ exports.sendBandSectionMessage = onCall({ region: 'europe-west1' }, async (reque
 
   await admin.database().ref().update(updates);
 
-  // Push notifications to all other current participants
+  // Push notifications and notification center entries to all other current participants
   const otherParticipants = participantsList.filter(uid => uid !== senderUid);
   if (otherParticipants.length > 0) {
     try {
       const groupName = convVal.groupName || 'Section Chat';
+
+      // Record Notification Center feed entry for all other participants
+      await recordUserNotificationsBatch(otherParticipants, (uid) => ({
+        id: `notif_sec_${bandId}_${conversationId}_${msgId}_${uid}`,
+        type: 'band_section_chat',
+        category: 'messages',
+        title: `💬 ${groupName}`,
+        body: `${senderName}: ${text.trim().length > 100 ? `${text.trim().substring(0, 97)}...` : text.trim()}`,
+        createdAt: Date.now(),
+        data: {
+          conversationId: conversationId,
+          bandId: bandId,
+          senderId: senderUid,
+          type: 'band_section_chat',
+        },
+      }));
+
       const tokenPromises = otherParticipants.map(async (uid) => {
         const tokenSnap = await admin.database().ref(`/users/${uid}/info/PushToken`).once('value');
         const token = tokenSnap.val();
@@ -2925,4 +3205,133 @@ exports.sendTestPushNotification = onCall({ region: 'europe-west1' }, async (req
       error: `FCM Error: ${err.message || err.code || err}`,
     };
   }
+});
+
+/**
+ * Triggered when a new band room message is created under /bandconversations/{bandId}/messages/{messageId}.
+ * Records user notifications for all band members except the sender.
+ */
+exports.onBandRoomMessageCreated = functions.region(databaseTriggerRegion).database
+  .ref('/bandconversations/{bandId}/messages/{messageId}')
+  .onCreate(async (snapshot, context) => {
+    const msgData = snapshot.val();
+    if (!msgData) return null;
+
+    const bandId = context.params.bandId;
+    const messageId = context.params.messageId;
+    const senderId = msgData.senderId || msgData.SenderId;
+    const senderName = msgData.senderName || msgData.SenderName || 'Musician';
+    const text = msgData.text || msgData.Text || '';
+
+    try {
+      // 1. Fetch band name and members
+      const bandRef = admin.database().ref(`/Bands/${bandId}`);
+      const bandSnap = await bandRef.once('value');
+      const bandVal = bandSnap.val() || {};
+      const bandName = bandVal.Name || bandVal.name || bandId;
+
+      let memberIds = [];
+      if (bandVal.Members_band) {
+        memberIds = Object.keys(bandVal.Members_band);
+      } else if (bandVal.Members) {
+        memberIds = Object.keys(bandVal.Members);
+      }
+
+      // Also check /bandconversations/{bandId}/members if band node didn't have members
+      if (memberIds.length === 0) {
+        const convMembersSnap = await admin.database().ref(`/bandconversations/${bandId}/members`).once('value');
+        if (convMembersSnap.exists() && convMembersSnap.val()) {
+          memberIds = Object.keys(convMembersSnap.val());
+        }
+      }
+
+      const recipients = memberIds.filter(uid => uid && uid !== senderId);
+      if (recipients.length === 0) return null;
+
+      // 2. Record persistent notifications in Notification Center
+      await recordUserNotificationsBatch(recipients, (uid) => ({
+        id: `notif_br_${bandId}_${messageId}_${uid}`,
+        type: 'band_room_message',
+        category: 'messages',
+        title: `🎵 ${bandName}`,
+        body: `${senderName}: ${text.length > 100 ? `${text.substring(0, 97)}...` : text}`,
+        createdAt: Date.now(),
+        data: {
+          bandId: bandId,
+          messageId: messageId,
+          senderId: senderId || '',
+          type: 'band_room_message',
+        },
+      }));
+
+      return null;
+    } catch (err) {
+      console.error('Error in onBandRoomMessageCreated trigger:', err);
+      return null;
+    }
+  });
+
+/**
+ * Marks a single notification as read in the caller's /userNotifications/{callerUid}/{notificationId} feed.
+ */
+exports.markNotificationRead = onCall({ region: 'europe-west1' }, async (request) => {
+  const callerUid = request.auth?.uid;
+  if (!callerUid) {
+    throw new HttpsError('unauthenticated', 'User must be authenticated.');
+  }
+
+  const notificationId = request.data?.notificationId;
+  if (!notificationId || typeof notificationId !== 'string' || notificationId.trim().length === 0) {
+    throw new HttpsError('invalid-argument', 'notificationId is required.');
+  }
+
+  const notifRef = admin.database().ref(`/userNotifications/${callerUid}/${notificationId.trim()}`);
+  const notifSnap = await notifRef.once('value');
+  if (!notifSnap.exists()) {
+    throw new HttpsError('not-found', 'Notification not found.');
+  }
+
+  await notifRef.update({
+    isRead: true,
+    readAt: Date.now(),
+  });
+
+  return { success: true };
+});
+
+/**
+ * Marks all unread notifications as read in the caller's /userNotifications/{callerUid} feed.
+ */
+exports.markAllNotificationsRead = onCall({ region: 'europe-west1' }, async (request) => {
+  const callerUid = request.auth?.uid;
+  if (!callerUid) {
+    throw new HttpsError('unauthenticated', 'User must be authenticated.');
+  }
+
+  const feedRef = admin.database().ref(`/userNotifications/${callerUid}`);
+  const feedSnap = await feedRef.once('value');
+
+  if (!feedSnap.exists() || !feedSnap.val()) {
+    return { success: true, updatedCount: 0 };
+  }
+
+  const notifs = feedSnap.val();
+  const updates = {};
+  const now = Date.now();
+  let updatedCount = 0;
+
+  Object.keys(notifs).forEach((nId) => {
+    const n = notifs[nId];
+    if (n && !n.isRead) {
+      updates[`/userNotifications/${callerUid}/${nId}/isRead`] = true;
+      updates[`/userNotifications/${callerUid}/${nId}/readAt`] = now;
+      updatedCount++;
+    }
+  });
+
+  if (updatedCount > 0) {
+    await admin.database().ref().update(updates);
+  }
+
+  return { success: true, updatedCount };
 });
