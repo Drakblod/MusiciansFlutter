@@ -268,6 +268,29 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
     }
   }
 
+  String _getMemberName(BandMember member) {
+    if (member.userId != null) {
+      final profile = _memberProfiles[member.userId!];
+      if (profile?.displayName != null && profile!.displayName!.trim().isNotEmpty) {
+        return profile.displayName!.trim();
+      }
+      if (profile?.nickname != null && profile!.nickname!.trim().isNotEmpty) {
+        return profile.nickname!.trim();
+      }
+    }
+    if (member.nickname != null &&
+        member.nickname!.trim().isNotEmpty &&
+        member.nickname!.trim().toLowerCase() != 'leader') {
+      return member.nickname!.trim();
+    }
+    return 'Member';
+  }
+
+  String _getMemberInitial(BandMember member) {
+    final name = _getMemberName(member);
+    return name.isNotEmpty ? name.substring(0, 1).toUpperCase() : 'M';
+  }
+
   String _getMemberInstrument(String? userId) {
     if (userId == null) return '';
     final profile = _memberProfiles[userId];
@@ -1199,18 +1222,19 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
   }
 
   String _getSenderName(Message msg) {
-    if (msg.senderName != null && msg.senderName!.isNotEmpty && msg.senderName != 'Unknown') {
+    if (msg.senderName != null &&
+        msg.senderName!.isNotEmpty &&
+        msg.senderName != 'Unknown' &&
+        msg.senderName!.toLowerCase() != 'leader') {
       return msg.senderName!;
     }
     final senderId = msg.senderId;
     if (senderId != null) {
       final member = _members.firstWhere(
         (m) => m.userId == senderId,
-        orElse: () => BandMember(),
+        orElse: () => BandMember(userId: senderId),
       );
-      if (member.nickname != null && member.nickname!.isNotEmpty) {
-        return member.nickname!;
-      }
+      return _getMemberName(member);
     }
     return 'Member';
   }
@@ -1743,7 +1767,7 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
     final appState = Provider.of<AppState>(context, listen: false);
     final memberId = member.userId;
     if (memberId == null) return;
-    final memberName = member.nickname ?? 'Member';
+    final memberName = _getMemberName(member);
 
     UserProfile? profile;
     try {
@@ -1978,7 +2002,7 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                         radius: 20,
                         backgroundColor: AppTheme.primaryAccent.withOpacity(0.3),
                         child: Text(
-                          (member.nickname ?? 'M').substring(0, 1).toUpperCase(),
+                          _getMemberInitial(member),
                           style: GoogleFonts.inter(color: Colors.white),
                         ),
                       ),
@@ -1988,7 +2012,7 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              member.nickname ?? 'Unknown Member',
+                              _getMemberName(member),
                               style: GoogleFonts.outfit(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold),
                             ),
                             const SizedBox(height: 2),
@@ -2042,7 +2066,7 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                             if (bandId != null) {
                               _showMemberChatActions(member, bandId);
                             } else {
-                              _navigateTo1on1Chat(member.userId!, member.nickname ?? 'Member');
+                              _navigateTo1on1Chat(member.userId!, _getMemberName(member));
                             }
                           },
                           child: Container(
@@ -2079,7 +2103,7 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                                 if (mounted) {
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
-                                      content: Text('${member.nickname ?? "Member"}\'s role updated to $newRole'),
+                                      content: Text('${_getMemberName(member)}\'s role updated to $newRole'),
                                       backgroundColor: AppTheme.success,
                                     ),
                                   );
@@ -2404,7 +2428,7 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                         radius: 18,
                         backgroundColor: AppTheme.primaryAccent.withOpacity(0.2),
                         child: Text(
-                          (member.nickname ?? 'M').substring(0, 1).toUpperCase(),
+                          _getMemberInitial(member),
                           style: GoogleFonts.outfit(
                             fontSize: 13,
                             fontWeight: FontWeight.bold,
@@ -2414,7 +2438,7 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        member.nickname ?? 'Member',
+                        _getMemberName(member),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         textAlign: TextAlign.center,
@@ -2484,7 +2508,7 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                     radius: 22,
                     backgroundColor: AppTheme.primaryAccent.withOpacity(0.2),
                     child: Text(
-                      (member.nickname ?? 'M').substring(0, 1).toUpperCase(),
+                      _getMemberInitial(member),
                       style: GoogleFonts.outfit(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
@@ -2498,7 +2522,7 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          member.nickname ?? 'Member',
+                          _getMemberName(member),
                           style: GoogleFonts.outfit(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
@@ -2571,7 +2595,7 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
     final memberUserId = member.userId;
     if (memberUserId == null || _loadedBandId == null) return;
 
-    final name = member.nickname ?? 'Member';
+    final name = _getMemberName(member);
 
     final confirmed = await showDialog<bool>(
       context: context,

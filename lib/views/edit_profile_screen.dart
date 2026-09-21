@@ -1284,11 +1284,223 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         ),
                       ),
                     ),
+              const SizedBox(height: 32),
+
+              // Danger Zone: Delete Account
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEF4444).withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: const Color(0xFFEF4444).withOpacity(0.3),
+                    width: 1,
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.warning_amber_rounded,
+                          color: Color(0xFFEF4444),
+                          size: 20,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'DANGER ZONE',
+                          style: GoogleFonts.outfit(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: const Color(0xFFEF4444),
+                            letterSpacing: 1.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Permanently remove your account, profile, feeds, and all related data.',
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        color: AppTheme.textSecondary,
+                        height: 1.3,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    AnimatedTapDetector(
+                      onTap: () => _showDeleteAccountConfirmation(context),
+                      child: Container(
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEF4444).withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: const Color(0xFFEF4444).withOpacity(0.6),
+                            width: 1,
+                          ),
+                        ),
+                        child: Center(
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.delete_forever_rounded,
+                                color: Color(0xFFEF4444),
+                                size: 18,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Delete Account',
+                                style: GoogleFonts.inter(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                  color: const Color(0xFFEF4444),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
               const SizedBox(height: 40),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  void _showDeleteAccountConfirmation(BuildContext context) {
+    final appState = Provider.of<AppState>(context, listen: false);
+    showDialog(
+      context: context,
+      builder: (dialogCtx) {
+        bool isDeleting = false;
+        return StatefulBuilder(
+          builder: (dialogCtx, setDialogState) {
+            return Dialog(
+              backgroundColor: Colors.transparent,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0F0C20).withOpacity(0.98),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: const Color(0xFFEF4444).withOpacity(0.5), width: 1.5),
+                ),
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEF4444).withOpacity(0.15),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.delete_forever_rounded, color: Color(0xFFEF4444), size: 40),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Delete Account',
+                      style: GoogleFonts.outfit(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Are you sure you want to permanently delete your account? This action cannot be undone and will delete all your profile data, notification feeds, and band memberships.',
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        color: AppTheme.textSecondary,
+                        height: 1.4,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 24),
+                    if (isDeleting)
+                      const Center(
+                        child: CircularProgressIndicator(color: Color(0xFFEF4444)),
+                      )
+                    else
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              style: OutlinedButton.styleFrom(
+                                side: const BorderSide(color: Color(0xFF2E2A4E)),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                              ),
+                              onPressed: () => Navigator.pop(dialogCtx),
+                              child: Text(
+                                'Cancel',
+                                style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w600),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFFEF4444),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                              ),
+                              onPressed: () async {
+                                setDialogState(() {
+                                  isDeleting = true;
+                                });
+                                try {
+                                  await appState.deleteCurrentAccount();
+                                  if (dialogCtx.mounted) {
+                                    Navigator.pop(dialogCtx); // Close dialog
+                                    Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('Account deleted successfully.'),
+                                        backgroundColor: AppTheme.warning,
+                                      ),
+                                    );
+                                  }
+                                } catch (e) {
+                                  if (dialogCtx.mounted) {
+                                    setDialogState(() {
+                                      isDeleting = false;
+                                    });
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text('Error deleting account: $e'),
+                                        backgroundColor: AppTheme.danger,
+                                      ),
+                                    );
+                                  }
+                                }
+                              },
+                              child: Text(
+                                'Delete',
+                                style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w600),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }

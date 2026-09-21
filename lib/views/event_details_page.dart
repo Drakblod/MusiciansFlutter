@@ -378,7 +378,10 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
       final userId = member.userId;
       if (userId == null) continue;
 
-      final name = _cachedProfiles[userId]?.displayName ?? _cachedProfiles[userId]?.nickname ?? member.nickname ?? 'Unknown Member';
+      final name = _cachedProfiles[userId]?.displayName ??
+          _cachedProfiles[userId]?.nickname ??
+          ((member.nickname != null && member.nickname!.trim().toLowerCase() != 'leader') ? member.nickname : null) ??
+          'Unknown Member';
       final response = event.responses[userId]?.status;
       final comment = event.responses[userId]?.uncertainReason ?? event.responses[userId]?.comment;
       final displayName = comment != null && comment.isNotEmpty ? '$name\n"$comment"' : name;

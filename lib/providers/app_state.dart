@@ -325,6 +325,42 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  Future<void> deleteCurrentAccount() async {
+    _isLoading = true;
+    notifyListeners();
+    try {
+      _unreadSubscription?.cancel();
+      _unreadNotificationsSubscription?.cancel();
+      await firebaseService.deleteUserAccountAsync();
+      _clearProfileState();
+    } catch (e) {
+      debugPrint("Error on deleteCurrentAccount: $e");
+      rethrow;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> deleteBand(String bandId) async {
+    _isLoading = true;
+    notifyListeners();
+    try {
+      await firebaseService.deleteBandAsync(bandId);
+      if (_activeBandId == bandId) {
+        _activeBandId = null;
+        _activeBandName = null;
+      }
+      await refreshProfile();
+    } catch (e) {
+      debugPrint("Error on deleteBand: $e");
+      rethrow;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
   void selectBand(String bandId, String bandName) {
     _activeBandId = bandId;
     _activeBandName = bandName;

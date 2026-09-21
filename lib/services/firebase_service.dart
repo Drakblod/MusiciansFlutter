@@ -462,6 +462,16 @@ class FirebaseService {
     final bandNameKey = (band.name ?? 'My Band').replaceAll(' ', '_');
     final bandRef = _dbRef('Bands/$bandNameKey');
 
+    String creatorName = 'Leader';
+    try {
+      final profile = await getUserProfileAsync(userId);
+      if (profile?.displayName != null && profile!.displayName!.trim().isNotEmpty) {
+        creatorName = profile.displayName!.trim();
+      } else if (profile?.nickname != null && profile!.nickname!.trim().isNotEmpty) {
+        creatorName = profile.nickname!.trim();
+      }
+    } catch (_) {}
+
     final updatedBand = Band(
       id: bandNameKey,
       name: band.name,
@@ -474,7 +484,7 @@ class FirebaseService {
       rehearsalEndTime: band.rehearsalEndTime,
       about: band.about,
       description: band.description,
-      membersBand: {userId: BandMember(nickname: 'Leader', role: 'Leader')},
+      membersBand: {userId: BandMember(nickname: creatorName, role: 'Leader')},
     );
 
     // Save globally
@@ -482,7 +492,7 @@ class FirebaseService {
     // Assign Leader in global band members
     await _dbRef(
       'Bands/$bandNameKey/Members_band/$userId',
-    ).set({'Nickname': 'Leader', 'Role': 'Leader'});
+    ).set({'Nickname': creatorName, 'Role': 'Leader'});
     // Link band in user's profile
     await _dbRef('users/$userId/Bands/$bandNameKey').set(updatedBand.toJson());
     // Add member to band conversation
@@ -2925,5 +2935,111 @@ class FirebaseService {
 
   Future<void> saveSubRequestPublicationAsync(String publicationId, Map<String, dynamic> manifest) async {
     await _dbRef('subRequestPublications/$publicationId').set(manifest);
+  }
+
+  // ==========================================
+  // Account & Band Deletion
+  // ==========================================
+
+  Future<void> deleteUserAccountAsync() async {
+    final uid = currentUserId;
+    if (uid == null) {
+      throw Exception('User is not logged in.');
+    }
+
+    try {
+      final callable = _functions.httpsCallable('deleteUserAccount');
+      await callable.call();
+    } on FirebaseFunctionsException catch (e) {
+      debugPrint('Cloud Function deleteUserAccount error: ${e.message}, executing fallback cleanup');
+      await _deleteUserAccountFallback(uid);
+    } catch (e) {
+      debugPrint('deleteUserAccount fallback triggered: $e');
+      await _deleteUserAccountFallback(uid);
+    }
+
+    // Clean up client-side Auth record
+    try {
+      final user = _auth.currentUser;
+      if (user != null) {
+        await user.delete();
+      }
+    } catch (e) {
+      debugPrint('Client Auth delete notice (may have already been deleted server-side): $e');
+    }
+  }
+
+  Future<void> _deleteUserAccountFallback(String uid) async {
+    try {
+      final userBands = await getUserBandsAsync(uid);
+      for (final bandId in userBands.keys) {
+        final membersSnap = await _dbRef('Bands/$bandId/Members_band').get();
+        if (membersSnap.exists && membersSnap.value is Map) {
+          final members = Map<String, dynamic>.from(membersSnap.value as Map);
+          final userMember = members[uid];
+          final role = (userMember is Map ? (userMember['Role'] ?? userMember['role']) : null)?.toString().toLowerCase();
+          final otherMemberIds = members.keys.where((k) => k != uid).toList();
+
+          if (role == 'leader') {
+            if (otherMemberIds.isEmpty) {
+              await _dbRef('Bands/$bandId').remove();
+              await _dbRef('bandconversations/$bandId').remove();
+            } else {
+              String? successorId = otherMemberIds.firstWhere((id) {
+                final m = members[id];
+                final r = (m is Map ? (m['Role'] ?? m['role']) : null)?.toString().toLowerCase();
+                return r == 'admin';
+              }, orElse: () => otherMemberIds.first);
+
+              await _dbRef('Bands/$bandId/Members_band/$successorId/Role').set('Leader');
+              await _dbRef('Bands/$bandId/Members_band/$uid').remove();
+              await _dbRef('bandconversations/$bandId/members/$uid').remove();
+            }
+          } else {
+            await _dbRef('Bands/$bandId/Members_band/$uid').remove();
+            await _dbRef('bandconversations/$bandId/members/$uid').remove();
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Fallback error in band membership cleanup: $e');
+    }
+
+    await _dbRef('users/$uid').remove();
+    await _dbRef('userNotifications/$uid').remove();
+    await _dbRef('userSubRequestFeed/$uid').remove();
+    await _dbRef('creatorSubRequestGroups/$uid').remove();
+    await _dbRef('userConversations/$uid').remove();
+  }
+
+  Future<void> deleteBandAsync(String bandId) async {
+    final uid = currentUserId;
+    if (uid == null) {
+      throw Exception('User is not logged in.');
+    }
+
+    try {
+      final callable = _functions.httpsCallable('deleteBand');
+      await callable.call({'bandId': bandId});
+    } on FirebaseFunctionsException catch (e) {
+      debugPrint('Cloud Function deleteBand error: ${e.message}, executing fallback');
+      await _deleteBandFallback(bandId, uid);
+    } catch (e) {
+      debugPrint('deleteBand fallback triggered: $e');
+      await _deleteBandFallback(bandId, uid);
+    }
+  }
+
+  Future<void> _deleteBandFallback(String bandId, String uid) async {
+    final members = await getBandMembersAsync(bandId);
+    for (final member in members) {
+      if (member.userId != null) {
+        try {
+          await _dbRef('users/${member.userId}/Bands/$bandId').remove();
+        } catch (_) {}
+      }
+    }
+    await _dbRef('bandconversations/$bandId').remove();
+    await _dbRef('Bands/$bandId').remove();
   }
 }

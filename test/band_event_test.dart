@@ -375,6 +375,19 @@ void main() {
       final parsedCustom = EventRehearsal.fromJson(jsonCustom);
       expect(parsedCustom.type, equals('Soundcheck'));
       expect(parsedCustom.toJson()['type'], equals('Soundcheck'));
+
+      final jsonGig = {
+        'id': 'gig_1',
+        'date': '2026-10-29',
+        'startTime': '20:00',
+        'endTime': '23:00',
+        'location': 'Downtown Club',
+        'type': 'Club gig',
+      };
+      final parsedGig = EventRehearsal.fromJson(jsonGig);
+      expect(parsedGig.type, equals('Club gig'));
+      expect(EventRehearsal.gigTypes, containsAll(['Club gig', 'Concert', 'Show', 'Private Event']));
+      expect(EventRehearsal.sessionTypes, containsAll(['Rehearsal', 'Soundcheck', 'Load-in / Setup', 'Meeting', 'Other']));
     });
   });
 }

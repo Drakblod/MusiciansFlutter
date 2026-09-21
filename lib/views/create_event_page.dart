@@ -253,6 +253,18 @@ class _CreateEventPageState extends State<CreateEventPage> {
     return '$h:$m';
   }
 
+  IconData _getSessionTypeIcon(String type) {
+    if (type == 'Soundcheck') return Icons.tune_rounded;
+    if (type == 'Club gig') return Icons.nightlife_rounded;
+    if (type == 'Concert') return Icons.stadium_rounded;
+    if (type == 'Show') return Icons.theater_comedy_rounded;
+    if (type == 'Private Event') return Icons.celebration_rounded;
+    if (type == 'Load-in / Setup') return Icons.local_shipping_outlined;
+    if (type == 'Meeting') return Icons.groups_outlined;
+    if (type == 'Other') return Icons.more_horiz_rounded;
+    return Icons.music_note_rounded;
+  }
+
   void _showRehearsalDialog({int? editIndex}) {
     final isEditing = editIndex != null;
     final rehearsalToEdit = isEditing ? _rehearsals[editIndex] : null;
@@ -275,6 +287,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
         : _endTime;
 
     String draftType = isEditing ? rehearsalToEdit!.type : 'Rehearsal';
+    int selectedCategory = EventRehearsal.gigTypes.contains(draftType) ? 0 : 1;
 
     final draftLocationController = TextEditingController(
       text: isEditing
@@ -295,6 +308,10 @@ class _CreateEventPageState extends State<CreateEventPage> {
       builder: (ctx) {
         return StatefulBuilder(
           builder: (ctx, setModalState) {
+            final currentCategoryOptions = selectedCategory == 0
+                ? EventRehearsal.gigTypes
+                : EventRehearsal.sessionTypes;
+
             return Padding(
               padding: EdgeInsets.only(
                 left: 20,
@@ -324,33 +341,135 @@ class _CreateEventPageState extends State<CreateEventPage> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 14),
 
-                    // Session Type Dropdown
+                    // Two-Part Category Toggle (Gigs & Shows vs Sessions & Logistics)
+                    Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF141029),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xFF2E2A4E)),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: () {
+                                setModalState(() {
+                                  selectedCategory = 0;
+                                  if (!EventRehearsal.gigTypes.contains(draftType)) {
+                                    draftType = EventRehearsal.gigTypes.first;
+                                  }
+                                });
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: selectedCategory == 0
+                                      ? AppTheme.primaryAccent
+                                      : Colors.transparent,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Center(
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(
+                                        Icons.nightlife_rounded,
+                                        size: 15,
+                                        color: selectedCategory == 0
+                                            ? Colors.white
+                                            : AppTheme.textSecondary,
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        'Gigs & Shows',
+                                        style: GoogleFonts.inter(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          color: selectedCategory == 0
+                                              ? Colors.white
+                                              : AppTheme.textSecondary,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: () {
+                                setModalState(() {
+                                  selectedCategory = 1;
+                                  if (!EventRehearsal.sessionTypes.contains(draftType)) {
+                                    draftType = EventRehearsal.sessionTypes.first;
+                                  }
+                                });
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: selectedCategory == 1
+                                      ? AppTheme.primaryAccent
+                                      : Colors.transparent,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Center(
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(
+                                        Icons.music_note_rounded,
+                                        size: 15,
+                                        color: selectedCategory == 1
+                                            ? Colors.white
+                                            : AppTheme.textSecondary,
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        'Sessions & Prep',
+                                        style: GoogleFonts.inter(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          color: selectedCategory == 1
+                                              ? Colors.white
+                                              : AppTheme.textSecondary,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Session Type Dropdown (Filtered by selected category)
                     DropdownButtonFormField<String>(
-                      value: EventRehearsal.standardSessionTypes.contains(draftType)
+                      value: currentCategoryOptions.contains(draftType)
                           ? draftType
-                          : EventRehearsal.standardSessionTypes.first,
+                          : (currentCategoryOptions.isNotEmpty
+                              ? currentCategoryOptions.first
+                              : draftType),
                       dropdownColor: const Color(0xFF16132D),
                       style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
-                      decoration: const InputDecoration(
-                        labelText: 'Session Type',
-                        prefixIcon: Icon(Icons.category_outlined, color: AppTheme.primaryAccent),
+                      decoration: InputDecoration(
+                        labelText: selectedCategory == 0 ? 'Performance / Gig Type' : 'Session Type',
+                        prefixIcon: Icon(_getSessionTypeIcon(draftType), color: AppTheme.primaryAccent),
                       ),
-                      items: EventRehearsal.standardSessionTypes.map((type) {
-                        IconData typeIcon = Icons.music_note_rounded;
-                        if (type == 'Soundcheck') typeIcon = Icons.tune_rounded;
-                        if (type == 'Club gig') typeIcon = Icons.nightlife_rounded;
-                        if (type == 'Concert') typeIcon = Icons.stadium_rounded;
-                        if (type == 'Load-in / Setup') typeIcon = Icons.local_shipping_outlined;
-                        if (type == 'Meeting') typeIcon = Icons.groups_outlined;
-                        if (type == 'Other') typeIcon = Icons.more_horiz_rounded;
-
+                      items: currentCategoryOptions.map((type) {
                         return DropdownMenuItem<String>(
                           value: type,
                           child: Row(
                             children: [
-                              Icon(typeIcon, color: AppTheme.primaryAccent, size: 16),
+                              Icon(_getSessionTypeIcon(type), color: AppTheme.primaryAccent, size: 16),
                               const SizedBox(width: 8),
                               Text(type, style: GoogleFonts.inter(color: Colors.white)),
                             ],

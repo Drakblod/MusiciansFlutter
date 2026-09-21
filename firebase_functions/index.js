@@ -3335,3 +3335,213 @@ exports.markAllNotificationsRead = onCall({ region: 'europe-west1' }, async (req
 
   return { success: true, updatedCount };
 });
+
+/**
+ * Permanently deletes the caller's user account and all associated data.
+ * If the user is the leader of a band:
+ *   - If other members exist, leadership is automatically transferred to an Admin or next member.
+ *   - If no other members exist, the orphaned band is deleted.
+ */
+exports.deleteUserAccount = onCall({ region: 'europe-west1' }, async (request) => {
+  const callerUid = request.auth?.uid;
+  if (!callerUid) {
+    throw new HttpsError('unauthenticated', 'User must be authenticated.');
+  }
+
+  const db = admin.database();
+
+  try {
+    // 1. Process band memberships & leadership transfer
+    const userBandsSnap = await db.ref(`/users/${callerUid}/Bands`).once('value');
+    if (userBandsSnap.exists() && userBandsSnap.val()) {
+      const userBands = userBandsSnap.val();
+      const bandIds = Object.keys(userBands);
+
+      for (const bandId of bandIds) {
+        const bandSnap = await db.ref(`/Bands/${bandId}`).once('value');
+        if (!bandSnap.exists()) continue;
+
+        const bandData = bandSnap.val() || {};
+        const members = bandData.Members_band || {};
+        const callerMember = members[callerUid];
+
+        if (callerMember) {
+          const userRole = (callerMember.Role || callerMember.role || '').toLowerCase();
+          const otherMemberIds = Object.keys(members).filter((id) => id !== callerUid);
+
+          if (userRole === 'leader') {
+            if (otherMemberIds.length === 0) {
+              // Sole member / leader: Delete orphaned band completely
+              await db.ref(`/Bands/${bandId}`).remove();
+              await db.ref(`/bandconversations/${bandId}`).remove();
+              await db.ref(`/bandSectionConversations/${bandId}`).remove();
+            } else {
+              // Auto-transfer leadership to an Admin, or next available member
+              let successorId = otherMemberIds.find((id) => {
+                const r = (members[id]?.Role || members[id]?.role || '').toLowerCase();
+                return r === 'admin';
+              });
+              if (!successorId) {
+                successorId = otherMemberIds[0];
+              }
+
+              // Promote successor to Leader
+              await db.ref(`/Bands/${bandId}/Members_band/${successorId}/Role`).set('Leader');
+              // Remove deleting user from band
+              await db.ref(`/Bands/${bandId}/Members_band/${callerUid}`).remove();
+              await db.ref(`/bandconversations/${bandId}/members/${callerUid}`).remove();
+
+              // Send system notification to new leader
+              const bandName = bandData.Name || bandData.name || bandId;
+              await recordUserNotification(successorId, {
+                type: 'band_leadership_promoted',
+                category: 'events',
+                title: '👑 You are now the Band Leader',
+                body: `You have been promoted to Leader of ${bandName}.`,
+                data: { bandId: bandId },
+              });
+            }
+          } else {
+            // Normal member: remove from band members
+            await db.ref(`/Bands/${bandId}/Members_band/${callerUid}`).remove();
+            await db.ref(`/bandconversations/${bandId}/members/${callerUid}`).remove();
+          }
+        }
+      }
+    }
+
+    // 2. Clean up user's sub-requests
+    const subRequestsSnap = await db.ref('/SubRequests').once('value');
+    if (subRequestsSnap.exists() && subRequestsSnap.val()) {
+      const allSubRequests = subRequestsSnap.val();
+      const subUpdates = {};
+      Object.keys(allSubRequests).forEach((subId) => {
+        const item = allSubRequests[subId];
+        if (item && (item.CreatorUserId === callerUid || item.UserId === callerUid || item.creatorUserId === callerUid || item.userId === callerUid)) {
+          subUpdates[`/SubRequests/${subId}`] = null;
+          subUpdates[`/subRequestAudience/${subId}`] = null;
+        }
+      });
+      if (Object.keys(subUpdates).length > 0) {
+        await db.ref().update(subUpdates);
+      }
+    }
+
+    // 3. Clean up user's collab sessions & studios
+    const collabsSnap = await db.ref('/Collabs/Sessions').once('value');
+    if (collabsSnap.exists() && collabsSnap.val()) {
+      const sessions = collabsSnap.val();
+      const collabUpdates = {};
+      Object.keys(sessions).forEach((sId) => {
+        const s = sessions[sId];
+        if (s && (s.CreatorId === callerUid || s.creatorId === callerUid)) {
+          collabUpdates[`/Collabs/Sessions/${sId}`] = null;
+          collabUpdates[`/Collabs/Applications/${sId}`] = null;
+        }
+      });
+      if (Object.keys(collabUpdates).length > 0) {
+        await db.ref().update(collabUpdates);
+      }
+    }
+
+    const studiosSnap = await db.ref('/Collabs/Studios').once('value');
+    if (studiosSnap.exists() && studiosSnap.val()) {
+      const studios = studiosSnap.val();
+      const studioUpdates = {};
+      Object.keys(studios).forEach((sId) => {
+        const s = studios[sId];
+        if (s && (s.CreatorId === callerUid || s.creatorId === callerUid)) {
+          studioUpdates[`/Collabs/Studios/${sId}`] = null;
+        }
+      });
+      if (Object.keys(studioUpdates).length > 0) {
+        await db.ref().update(studioUpdates);
+      }
+    }
+
+    // 4. Clean up user-specific nodes
+    const rootUpdates = {};
+    rootUpdates[`/users/${callerUid}`] = null;
+    rootUpdates[`/userNotifications/${callerUid}`] = null;
+    rootUpdates[`/userSubRequestFeed/${callerUid}`] = null;
+    rootUpdates[`/creatorSubRequestGroups/${callerUid}`] = null;
+    rootUpdates[`/userConversations/${callerUid}`] = null;
+    await db.ref().update(rootUpdates);
+
+    // 5. Delete Firebase Authentication user record
+    try {
+      await admin.auth().deleteUser(callerUid);
+    } catch (authErr) {
+      console.warn(`Auth user delete notice for ${callerUid}:`, authErr.message);
+    }
+
+    return { success: true };
+  } catch (err) {
+    console.error(`Error deleting user account for ${callerUid}:`, err);
+    throw new HttpsError('internal', `Failed to delete user account: ${err.message}`);
+  }
+});
+
+/**
+ * Permanently deletes a band. Only callable by a Leader of the band.
+ * Removes band references from all members' /users/{memberId}/Bands and deletes the band.
+ */
+exports.deleteBand = onCall({ region: 'europe-west1' }, async (request) => {
+  const callerUid = request.auth?.uid;
+  if (!callerUid) {
+    throw new HttpsError('unauthenticated', 'User must be authenticated.');
+  }
+
+  const bandId = request.data?.bandId;
+  if (!bandId || typeof bandId !== 'string' || bandId.trim().length === 0) {
+    throw new HttpsError('invalid-argument', 'bandId is required.');
+  }
+
+  const trimmedBandId = bandId.trim();
+  const db = admin.database();
+
+  try {
+    const bandRef = db.ref(`/Bands/${trimmedBandId}`);
+    const bandSnap = await bandRef.once('value');
+
+    if (!bandSnap.exists()) {
+      throw new HttpsError('not-found', 'Band not found.');
+    }
+
+    const bandData = bandSnap.val() || {};
+    const members = bandData.Members_band || {};
+    const callerMember = members[callerUid];
+
+    if (!callerMember) {
+      throw new HttpsError('permission-denied', 'You are not a member of this band.');
+    }
+
+    const callerRole = (callerMember.Role || callerMember.role || '').toLowerCase();
+    if (callerRole !== 'leader') {
+      throw new HttpsError('permission-denied', 'Only the band leader can delete this band.');
+    }
+
+    const memberIds = Object.keys(members);
+    const updates = {};
+
+    // 1. Remove band from each member's user profile
+    for (const memberId of memberIds) {
+      updates[`/users/${memberId}/Bands/${trimmedBandId}`] = null;
+    }
+
+    // 2. Remove band conversations & section conversations
+    updates[`/bandconversations/${trimmedBandId}`] = null;
+    updates[`/bandSectionConversations/${trimmedBandId}`] = null;
+
+    // 3. Remove the band itself
+    updates[`/Bands/${trimmedBandId}`] = null;
+
+    await db.ref().update(updates);
+
+    return { success: true };
+  } catch (err) {
+    if (err instanceof HttpsError) throw err;
+    console.error(`Error deleting band ${trimmedBandId} by ${callerUid}:`, err);
+    throw new HttpsError('internal', `Failed to delete band: ${err.message}`);
+  }
+});

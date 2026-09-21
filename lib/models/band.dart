@@ -141,6 +141,19 @@ class Band {
     return uRole.contains('leader') || uRole.contains('admin');
   }
 
+  bool isUserLeader(String? userId) {
+    if (userId == null) return false;
+    final member = membersBand[userId] ??
+        membersBand.values.firstWhere(
+          (m) => m.userId == userId,
+          orElse: () => BandMember(),
+        );
+    final role = (member.role ?? '').toLowerCase();
+    final nickname = (member.nickname ?? '').toLowerCase();
+    final uRole = (userRole ?? '').toLowerCase();
+    return role == 'leader' || nickname == 'leader' || uRole == 'leader';
+  }
+
   static List<String> _toList(dynamic val) {
     if (val == null) return [];
     if (val is List) return val.map((e) => e.toString()).toList();

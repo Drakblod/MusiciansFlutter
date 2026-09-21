@@ -82,7 +82,7 @@ class BandSectionUtils {
 
       final displayName = profile?.displayName ??
           profile?.nickname ??
-          member.nickname ??
+          ((member.nickname != null && member.nickname!.toLowerCase() != 'leader') ? member.nickname : null) ??
           'Musician';
       sectionNames.putIfAbsent(key, () => []).add(displayName);
     }

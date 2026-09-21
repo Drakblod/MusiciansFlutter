@@ -317,7 +317,10 @@ class _EventResultsPageState extends State<EventResultsPage> {
       regularUserIds.add(userId);
 
       final profile = _cachedProfiles[userId];
-      final displayName = profile?.displayName ?? profile?.nickname ?? member.nickname ?? 'Unknown Member';
+      final displayName = profile?.displayName ??
+          profile?.nickname ??
+          ((member.nickname != null && member.nickname!.trim().toLowerCase() != 'leader') ? member.nickname : null) ??
+          'Unknown Member';
       final instrument = profile?.mainInstrument ?? member.role;
 
       final response = event.responses[userId];
