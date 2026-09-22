@@ -4,6 +4,7 @@ import '../providers/app_state.dart';
 import '../theme/app_theme.dart';
 import '../widgets/animated_tap_detector.dart';
 import '../views/create_event_page.dart';
+import '../views/manage_events_screen.dart';
 
 class GlobalCreateEventLauncher {
   static bool _isNavigating = false;
@@ -50,7 +51,7 @@ class GlobalCreateEventLauncher {
               ),
               const SizedBox(height: 20),
               Text(
-                'WHAT WOULD YOU LIKE TO CREATE?',
+                'EVENTS & SESSIONS',
                 style: GoogleFonts.outfit(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -176,6 +177,78 @@ class GlobalCreateEventLauncher {
                               const SizedBox(height: 4),
                               Text(
                                 'Create songwriting session, jam, recording, workshop...',
+                                style: GoogleFonts.inter(
+                                  fontSize: 12,
+                                  color: AppTheme.textSecondary,
+                                  height: 1.3,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              // Option 3: Manage Events
+              AnimatedTapDetector(
+                enableFocus: true,
+                semanticLabel: 'Manage Events',
+                onTap: () async {
+                  if (_isNavigating) return;
+                  _isNavigating = true;
+                  Navigator.pop(sheetContext);
+                  if (context.mounted) {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const ManageEventsScreen(),
+                      ),
+                    );
+                  }
+                  _isNavigating = false;
+                },
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AppTheme.cardBackground,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: const Color(0xFF2E2A4E), width: 1.5),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: AppTheme.primaryAccent.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Icon(
+                            Icons.edit_calendar_rounded,
+                            color: AppTheme.primaryAccent,
+                            size: 24,
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Manage Events',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'View, edit, track RSVPs & manage your events...',
                                 style: GoogleFonts.inter(
                                   fontSize: 12,
                                   color: AppTheme.textSecondary,

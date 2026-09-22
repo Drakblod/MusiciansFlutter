@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
 import '../providers/app_state.dart';
 import '../theme/app_theme.dart';
 import '../models/sub_request.dart';
@@ -104,18 +105,62 @@ class _SubRequestResponseDetailsScreenState
         throw Exception("Missing user ID or request ID");
       }
 
+      SubRequest effectiveReq = widget.subRequest;
+      try {
+        final freshReq = await appState.firebaseService.getSubRequestAsync(reqId);
+        if (freshReq != null) {
+          effectiveReq = freshReq;
+        }
+      } catch (_) {}
+
+      // If connected to event and location or date is still missing, enrich from the event
+      if ((effectiveReq.location == null || effectiveReq.location!.isEmpty || effectiveReq.date == null || effectiveReq.date!.isEmpty) &&
+          effectiveReq.bandId != null &&
+          effectiveReq.eventId != null &&
+          effectiveReq.bandId!.isNotEmpty &&
+          effectiveReq.eventId!.isNotEmpty) {
+        try {
+          final event = await appState.firebaseService.getBandEventOnceAsync(
+            effectiveReq.bandId!,
+            effectiveReq.eventId!,
+          );
+          if (event != null) {
+            final startLocal = DateTime.tryParse(event.startDateTime)?.toLocal();
+            final endLocal = DateTime.tryParse(event.endDateTime)?.toLocal();
+            effectiveReq = effectiveReq.copyWith(
+              location: (effectiveReq.location != null && effectiveReq.location!.isNotEmpty)
+                  ? effectiveReq.location
+                  : event.location,
+              date: (effectiveReq.date != null && effectiveReq.date!.isNotEmpty)
+                  ? effectiveReq.date
+                  : event.startDateTime,
+              startTime: (effectiveReq.startTime != null && effectiveReq.startTime!.isNotEmpty)
+                  ? effectiveReq.startTime
+                  : (startLocal != null ? DateFormat('HH:mm').format(startLocal) : null),
+              endTime: (effectiveReq.endTime != null && effectiveReq.endTime!.isNotEmpty)
+                  ? effectiveReq.endTime
+                  : (endLocal != null ? DateFormat('HH:mm').format(endLocal) : null),
+            );
+          }
+        } catch (_) {}
+      }
+
       // 1. Create the Agreement
       final agreement = Agreement(
         choirLeaderId: currentUserId,
         vocalistId: selectedSub.userId,
-        voicePart: widget.subRequest.voicePart,
-        date: widget.subRequest.date,
-        startTime: widget.subRequest.startTime,
-        endTime: widget.subRequest.endTime,
-        location: widget.subRequest.location,
-        additionalTerms: "Rehearsal replacement agreement.",
-        bandName: widget.subRequest.bandName,
+        voicePart: effectiveReq.voicePart,
+        date: effectiveReq.date,
+        startTime: effectiveReq.startTime,
+        endTime: effectiveReq.endTime,
+        location: effectiveReq.location,
+        additionalTerms: effectiveReq.description?.isNotEmpty == true
+            ? effectiveReq.description
+            : "Substitute staffing agreement.",
+        bandName: effectiveReq.bandName,
         subRequestId: reqId,
+        payAmount: effectiveReq.payAmount,
+        currency: effectiveReq.currency,
       );
 
       // 2. Create the system message for the conversation

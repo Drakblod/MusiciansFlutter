@@ -1086,6 +1086,18 @@ class FirebaseService {
     }
   }
 
+  Future<SubRequest?> getSubRequestAsync(String subRequestId) async {
+    try {
+      final snapshot = await _dbRef('SubRequests/$subRequestId').get();
+      if (snapshot.exists && snapshot.value is Map) {
+        return SubRequest.fromJson(snapshot.value as Map, subRequestId);
+      }
+    } catch (e) {
+      debugPrint('[FirebaseService] Error getting subrequest $subRequestId: $e');
+    }
+    return null;
+  }
+
   Future<bool> deleteSubRequestAsync(
     String creatorId,
     String subRequestId,
@@ -1144,6 +1156,7 @@ class FirebaseService {
     final conversationId = await createAgreementConversationAsync(
       subRequestId,
       receiverId,
+      agreement: agreement,
     );
     if (conversationId.isNotEmpty &&
         message.text != null &&
@@ -1164,25 +1177,39 @@ class FirebaseService {
 
   Future<String> createAgreementConversationAsync(
     String subRequestId,
-    String applicantId,
-  ) async {
+    String applicantId, {
+    Agreement? agreement,
+  }) async {
     try {
       if (subRequestId.isNotEmpty) {
         final result = await _functions
             .httpsCallable('createAgreementConversation')
-            .call({'subRequestId': subRequestId, 'applicantId': applicantId});
+            .call({
+              'subRequestId': subRequestId,
+              'applicantId': applicantId,
+              if (agreement != null) 'agreement': agreement.toJson(),
+            });
         final convId = result.data['conversationId']?.toString() ?? '';
         if (convId.isNotEmpty) {
+          if (agreement != null) {
+            await _dbRef('conversations/$convId/agreement').update(agreement.toJson());
+            await _dbRef('conversations/$convId/Agreement').update(agreement.toJson());
+          }
           return convId;
         }
       }
     } catch (e) {
       debugPrint('[FirebaseService] createAgreementConversation error: $e. Falling back to direct conversation.');
     }
-    return await getOrCreateDirectConversationAsync(
+    final directId = await getOrCreateDirectConversationAsync(
       currentUserId ?? '',
       applicantId,
     );
+    if (directId.isNotEmpty && agreement != null) {
+      await _dbRef('conversations/$directId/agreement').update(agreement.toJson());
+      await _dbRef('conversations/$directId/Agreement').update(agreement.toJson());
+    }
+    return directId;
   }
 
   // ==========================================

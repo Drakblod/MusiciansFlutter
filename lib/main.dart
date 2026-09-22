@@ -53,6 +53,7 @@ import 'views/public_event_details_screen.dart';
 import 'models/public_calendar_event.dart';
 import 'views/push_sound_admin_screen.dart';
 import 'views/notification_center_screen.dart';
+import 'views/manage_events_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -133,6 +134,7 @@ class MyApp extends StatelessWidget {
           '/create-session': (context) => const CreateSessionScreen(),
           '/admin-push-sounds': (context) => const PushSoundAdminScreen(),
           '/notifications': (context) => const NotificationCenterScreen(),
+          '/manage-events': (context) => const ManageEventsScreen(),
         },
         onGenerateRoute: (settings) {
           if (settings.name == '/edit-band') {

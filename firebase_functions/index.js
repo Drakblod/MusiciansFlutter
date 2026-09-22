@@ -1743,13 +1743,21 @@ exports.createAgreementConversation = onCall({ region: 'europe-west1' }, async (
     throw new HttpsError('internal', 'Failed to resolve agreement conversation ID.');
   }
 
+  const clientAgreement = request.data?.agreement || {};
   const agreementPayload = {
     subRequestId: subRequestId,
     applicantId: applicantId,
     creatorId: creatorUid,
-    bandName: subReqData.BandName || 'Gig Agreement',
-    voicePart: subReqData.VoicePart || 'Musician',
-    status: 'pending',
+    bandName: subReqData.BandName || subReqData.bandName || clientAgreement.BandName || clientAgreement.bandName || 'Gig Agreement',
+    voicePart: subReqData.VoicePart || subReqData.voicePart || subReqData.Role || subReqData.role || clientAgreement.VoicePart || clientAgreement.voicePart || 'Musician',
+    date: subReqData.Date || subReqData.date || subReqData.startDateTime || clientAgreement.Date || clientAgreement.date || null,
+    startTime: subReqData.StartTime || subReqData.startTime || clientAgreement.StartTime || clientAgreement.startTime || null,
+    endTime: subReqData.EndTime || subReqData.endTime || clientAgreement.EndTime || clientAgreement.endTime || null,
+    location: subReqData.Location || subReqData.location || clientAgreement.Location || clientAgreement.location || null,
+    additionalTerms: subReqData.AdditionalTerms || subReqData.additionalTerms || clientAgreement.AdditionalTerms || clientAgreement.additionalTerms || 'Substitute staffing assignment.',
+    payAmount: subReqData.PayAmount || subReqData.payAmount || clientAgreement.PayAmount || clientAgreement.payAmount || null,
+    currency: subReqData.Currency || subReqData.currency || clientAgreement.Currency || clientAgreement.currency || null,
+    status: 'confirmed',
   };
 
   const convRef = admin.database().ref(`/conversations/${conversationId}`);
@@ -1763,6 +1771,10 @@ exports.createAgreementConversation = onCall({ region: 'europe-west1' }, async (
       agreement: agreementPayload,
       Agreement: agreementPayload,
     });
+  } else {
+    // Update or enrich existing agreement record
+    await convRef.child('agreement').update(agreementPayload);
+    await convRef.child('Agreement').update(agreementPayload);
   }
 
   // Idempotent user index repair

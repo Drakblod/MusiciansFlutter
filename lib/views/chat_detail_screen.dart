@@ -278,14 +278,14 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                               const SizedBox(height: 8),
                               _buildAgreementRow(
                                 Icons.person_search_rounded,
-                                'Vocalist Role / Part',
+                                'Role / Instrument',
                                 agreement.voicePart ?? 'N/A',
                               ),
                               const SizedBox(height: 8),
                               _buildAgreementRow(
                                 Icons.calendar_today_rounded,
                                 'Date & Time',
-                                '${agreement.date ?? "N/A"} (${agreement.startTime ?? "—"} to ${agreement.endTime ?? "—"})',
+                                _formatAgreementDateTime(agreement),
                               ),
                               const SizedBox(height: 8),
                               _buildAgreementRow(
@@ -311,7 +311,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                         // Collapsed Quick Summary
                         const SizedBox(height: 6),
                         Text(
-                          '${agreement.bandName ?? "Band"} • ${agreement.voicePart ?? "Sub"} • ${agreement.date ?? "No Date"}',
+                          _formatAgreementCollapsed(agreement),
                           style: GoogleFonts.inter(
                             fontSize: 12,
                             color: Colors.white70,
@@ -558,6 +558,44 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         ],
       ),
     );
+  }
+
+  String _formatAgreementDateTime(Agreement agreement) {
+    String dateStr = agreement.date?.trim() ?? '';
+    if (dateStr.isNotEmpty) {
+      final parsedDate = DateTime.tryParse(dateStr);
+      if (parsedDate != null) {
+        dateStr = DateFormat('EEEE, MMM d, yyyy').format(parsedDate.toLocal());
+      }
+    }
+
+    final hasStart = agreement.startTime != null && agreement.startTime!.trim().isNotEmpty;
+    final hasEnd = agreement.endTime != null && agreement.endTime!.trim().isNotEmpty;
+
+    if (dateStr.isNotEmpty && (hasStart || hasEnd)) {
+      final timeStr = '${agreement.startTime ?? "—"} – ${agreement.endTime ?? "—"}';
+      return '$dateStr ($timeStr)';
+    } else if (dateStr.isNotEmpty) {
+      return dateStr;
+    } else if (hasStart || hasEnd) {
+      return '${agreement.startTime ?? "—"} – ${agreement.endTime ?? "—"}';
+    }
+    return 'N/A';
+  }
+
+  String _formatAgreementCollapsed(Agreement agreement) {
+    final band = agreement.bandName ?? "Band";
+    final part = agreement.voicePart ?? "Sub";
+    String dateStr = agreement.date?.trim() ?? '';
+    if (dateStr.isNotEmpty) {
+      final parsedDate = DateTime.tryParse(dateStr);
+      if (parsedDate != null) {
+        dateStr = DateFormat('MMM d, yyyy').format(parsedDate.toLocal());
+      }
+    } else {
+      dateStr = 'No Date';
+    }
+    return '$band • $part • $dateStr';
   }
 
   Widget _buildAgreementRow(IconData icon, String label, String value) {

@@ -885,14 +885,22 @@ class _FindSubScreenState extends State<FindSubScreen> {
           );
 
           try {
+            final sectionLoc = section.locationController.text.trim().isNotEmpty
+                ? section.locationController.text.trim()
+                : (section.event.location.isNotEmpty
+                    ? section.event.location
+                    : _locationController.text.trim());
+            final sectionStartTimeStr = (section.startTime.hour.toString().padLeft(2, '0') + ':' + section.startTime.minute.toString().padLeft(2, '0'));
+            final sectionEndTimeStr = (section.endTime.hour.toString().padLeft(2, '0') + ':' + section.endTime.minute.toString().padLeft(2, '0'));
+
             final agreement = Agreement(
               choirLeaderId: currentUserId,
               vocalistId: candidate.userId,
               voicePart: slot.instrument,
-              date: _selectedDate.toIso8601String(),
-              startTime: (_startTime.hour.toString().padLeft(2, '0') + ':' + _startTime.minute.toString().padLeft(2, '0')),
-              endTime: (_endTime.hour.toString().padLeft(2, '0') + ':' + _endTime.minute.toString().padLeft(2, '0')),
-              location: _locationController.text.trim(),
+              date: section.selectedDate.toIso8601String(),
+              startTime: sectionStartTimeStr,
+              endTime: sectionEndTimeStr,
+              location: sectionLoc,
               additionalTerms: 'Substitute staffing assignment.',
               bandName: bandName,
               subRequestId: subRequestId,
