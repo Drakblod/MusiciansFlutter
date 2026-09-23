@@ -292,7 +292,7 @@ void main() {
       // Create Multiple Events is completely removed
       expect(find.text('Create Multiple Events'), findsNothing);
       expect(find.text('Publish Event'), findsOneWidget);
-      expect(find.text('+ Add Session'), findsOneWidget);
+      expect(find.text('+ Add Event'), findsOneWidget);
     });
 
     testWidgets('11. Create Event validation: empty Name or Location blocks save', (WidgetTester tester) async {
@@ -326,7 +326,7 @@ void main() {
       expect(appState.mockFirebase.savedBandEvents.isEmpty, isTrue);
     });
 
-    testWidgets('12, 13. Attached sessions can be added via bottom sheet, edited, and removed', (WidgetTester tester) async {
+    testWidgets('12, 13. Attached events can be added via bottom sheet, edited, and removed', (WidgetTester tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() => tester.view.resetPhysicalSize());
@@ -339,19 +339,19 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
-      // Open + Add Session bottom sheet
-      await tester.tap(find.text('+ Add Session'));
+      // Open + Add Event bottom sheet
+      await tester.tap(find.text('+ Add Event'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
-      expect(find.text('Add Session'), findsWidgets);
+      expect(find.text('Add Event'), findsWidgets);
 
       // Enter session details
       await tester.enterText(find.widgetWithText(TextFormField, 'Location (City, Country)').last, 'Studio A');
       await tester.enterText(find.widgetWithText(TextFormField, 'Description (Optional)'), 'Warmup rehearsal');
 
-      // Tap Add Session
-      await tester.tap(find.widgetWithText(ElevatedButton, 'Add Session'));
+      // Tap Add Event
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Add Event'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
@@ -359,14 +359,14 @@ void main() {
       expect(find.text('Rehearsal'), findsWidgets);
       expect(find.text('@ Studio A'), findsOneWidget);
       expect(find.text('Warmup rehearsal'), findsOneWidget);
-      expect(find.text('1 Session'), findsOneWidget);
+      expect(find.text('2 Events'), findsOneWidget);
 
       // Edit session
-      await tester.tap(find.byIcon(Icons.edit_outlined).first);
+      await tester.tap(find.byIcon(Icons.edit_outlined).last);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
-      expect(find.text('Edit Session'), findsWidgets);
+      expect(find.text('Edit Event'), findsWidgets);
       await tester.enterText(find.widgetWithText(TextFormField, 'Location (City, Country)').last, 'Studio B (Updated)');
       await tester.tap(find.widgetWithText(ElevatedButton, 'Save Changes'));
       await tester.pump();
@@ -375,22 +375,22 @@ void main() {
       expect(find.text('@ Studio B (Updated)'), findsOneWidget);
 
       // Add a second session
-      await tester.tap(find.text('+ Add Session'));
+      await tester.tap(find.text('+ Add Event'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
       await tester.enterText(find.widgetWithText(TextFormField, 'Location (City, Country)').last, 'Studio C');
-      await tester.tap(find.widgetWithText(ElevatedButton, 'Add Session'));
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Add Event'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
-      expect(find.text('2 Sessions'), findsOneWidget);
+      expect(find.text('3 Events'), findsOneWidget);
 
       // Remove second session
       await tester.tap(find.byIcon(Icons.delete_outline).last);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
 
-      expect(find.text('1 Session'), findsOneWidget);
+      expect(find.text('2 Events'), findsOneWidget);
     });
 
     testWidgets('14, 15, 16. Existing legacy events open safely, display correctly, and preserve legacy eventType', (WidgetTester tester) async {
@@ -427,7 +427,7 @@ void main() {
 
       // Does not crash and displays title
       expect(find.byType(CreateEventPage), findsOneWidget);
-      expect(find.text('Legacy Recording Day'), findsOneWidget);
+      expect(find.text('Legacy Recording Day'), findsWidgets);
 
       // Saving preserves legacy value
       await tester.tap(find.text('Publish Event'));
@@ -921,19 +921,19 @@ void main() {
       await tester.enterText(descField, 'Main arena performance');
 
       // Add Session 1
-      await tester.tap(find.text('+ Add Session'));
+      await tester.tap(find.text('+ Add Event'));
       await tester.pumpAndSettle();
       await tester.enterText(find.widgetWithText(TextFormField, 'Location (City, Country)').last, 'Studio A');
       await tester.enterText(find.widgetWithText(TextFormField, 'Description (Optional)'), 'Sectional rehearsal');
-      await tester.tap(find.widgetWithText(ElevatedButton, 'Add Session'));
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Add Event'));
       await tester.pumpAndSettle();
 
       // Add Session 2
-      await tester.tap(find.text('+ Add Session'));
+      await tester.tap(find.text('+ Add Event'));
       await tester.pumpAndSettle();
       await tester.enterText(find.widgetWithText(TextFormField, 'Location (City, Country)').last, 'Studio B');
       await tester.enterText(find.widgetWithText(TextFormField, 'Description (Optional)'), 'Dress rehearsal');
-      await tester.tap(find.widgetWithText(ElevatedButton, 'Add Session'));
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Add Event'));
       await tester.pumpAndSettle();
 
       // Tap Publish Event
@@ -997,7 +997,7 @@ void main() {
       ));
       await tester.pumpAndSettle();
 
-      expect(find.text('Headline Show'), findsOneWidget);
+      expect(find.text('Headline Show'), findsWidgets);
       expect(find.text('Madison Square Garden'), findsOneWidget);
       expect(find.text('Rehearsal'), findsWidgets);
       expect(find.text('@ Sound Stage 1'), findsOneWidget);

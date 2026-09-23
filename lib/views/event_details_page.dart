@@ -880,68 +880,6 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
               ),
             ],
 
-            // Open Event Chat (Prominent Top Placement)
-            if (event.temporaryRoomId != null && event.temporaryRoomId!.isNotEmpty) ...[
-              AnimatedTapDetector(
-                onTap: () {
-                  final eventRoom = EventRoom(
-                    roomId: event.temporaryRoomId!,
-                    eventId: widget.eventId,
-                    bandId: widget.bandId,
-                    name: '${event.title} Chat',
-                    createdAt: event.createdAt,
-                    createdBy: event.createdBy,
-                  );
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => EventRoomChatScreen(
-                        bandId: widget.bandId,
-                        eventRoom: eventRoom,
-                      ),
-                    ),
-                  );
-                },
-                child: Container(
-                  height: 48,
-                  margin: const EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(
-                    color: AppTheme.primaryAccent.withOpacity(0.18),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppTheme.primaryAccent, width: 1.5),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.forum_outlined, color: AppTheme.primaryAccent, size: 20),
-                      const SizedBox(width: 8),
-                      Text(
-                        "Open Event Chat",
-                        style: GoogleFonts.inter(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: AppTheme.primaryAccent,
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          'CHAT',
-                          style: GoogleFonts.inter(fontSize: 9, color: Colors.white, fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-            const SizedBox(height: 8),
-
             // 2. RSVP Buttons (Only if requireResponse is true)
             if (event.requireResponse) ...[
               Builder(builder: (context) {
@@ -1507,6 +1445,67 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                         ),
                       ],
                     ),
+                  ),
+                ),
+              ),
+            ],
+
+            // Open Event Chat (Bottom Placement)
+            if (event.temporaryRoomId != null && event.temporaryRoomId!.isNotEmpty) ...[
+              AnimatedTapDetector(
+                onTap: () {
+                  final eventRoom = EventRoom(
+                    roomId: event.temporaryRoomId!,
+                    eventId: widget.eventId,
+                    bandId: widget.bandId,
+                    name: '${event.title} Chat',
+                    createdAt: event.createdAt,
+                    createdBy: event.createdBy,
+                  );
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => EventRoomChatScreen(
+                        bandId: widget.bandId,
+                        eventRoom: eventRoom,
+                      ),
+                    ),
+                  );
+                },
+                child: Container(
+                  height: 48,
+                  margin: const EdgeInsets.only(bottom: 24),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primaryAccent.withOpacity(0.18),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppTheme.primaryAccent, width: 1.5),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.forum_outlined, color: AppTheme.primaryAccent, size: 20),
+                      const SizedBox(width: 8),
+                      Text(
+                        "Open Event Chat",
+                        style: GoogleFonts.inter(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: AppTheme.primaryAccent,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          'CHAT',
+                          style: GoogleFonts.inter(fontSize: 9, color: Colors.white, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),

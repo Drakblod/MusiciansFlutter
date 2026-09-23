@@ -328,7 +328,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          isEditing ? "Edit Session" : "Add Session",
+                          isEditing ? "Edit Event" : "Add Event",
                           style: GoogleFonts.outfit(
                             fontSize: 18,
                             color: Colors.white,
@@ -461,7 +461,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                       dropdownColor: const Color(0xFF16132D),
                       style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
                       decoration: InputDecoration(
-                        labelText: selectedCategory == 0 ? 'Performance / Gig Type' : 'Session Type',
+                        labelText: selectedCategory == 0 ? 'Performance / Gig Type' : 'Event / Session Type',
                         prefixIcon: Icon(_getSessionTypeIcon(draftType), color: AppTheme.primaryAccent),
                       ),
                       items: currentCategoryOptions.map((type) {
@@ -639,7 +639,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                           Navigator.pop(ctx);
                         },
                         child: Text(
-                          isEditing ? "Save Changes" : "Add Session",
+                          isEditing ? "Save Changes" : "Add Event",
                           style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold),
                         ),
                       ),
@@ -939,7 +939,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                     ),
                     const SizedBox(height: 16),
 
-                    // 5 & 6. Attached Sessions Section
+                    // 5 & 6. Attached Events / Event Schedule Section
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
@@ -960,7 +960,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                                     const SizedBox(width: 8),
                                     Flexible(
                                       child: Text(
-                                        'SCHEDULE & SESSIONS',
+                                        'EVENT SCHEDULE',
                                         style: GoogleFonts.outfit(
                                           fontSize: 12,
                                           fontWeight: FontWeight.bold,
@@ -973,34 +973,139 @@ class _CreateEventPageState extends State<CreateEventPage> {
                                   ],
                                 ),
                               ),
-                              if (_rehearsals.isNotEmpty) ...[
-                                const SizedBox(width: 8),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: AppTheme.primaryAccent.withOpacity(0.2),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Text(
-                                    '${_rehearsals.length} Session${_rehearsals.length == 1 ? '' : 's'}',
-                                    style: GoogleFonts.inter(
-                                      fontSize: 11,
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold,
-                                    ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.primaryAccent.withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  '${1 + _rehearsals.length} Event${(1 + _rehearsals.length) == 1 ? '' : 's'}',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 11,
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
                                   ),
                                 ),
-                              ],
+                              ),
                             ],
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            'Attach scheduled sessions, rehearsals, soundchecks, gigs, or meetings.',
+                            'Attach scheduled events, rehearsals, soundchecks, gigs, or meetings.',
                             style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary),
                           ),
                           const SizedBox(height: 12),
 
-                          // List of attached sessions
+                          // Name of "Main event" on top of the schedule items
+                          AnimatedBuilder(
+                            animation: _titleController,
+                            builder: (context, _) {
+                              final entered = _titleController.text.trim();
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: Text(
+                                  entered.isEmpty ? '"Name of Event"' : '"$entered"',
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+
+                          // 1. Main Event Card (First in the list)
+                          AnimatedBuilder(
+                            animation: Listenable.merge([_titleController, _locationController, _descriptionController]),
+                            builder: (context, _) {
+                              final mainTitle = _titleController.text.trim().isNotEmpty
+                                  ? _titleController.text.trim()
+                                  : 'Main Event';
+                              final mainDateFormatted = DateFormat('EEEE, MMM d').format(_selectedDate);
+                              final mainTimeFormatted = '${_formatTimeOfDay(_startTime)} - ${_formatTimeOfDay(_endTime)}';
+                              final mainLocation = _locationController.text.trim();
+                              final mainDescription = _descriptionController.text.trim();
+
+                              return Container(
+                                margin: const EdgeInsets.only(bottom: 8),
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF141029),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: const Color(0xFF2E2A4E)),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: AppTheme.primaryAccent.withOpacity(0.2),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: Text(
+                                        _eventType.isNotEmpty ? _eventType : 'Event',
+                                        style: GoogleFonts.inter(
+                                          fontSize: 11,
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            mainTitle,
+                                            style: GoogleFonts.inter(
+                                              fontSize: 12,
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            '$mainDateFormatted ($mainTimeFormatted)',
+                                            style: GoogleFonts.inter(
+                                              fontSize: 11,
+                                              color: AppTheme.textSecondary,
+                                            ),
+                                          ),
+                                          if (mainLocation.isNotEmpty) ...[
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              '@ $mainLocation',
+                                              style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary),
+                                            ),
+                                          ],
+                                          if (mainDescription.isNotEmpty) ...[
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              mainDescription,
+                                              style: GoogleFonts.inter(fontSize: 11, color: Colors.white70),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ],
+                                        ],
+                                      ),
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.edit_outlined, color: AppTheme.primaryAccent, size: 18),
+                                      tooltip: 'Edit Date & Time',
+                                      onPressed: () => _selectDate(),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+
+                          // List of attached events
                           if (_rehearsals.isNotEmpty) ...[
                             ...List.generate(_rehearsals.length, (index) {
                               final rehearsal = _rehearsals[index];
@@ -1008,7 +1113,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                               final dateFormatted = parsedDate != null
                                   ? DateFormat('EEEE, MMM d').format(parsedDate)
                                   : rehearsal.date;
-                              final sessionType = rehearsal.type.isNotEmpty ? rehearsal.type : 'Session';
+                              final sessionType = rehearsal.type.isNotEmpty ? rehearsal.type : 'Event';
 
                               return Container(
                                 margin: const EdgeInsets.only(bottom: 8),
@@ -1086,7 +1191,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                             const SizedBox(height: 8),
                           ],
 
-                          // + Add Session Button
+                          // + Add Event Button
                           OutlinedButton.icon(
                             style: OutlinedButton.styleFrom(
                               side: const BorderSide(color: AppTheme.primaryAccent),
@@ -1095,7 +1200,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                             ),
                             icon: const Icon(Icons.add_circle_outline, color: AppTheme.primaryAccent, size: 18),
                             label: Text(
-                              "+ Add Session",
+                              "+ Add Event",
                               style: GoogleFonts.inter(
                                 color: AppTheme.primaryAccent,
                                 fontWeight: FontWeight.bold,

@@ -1559,12 +1559,12 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
-      // Sessions section is available
-      expect(find.text('+ Add Session'), findsOneWidget);
-      await tester.tap(find.text('+ Add Session'));
+      // Events section is available
+      expect(find.text('+ Add Event'), findsOneWidget);
+      await tester.tap(find.text('+ Add Event'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Add Session'), findsWidgets);
+      expect(find.text('Add Event'), findsWidgets);
     });
   });
 }
