@@ -156,12 +156,13 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> with SingleTick
           if (_searchQuery.isNotEmpty) {
             final q = _searchQuery.toLowerCase();
             final titleMatch = event.title.toLowerCase().contains(q);
+            final descMatch = event.description.toLowerCase().contains(q);
             final locMatch = event.location.toLowerCase().contains(q);
             final typeMatch = event.eventType.toLowerCase().contains(q);
             final bandName = (_userBands[bandId] ?? '').toLowerCase();
             final bandMatch = bandName.contains(q);
 
-            if (!titleMatch && !locMatch && !typeMatch && !bandMatch) {
+            if (!titleMatch && !descMatch && !locMatch && !typeMatch && !bandMatch) {
               continue;
             }
           }
@@ -262,7 +263,7 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> with SingleTick
 
     return GradientScaffold(
       appBar: const CustomTopBar(
-        title: 'Manage Events',
+        title: 'Events',
         showBack: true,
       ),
       body: SafeArea(
@@ -277,7 +278,7 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> with SingleTick
                   const Icon(Icons.event_note_rounded, color: AppTheme.primaryAccent, size: 22),
                   const SizedBox(width: 8),
                   Text(
-                    'MANAGE EVENTS',
+                    'EVENTS',
                     style: GoogleFonts.outfit(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
@@ -761,6 +762,28 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> with SingleTick
                             fontSize: 12,
                             color: AppTheme.textSecondary,
                           ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+                if (event.description.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.notes_rounded, color: AppTheme.textSecondary, size: 15),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          event.description,
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            color: Colors.white70,
+                            height: 1.3,
+                          ),
+                          maxLines: 3,
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),

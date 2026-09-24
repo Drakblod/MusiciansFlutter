@@ -194,7 +194,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Header title
-      expect(find.text('MANAGE EVENTS'), findsOneWidget);
+      expect(find.text('EVENTS'), findsOneWidget);
 
       // Search bar
       expect(find.byType(TextField), findsOneWidget);
@@ -203,8 +203,9 @@ void main() {
       expect(find.text('UPCOMING'), findsOneWidget);
       expect(find.text('PAST EVENTS'), findsOneWidget);
 
-      // Upcoming event title for band 1
+      // Upcoming event title and description for band 1
       expect(find.text('Summer Arena Concert'), findsOneWidget);
+      expect(find.text('Big festival headline'), findsOneWidget);
       expect(find.text('1 Yes'), findsOneWidget);
       expect(find.text('1 No'), findsOneWidget);
 
@@ -230,8 +231,9 @@ void main() {
       await tester.tap(find.text('PAST EVENTS'));
       await tester.pumpAndSettle();
 
-      // Verify past event is visible
+      // Verify past event and description are visible
       expect(find.text('Old Rehearsal Session'), findsOneWidget);
+      expect(find.text('Tutti practice'), findsOneWidget);
     });
 
     testWidgets('4. ManageEventsScreen filter search narrows down displayed events', (WidgetTester tester) async {

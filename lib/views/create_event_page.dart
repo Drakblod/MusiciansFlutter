@@ -877,21 +877,22 @@ class _CreateEventPageState extends State<CreateEventPage> {
                                   ],
                                 ),
                               ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: AppTheme.primaryAccent.withOpacity(0.2),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Text(
-                                  '${1 + _rehearsals.length} Event${(1 + _rehearsals.length) == 1 ? '' : 's'}',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 11,
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
+                              if (_rehearsals.isNotEmpty)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.primaryAccent.withOpacity(0.2),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    '${_rehearsals.length} Event${_rehearsals.length == 1 ? '' : 's'}',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 11,
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                    ),
                                   ),
                                 ),
-                              ),
                             ],
                           ),
                           const SizedBox(height: 4),
@@ -916,94 +917,6 @@ class _CreateEventPageState extends State<CreateEventPage> {
                                     color: Colors.white,
                                     letterSpacing: 0.5,
                                   ),
-                                ),
-                              );
-                            },
-                          ),
-
-                          // 1. Main Event Card (First in the list)
-                          AnimatedBuilder(
-                            animation: Listenable.merge([_titleController, _locationController, _descriptionController]),
-                            builder: (context, _) {
-                              final mainTitle = _titleController.text.trim().isNotEmpty
-                                  ? _titleController.text.trim()
-                                  : 'Main Event';
-                              final mainDateFormatted = DateFormat('EEEE, MMM d').format(_selectedDate);
-                              final mainTimeFormatted = '${_formatTimeOfDay(_startTime)} - ${_formatTimeOfDay(_endTime)}';
-                              final mainLocation = _locationController.text.trim();
-                              final mainDescription = _descriptionController.text.trim();
-
-                              return Container(
-                                margin: const EdgeInsets.only(bottom: 8),
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF141029),
-                                  borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(color: const Color(0xFF2E2A4E)),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                      decoration: BoxDecoration(
-                                        color: AppTheme.primaryAccent.withOpacity(0.2),
-                                        borderRadius: BorderRadius.circular(6),
-                                      ),
-                                      child: Text(
-                                        _eventType.isNotEmpty ? _eventType : 'Event',
-                                        style: GoogleFonts.inter(
-                                          fontSize: 11,
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 10),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            mainTitle,
-                                            style: GoogleFonts.inter(
-                                              fontSize: 12,
-                                              color: Colors.white,
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 2),
-                                          Text(
-                                            '$mainDateFormatted ($mainTimeFormatted)',
-                                            style: GoogleFonts.inter(
-                                              fontSize: 11,
-                                              color: AppTheme.textSecondary,
-                                            ),
-                                          ),
-                                          if (mainLocation.isNotEmpty) ...[
-                                            const SizedBox(height: 2),
-                                            Text(
-                                              '@ $mainLocation',
-                                              style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary),
-                                            ),
-                                          ],
-                                          if (mainDescription.isNotEmpty) ...[
-                                            const SizedBox(height: 2),
-                                            Text(
-                                              mainDescription,
-                                              style: GoogleFonts.inter(fontSize: 11, color: Colors.white70),
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                          ],
-                                        ],
-                                      ),
-                                    ),
-                                    IconButton(
-                                      icon: const Icon(Icons.edit_outlined, color: AppTheme.primaryAccent, size: 18),
-                                      tooltip: 'Edit Date & Time',
-                                      onPressed: () => _selectDate(),
-                                    ),
-                                  ],
                                 ),
                               );
                             },

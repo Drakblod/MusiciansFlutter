@@ -359,7 +359,7 @@ void main() {
       expect(find.text('Rehearsal'), findsWidgets);
       expect(find.text('@ Studio A'), findsOneWidget);
       expect(find.text('Warmup rehearsal'), findsOneWidget);
-      expect(find.text('2 Events'), findsOneWidget);
+      expect(find.text('1 Event'), findsOneWidget);
 
       // Edit session
       await tester.tap(find.byIcon(Icons.edit_outlined).last);
@@ -383,14 +383,14 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
-      expect(find.text('3 Events'), findsOneWidget);
+      expect(find.text('2 Events'), findsOneWidget);
 
       // Remove second session
       await tester.tap(find.byIcon(Icons.delete_outline).last);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
 
-      expect(find.text('2 Events'), findsOneWidget);
+      expect(find.text('1 Event'), findsOneWidget);
     });
 
     testWidgets('14, 15, 16. Existing legacy events open safely, display correctly, and preserve legacy eventType', (WidgetTester tester) async {

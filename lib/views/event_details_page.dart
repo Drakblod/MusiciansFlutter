@@ -950,7 +950,7 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                               });
                             },
                             child: Container(
-                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
                               decoration: BoxDecoration(
                                 color: isYes
                                     ? AppTheme.success.withOpacity(0.2)
@@ -961,13 +961,15 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                                   width: 1.5,
                                 ),
                               ),
-                              child: Column(
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
                                   Icon(
                                     Icons.check_circle_outline_rounded,
+                                    size: 17,
                                     color: isYes ? AppTheme.success : AppTheme.textSecondary,
                                   ),
-                                  const SizedBox(height: 4),
+                                  const SizedBox(width: 6),
                                   Text(
                                     'YES',
                                     style: GoogleFonts.inter(
@@ -992,7 +994,7 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                               });
                             },
                             child: Container(
-                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
                               decoration: BoxDecoration(
                                 color: isNo
                                     ? AppTheme.danger.withOpacity(0.2)
@@ -1003,13 +1005,15 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                                   width: 1.5,
                                 ),
                               ),
-                              child: Column(
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
                                   Icon(
                                     Icons.cancel_outlined,
+                                    size: 17,
                                     color: isNo ? AppTheme.danger : AppTheme.textSecondary,
                                   ),
-                                  const SizedBox(height: 4),
+                                  const SizedBox(width: 6),
                                   Text(
                                     'NO',
                                     style: GoogleFonts.inter(
@@ -1034,7 +1038,7 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                               });
                             },
                             child: Container(
-                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
                               decoration: BoxDecoration(
                                 color: isUncertain
                                     ? AppTheme.warning.withOpacity(0.2)
@@ -1045,19 +1049,24 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                                   width: 1.5,
                                 ),
                               ),
-                              child: Column(
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
                                   Icon(
                                     Icons.help_outline_rounded,
+                                    size: 17,
                                     color: isUncertain ? AppTheme.warning : AppTheme.textSecondary,
                                   ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    'UNCERTAIN',
-                                    style: GoogleFonts.inter(
-                                      fontSize: 12,
-                                      color: isUncertain ? Colors.white : AppTheme.textSecondary,
-                                      fontWeight: FontWeight.bold,
+                                  const SizedBox(width: 5),
+                                  Flexible(
+                                    child: Text(
+                                      'UNCERTAIN',
+                                      style: GoogleFonts.inter(
+                                        fontSize: 11.5,
+                                        color: isUncertain ? Colors.white : AppTheme.textSecondary,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
                                 ],
@@ -1260,10 +1269,10 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                   );
                 },
                 child: Container(
-                  height: 50,
+                  height: 48,
                   margin: const EdgeInsets.only(bottom: 12),
                   decoration: BoxDecoration(
-                    color: AppTheme.primaryAccent.withOpacity(0.18),
+                    color: AppTheme.cardBackground,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: AppTheme.primaryAccent, width: 1.5),
                   ),
@@ -1271,11 +1280,11 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(Icons.edit_calendar_outlined, color: AppTheme.primaryAccent),
+                        const Icon(Icons.edit_calendar_outlined, color: AppTheme.primaryAccent, size: 20),
                         const SizedBox(width: 8),
                         Text(
                           _linkedSubEvents.length > 1 ? "Edit Event Series" : "Edit Event",
-                          style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold),
+                          style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
                         ),
                       ],
                     ),
@@ -1353,7 +1362,7 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                     }
                   },
                   child: Container(
-                    height: 50,
+                    height: 48,
                     margin: const EdgeInsets.only(bottom: 12),
                     decoration: BoxDecoration(
                       color: AppTheme.cardBackground,
@@ -1364,11 +1373,11 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Icon(Icons.check_circle_outline, color: AppTheme.success),
+                          const Icon(Icons.check_circle_outline, color: AppTheme.success, size: 20),
                           const SizedBox(width: 8),
                           Text(
                             "Finalize Event & Lock RSVPs",
-                            style: GoogleFonts.inter(color: AppTheme.success, fontWeight: FontWeight.bold),
+                            style: GoogleFonts.inter(color: AppTheme.success, fontWeight: FontWeight.bold, fontSize: 14),
                           ),
                         ],
                       ),
@@ -1412,7 +1421,7 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                     }
                   },
                   child: Container(
-                    height: 50,
+                    height: 48,
                     margin: const EdgeInsets.only(bottom: 12),
                     decoration: BoxDecoration(
                       color: AppTheme.cardBackground,
@@ -1423,11 +1432,11 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Icon(Icons.lock_open_rounded, color: AppTheme.primaryAccent),
+                          const Icon(Icons.lock_open_rounded, color: AppTheme.primaryAccent, size: 20),
                           const SizedBox(width: 8),
                           Text(
                             "Re-open RSVPs / Unlock",
-                            style: GoogleFonts.inter(color: AppTheme.primaryAccent, fontWeight: FontWeight.bold),
+                            style: GoogleFonts.inter(color: AppTheme.primaryAccent, fontWeight: FontWeight.bold, fontSize: 14),
                           ),
                         ],
                       ),
@@ -1447,21 +1456,22 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                   );
                 },
                 child: Container(
-                  height: 50,
-                  margin: const EdgeInsets.only(bottom: 24),
+                  height: 48,
+                  margin: const EdgeInsets.only(bottom: 12),
                   decoration: BoxDecoration(
-                    gradient: AppTheme.primaryGradient,
+                    color: AppTheme.cardBackground,
                     borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppTheme.primaryAccent, width: 1.5),
                   ),
                   child: Center(
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(Icons.search, color: Colors.white),
+                        const Icon(Icons.person_search_outlined, color: AppTheme.primaryAccent, size: 20),
                         const SizedBox(width: 8),
                         Text(
-                          "FIND SUBSTITUTE(S)",
-                          style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold, letterSpacing: 1.1),
+                          "Find Substitute(s)",
+                          style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
                         ),
                       ],
                     ),
@@ -1496,7 +1506,7 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                   height: 48,
                   margin: const EdgeInsets.only(bottom: 24),
                   decoration: BoxDecoration(
-                    color: AppTheme.primaryAccent.withOpacity(0.18),
+                    color: AppTheme.cardBackground,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: AppTheme.primaryAccent, width: 1.5),
                   ),
