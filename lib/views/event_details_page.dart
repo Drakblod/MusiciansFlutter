@@ -837,14 +837,34 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(
-                                      '$dateFormatted (${rehearsal.startTime} - ${rehearsal.endTime})',
-                                      style: GoogleFonts.inter(
-                                        fontSize: 13,
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.w600,
+                                    if (rehearsal.title.isNotEmpty) ...[
+                                      Text(
+                                        rehearsal.title,
+                                        style: GoogleFonts.inter(
+                                          fontSize: 14,
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold,
+                                        ),
                                       ),
-                                    ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        '$dateFormatted (${rehearsal.startTime} - ${rehearsal.endTime})',
+                                        style: GoogleFonts.inter(
+                                          fontSize: 12,
+                                          color: AppTheme.textSecondary,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ] else ...[
+                                      Text(
+                                        '$dateFormatted (${rehearsal.startTime} - ${rehearsal.endTime})',
+                                        style: GoogleFonts.inter(
+                                          fontSize: 13,
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
                                     if (rehearsal.location.isNotEmpty) ...[
                                       const SizedBox(height: 2),
                                       Row(

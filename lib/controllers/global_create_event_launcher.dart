@@ -192,10 +192,10 @@ class GlobalCreateEventLauncher {
                 ),
               ),
               const SizedBox(height: 14),
-              // Option 3: Manage Events
+              // Option 3: Events
               AnimatedTapDetector(
                 enableFocus: true,
-                semanticLabel: 'Manage Events',
+                semanticLabel: 'Events',
                 onTap: () async {
                   if (_isNavigating) return;
                   _isNavigating = true;
@@ -239,7 +239,7 @@ class GlobalCreateEventLauncher {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Manage Events',
+                                'Events',
                                 style: GoogleFonts.outfit(
                                   fontSize: 16,
                                   fontWeight: FontWeight.bold,

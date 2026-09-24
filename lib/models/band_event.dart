@@ -184,43 +184,32 @@ class SubstituteAssignment {
 }
 
 class EventRehearsal {
-  static const List<String> gigTypes = [
-    'Club gig',
-    'Concert',
-    'Show',
-    'Private Event',
-  ];
-
-  static const List<String> sessionTypes = [
-    'Rehearsal',
-    'Soundcheck',
-    'Load-in / Setup',
-    'Meeting',
-    'Other',
-  ];
-
   static const List<String> standardSessionTypes = [
     'Rehearsal',
-    'Soundcheck',
     'Club gig',
     'Concert',
     'Show',
+    'Tour',
     'Private Event',
-    'Load-in / Setup',
-    'Meeting',
+    'Festival',
     'Other',
   ];
 
+  static const List<String> gigTypes = standardSessionTypes;
+  static const List<String> sessionTypes = standardSessionTypes;
+
   final String id;
+  final String title; // Sub-event custom title/name
   final String date; // 'YYYY-MM-DD' or ISO-8601 string
   final String startTime; // 'HH:mm'
   final String endTime; // 'HH:mm'
   final String location;
   final String description;
-  final String type; // e.g. 'Rehearsal', 'Soundcheck', 'Club gig', etc.
+  final String type; // e.g. 'Rehearsal', 'Club gig', 'Show', 'Tour', etc.
 
   EventRehearsal({
     required this.id,
+    this.title = '',
     required this.date,
     required this.startTime,
     required this.endTime,
@@ -232,6 +221,7 @@ class EventRehearsal {
   factory EventRehearsal.fromJson(Map<dynamic, dynamic> json, [String? id]) {
     return EventRehearsal(
       id: json['id']?.toString() ?? id ?? '',
+      title: json['title']?.toString() ?? json['name']?.toString() ?? '',
       date: json['date']?.toString() ?? '',
       startTime: json['startTime']?.toString() ?? '',
       endTime: json['endTime']?.toString() ?? '',
@@ -244,6 +234,7 @@ class EventRehearsal {
   Map<String, dynamic> toJson() {
     return {
       'id': id,
+      if (title.isNotEmpty) 'title': title,
       'date': date,
       'startTime': startTime,
       'endTime': endTime,
@@ -255,6 +246,7 @@ class EventRehearsal {
 
   EventRehearsal copyWith({
     String? id,
+    String? title,
     String? date,
     String? startTime,
     String? endTime,
@@ -264,6 +256,7 @@ class EventRehearsal {
   }) {
     return EventRehearsal(
       id: id ?? this.id,
+      title: title ?? this.title,
       date: date ?? this.date,
       startTime: startTime ?? this.startTime,
       endTime: endTime ?? this.endTime,

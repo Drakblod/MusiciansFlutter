@@ -254,13 +254,12 @@ class _CreateEventPageState extends State<CreateEventPage> {
   }
 
   IconData _getSessionTypeIcon(String type) {
-    if (type == 'Soundcheck') return Icons.tune_rounded;
     if (type == 'Club gig') return Icons.nightlife_rounded;
     if (type == 'Concert') return Icons.stadium_rounded;
     if (type == 'Show') return Icons.theater_comedy_rounded;
+    if (type == 'Tour') return Icons.flight_takeoff_rounded;
+    if (type == 'Festival') return Icons.festival_rounded;
     if (type == 'Private Event') return Icons.celebration_rounded;
-    if (type == 'Load-in / Setup') return Icons.local_shipping_outlined;
-    if (type == 'Meeting') return Icons.groups_outlined;
     if (type == 'Other') return Icons.more_horiz_rounded;
     return Icons.music_note_rounded;
   }
@@ -287,8 +286,10 @@ class _CreateEventPageState extends State<CreateEventPage> {
         : _endTime;
 
     String draftType = isEditing ? rehearsalToEdit!.type : 'Rehearsal';
-    int selectedCategory = EventRehearsal.gigTypes.contains(draftType) ? 0 : 1;
 
+    final draftTitleController = TextEditingController(
+      text: isEditing ? rehearsalToEdit!.title : '',
+    );
     final draftLocationController = TextEditingController(
       text: isEditing
           ? rehearsalToEdit!.location
@@ -297,6 +298,10 @@ class _CreateEventPageState extends State<CreateEventPage> {
     final draftDescriptionController = TextEditingController(
       text: isEditing ? rehearsalToEdit!.description : '',
     );
+
+    final availableTypes = EventRehearsal.standardSessionTypes.contains(draftType)
+        ? EventRehearsal.standardSessionTypes
+        : [draftType, ...EventRehearsal.standardSessionTypes];
 
     showModalBottomSheet(
       context: context,
@@ -308,10 +313,6 @@ class _CreateEventPageState extends State<CreateEventPage> {
       builder: (ctx) {
         return StatefulBuilder(
           builder: (ctx, setModalState) {
-            final currentCategoryOptions = selectedCategory == 0
-                ? EventRehearsal.gigTypes
-                : EventRehearsal.sessionTypes;
-
             return Padding(
               padding: EdgeInsets.only(
                 left: 20,
@@ -343,128 +344,29 @@ class _CreateEventPageState extends State<CreateEventPage> {
                     ),
                     const SizedBox(height: 14),
 
-                    // Two-Part Category Toggle (Gigs & Shows vs Sessions & Logistics)
-                    Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF141029),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: const Color(0xFF2E2A4E)),
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: GestureDetector(
-                              onTap: () {
-                                setModalState(() {
-                                  selectedCategory = 0;
-                                  if (!EventRehearsal.gigTypes.contains(draftType)) {
-                                    draftType = EventRehearsal.gigTypes.first;
-                                  }
-                                });
-                              },
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(vertical: 8),
-                                decoration: BoxDecoration(
-                                  color: selectedCategory == 0
-                                      ? AppTheme.primaryAccent
-                                      : Colors.transparent,
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Center(
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(
-                                        Icons.nightlife_rounded,
-                                        size: 15,
-                                        color: selectedCategory == 0
-                                            ? Colors.white
-                                            : AppTheme.textSecondary,
-                                      ),
-                                      const SizedBox(width: 6),
-                                      Text(
-                                        'Gigs & Shows',
-                                        style: GoogleFonts.inter(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w600,
-                                          color: selectedCategory == 0
-                                              ? Colors.white
-                                              : AppTheme.textSecondary,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 4),
-                          Expanded(
-                            child: GestureDetector(
-                              onTap: () {
-                                setModalState(() {
-                                  selectedCategory = 1;
-                                  if (!EventRehearsal.sessionTypes.contains(draftType)) {
-                                    draftType = EventRehearsal.sessionTypes.first;
-                                  }
-                                });
-                              },
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(vertical: 8),
-                                decoration: BoxDecoration(
-                                  color: selectedCategory == 1
-                                      ? AppTheme.primaryAccent
-                                      : Colors.transparent,
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Center(
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(
-                                        Icons.music_note_rounded,
-                                        size: 15,
-                                        color: selectedCategory == 1
-                                            ? Colors.white
-                                            : AppTheme.textSecondary,
-                                      ),
-                                      const SizedBox(width: 6),
-                                      Text(
-                                        'Sessions & Prep',
-                                        style: GoogleFonts.inter(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w600,
-                                          color: selectedCategory == 1
-                                              ? Colors.white
-                                              : AppTheme.textSecondary,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
+                    // 1. Name of Event / Sub-Event Title (Optional)
+                    TextFormField(
+                      controller: draftTitleController,
+                      style: GoogleFonts.inter(color: Colors.white),
+                      decoration: const InputDecoration(
+                        labelText: 'Name of Event (Optional)',
+                        hintText: 'e.g. Warmup Rehearsal, Stockholm Gig, Show 1',
                       ),
                     ),
                     const SizedBox(height: 12),
 
-                    // Session Type Dropdown (Filtered by selected category)
+                    // 2. Event Type Dropdown (Single combined list)
                     DropdownButtonFormField<String>(
-                      value: currentCategoryOptions.contains(draftType)
+                      value: availableTypes.contains(draftType)
                           ? draftType
-                          : (currentCategoryOptions.isNotEmpty
-                              ? currentCategoryOptions.first
-                              : draftType),
+                          : (availableTypes.isNotEmpty ? availableTypes.first : draftType),
                       dropdownColor: const Color(0xFF16132D),
                       style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
                       decoration: InputDecoration(
-                        labelText: selectedCategory == 0 ? 'Performance / Gig Type' : 'Event / Session Type',
+                        labelText: 'Event Type',
                         prefixIcon: Icon(_getSessionTypeIcon(draftType), color: AppTheme.primaryAccent),
                       ),
-                      items: currentCategoryOptions.map((type) {
+                      items: availableTypes.map((type) {
                         return DropdownMenuItem<String>(
                           value: type,
                           child: Row(
@@ -596,7 +498,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                       maxLines: 2,
                       decoration: const InputDecoration(
                         labelText: 'Description (Optional)',
-                        hintText: 'e.g. Warmup rehearsal, Tutti, Soundcheck',
+                        hintText: 'e.g. Load-in at 16:00, Soundcheck at 17:30...',
                       ),
                     ),
                     const SizedBox(height: 20),
@@ -608,6 +510,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryAccent),
                         onPressed: () {
+                          final title = draftTitleController.text.trim();
                           final dateStr = DateFormat('yyyy-MM-dd').format(draftDate);
                           final startStr = _formatTimeOfDay(draftStart);
                           final endStr = _formatTimeOfDay(draftEnd);
@@ -620,6 +523,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
 
                           final updatedRehearsal = EventRehearsal(
                             id: rehearsalId,
+                            title: title,
                             date: dateStr,
                             startTime: startStr,
                             endTime: endStr,
@@ -1145,14 +1049,34 @@ class _CreateEventPageState extends State<CreateEventPage> {
                                       child: Column(
                                         crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
-                                          Text(
-                                            '$dateFormatted (${rehearsal.startTime} - ${rehearsal.endTime})',
-                                            style: GoogleFonts.inter(
-                                              fontSize: 12,
-                                              color: Colors.white,
-                                              fontWeight: FontWeight.w600,
+                                          if (rehearsal.title.isNotEmpty) ...[
+                                            Text(
+                                              rehearsal.title,
+                                              style: GoogleFonts.inter(
+                                                fontSize: 13,
+                                                color: Colors.white,
+                                                fontWeight: FontWeight.bold,
+                                              ),
                                             ),
-                                          ),
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              '$dateFormatted (${rehearsal.startTime} - ${rehearsal.endTime})',
+                                              style: GoogleFonts.inter(
+                                                fontSize: 11,
+                                                color: AppTheme.textSecondary,
+                                                fontWeight: FontWeight.w500,
+                                              ),
+                                            ),
+                                          ] else ...[
+                                            Text(
+                                              '$dateFormatted (${rehearsal.startTime} - ${rehearsal.endTime})',
+                                              style: GoogleFonts.inter(
+                                                fontSize: 12,
+                                                color: Colors.white,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          ],
                                           if (rehearsal.location.isNotEmpty) ...[
                                             const SizedBox(height: 2),
                                             Text(

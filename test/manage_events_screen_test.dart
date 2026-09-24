@@ -176,7 +176,7 @@ void main() {
       expect(find.text('EVENTS & SESSIONS'), findsOneWidget);
       expect(find.text('Create Event'), findsOneWidget);
       expect(find.text('Create Session'), findsOneWidget);
-      expect(find.text('Manage Events'), findsOneWidget);
+      expect(find.text('Events'), findsOneWidget);
       expect(find.text('View, edit, track RSVPs & manage your events...'), findsOneWidget);
     });
 
