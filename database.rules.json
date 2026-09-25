@@ -24,6 +24,14 @@
                 ".write": "auth.uid == $userId && root.child('Bands').child($bandId).child('Events').child($eventId).child('isLocked').val() != true"
               }
             },
+            "ScheduleResponses": {
+              "$scheduleItemId": {
+                "$userId": {
+                  ".write": "auth != null && auth.uid == $userId && root.child('Bands').child($bandId).child('Events').child($eventId).child('isLocked').val() != true && (root.child('Bands').child($bandId).child('Members_band').child(auth.uid).exists() || root.child('Bands').child($bandId).child('Events').child($eventId).child('externalInvitees').child(auth.uid).exists())",
+                  ".validate": "newData.hasChildren(['status', 'timestamp']) && (newData.child('status').val() == 'YES' || newData.child('status').val() == 'NO' || newData.child('status').val() == 'UNCERTAIN' || newData.child('status').val() == 'Yes' || newData.child('status').val() == 'No' || newData.child('status').val() == 'Uncertain' || newData.child('status').val() == 'attending' || newData.child('status').val() == 'declined' || newData.child('status').val() == 'maybe')"
+                }
+              }
+            },
             "externalInvitees": {
               "$userId": {
                 ".write": "(auth.uid == $userId && root.child('Bands').child($bandId).child('Events').child($eventId).child('isLocked').val() != true) || root.child('Bands').child($bandId).child('Members_band').child(auth.uid).child('Role').val() == 'Leader' || root.child('Bands').child($bandId).child('Members_band').child(auth.uid).child('Role').val() == 'Admin'"

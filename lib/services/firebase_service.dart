@@ -2137,6 +2137,7 @@ class FirebaseService {
       parentEventId: event.parentEventId,
       subEventSequence: event.subEventSequence,
       rehearsals: event.rehearsals,
+      scheduleResponses: event.scheduleResponses,
     );
     await _dbRef('Bands/$bandId/Events/$eventId').set(created.toJson());
     return eventId;
@@ -2266,6 +2267,27 @@ class FirebaseService {
       'status': status,
       'timestamp': timestamp,
       if (comment != null) 'comment': comment,
+    });
+    await _dbRef(
+      'Bands/$bandId/Events/$eventId/updatedAt',
+    ).set(DateTime.now().millisecondsSinceEpoch);
+  }
+
+  Future<void> updateScheduleItemResponseAsync(
+    String bandId,
+    String eventId,
+    String scheduleItemId,
+    String userId,
+    String status, {
+    String? uncertainReason,
+  }) async {
+    final timestamp = DateTime.now().toUtc().toIso8601String();
+    await _dbRef(
+      'Bands/$bandId/Events/$eventId/ScheduleResponses/$scheduleItemId/$userId',
+    ).set({
+      'status': status,
+      'timestamp': timestamp,
+      'uncertainReason': uncertainReason,
     });
     await _dbRef(
       'Bands/$bandId/Events/$eventId/updatedAt',

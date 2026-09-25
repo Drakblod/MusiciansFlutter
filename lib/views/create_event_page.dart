@@ -1028,24 +1028,45 @@ class _CreateEventPageState extends State<CreateEventPage> {
                             const SizedBox(height: 8),
                           ],
 
-                          // + Add Event Button
-                          OutlinedButton.icon(
-                            style: OutlinedButton.styleFrom(
-                              side: const BorderSide(color: AppTheme.primaryAccent),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                              minimumSize: const Size(double.infinity, 44),
-                            ),
-                            icon: const Icon(Icons.add_circle_outline, color: AppTheme.primaryAccent, size: 18),
-                            label: Text(
-                              "+ Add Event",
-                              style: GoogleFonts.inter(
-                                color: AppTheme.primaryAccent,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 13,
+                          // + Add Event Button or Limit Warning
+                          if (_rehearsals.length < 5)
+                            OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(
+                                side: const BorderSide(color: AppTheme.primaryAccent),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                minimumSize: const Size(double.infinity, 44),
+                              ),
+                              icon: const Icon(Icons.add_circle_outline, color: AppTheme.primaryAccent, size: 18),
+                              label: Text(
+                                "+ Add Event",
+                                style: GoogleFonts.inter(
+                                  color: AppTheme.primaryAccent,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                ),
+                              ),
+                              onPressed: () => _showRehearsalDialog(),
+                            )
+                          else
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF1B1838),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: const Color(0xFF2E2A4E)),
+                              ),
+                              child: Center(
+                                child: Text(
+                                  "Maximum 6 events per Event Schedule.",
+                                  style: GoogleFonts.inter(
+                                    color: AppTheme.textSecondary,
+                                    fontSize: 12,
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                ),
                               ),
                             ),
-                            onPressed: () => _showRehearsalDialog(),
-                          ),
                         ],
                       ),
                     ),

@@ -10,19 +10,18 @@ import '../models/band.dart';
 import '../models/user_profile.dart';
 import '../widgets/gradient_scaffold.dart';
 import '../widgets/custom_top_bar.dart';
-import '../widgets/animated_tap_detector.dart';
 
 class MemberResultItem {
   final String userId;
   final String displayName;
-  final String? instrument;
+  final String? primarySkill;
   final String? reason;
   final EventResponseStatus responseStatus;
 
   MemberResultItem({
     required this.userId,
     required this.displayName,
-    this.instrument,
+    this.primarySkill,
     this.reason,
     required this.responseStatus,
   });
@@ -32,7 +31,7 @@ class SubstituteResultItem {
   final String slotId;
   final String assignedUserId;
   final String substituteName;
-  final String instrument;
+  final String primarySkill;
   final String? replacedMemberName;
   final bool isFromLegacyExternalInvitee;
 
@@ -40,9 +39,41 @@ class SubstituteResultItem {
     required this.slotId,
     required this.assignedUserId,
     required this.substituteName,
-    required this.instrument,
+    required this.primarySkill,
     this.replacedMemberName,
     this.isFromLegacyExternalInvitee = false,
+  });
+}
+
+class _EventResultScheduleItem {
+  final int index;
+  final bool isMain;
+  final String? scheduleItemId;
+  final String type;
+  final String title;
+  final String dateStr;
+  final String timeStr;
+  final String location;
+  final List<MemberResultItem> yesMembers;
+  final List<MemberResultItem> noMembers;
+  final List<MemberResultItem> uncertainMembers;
+  final List<MemberResultItem> noAnswerMembers;
+  final List<SubstituteResultItem> substitutes;
+
+  _EventResultScheduleItem({
+    required this.index,
+    required this.isMain,
+    this.scheduleItemId,
+    required this.type,
+    required this.title,
+    required this.dateStr,
+    required this.timeStr,
+    required this.location,
+    required this.yesMembers,
+    required this.noMembers,
+    required this.uncertainMembers,
+    required this.noAnswerMembers,
+    required this.substitutes,
   });
 }
 
@@ -67,9 +98,12 @@ class _EventResultsPageState extends State<EventResultsPage> {
   StreamSubscription<BandEvent?>? _eventSubscription;
   List<BandMember> _members = [];
   Map<String, UserProfile> _cachedProfiles = {};
+  List<BandEvent> _linkedSubEvents = [];
   bool _isLoading = true;
   String? _errorMessage;
-  List<BandEvent> _linkedSubEvents = [];
+
+  // Active expanded group key across schedule items (e.g. '0_YES', '1_UNCERTAIN')
+  String? _activeGroupKey;
 
   @override
   void initState() {
@@ -85,9 +119,9 @@ class _EventResultsPageState extends State<EventResultsPage> {
     super.dispose();
   }
 
-  void _subscribeToEvent([String? eventId]) {
+  void _subscribeToEvent() {
     _eventSubscription?.cancel();
-    final targetId = eventId ?? _event?.id ?? widget.eventId;
+    final targetId = _event?.id ?? widget.eventId;
     final appState = Provider.of<AppState>(context, listen: false);
     _eventSubscription = appState.firebaseService
         .subscribeToBandEvent(widget.bandId, targetId)
@@ -98,16 +132,6 @@ class _EventResultsPageState extends State<EventResultsPage> {
         });
       }
     });
-  }
-
-  void _selectOccurrence(BandEvent occurrence) {
-    if (_event?.id == occurrence.id) return;
-    setState(() {
-      _event = occurrence;
-    });
-    if (occurrence.id != null) {
-      _subscribeToEvent(occurrence.id!);
-    }
   }
 
   Future<void> _loadData() async {
@@ -124,98 +148,59 @@ class _EventResultsPageState extends State<EventResultsPage> {
       final members = await appState.firebaseService.getBandMembersAsync(widget.bandId);
       _members = members;
 
-      // If _event is null, fetch it from band events list
+      // Load band events for occurrence switcher & event fallback
+      final allEvents = await appState.firebaseService.getBandEventsListAsync(widget.bandId);
       if (_event == null) {
-        final allEvents = await appState.firebaseService.getBandEventsListAsync(widget.bandId);
         final found = allEvents.where((e) => e.id == widget.eventId);
         if (found.isNotEmpty) {
           _event = found.first;
         }
       }
 
-      // Check linked sub events for grouped/multi-part events
-      if (_event != null) {
-        final allEvents = await appState.firebaseService.getBandEventsListAsync(widget.bandId);
-        String normalizeTitle(String rawTitle) {
-          return rawTitle
-              .replaceAll(RegExp(r'\s*[\-\(]?\s*(Part|Date|Day)\s*\d+[\)]?', caseSensitive: false), '')
-              .trim()
-              .toLowerCase();
-        }
-
-        final parentId = _event!.parentEventId;
-        final currentId = _event!.id ?? widget.eventId;
-        final hasChildEvents = allEvents.any((e) => e.parentEventId == currentId);
-        final isMulti = _event!.eventType.toLowerCase().contains('multiple') ||
-            hasChildEvents ||
-            (parentId != null && parentId.isNotEmpty);
-
-        final effectiveParentId = (parentId != null && parentId.isNotEmpty)
-            ? parentId
-            : (isMulti ? currentId : null);
-
-        if (effectiveParentId != null && effectiveParentId.isNotEmpty) {
-          final explicitChildren = allEvents
-              .where((e) => e.parentEventId == effectiveParentId && e.id != effectiveParentId)
-              .toList();
-
-          if (explicitChildren.isNotEmpty) {
-            // The parent BandEvent is a group/header. Render only real playable child occurrences.
-            _linkedSubEvents = explicitChildren;
-          } else {
-            _linkedSubEvents = allEvents
-                .where((e) => e.parentEventId == effectiveParentId || e.id == effectiveParentId)
-                .toList();
-          }
+      // Check linked occurrences
+      final current = _event;
+      if (current != null) {
+        final parentId = current.parentEventId;
+        if (parentId != null && parentId.isNotEmpty) {
+          final linked = allEvents.where((e) => e.parentEventId == parentId && e.id != parentId).toList();
+          linked.sort((a, b) => (a.subEventSequence ?? 0).compareTo(b.subEventSequence ?? 0));
+          _linkedSubEvents = linked;
         } else {
-          final normTarget = normalizeTitle(_event!.title);
-          _linkedSubEvents = allEvents.where((e) {
-            final isParentHeader = allEvents.any((child) => child.parentEventId == e.id);
-            if (isParentHeader) return false;
-            return normalizeTitle(e.title) == normTarget;
-          }).toList();
-        }
-
-        _linkedSubEvents.sort((a, b) {
-          final seqA = a.subEventSequence ?? 0;
-          final seqB = b.subEventSequence ?? 0;
-          if (seqA != seqB) return seqA.compareTo(seqB);
-          final aTime = DateTime.tryParse(a.startDateTime) ?? DateTime.now();
-          final bTime = DateTime.tryParse(b.startDateTime) ?? DateTime.now();
-          return aTime.compareTo(bTime);
-        });
-
-        // If current _event is the synthetic parent header, default to the first real child occurrence
-        if (_linkedSubEvents.isNotEmpty &&
-            !_linkedSubEvents.any((e) => e.id == _event!.id)) {
-          _event = _linkedSubEvents.first;
-          if (_event!.id != null) {
-            _subscribeToEvent(_event!.id!);
+          final children = allEvents.where((e) => e.parentEventId == current.id).toList();
+          if (children.isNotEmpty) {
+            final linked = children;
+            linked.sort((a, b) => (a.subEventSequence ?? 0).compareTo(b.subEventSequence ?? 0));
+            _linkedSubEvents = linked;
+          } else {
+            _linkedSubEvents = [];
           }
         }
       }
 
-      // Collect user IDs for profile caching across all occurrences
+      // Collect user IDs for profile caching
       final Set<String> userIdsToFetch = {};
       for (final m in _members) {
         if (m.userId != null && m.userId!.isNotEmpty) {
           userIdsToFetch.add(m.userId!);
         }
       }
-      final eventsToCache = _linkedSubEvents.isNotEmpty
-          ? _linkedSubEvents
-          : (_event != null ? [_event!] : <BandEvent>[]);
-      for (final ev in eventsToCache) {
-        for (final k in ev.responses.keys) {
+
+      if (_event != null) {
+        for (final k in _event!.responses.keys) {
           if (k.isNotEmpty) userIdsToFetch.add(k);
         }
-        for (final k in ev.externalInvitees.keys) {
+        for (final k in _event!.externalInvitees.keys) {
           if (k.isNotEmpty) userIdsToFetch.add(k);
         }
-        for (final sub in ev.substituteAssignments.values) {
+        for (final sub in _event!.substituteAssignments.values) {
           if (sub.assignedUserId.isNotEmpty) userIdsToFetch.add(sub.assignedUserId);
           if (sub.replacedMemberId != null && sub.replacedMemberId!.isNotEmpty) {
             userIdsToFetch.add(sub.replacedMemberId!);
+          }
+        }
+        for (final userMap in _event!.scheduleResponses.values) {
+          for (final uid in userMap.keys) {
+            if (uid.isNotEmpty) userIdsToFetch.add(uid);
           }
         }
       }
@@ -245,6 +230,289 @@ class _EventResultsPageState extends State<EventResultsPage> {
         });
       }
     }
+  }
+
+  String _getPrimarySkill(String userId, [String? fallbackRole]) {
+    final profile = _cachedProfiles[userId];
+    if (profile != null) {
+      if (profile.mainInstrument != null && profile.mainInstrument!.trim().isNotEmpty) {
+        return profile.mainInstrument!.trim();
+      }
+      if (profile.instruments.isNotEmpty && profile.instruments.first.trim().isNotEmpty) {
+        return profile.instruments.first.trim();
+      }
+      if (profile.collabRoles.isNotEmpty && profile.collabRoles.first.trim().isNotEmpty) {
+        return profile.collabRoles.first.trim();
+      }
+    }
+    if (fallbackRole != null &&
+        fallbackRole.trim().isNotEmpty &&
+        fallbackRole.trim().toLowerCase() != 'member' &&
+        fallbackRole.trim().toLowerCase() != 'leader' &&
+        fallbackRole.trim().toLowerCase() != 'admin') {
+      return fallbackRole.trim();
+    }
+    return '';
+  }
+
+  List<_EventResultScheduleItem> _buildResultScheduleItems(BandEvent event) {
+    final List<_EventResultScheduleItem> items = [];
+
+    // Confirmed substitutes for main event
+    final confirmedSubs = <SubstituteResultItem>[];
+    final Set<String> claimedSlotOrRequestIds = {};
+    final Set<String> revokedOrCancelledIds = {};
+
+    for (final entry in event.substituteAssignments.entries) {
+      final slotId = entry.key;
+      final sub = entry.value;
+
+      if (sub.status == 'revoked' || sub.status == 'cancelled') {
+        if (sub.assignedUserId.trim().isNotEmpty) revokedOrCancelledIds.add(sub.assignedUserId.trim());
+        if (sub.subRequestId != null && sub.subRequestId!.trim().isNotEmpty) {
+          revokedOrCancelledIds.add(sub.subRequestId!.trim());
+        }
+        revokedOrCancelledIds.add(slotId);
+        continue;
+      }
+
+      if (!sub.isConfirmedAssignment) continue;
+
+      final profile = _cachedProfiles[sub.assignedUserId];
+      final name = (sub.assignedUserName != null && sub.assignedUserName!.trim().isNotEmpty)
+          ? sub.assignedUserName!.trim()
+          : (profile?.displayName ?? profile?.nickname ?? 'Substitute');
+      final primarySkill = (sub.instrument != null && sub.instrument!.trim().isNotEmpty)
+          ? sub.instrument!.trim()
+          : _getPrimarySkill(sub.assignedUserId);
+
+      String? replacedName = sub.replacedMemberName;
+      if ((replacedName == null || replacedName.trim().isEmpty) && sub.replacedMemberId != null) {
+        final repProfile = _cachedProfiles[sub.replacedMemberId];
+        replacedName = repProfile?.displayName ?? repProfile?.nickname;
+      }
+
+      claimedSlotOrRequestIds.add(slotId);
+      if (sub.subRequestId != null && sub.subRequestId!.trim().isNotEmpty) {
+        claimedSlotOrRequestIds.add(sub.subRequestId!.trim());
+      }
+      claimedSlotOrRequestIds.add('${sub.assignedUserId.trim()}|$slotId');
+
+      confirmedSubs.add(
+        SubstituteResultItem(
+          slotId: slotId,
+          assignedUserId: sub.assignedUserId.trim(),
+          substituteName: name,
+          primarySkill: primarySkill,
+          replacedMemberName: replacedName,
+          isFromLegacyExternalInvitee: false,
+        ),
+      );
+    }
+
+    for (final entry in event.externalInvitees.entries) {
+      final userId = entry.key.trim();
+      final invitee = entry.value;
+      final isSubSource = invitee.source == 'subRequest' ||
+          (invitee.subRequestId != null && invitee.subRequestId!.trim().isNotEmpty);
+      final isAttending = classifyEventResponse(invitee.status) == EventResponseStatus.yes;
+
+      if (isSubSource && isAttending) {
+        final isRevoked = revokedOrCancelledIds.contains(userId) ||
+            (invitee.subRequestId != null && revokedOrCancelledIds.contains(invitee.subRequestId!.trim()));
+        if (isRevoked) continue;
+
+        final isAlreadyClaimed = claimedSlotOrRequestIds.contains(userId) ||
+            (invitee.subRequestId != null && claimedSlotOrRequestIds.contains(invitee.subRequestId!.trim())) ||
+            claimedSlotOrRequestIds.contains('$userId|${invitee.subRequestId ?? ''}');
+
+        if (!isAlreadyClaimed) {
+          final profile = _cachedProfiles[userId];
+          final name = invitee.displayName ?? profile?.displayName ?? profile?.nickname ?? 'Substitute';
+          final primarySkill = (invitee.instrument != null && invitee.instrument!.trim().isNotEmpty)
+              ? invitee.instrument!.trim()
+              : _getPrimarySkill(userId);
+
+          confirmedSubs.add(
+            SubstituteResultItem(
+              slotId: invitee.subRequestId ?? userId,
+              assignedUserId: userId,
+              substituteName: name,
+              primarySkill: primarySkill,
+              isFromLegacyExternalInvitee: true,
+            ),
+          );
+        }
+      }
+    }
+
+    // 1. Process Main Event (Item 0)
+    final mainYes = <MemberResultItem>[];
+    final mainNo = <MemberResultItem>[];
+    final mainUncertain = <MemberResultItem>[];
+    final mainNoAnswer = <MemberResultItem>[];
+
+    final Set<String> processedUserIds = {};
+
+    for (final member in _members) {
+      final uid = member.userId;
+      if (uid == null || uid.isEmpty) continue;
+      processedUserIds.add(uid);
+
+      final profile = _cachedProfiles[uid];
+      final name = profile?.displayName ??
+          profile?.nickname ??
+          ((member.nickname != null && member.nickname!.trim().toLowerCase() != 'leader') ? member.nickname : null) ??
+          'Unknown Member';
+      final primarySkill = _getPrimarySkill(uid, member.role);
+
+      final resp = event.responses[uid];
+      final status = classifyEventResponse(resp?.status);
+      final reason = resp?.uncertainReason ?? resp?.comment;
+
+      final item = MemberResultItem(
+        userId: uid,
+        displayName: name,
+        primarySkill: primarySkill.isNotEmpty ? primarySkill : null,
+        reason: status == EventResponseStatus.uncertain ? reason : null,
+        responseStatus: status,
+      );
+
+      if (status == EventResponseStatus.yes) {
+        mainYes.add(item);
+      } else if (status == EventResponseStatus.no) {
+        mainNo.add(item);
+      } else if (status == EventResponseStatus.uncertain) {
+        mainUncertain.add(item);
+      } else {
+        mainNoAnswer.add(item);
+      }
+    }
+
+    // Process external invitees who are not substitutes for main event
+    final guests = <MemberResultItem>[];
+    for (final entry in event.externalInvitees.entries) {
+      final uid = entry.key;
+      if (processedUserIds.contains(uid)) continue;
+      final invitee = entry.value;
+      final isSub = invitee.source == 'subRequest' || (invitee.subRequestId != null && invitee.subRequestId!.isNotEmpty);
+      if (isSub) continue; // Captured under confirmedSubs
+
+      final profile = _cachedProfiles[uid];
+      final name = invitee.displayName ?? profile?.displayName ?? profile?.nickname ?? 'Guest';
+      final primarySkill = (invitee.instrument != null && invitee.instrument!.isNotEmpty)
+          ? invitee.instrument!
+          : _getPrimarySkill(uid);
+      final status = classifyEventResponse(invitee.status);
+      final reason = invitee.comment;
+
+      final item = MemberResultItem(
+        userId: uid,
+        displayName: name,
+        primarySkill: primarySkill.isNotEmpty ? primarySkill : null,
+        reason: status == EventResponseStatus.uncertain ? reason : null,
+        responseStatus: status,
+      );
+
+      guests.add(item);
+    }
+
+    final startLocal = DateTime.tryParse(event.startDateTime)?.toLocal() ?? DateTime.now();
+    final endLocal = DateTime.tryParse(event.endDateTime)?.toLocal() ?? DateTime.now();
+    final mainDateStr = DateFormat('EEEE, MMMM d, yyyy').format(startLocal);
+    final mainTimeStr = '${DateFormat('HH:mm').format(startLocal)} - ${DateFormat('HH:mm').format(endLocal)}';
+
+    items.add(
+      _EventResultScheduleItem(
+        index: 0,
+        isMain: true,
+        scheduleItemId: null,
+        type: event.eventType.isNotEmpty && event.eventType.toLowerCase() != 'event' ? event.eventType : 'Main Event',
+        title: event.title,
+        dateStr: mainDateStr,
+        timeStr: mainTimeStr,
+        location: event.location,
+        yesMembers: mainYes,
+        noMembers: mainNo,
+        uncertainMembers: mainUncertain,
+        noAnswerMembers: mainNoAnswer,
+        substitutes: confirmedSubs,
+      ),
+    );
+
+    // 2. Process Attached Schedule Items (Items 1..N)
+    for (int i = 0; i < event.rehearsals.length; i++) {
+      final rehearsal = event.rehearsals[i];
+      final schedYes = <MemberResultItem>[];
+      final schedNo = <MemberResultItem>[];
+      final schedUncertain = <MemberResultItem>[];
+      final schedNoAnswer = <MemberResultItem>[];
+
+      final scheduleResponses = event.scheduleResponses[rehearsal.id] ?? {};
+
+      for (final member in _members) {
+        final uid = member.userId;
+        if (uid == null || uid.isEmpty) continue;
+
+        final profile = _cachedProfiles[uid];
+        final name = profile?.displayName ??
+            profile?.nickname ??
+            ((member.nickname != null && member.nickname!.trim().toLowerCase() != 'leader') ? member.nickname : null) ??
+            'Unknown Member';
+        final primarySkill = _getPrimarySkill(uid, member.role);
+
+        final resp = scheduleResponses[uid];
+        final status = classifyEventResponse(resp?.status);
+        final reason = resp?.uncertainReason ?? resp?.comment;
+
+        final item = MemberResultItem(
+          userId: uid,
+          displayName: name,
+          primarySkill: primarySkill.isNotEmpty ? primarySkill : null,
+          reason: status == EventResponseStatus.uncertain ? reason : null,
+          responseStatus: status,
+        );
+
+        if (status == EventResponseStatus.yes) {
+          schedYes.add(item);
+        } else if (status == EventResponseStatus.no) {
+          schedNo.add(item);
+        } else if (status == EventResponseStatus.uncertain) {
+          schedUncertain.add(item);
+        } else {
+          schedNoAnswer.add(item);
+        }
+      }
+
+      final parsedDate = DateTime.tryParse(rehearsal.date);
+      final dateFormatted = parsedDate != null
+          ? DateFormat('EEEE, MMMM d, yyyy').format(parsedDate)
+          : rehearsal.date;
+      final timeFormatted = '${rehearsal.startTime} - ${rehearsal.endTime}';
+      final titleFormatted = rehearsal.title.isNotEmpty ? rehearsal.title : event.title;
+      final typeFormatted = rehearsal.type.isNotEmpty ? rehearsal.type : 'Rehearsal';
+      final locationFormatted = rehearsal.location.isNotEmpty ? rehearsal.location : event.location;
+
+      items.add(
+        _EventResultScheduleItem(
+          index: i + 1,
+          isMain: false,
+          scheduleItemId: rehearsal.id,
+          type: typeFormatted,
+          title: titleFormatted,
+          dateStr: dateFormatted,
+          timeStr: timeFormatted,
+          location: locationFormatted,
+          yesMembers: schedYes,
+          noMembers: schedNo,
+          uncertainMembers: schedUncertain,
+          noAnswerMembers: schedNoAnswer,
+          substitutes: const [],
+        ),
+      );
+    }
+
+    return items;
   }
 
   @override
@@ -302,684 +570,582 @@ class _EventResultsPageState extends State<EventResultsPage> {
       );
     }
 
-    // 1. Process regular band members
-    final regularMemberResults = <EventResponseStatus, List<MemberResultItem>>{
-      EventResponseStatus.yes: [],
-      EventResponseStatus.no: [],
-      EventResponseStatus.uncertain: [],
-      EventResponseStatus.noAnswer: [],
-    };
+    final scheduleItems = _buildResultScheduleItems(event);
+    final hasMultipleEvents = event.rehearsals.isNotEmpty;
 
-    final Set<String> regularUserIds = {};
-    for (final member in _members) {
-      final userId = member.userId;
-      if (userId == null || userId.isEmpty) continue;
-      regularUserIds.add(userId);
-
-      final profile = _cachedProfiles[userId];
-      final displayName = profile?.displayName ??
-          profile?.nickname ??
-          ((member.nickname != null && member.nickname!.trim().toLowerCase() != 'leader') ? member.nickname : null) ??
-          'Unknown Member';
-      final instrument = profile?.mainInstrument ?? member.role;
-
-      final response = event.responses[userId];
-      final status = classifyEventResponse(response?.status);
-      final reason = (response?.uncertainReason != null && response!.uncertainReason!.trim().isNotEmpty)
-          ? response.uncertainReason!.trim()
-          : (response?.comment != null && response!.comment!.trim().isNotEmpty)
-              ? response.comment!.trim()
-              : null;
-
-      regularMemberResults[status]!.add(
-        MemberResultItem(
-          userId: userId,
-          displayName: displayName,
-          instrument: instrument,
-          reason: status == EventResponseStatus.uncertain ? reason : null,
-          responseStatus: status,
-        ),
-      );
-    }
-
-    // 2. Identify additional/former unclassified responses
-    final unclassifiedResponses = <MemberResultItem>[];
-    for (final entry in event.responses.entries) {
-      final userId = entry.key;
-      if (regularUserIds.contains(userId)) continue;
-      if (event.externalInvitees.containsKey(userId)) continue;
-
-      final profile = _cachedProfiles[userId];
-      final displayName = profile?.displayName ?? profile?.nickname ?? 'Recorded User ($userId)';
-      final status = classifyEventResponse(entry.value.status);
-      final reason = entry.value.uncertainReason ?? entry.value.comment;
-
-      unclassifiedResponses.add(
-        MemberResultItem(
-          userId: userId,
-          displayName: displayName,
-          reason: reason,
-          responseStatus: status,
-        ),
-      );
-    }
-
-    // 3. Process confirmed substitutes
-    final confirmedSubs = <SubstituteResultItem>[];
-    final Set<String> revokedSlotOrRequestIds = {};
-    final Set<String> revokedUserSlotKeys = {};
-    final Set<String> claimedSlotOrRequestIds = {};
-
-    for (final entry in event.substituteAssignments.entries) {
-      final slotId = entry.key;
-      final sub = entry.value;
-      final s = sub.status.trim().toLowerCase();
-      final isRevokedOrCancelled = s == 'revoked' ||
-          s == 'cancelled' ||
-          s == 'canceled' ||
-          s == 'unassigned' ||
-          s == 'published' ||
-          s == 'draft' ||
-          s == 'open';
-
-      if (isRevokedOrCancelled) {
-        revokedSlotOrRequestIds.add(slotId);
-        if (sub.subRequestId != null && sub.subRequestId!.trim().isNotEmpty) {
-          revokedSlotOrRequestIds.add(sub.subRequestId!.trim());
-        }
-        if (sub.assignedUserId.trim().isNotEmpty) {
-          final uid = sub.assignedUserId.trim();
-          revokedUserSlotKeys.add('$uid|$slotId');
-          if (sub.subRequestId != null && sub.subRequestId!.trim().isNotEmpty) {
-            revokedUserSlotKeys.add('$uid|${sub.subRequestId!.trim()}');
-          }
-          revokedUserSlotKeys.add('$uid|');
-        }
-      }
-    }
-
-    // 3a. Explicit canonical substituteAssignments
-    for (final entry in event.substituteAssignments.entries) {
-      final slotId = entry.key;
-      final sub = entry.value;
-      if (!sub.isConfirmedAssignment) continue;
-
-      final profile = _cachedProfiles[sub.assignedUserId];
-      final name = (sub.assignedUserName != null && sub.assignedUserName!.trim().isNotEmpty)
-          ? sub.assignedUserName!.trim()
-          : (profile?.displayName ?? profile?.nickname ?? 'Substitute');
-      final instrument = (sub.instrument != null && sub.instrument!.trim().isNotEmpty)
-          ? sub.instrument!.trim()
-          : (profile?.mainInstrument ?? 'Musician');
-
-      String? replacedName = sub.replacedMemberName;
-      if ((replacedName == null || replacedName.trim().isEmpty) && sub.replacedMemberId != null) {
-        final repProfile = _cachedProfiles[sub.replacedMemberId];
-        replacedName = repProfile?.displayName ?? repProfile?.nickname;
-      }
-
-      claimedSlotOrRequestIds.add(slotId);
-      if (sub.subRequestId != null && sub.subRequestId!.trim().isNotEmpty) {
-        claimedSlotOrRequestIds.add(sub.subRequestId!.trim());
-      }
-      claimedSlotOrRequestIds.add('${sub.assignedUserId.trim()}|$slotId');
-      if (sub.subRequestId != null && sub.subRequestId!.trim().isNotEmpty) {
-        claimedSlotOrRequestIds.add('${sub.assignedUserId.trim()}|${sub.subRequestId!.trim()}');
-      }
-
-      confirmedSubs.add(
-        SubstituteResultItem(
-          slotId: slotId,
-          assignedUserId: sub.assignedUserId.trim(),
-          substituteName: name,
-          instrument: instrument,
-          replacedMemberName: replacedName,
-          isFromLegacyExternalInvitee: false,
-        ),
-      );
-    }
-
-    // 3b. Legacy fallback from externalInvitees
-    for (final entry in event.externalInvitees.entries) {
-      final userId = entry.key.trim();
-      final invitee = entry.value;
-
-      final isSubSource = invitee.source == 'subRequest' ||
-          (invitee.subRequestId != null && invitee.subRequestId!.trim().isNotEmpty);
-      final isAttending = classifyEventResponse(invitee.status) == EventResponseStatus.yes;
-
-      if (!isSubSource || !isAttending) continue;
-
-      final subReqId = invitee.subRequestId?.trim();
-
-      // Check if this externalInvitee corresponds to an already claimed canonical slot
-      final isAlreadyClaimed = (subReqId != null && claimedSlotOrRequestIds.contains(subReqId)) ||
-          claimedSlotOrRequestIds.contains('$userId|$subReqId') ||
-          (subReqId == null && claimedSlotOrRequestIds.any((k) => k.startsWith('$userId|')));
-      if (isAlreadyClaimed) continue;
-
-      // Check if this externalInvitee corresponds to an authoritative revoked / cancelled slot
-      final isRevoked = (subReqId != null && revokedSlotOrRequestIds.contains(subReqId)) ||
-          revokedUserSlotKeys.contains('$userId|$subReqId') ||
-          revokedUserSlotKeys.contains('$userId|');
-      if (isRevoked) {
-        // Authoritative revoked/cancelled record takes precedence over stale external-invitee record!
-        continue;
-      }
-
-      final profile = _cachedProfiles[userId];
-      final name = (invitee.displayName != null && invitee.displayName!.trim().isNotEmpty)
-          ? invitee.displayName!.trim()
-          : (profile?.displayName ?? profile?.nickname ?? 'Substitute');
-      final instrument = (invitee.instrument != null && invitee.instrument!.trim().isNotEmpty)
-          ? invitee.instrument!.trim()
-          : (profile?.mainInstrument ?? 'Musician');
-
-      final effectiveSlotId = (subReqId != null && subReqId.isNotEmpty) ? subReqId : 'legacy_$userId';
-      claimedSlotOrRequestIds.add(effectiveSlotId);
-      claimedSlotOrRequestIds.add('$userId|$effectiveSlotId');
-
-      confirmedSubs.add(
-        SubstituteResultItem(
-          slotId: effectiveSlotId,
-          assignedUserId: userId,
-          substituteName: name,
-          instrument: instrument,
-          replacedMemberName: null,
-          isFromLegacyExternalInvitee: true,
-        ),
-      );
-    }
-
-    // 4. Non-substitute external guests (if any)
-    final nonSubExternalGuests = <MemberResultItem>[];
-    for (final entry in event.externalInvitees.entries) {
-      final userId = entry.key.trim();
-      final invitee = entry.value;
-      final isSubSource = invitee.source == 'subRequest' ||
-          (invitee.subRequestId != null && invitee.subRequestId!.trim().isNotEmpty);
-
-      // Exclude ALL sub-request invitees from external guests
-      if (isSubSource) continue;
-
-      final profile = _cachedProfiles[userId];
-      final name = invitee.displayName ?? profile?.displayName ?? profile?.nickname ?? 'Guest';
-      final status = classifyEventResponse(invitee.status);
-
-      nonSubExternalGuests.add(
-        MemberResultItem(
-          userId: userId,
-          displayName: name,
-          instrument: invitee.instrument,
-          reason: invitee.comment,
-          responseStatus: status,
-        ),
-      );
-    }
-
-    return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      physics: const BouncingScrollPhysics(),
-      children: [
-        // Multi-Part / Date Switcher (for grouped events)
-        if (_linkedSubEvents.length > 1) ...[
-          _buildDateSwitcher(event),
-          const SizedBox(height: 12),
-        ],
-
-        // Event Header & Details Card
-        _buildEventHeaderCard(event),
-        const SizedBox(height: 20),
-
-        // Section: REGULAR BAND MEMBERS
-        _buildRegularBandMembersSection(regularMemberResults),
-        const SizedBox(height: 20),
-
-        // Section: ADDITIONAL RECORDED RESPONSES (if any former/unclassified users responded)
-        if (unclassifiedResponses.isNotEmpty) ...[
-          _buildUnclassifiedResponsesSection(unclassifiedResponses),
-          const SizedBox(height: 20),
-        ],
-
-        // Section: SUBSTITUTES
-        _buildSubstitutesSection(confirmedSubs),
-        const SizedBox(height: 20),
-
-        // Section: EXTERNAL GUESTS (if any non-substitute invitees exist)
-        if (nonSubExternalGuests.isNotEmpty) ...[
-          _buildExternalGuestsSection(nonSubExternalGuests),
-          const SizedBox(height: 20),
-        ],
-
-        const SizedBox(height: 30),
-      ],
-    );
-  }
-
-  Widget _buildDateSwitcher(BandEvent currentEvent) {
-    return Container(
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: const Color(0xFF16132D),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.purpleAccent.withValues(alpha: 0.4), width: 1),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    return SafeArea(
+      child: ListView(
+        padding: const EdgeInsets.all(20),
         children: [
-          Row(
-            children: [
-              const Icon(Icons.event_repeat_rounded, size: 14, color: Colors.purpleAccent),
-              const SizedBox(width: 6),
-              Text(
-                "SWITCH EVENT OCCURRENCE (${_linkedSubEvents.length} PARTS):",
-                style: GoogleFonts.outfit(
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.purpleAccent,
-                  letterSpacing: 1.1,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: _linkedSubEvents.map((sub) {
-                final isCurrent = sub.id == currentEvent.id;
-                final subStart = DateTime.tryParse(sub.startDateTime)?.toLocal() ?? DateTime.now();
-                final dateLabel = DateFormat('EEE, MMM d').format(subStart);
-                final seqStr = sub.subEventSequence != null ? 'Part ${sub.subEventSequence}' : sub.title;
-
-                return Container(
-                  margin: const EdgeInsets.only(right: 8),
-                  child: AnimatedTapDetector(
-                    onTap: () {
-                      _selectOccurrence(sub);
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                      decoration: BoxDecoration(
-                        gradient: isCurrent ? AppTheme.primaryGradient : null,
-                        color: isCurrent ? null : const Color(0xFF231F45),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: isCurrent ? Colors.white : Colors.transparent,
-                          width: isCurrent ? 1.5 : 0,
+          // Linked Occurrences Switcher if multiple parts exist
+          if (_linkedSubEvents.length > 1)
+            Container(
+              margin: const EdgeInsets.only(bottom: 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'SWITCH EVENT OCCURRENCE (${_linkedSubEvents.length} PARTS)',
+                    style: GoogleFonts.outfit(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.primaryAccent,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: _linkedSubEvents.map((subEvent) {
+                      final isSelected = subEvent.id == _event?.id;
+                      final seq = subEvent.subEventSequence ?? (_linkedSubEvents.indexOf(subEvent) + 1);
+                      return ChoiceChip(
+                        label: Text('Part $seq (${subEvent.title})'),
+                        selected: isSelected,
+                        selectedColor: AppTheme.primaryAccent.withOpacity(0.3),
+                        backgroundColor: const Color(0xFF16132D),
+                        labelStyle: GoogleFonts.inter(
+                          fontSize: 12,
+                          color: isSelected ? Colors.white : AppTheme.textSecondary,
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                         ),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
+                        onSelected: (selected) {
+                          if (selected && mounted) {
+                            setState(() {
+                              _event = subEvent;
+                              _activeGroupKey = null;
+                            });
+                            _subscribeToEvent();
+                          }
+                        },
+                      );
+                    }).toList(),
+                  ),
+                ],
+              ),
+            ),
+
+          // Event Title & Overview Header
+          Container(
+            padding: const EdgeInsets.all(16),
+            margin: const EdgeInsets.only(bottom: 16),
+            decoration: BoxDecoration(
+              color: AppTheme.cardBackground,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFF2E2A4E), width: 1.5),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(
-                            isCurrent ? Icons.check_circle_rounded : Icons.calendar_today_rounded,
-                            size: 13,
-                            color: isCurrent ? Colors.white : AppTheme.textSecondary,
-                          ),
-                          const SizedBox(width: 6),
                           Text(
-                            "$seqStr ($dateLabel)",
-                            style: GoogleFonts.inter(
-                              fontSize: 11.5,
-                              fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
-                              color: isCurrent ? Colors.white : AppTheme.textSecondary,
+                            event.title,
+                            style: GoogleFonts.outfit(
+                              fontSize: 22,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
                             ),
                           ),
+                          if (event.eventType.isNotEmpty && event.eventType.toLowerCase() != 'event') ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              event.eventType,
+                              style: GoogleFonts.inter(
+                                fontSize: 13,
+                                color: AppTheme.primaryAccent,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ),
-                  ),
-                );
-              }).toList(),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEventHeaderCard(BandEvent event) {
-    final startLocal = DateTime.tryParse(event.startDateTime)?.toLocal() ?? DateTime.now();
-    final endLocal = DateTime.tryParse(event.endDateTime)?.toLocal() ?? DateTime.now();
-
-    final isSameDay = startLocal.year == endLocal.year &&
-        startLocal.month == endLocal.month &&
-        startLocal.day == endLocal.day;
-
-    String dateStr;
-    if (isSameDay) {
-      dateStr = '${DateFormat('EEEE, MMM d, yyyy').format(startLocal)} • ${DateFormat('HH:mm').format(startLocal)} – ${DateFormat('HH:mm').format(endLocal)}';
-    } else {
-      dateStr = '${DateFormat('EEE, MMM d, yyyy HH:mm').format(startLocal)} – ${DateFormat('EEE, MMM d, yyyy HH:mm').format(endLocal)}';
-    }
-
-    IconData eventIcon;
-    switch (event.eventType.toLowerCase()) {
-      case 'rehearsal':
-        eventIcon = Icons.music_note_rounded;
-        break;
-      case 'concert':
-      case 'gig':
-      case 'club gig':
-        eventIcon = Icons.campaign_rounded;
-        break;
-      case 'recording session':
-        eventIcon = Icons.mic_rounded;
-        break;
-      case 'meeting':
-        eventIcon = Icons.forum_rounded;
-        break;
-      default:
-        eventIcon = Icons.event_available_rounded;
-    }
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppTheme.cardBackground,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF2E2A4E), width: 1.0),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Type badge & status
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: AppTheme.primaryAccent.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(eventIcon, color: AppTheme.primaryAccent, size: 14),
-                    const SizedBox(width: 5),
-                    Text(
-                      event.eventType.toUpperCase(),
-                      style: GoogleFonts.inter(
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                        color: AppTheme.primaryAccent,
-                        letterSpacing: 0.8,
+                    if (event.isLocked)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: AppTheme.success.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: AppTheme.success.withOpacity(0.5)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.lock_outline_rounded, size: 12, color: AppTheme.success),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Finalized',
+                              style: GoogleFonts.inter(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: AppTheme.success,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
                   ],
                 ),
-              ),
-              const Spacer(),
-              if (event.isLocked)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: AppTheme.success.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(6),
+                if (event.location.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      const Icon(Icons.location_on_outlined, size: 14, color: AppTheme.textSecondary),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          event.location,
+                          style: GoogleFonts.inter(fontSize: 13, color: Colors.white),
+                        ),
+                      ),
+                    ],
                   ),
-                  child: Text(
-                    'FINALIZED',
-                    style: GoogleFonts.inter(
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                      color: AppTheme.success,
-                    ),
+                ],
+                if (event.description.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    event.description,
+                    style: GoogleFonts.inter(fontSize: 12.5, color: AppTheme.textSecondary),
                   ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 10),
-
-          // Title
-          Text(
-            event.title,
-            style: GoogleFonts.outfit(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-            ),
-          ),
-          const SizedBox(height: 8),
-
-          // Date and Time
-          Row(
-            children: [
-              const Icon(Icons.access_time_rounded, color: AppTheme.textSecondary, size: 15),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  dateStr,
-                  style: GoogleFonts.inter(fontSize: 13, color: Colors.white70),
-                ),
-              ),
-            ],
-          ),
-
-          // Location
-          if (event.location.isNotEmpty) ...[
-            const SizedBox(height: 6),
-            Row(
-              children: [
-                const Icon(Icons.location_on_outlined, color: AppTheme.textSecondary, size: 15),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    event.location,
-                    style: GoogleFonts.inter(fontSize: 13, color: Colors.white70),
-                  ),
-                ),
+                ],
               ],
             ),
-          ],
+          ),
 
-          // Description
-          if (event.description.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Text(
-                event.description,
-                style: GoogleFonts.inter(
-                  fontSize: 13,
-                  color: AppTheme.textSecondary,
-                  height: 1.35,
+          // For Single Event: Render full categories, substitutes and guests sections
+          if (!hasMultipleEvents) ...[
+            _buildSingleEventResultsView(scheduleItems.first),
+          ] else ...[
+            // Render Results for Each Event in Multi-Schedule
+            ...List.generate(scheduleItems.length, (itemIndex) {
+              final item = scheduleItems[itemIndex];
+              final itemHeader = 'EVENT ${itemIndex + 1} · ${item.type.toUpperCase()} · "${item.title}"';
+
+              final yesKey = '${itemIndex}_YES';
+              final noKey = '${itemIndex}_NO';
+              final uncertainKey = '${itemIndex}_UNCERTAIN';
+              final noAnswerKey = '${itemIndex}_NO_ANSWER';
+              final subsKey = '${itemIndex}_SUBSTITUTES';
+
+              final isYesActive = _activeGroupKey == yesKey;
+              final isNoActive = _activeGroupKey == noKey;
+              final isUncertainActive = _activeGroupKey == uncertainKey;
+              final isNoAnswerActive = _activeGroupKey == noAnswerKey;
+              final isSubsActive = _activeGroupKey == subsKey;
+
+              return Container(
+                margin: const EdgeInsets.only(bottom: 14),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: AppTheme.cardBackground,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
                 ),
-              ),
-            ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      itemHeader,
+                      style: GoogleFonts.outfit(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${item.dateStr} • ${item.timeStr}',
+                      style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary),
+                    ),
+                    const SizedBox(height: 10),
+
+                    // Compact Single Row of Clickable Filter Pills
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          _buildResultFilterPill(
+                            icon: Icons.check_circle_outline_rounded,
+                            label: 'YES (${item.yesMembers.length})',
+                            color: AppTheme.success,
+                            isSelected: isYesActive,
+                            onTap: () {
+                              setState(() {
+                                _activeGroupKey = isYesActive ? null : yesKey;
+                              });
+                            },
+                          ),
+                          const SizedBox(width: 6),
+                          _buildResultFilterPill(
+                            icon: Icons.cancel_outlined,
+                            label: 'NO (${item.noMembers.length})',
+                            color: AppTheme.danger,
+                            isSelected: isNoActive,
+                            onTap: () {
+                              setState(() {
+                                _activeGroupKey = isNoActive ? null : noKey;
+                              });
+                            },
+                          ),
+                          const SizedBox(width: 6),
+                          _buildResultFilterPill(
+                            icon: Icons.help_outline_rounded,
+                            label: 'UNCERTAIN (${item.uncertainMembers.length})',
+                            color: AppTheme.warning,
+                            isSelected: isUncertainActive,
+                            onTap: () {
+                              setState(() {
+                                _activeGroupKey = isUncertainActive ? null : uncertainKey;
+                              });
+                            },
+                          ),
+                          const SizedBox(width: 6),
+                          _buildResultFilterPill(
+                            icon: Icons.radio_button_unchecked_rounded,
+                            label: 'NO ANSWER (${item.noAnswerMembers.length})',
+                            color: AppTheme.textSecondary,
+                            isSelected: isNoAnswerActive,
+                            onTap: () {
+                              setState(() {
+                                _activeGroupKey = isNoAnswerActive ? null : noAnswerKey;
+                              });
+                            },
+                          ),
+                          if (item.substitutes.isNotEmpty) ...[
+                            const SizedBox(width: 6),
+                            _buildResultFilterPill(
+                              icon: Icons.person_search_outlined,
+                              label: 'SUBSTITUTES (${item.substitutes.length})',
+                              color: Colors.purpleAccent,
+                              isSelected: isSubsActive,
+                              onTap: () {
+                                setState(() {
+                                  _activeGroupKey = isSubsActive ? null : subsKey;
+                                });
+                              },
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+
+                    // Expanded Member / Substitute List
+                    if (isYesActive)
+                      _buildMemberListContainer('YES Respondents (${item.yesMembers.length})', item.yesMembers, AppTheme.success),
+                    if (isNoActive)
+                      _buildMemberListContainer('NO Respondents (${item.noMembers.length})', item.noMembers, AppTheme.danger),
+                    if (isUncertainActive)
+                      _buildMemberListContainer('UNCERTAIN Respondents (${item.uncertainMembers.length})', item.uncertainMembers, AppTheme.warning),
+                    if (isNoAnswerActive)
+                      _buildMemberListContainer('NO ANSWER (${item.noAnswerMembers.length})', item.noAnswerMembers, AppTheme.textSecondary),
+                    if (isSubsActive)
+                      _buildSubstituteListContainer('Confirmed Substitutes (${item.substitutes.length})', item.substitutes, Colors.purpleAccent),
+                  ],
+                ),
+              );
+            }),
           ],
         ],
       ),
     );
   }
 
-  Widget _buildRegularBandMembersSection(
-    Map<EventResponseStatus, List<MemberResultItem>> groups,
-  ) {
-    final yesList = groups[EventResponseStatus.yes]!;
-    final noList = groups[EventResponseStatus.no]!;
-    final uncertainList = groups[EventResponseStatus.uncertain]!;
-    final noAnswerList = groups[EventResponseStatus.noAnswer]!;
+  Widget _buildSingleEventResultsView(_EventResultScheduleItem item) {
+    // Unique people in substitutes
+    final uniqueSubsPeople = <String>{};
+    for (final s in item.substitutes) {
+      uniqueSubsPeople.add(s.assignedUserId);
+    }
+
+    final nonSubGuests = <MemberResultItem>[];
+    if (_event != null) {
+      for (final entry in _event!.externalInvitees.entries) {
+        final uid = entry.key;
+        final invitee = entry.value;
+        final isSub = invitee.source == 'subRequest' || (invitee.subRequestId != null && invitee.subRequestId!.isNotEmpty);
+        if (isSub) continue;
+        final profile = _cachedProfiles[uid];
+        final name = invitee.displayName ?? profile?.displayName ?? profile?.nickname ?? 'Guest';
+        final primarySkill = (invitee.instrument != null && invitee.instrument!.isNotEmpty)
+            ? invitee.instrument!
+            : _getPrimarySkill(uid);
+        final status = classifyEventResponse(invitee.status);
+        final reason = invitee.comment;
+        nonSubGuests.add(
+          MemberResultItem(
+            userId: uid,
+            displayName: name,
+            primarySkill: primarySkill.isNotEmpty ? primarySkill : null,
+            reason: status == EventResponseStatus.uncertain ? reason : null,
+            responseStatus: status,
+          ),
+        );
+      }
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              'REGULAR BAND MEMBERS',
-              style: GoogleFonts.outfit(
-                fontSize: 13,
-                fontWeight: FontWeight.bold,
-                color: AppTheme.primaryAccent,
-                letterSpacing: 1.5,
-              ),
-            ),
-            Text(
-              '${_members.length} members',
-              style: GoogleFonts.inter(
-                fontSize: 11,
-                color: AppTheme.textSecondary,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 4),
-        Text(
-          'Based on current band roster',
-          style: GoogleFonts.inter(
-            fontSize: 11,
-            color: AppTheme.textMuted,
-            fontStyle: FontStyle.italic,
-          ),
-        ),
-        const SizedBox(height: 10),
+        _buildCategorySection('YES (${item.yesMembers.length})', item.yesMembers, AppTheme.success),
+        const SizedBox(height: 12),
+        _buildCategorySection('NO (${item.noMembers.length})', item.noMembers, AppTheme.danger),
+        const SizedBox(height: 12),
+        _buildCategorySection('UNCERTAIN (${item.uncertainMembers.length})', item.uncertainMembers, AppTheme.warning),
+        const SizedBox(height: 12),
+        _buildCategorySection('NO ANSWER (${item.noAnswerMembers.length})', item.noAnswerMembers, AppTheme.textSecondary),
+        const SizedBox(height: 16),
 
+        // SUBSTITUTES section
         Container(
+          padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: AppTheme.cardBackground,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(14),
             border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
           ),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Exact order: 1. YES, 2. NO, 3. UNCERTAIN, 4. NO ANSWER
-              _buildResponseGroupTile(
-                title: 'YES',
-                items: yesList,
-                color: AppTheme.success,
-                icon: Icons.check_circle_rounded,
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'SUBSTITUTES',
+                    style: GoogleFonts.outfit(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  Text(
+                    '${item.substitutes.length} slots (${uniqueSubsPeople.length} people)',
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.purpleAccent,
+                    ),
+                  ),
+                ],
               ),
-              const Divider(color: Color(0xFF231F45), height: 1),
-              _buildResponseGroupTile(
-                title: 'NO',
-                items: noList,
-                color: AppTheme.danger,
-                icon: Icons.cancel_rounded,
-              ),
-              const Divider(color: Color(0xFF231F45), height: 1),
-              _buildResponseGroupTile(
-                title: 'UNCERTAIN',
-                items: uncertainList,
-                color: AppTheme.warning,
-                icon: Icons.help_rounded,
-                isUncertain: true,
-              ),
-              const Divider(color: Color(0xFF231F45), height: 1),
-              _buildResponseGroupTile(
-                title: 'NO ANSWER',
-                items: noAnswerList,
-                color: AppTheme.textSecondary,
-                icon: Icons.remove_circle_outline_rounded,
-              ),
+              const SizedBox(height: 10),
+              if (item.substitutes.isEmpty)
+                Text(
+                  'No substitutes assigned',
+                  style: GoogleFonts.inter(fontSize: 13, color: AppTheme.textSecondary),
+                )
+              else
+                ...item.substitutes.map((sub) {
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const CircleAvatar(
+                          radius: 11,
+                          backgroundColor: Color(0x33AB47BC),
+                          child: Icon(Icons.person_search_rounded, size: 12, color: Colors.purpleAccent),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Text(
+                                    sub.substituteName,
+                                    style: GoogleFonts.inter(
+                                      fontSize: 13,
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  if (sub.primarySkill.isNotEmpty) ...[
+                                    const SizedBox(width: 6),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                                      decoration: BoxDecoration(
+                                        color: Colors.purpleAccent.withOpacity(0.15),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Text(
+                                        sub.primarySkill,
+                                        style: GoogleFonts.inter(
+                                          fontSize: 10,
+                                          color: Colors.purpleAccent,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                              if (sub.replacedMemberName != null && sub.replacedMemberName!.isNotEmpty) ...[
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Replacing ${sub.replacedMemberName!}',
+                                  style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
             ],
           ),
         ),
+
+        // EXTERNAL GUESTS section if any exist
+        if (nonSubGuests.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppTheme.cardBackground,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'EXTERNAL GUESTS',
+                  style: GoogleFonts.outfit(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                ...nonSubGuests.map((guest) {
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Row(
+                      children: [
+                        const CircleAvatar(
+                          radius: 11,
+                          backgroundColor: Color(0x334CAF50),
+                          child: Icon(Icons.person_outline, size: 12, color: AppTheme.success),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          guest.displayName,
+                          style: GoogleFonts.inter(
+                            fontSize: 13,
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+              ],
+            ),
+          ),
+        ],
       ],
     );
   }
 
-  Widget _buildResponseGroupTile({
-    required String title,
-    required List<MemberResultItem> items,
-    required Color color,
-    required IconData icon,
-    bool isUncertain = false,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+  Widget _buildCategorySection(String title, List<MemberResultItem> list, Color color) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppTheme.cardBackground,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Group Heading (ALWAYS visible, including 0 count)
-          Row(
-            children: [
-              Icon(icon, color: color, size: 16),
-              const SizedBox(width: 8),
-              Text(
-                '$title (${items.length})',
-                style: GoogleFonts.inter(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: color,
-                ),
-              ),
-            ],
+          Text(
+            title,
+            style: GoogleFonts.outfit(
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+              color: color,
+              letterSpacing: 0.5,
+            ),
           ),
           const SizedBox(height: 8),
-
-          // Member list or None
-          if (items.isEmpty)
-            Padding(
-              padding: const EdgeInsets.only(left: 24, top: 2, bottom: 4),
-              child: Text(
-                'None',
-                style: GoogleFonts.inter(
-                  fontSize: 13,
-                  color: AppTheme.textMuted,
-                  fontStyle: FontStyle.italic,
-                ),
-              ),
+          if (list.isEmpty)
+            Text(
+              'No members in this category',
+              style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
             )
           else
-            ...items.map((item) {
+            ...list.map((m) {
               return Padding(
-                padding: const EdgeInsets.only(left: 12, top: 6, bottom: 6),
+                padding: const EdgeInsets.symmetric(vertical: 4),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     CircleAvatar(
-                      radius: 13,
-                      backgroundColor: color.withValues(alpha: 0.18),
+                      radius: 11,
+                      backgroundColor: color.withOpacity(0.2),
                       child: Text(
-                        item.displayName.isNotEmpty ? item.displayName[0].toUpperCase() : 'M',
-                        style: GoogleFonts.inter(
-                          color: color,
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                        ),
+                        m.displayName.isNotEmpty ? m.displayName[0].toUpperCase() : 'M',
+                        style: GoogleFonts.inter(color: color, fontSize: 10, fontWeight: FontWeight.bold),
                       ),
                     ),
-                    const SizedBox(width: 10),
+                    const SizedBox(width: 8),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Row(
                             children: [
-                              Text(
-                                item.displayName,
-                                style: GoogleFonts.inter(
-                                  fontSize: 13.5,
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w600,
+                              Flexible(
+                                child: Text(
+                                  m.displayName,
+                                  style: GoogleFonts.inter(
+                                    fontSize: 13,
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ),
-                              if (item.instrument != null && item.instrument!.isNotEmpty) ...[
-                                const SizedBox(width: 8),
-                                Text(
-                                  '•  ${item.instrument}',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 11.5,
-                                    color: AppTheme.textMuted,
+                              if (m.primarySkill != null && m.primarySkill!.isNotEmpty) ...[
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.primaryAccent.withOpacity(0.15),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(
+                                    m.primarySkill!,
+                                    style: GoogleFonts.inter(
+                                      fontSize: 10,
+                                      color: AppTheme.primaryAccent,
+                                      fontWeight: FontWeight.w600,
+                                    ),
                                   ),
                                 ),
                               ],
                             ],
                           ),
-                          // For UNCERTAIN: display the reason underneath the name
-                          if (isUncertain && item.reason != null && item.reason!.isNotEmpty) ...[
-                            const SizedBox(height: 3),
+                          if (m.reason != null && m.reason!.isNotEmpty) ...[
+                            const SizedBox(height: 2),
                             Text(
-                              '"${item.reason}"',
+                              '"${m.reason!}"',
                               style: GoogleFonts.inter(
-                                fontSize: 12,
+                                fontSize: 11.5,
                                 color: AppTheme.textSecondary,
                                 fontStyle: FontStyle.italic,
                               ),
@@ -997,363 +1163,231 @@ class _EventResultsPageState extends State<EventResultsPage> {
     );
   }
 
-  Widget _buildUnclassifiedResponsesSection(List<MemberResultItem> items) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'ADDITIONAL RECORDED RESPONSES',
-          style: GoogleFonts.outfit(
-            fontSize: 13,
-            fontWeight: FontWeight.bold,
-            color: AppTheme.primaryAccent,
-            letterSpacing: 1.5,
+  Widget _buildResultFilterPill({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? color.withOpacity(0.25) : const Color(0xFF16132D),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: isSelected ? color : const Color(0xFF2E2A4E),
+            width: isSelected ? 1.5 : 1.0,
           ),
         ),
-        const SizedBox(height: 4),
-        Text(
-          'Responses from former or unlisted accounts not in current band roster',
-          style: GoogleFonts.inter(
-            fontSize: 11,
-            color: AppTheme.textMuted,
-            fontStyle: FontStyle.italic,
-          ),
-        ),
-        const SizedBox(height: 10),
-        Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: AppTheme.cardBackground,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
-          ),
-          child: Column(
-            children: items.map((item) {
-              Color statusColor;
-              String statusLabel;
-              switch (item.responseStatus) {
-                case EventResponseStatus.yes:
-                  statusColor = AppTheme.success;
-                  statusLabel = 'YES';
-                  break;
-                case EventResponseStatus.no:
-                  statusColor = AppTheme.danger;
-                  statusLabel = 'NO';
-                  break;
-                case EventResponseStatus.uncertain:
-                  statusColor = AppTheme.warning;
-                  statusLabel = 'UNCERTAIN';
-                  break;
-                case EventResponseStatus.noAnswer:
-                  statusColor = AppTheme.textSecondary;
-                  statusLabel = 'NO ANSWER';
-                  break;
-              }
-
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            item.displayName,
-                            style: GoogleFonts.inter(
-                              fontSize: 13,
-                              color: Colors.white,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          if (item.reason != null && item.reason!.isNotEmpty) ...[
-                            const SizedBox(height: 2),
-                            Text(
-                              '"${item.reason}"',
-                              style: GoogleFonts.inter(
-                                fontSize: 11.5,
-                                color: AppTheme.textMuted,
-                                fontStyle: FontStyle.italic,
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: statusColor.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        statusLabel,
-                        style: GoogleFonts.inter(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          color: statusColor,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }).toList(),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildSubstitutesSection(List<SubstituteResultItem> confirmedSubs) {
-    final distinctPeopleCount = confirmedSubs.map((s) => s.assignedUserId).toSet().length;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
+            Icon(icon, size: 12, color: isSelected ? color : color.withOpacity(0.8)),
+            const SizedBox(width: 4),
             Text(
-              'SUBSTITUTES',
-              style: GoogleFonts.outfit(
-                fontSize: 13,
-                fontWeight: FontWeight.bold,
-                color: AppTheme.primaryAccent,
-                letterSpacing: 1.5,
-              ),
-            ),
-            Text(
-              '${confirmedSubs.length} ${confirmedSubs.length == 1 ? 'slot' : 'slots'} ($distinctPeopleCount ${distinctPeopleCount == 1 ? 'person' : 'people'})',
+              label,
               style: GoogleFonts.inter(
                 fontSize: 11,
-                color: AppTheme.textSecondary,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                color: isSelected ? Colors.white : color,
               ),
             ),
           ],
         ),
-        const SizedBox(height: 4),
-        Text(
-          'Confirmed substitute slot assignments for this event',
-          style: GoogleFonts.inter(
-            fontSize: 11,
-            color: AppTheme.textMuted,
-            fontStyle: FontStyle.italic,
-          ),
-        ),
-        const SizedBox(height: 10),
-
-        if (confirmedSubs.isEmpty)
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            decoration: BoxDecoration(
-              color: AppTheme.cardBackground,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
-            ),
-            child: Text(
-              'No substitutes assigned',
-              style: GoogleFonts.inter(
-                fontSize: 14,
-                color: AppTheme.textMuted,
-                fontStyle: FontStyle.italic,
-              ),
-            ),
-          )
-        else
-          Container(
-            decoration: BoxDecoration(
-              color: AppTheme.cardBackground,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
-            ),
-            child: Column(
-              children: confirmedSubs.asMap().entries.map((entry) {
-                final index = entry.key;
-                final sub = entry.value;
-                final isLast = index == confirmedSubs.length - 1;
-
-                return Column(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          CircleAvatar(
-                            radius: 16,
-                            backgroundColor: AppTheme.primaryAccent.withValues(alpha: 0.18),
-                            child: const Icon(
-                              Icons.person_rounded,
-                              size: 18,
-                              color: AppTheme.primaryAccent,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        sub.substituteName,
-                                        style: GoogleFonts.inter(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.white,
-                                        ),
-                                      ),
-                                    ),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                                      decoration: BoxDecoration(
-                                        color: AppTheme.primaryAccent.withValues(alpha: 0.15),
-                                        borderRadius: BorderRadius.circular(6),
-                                      ),
-                                      child: Text(
-                                        'Assigned',
-                                        style: GoogleFonts.inter(
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.bold,
-                                          color: AppTheme.primaryAccent,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 3),
-                                Text(
-                                  sub.instrument,
-                                  style: GoogleFonts.inter(
-                                    fontSize: 12,
-                                    color: AppTheme.primaryAccent,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                                if (sub.replacedMemberName != null && sub.replacedMemberName!.isNotEmpty) ...[
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    'Replacing ${sub.replacedMemberName}',
-                                    style: GoogleFonts.inter(
-                                      fontSize: 11.5,
-                                      color: AppTheme.textSecondary,
-                                      fontStyle: FontStyle.italic,
-                                    ),
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (!isLast)
-                      const Divider(color: Color(0xFF231F45), height: 1),
-                  ],
-                );
-              }).toList(),
-            ),
-          ),
-      ],
+      ),
     );
   }
 
-  Widget _buildExternalGuestsSection(List<MemberResultItem> guests) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'EXTERNAL GUESTS',
-          style: GoogleFonts.outfit(
-            fontSize: 13,
-            fontWeight: FontWeight.bold,
-            color: AppTheme.primaryAccent,
-            letterSpacing: 1.5,
-          ),
-        ),
-        const SizedBox(height: 10),
-        Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: AppTheme.cardBackground,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
-          ),
-          child: Column(
-            children: guests.map((guest) {
-              Color statusColor;
-              String statusLabel;
-              switch (guest.responseStatus) {
-                case EventResponseStatus.yes:
-                  statusColor = AppTheme.success;
-                  statusLabel = 'Attending';
-                  break;
-                case EventResponseStatus.no:
-                  statusColor = AppTheme.danger;
-                  statusLabel = 'Declined';
-                  break;
-                case EventResponseStatus.uncertain:
-                  statusColor = AppTheme.warning;
-                  statusLabel = 'Maybe';
-                  break;
-                case EventResponseStatus.noAnswer:
-                  statusColor = Colors.grey;
-                  statusLabel = 'Pending';
-                  break;
-              }
+  Widget _buildMemberListContainer(String title, List<MemberResultItem> list, Color color) {
+    if (list.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 10),
+        child: Text('No members in this category.', style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary)),
+      );
+    }
 
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            guest.displayName,
-                            style: GoogleFonts.inter(
-                              fontSize: 13,
-                              color: Colors.white,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          if (guest.instrument != null && guest.instrument!.isNotEmpty)
-                            Text(
-                              guest.instrument!,
-                              style: GoogleFonts.inter(
-                                fontSize: 11.5,
-                                color: AppTheme.textMuted,
+    return Container(
+      margin: const EdgeInsets.only(top: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF16132D),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withOpacity(0.4)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: GoogleFonts.inter(fontSize: 11.5, fontWeight: FontWeight.bold, color: color),
+          ),
+          const SizedBox(height: 8),
+          ...list.map((m) {
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  CircleAvatar(
+                    radius: 11,
+                    backgroundColor: color.withOpacity(0.2),
+                    child: Text(
+                      m.displayName.isNotEmpty ? m.displayName[0].toUpperCase() : 'M',
+                      style: GoogleFonts.inter(color: color, fontSize: 10, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                m.displayName,
+                                style: GoogleFonts.inter(
+                                  fontSize: 13,
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
-                        ],
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: statusColor.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        statusLabel,
-                        style: GoogleFonts.inter(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          color: statusColor,
+                            if (m.primarySkill != null && m.primarySkill!.isNotEmpty) ...[
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.primaryAccent.withOpacity(0.15),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  m.primarySkill!,
+                                  style: GoogleFonts.inter(
+                                    fontSize: 10,
+                                    color: AppTheme.primaryAccent,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
-                      ),
+                        if (m.reason != null && m.reason!.isNotEmpty) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            '"${m.reason!}"',
+                            style: GoogleFonts.inter(
+                              fontSize: 11.5,
+                              color: AppTheme.textSecondary,
+                              fontStyle: FontStyle.italic,
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
-                  ],
-                ),
-              );
-            }).toList(),
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSubstituteListContainer(String title, List<SubstituteResultItem> list, Color color) {
+    return Container(
+      margin: const EdgeInsets.only(top: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF16132D),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withOpacity(0.4)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: GoogleFonts.inter(fontSize: 11.5, fontWeight: FontWeight.bold, color: color),
           ),
-        ),
-      ],
+          const SizedBox(height: 8),
+          ...list.map((sub) {
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  CircleAvatar(
+                    radius: 11,
+                    backgroundColor: color.withOpacity(0.2),
+                    child: Text(
+                      sub.substituteName.isNotEmpty ? sub.substituteName[0].toUpperCase() : 'S',
+                      style: GoogleFonts.inter(color: color, fontSize: 10, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                sub.substituteName,
+                                style: GoogleFonts.inter(
+                                  fontSize: 13,
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            if (sub.primarySkill.isNotEmpty) ...[
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                                decoration: BoxDecoration(
+                                  color: Colors.purpleAccent.withOpacity(0.15),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  sub.primarySkill,
+                                  style: GoogleFonts.inter(
+                                    fontSize: 10,
+                                    color: Colors.purpleAccent,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                        if (sub.replacedMemberName != null && sub.replacedMemberName!.isNotEmpty) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            'Replacing ${sub.replacedMemberName!}',
+                            style: GoogleFonts.inter(
+                              fontSize: 11,
+                              color: AppTheme.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
+      ),
     );
   }
 }

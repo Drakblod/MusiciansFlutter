@@ -313,6 +313,7 @@ class BandEvent {
   final String? parentEventId;
   final int? subEventSequence;
   final List<EventRehearsal> rehearsals;
+  final Map<String, Map<String, EventResponse>> scheduleResponses;
 
   BandEvent({
     this.id,
@@ -344,6 +345,7 @@ class BandEvent {
     this.parentEventId,
     this.subEventSequence,
     this.rehearsals = const [],
+    this.scheduleResponses = const {},
   });
 
   factory BandEvent.fromJson(Map<dynamic, dynamic> json, String keyId) {
@@ -384,7 +386,7 @@ class BandEvent {
     }
 
     final List<EventRehearsal> parsedRehearsals = [];
-    final rehearsalsRaw = json['rehearsals'];
+    final rehearsalsRaw = json['rehearsals'] ?? json['Rehearsals'];
     if (rehearsalsRaw is List) {
       for (final item in rehearsalsRaw) {
         if (item is Map) {
@@ -395,6 +397,22 @@ class BandEvent {
       rehearsalsRaw.forEach((k, v) {
         if (v is Map) {
           parsedRehearsals.add(EventRehearsal.fromJson(v, k.toString()));
+        }
+      });
+    }
+
+    final Map<String, Map<String, EventResponse>> parsedScheduleResponses = {};
+    final scheduleResponsesRaw = json['ScheduleResponses'] ?? json['scheduleResponses'];
+    if (scheduleResponsesRaw is Map) {
+      scheduleResponsesRaw.forEach((scheduleId, userResponsesMap) {
+        if (userResponsesMap is Map) {
+          final Map<String, EventResponse> userMap = {};
+          userResponsesMap.forEach((uid, respVal) {
+            if (respVal is Map) {
+              userMap[uid.toString()] = EventResponse.fromJson(respVal);
+            }
+          });
+          parsedScheduleResponses[scheduleId.toString()] = userMap;
         }
       });
     }
@@ -441,6 +459,7 @@ class BandEvent {
           ? json['subEventSequence'] as int
           : int.tryParse(json['subEventSequence']?.toString() ?? ''),
       rehearsals: parsedRehearsals,
+      scheduleResponses: parsedScheduleResponses,
     );
   }
 
@@ -462,6 +481,17 @@ class BandEvent {
 
     final List<Map<String, dynamic>> rehearsalsList =
         rehearsals.map((r) => r.toJson()).toList();
+
+    final Map<String, dynamic> scheduleResponsesMap = {};
+    scheduleResponses.forEach((schedId, userMap) {
+      final Map<String, dynamic> innerMap = {};
+      userMap.forEach((uid, resp) {
+        innerMap[uid] = resp.toJson();
+      });
+      if (innerMap.isNotEmpty) {
+        scheduleResponsesMap[schedId] = innerMap;
+      }
+    });
 
     return {
       'title': title,
@@ -487,6 +517,7 @@ class BandEvent {
       'externalInvitees': externalInviteesMap,
       if (subAssignmentsMap.isNotEmpty) 'substituteAssignments': subAssignmentsMap,
       if (rehearsalsList.isNotEmpty) 'rehearsals': rehearsalsList,
+      if (scheduleResponsesMap.isNotEmpty) 'ScheduleResponses': scheduleResponsesMap,
       if (rsvpDeadline != null) 'rsvpDeadline': rsvpDeadline,
       if (reminderIntervalHours != null)
         'reminderIntervalHours': reminderIntervalHours,
