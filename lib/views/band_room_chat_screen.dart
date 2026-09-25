@@ -3298,18 +3298,35 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
       timeOrDateRangeStr = '${DateFormat('EEE, MMM d').format(startLocal)} – ${DateFormat('EEE, MMM d').format(endLocal)}';
     }
 
+    final isPast = endLocal.isBefore(DateTime.now());
+    final isFinalized = event.isLocked;
+    final isNewRsvp = !isPast && !isFinalized;
+
     return GestureDetector(
       onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => EventDetailsPage(
-              bandId: bandId,
-              eventId: event.id!,
-              initialEvent: event,
+        if (isNewRsvp) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => EventDetailsPage(
+                bandId: bandId,
+                eventId: event.id!,
+                initialEvent: event,
+              ),
             ),
-          ),
-        );
+          );
+        } else {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => EventResultsPage(
+                bandId: bandId,
+                eventId: event.id!,
+                initialEvent: event,
+              ),
+            ),
+          );
+        }
       },
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
@@ -3419,18 +3436,35 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
       dateRangeStr = '${DateFormat('EEE, MMM d').format(startLocal)} – ${DateFormat('EEE, MMM d').format(endLocal)}';
     }
 
+    final isPast = endLocal.isBefore(DateTime.now());
+    final isFinalized = group.mainEvent.isLocked;
+    final isNewRsvp = !isPast && !isFinalized;
+
     return GestureDetector(
       onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => EventDetailsPage(
-              bandId: bandId,
-              eventId: group.mainEvent.id!,
-              initialEvent: group.mainEvent,
+        if (isNewRsvp) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => EventDetailsPage(
+                bandId: bandId,
+                eventId: group.mainEvent.id!,
+                initialEvent: group.mainEvent,
+              ),
             ),
-          ),
-        );
+          );
+        } else {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => EventResultsPage(
+                bandId: bandId,
+                eventId: group.mainEvent.id!,
+                initialEvent: group.mainEvent,
+              ),
+            ),
+          );
+        }
       },
       child: Container(
         margin: const EdgeInsets.only(bottom: 14),
@@ -3731,7 +3765,7 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                                 Text("📩", style: GoogleFonts.inter(fontSize: 18)),
                                 const SizedBox(width: 8),
                                 Text(
-                                  "New Events",
+                                  "New Events (Need RSVP)",
                                   style: GoogleFonts.outfit(
                                     fontSize: 18,
                                     fontWeight: FontWeight.bold,
@@ -3765,7 +3799,7 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                                 Text("⏳", style: GoogleFonts.inter(fontSize: 18)),
                                 const SizedBox(width: 8),
                                 Text(
-                                  "Upcoming Events",
+                                  "Upcoming Events (Finalized)",
                                   style: GoogleFonts.outfit(
                                     fontSize: 18,
                                     fontWeight: FontWeight.bold,
@@ -3802,7 +3836,7 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                                   Text("🏛️", style: GoogleFonts.inter(fontSize: 16)),
                                   const SizedBox(width: 8),
                                   Text(
-                                    "Past Events (${pastGroups.length})",
+                                    "Past Events",
                                     style: GoogleFonts.outfit(
                                       fontSize: 16,
                                       color: AppTheme.textSecondary,

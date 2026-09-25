@@ -35,6 +35,8 @@ class _CreateEventPageState extends State<CreateEventPage> {
 
   String _eventType = 'Event';
   String? _existingEventId;
+  DateTime _startDate = DateTime.now().add(const Duration(days: 1));
+  DateTime _endDate = DateTime.now().add(const Duration(days: 1));
   DateTime _selectedDate = DateTime.now().add(const Duration(days: 1));
   TimeOfDay _startTime = const TimeOfDay(hour: 19, minute: 0);
   TimeOfDay _endTime = const TimeOfDay(hour: 21, minute: 0);
@@ -51,6 +53,9 @@ class _CreateEventPageState extends State<CreateEventPage> {
   @override
   void initState() {
     super.initState();
+    final now = DateTime.now().add(const Duration(days: 1));
+    _startDate = DateTime(now.year, now.month, now.day);
+    _endDate = DateTime(now.year, now.month, now.day);
     _customReminderController.text = '';
     _initFromExisting();
     _checkPermission();
@@ -98,7 +103,9 @@ class _CreateEventPageState extends State<CreateEventPage> {
       final startLocal = DateTime.tryParse(existing.startDateTime)?.toLocal() ?? DateTime.now();
       final endLocal = DateTime.tryParse(existing.endDateTime)?.toLocal() ?? startLocal;
 
-      _selectedDate = DateTime(startLocal.year, startLocal.month, startLocal.day);
+      _startDate = DateTime(startLocal.year, startLocal.month, startLocal.day);
+      _endDate = DateTime(endLocal.year, endLocal.month, endLocal.day);
+      _selectedDate = _startDate;
       _startTime = TimeOfDay(hour: startLocal.hour, minute: startLocal.minute);
       _endTime = TimeOfDay(hour: endLocal.hour, minute: endLocal.minute);
     }
@@ -154,6 +161,70 @@ class _CreateEventPageState extends State<CreateEventPage> {
         );
         Navigator.pop(context);
       }
+    }
+  }
+
+  Future<void> _selectStartDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _startDate,
+      firstDate: DateTime.now().subtract(const Duration(days: 365)),
+      lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.dark(
+              primary: AppTheme.primaryAccent,
+              onPrimary: Colors.white,
+              surface: Color(0xFF16132D),
+              onSurface: Colors.white,
+            ),
+            dialogBackgroundColor: const Color(0xFF0F0C20),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null) {
+      setState(() {
+        _startDate = picked;
+        _selectedDate = picked;
+        if (_endDate.isBefore(_startDate)) {
+          _endDate = _startDate;
+        }
+      });
+    }
+  }
+
+  Future<void> _selectEndDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _endDate.isBefore(_startDate) ? _startDate : _endDate,
+      firstDate: DateTime.now().subtract(const Duration(days: 365)),
+      lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.dark(
+              primary: AppTheme.primaryAccent,
+              onPrimary: Colors.white,
+              surface: Color(0xFF16132D),
+              onSurface: Colors.white,
+            ),
+            dialogBackgroundColor: const Color(0xFF0F0C20),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null) {
+      setState(() {
+        _endDate = picked;
+        if (_startDate.isAfter(_endDate)) {
+          _startDate = _endDate;
+          _selectedDate = _endDate;
+        }
+      });
     }
   }
 
@@ -575,24 +646,22 @@ class _CreateEventPageState extends State<CreateEventPage> {
       }
 
       final start = DateTime(
-        _selectedDate.year,
-        _selectedDate.month,
-        _selectedDate.day,
-        _startTime.hour,
-        _startTime.minute,
+        _startDate.year,
+        _startDate.month,
+        _startDate.day,
+        0,
+        0,
+        0,
       );
 
-      var end = DateTime(
-        _selectedDate.year,
-        _selectedDate.month,
-        _selectedDate.day,
-        _endTime.hour,
-        _endTime.minute,
+      final end = DateTime(
+        _endDate.year,
+        _endDate.month,
+        _endDate.day,
+        23,
+        59,
+        59,
       );
-
-      if (end.isBefore(start)) {
-        end = end.add(const Duration(days: 1));
-      }
 
       final publishedAt = DateTime.now().millisecondsSinceEpoch;
       final int? rsvpDeadline = (_requireResponse && _reminderIntervalHours > 0)
@@ -684,12 +753,12 @@ class _CreateEventPageState extends State<CreateEventPage> {
                     ),
                     const SizedBox(height: 20),
 
-                    // 1. Name of Event
+                    // 1. Main Event Name
                     TextFormField(
                       controller: _titleController,
                       style: GoogleFonts.inter(color: Colors.white),
                       decoration: const InputDecoration(
-                        labelText: 'Name of Event',
+                        labelText: 'Main Event Name',
                         hintText: 'e.g. Club gig – Summer Tour',
                       ),
                       validator: (value) {
@@ -701,13 +770,13 @@ class _CreateEventPageState extends State<CreateEventPage> {
                     ),
                     const SizedBox(height: 16),
 
-                    // 2. Description
+                    // 2. Event Description (Describe ALL parts of Main Event here)
                     TextFormField(
                       controller: _descriptionController,
                       style: GoogleFonts.inter(color: Colors.white),
                       maxLines: 3,
                       decoration: const InputDecoration(
-                        labelText: 'Description',
+                        labelText: 'Event Description (Describe ALL parts of Main Event here)',
                         hintText: 'What is this event about?',
                       ),
                     ),
@@ -731,7 +800,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                     ),
                     const SizedBox(height: 20),
 
-                    // 4. Date & Time pickers
+                    // 4. Date Range
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
@@ -743,7 +812,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'DATE & TIME',
+                            'DATE RANGE',
                             style: GoogleFonts.outfit(
                               fontSize: 12,
                               fontWeight: FontWeight.bold,
@@ -753,9 +822,9 @@ class _CreateEventPageState extends State<CreateEventPage> {
                           ),
                           const SizedBox(height: 12),
 
-                          // Date picker trigger
+                          // Start Date picker trigger
                           GestureDetector(
-                            onTap: _selectDate,
+                            onTap: _selectStartDate,
                             child: Row(
                               children: [
                                 const Icon(Icons.calendar_today_outlined, color: AppTheme.textSecondary, size: 20),
@@ -765,12 +834,12 @@ class _CreateEventPageState extends State<CreateEventPage> {
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        'Date',
+                                        'Start Date',
                                         style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary),
                                       ),
                                       const SizedBox(height: 2),
                                       Text(
-                                        DateFormat('EEEE, MMM d, yyyy').format(_selectedDate),
+                                        DateFormat('EEEE, MMM d, yyyy').format(_startDate),
                                         style: GoogleFonts.inter(fontSize: 15, color: Colors.white, fontWeight: FontWeight.w500),
                                       ),
                                     ],
@@ -782,53 +851,24 @@ class _CreateEventPageState extends State<CreateEventPage> {
                           ),
                           const Divider(height: 24, color: Color(0xFF2E2A4E)),
 
-                          // Start Time picker trigger
+                          // End Date picker trigger
                           GestureDetector(
-                            onTap: _selectStartTime,
+                            onTap: _selectEndDate,
                             child: Row(
                               children: [
-                                const Icon(Icons.access_time, color: AppTheme.textSecondary, size: 20),
+                                const Icon(Icons.calendar_today_outlined, color: AppTheme.textSecondary, size: 20),
                                 const SizedBox(width: 12),
                                 Expanded(
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        'Start Time',
+                                        'End Date',
                                         style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary),
                                       ),
                                       const SizedBox(height: 2),
                                       Text(
-                                        _startTime.format(context),
-                                        style: GoogleFonts.inter(fontSize: 15, color: Colors.white, fontWeight: FontWeight.w500),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const Icon(Icons.arrow_forward_ios_rounded, color: AppTheme.textSecondary, size: 14),
-                              ],
-                            ),
-                          ),
-                          const Divider(height: 24, color: Color(0xFF2E2A4E)),
-
-                          // End Time picker trigger
-                          GestureDetector(
-                            onTap: _selectEndTime,
-                            child: Row(
-                              children: [
-                                const Icon(Icons.access_time, color: AppTheme.textSecondary, size: 20),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        'End Time',
-                                        style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary),
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        _endTime.format(context),
+                                        DateFormat('EEEE, MMM d, yyyy').format(_endDate),
                                         style: GoogleFonts.inter(fontSize: 15, color: Colors.white, fontWeight: FontWeight.w500),
                                       ),
                                     ],
@@ -910,7 +950,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                               return Padding(
                                 padding: const EdgeInsets.only(bottom: 8),
                                 child: Text(
-                                  entered.isEmpty ? '"Name of Event"' : '"$entered"',
+                                  entered.isEmpty ? '"Main Event Name"' : '"$entered"',
                                   style: GoogleFonts.outfit(
                                     fontSize: 15,
                                     fontWeight: FontWeight.bold,
@@ -949,10 +989,10 @@ class _CreateEventPageState extends State<CreateEventPage> {
                                         borderRadius: BorderRadius.circular(6),
                                       ),
                                       child: Text(
-                                        sessionType,
+                                        'EVENT ${index + 1}',
                                         style: GoogleFonts.inter(
                                           fontSize: 11,
-                                          color: Colors.white,
+                                          color: AppTheme.primaryAccent,
                                           fontWeight: FontWeight.bold,
                                         ),
                                       ),
@@ -973,7 +1013,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                                             ),
                                             const SizedBox(height: 2),
                                             Text(
-                                              '$dateFormatted (${rehearsal.startTime} - ${rehearsal.endTime})',
+                                              '$sessionType • $dateFormatted (${rehearsal.startTime} - ${rehearsal.endTime})',
                                               style: GoogleFonts.inter(
                                                 fontSize: 11,
                                                 color: AppTheme.textSecondary,
@@ -982,7 +1022,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                                             ),
                                           ] else ...[
                                             Text(
-                                              '$dateFormatted (${rehearsal.startTime} - ${rehearsal.endTime})',
+                                              '$sessionType • $dateFormatted (${rehearsal.startTime} - ${rehearsal.endTime})',
                                               style: GoogleFonts.inter(
                                                 fontSize: 12,
                                                 color: Colors.white,
@@ -1029,7 +1069,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                           ],
 
                           // + Add Event Button or Limit Warning
-                          if (_rehearsals.length < 5)
+                          if (_rehearsals.length < 6)
                             OutlinedButton.icon(
                               style: OutlinedButton.styleFrom(
                                 side: const BorderSide(color: AppTheme.primaryAccent),

@@ -243,7 +243,44 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
   List<_EventScheduleItemModel> _buildScheduleItems(BandEvent event, String? currentUserId) {
     final List<_EventScheduleItemModel> list = [];
 
-    // 1. Main Event (Item 0)
+    if (event.rehearsals.isNotEmpty) {
+      for (int i = 0; i < event.rehearsals.length; i++) {
+        final rehearsal = event.rehearsals[i];
+        final parsedDate = DateTime.tryParse(rehearsal.date);
+        final dateFormatted = parsedDate != null
+            ? DateFormat('EEEE, MMMM d, yyyy').format(parsedDate)
+            : rehearsal.date;
+        final timeFormatted = '${rehearsal.startTime} - ${rehearsal.endTime}';
+        final titleFormatted = rehearsal.title.isNotEmpty ? rehearsal.title : event.title;
+        final typeFormatted = rehearsal.type.isNotEmpty ? rehearsal.type : 'Rehearsal';
+        final locationFormatted = rehearsal.location.isNotEmpty ? rehearsal.location : event.location;
+
+        String? schedStatus;
+        String? schedComment;
+        if (currentUserId != null && event.scheduleResponses.containsKey(rehearsal.id)) {
+          final userResp = event.scheduleResponses[rehearsal.id]?[currentUserId];
+          schedStatus = userResp?.status;
+          schedComment = userResp?.uncertainReason ?? userResp?.comment;
+        }
+
+        list.add(_EventScheduleItemModel(
+          sequenceIndex: i + 1,
+          isMain: false,
+          scheduleItemId: rehearsal.id,
+          type: typeFormatted,
+          title: titleFormatted,
+          description: rehearsal.description,
+          dateStr: dateFormatted,
+          timeStr: timeFormatted,
+          location: locationFormatted,
+          status: schedStatus,
+          comment: schedComment,
+        ));
+      }
+      return list;
+    }
+
+    // 1. Single Main Event (Item 0)
     final startLocal = DateTime.tryParse(event.startDateTime)?.toLocal() ?? DateTime.now();
     final endLocal = DateTime.tryParse(event.endDateTime)?.toLocal() ?? DateTime.now();
     final mainDateStr = DateFormat('EEEE, MMMM d, yyyy').format(startLocal);
@@ -274,41 +311,6 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
       status: mainStatus,
       comment: mainComment,
     ));
-
-    // 2. Attached Schedule Items (Items 1..N)
-    for (int i = 0; i < event.rehearsals.length; i++) {
-      final rehearsal = event.rehearsals[i];
-      final parsedDate = DateTime.tryParse(rehearsal.date);
-      final dateFormatted = parsedDate != null
-          ? DateFormat('EEEE, MMMM d, yyyy').format(parsedDate)
-          : rehearsal.date;
-      final timeFormatted = '${rehearsal.startTime} - ${rehearsal.endTime}';
-      final titleFormatted = rehearsal.title.isNotEmpty ? rehearsal.title : event.title;
-      final typeFormatted = rehearsal.type.isNotEmpty ? rehearsal.type : 'Rehearsal';
-      final locationFormatted = rehearsal.location.isNotEmpty ? rehearsal.location : event.location;
-
-      String? schedStatus;
-      String? schedComment;
-      if (currentUserId != null && event.scheduleResponses.containsKey(rehearsal.id)) {
-        final userResp = event.scheduleResponses[rehearsal.id]?[currentUserId];
-        schedStatus = userResp?.status;
-        schedComment = userResp?.uncertainReason ?? userResp?.comment;
-      }
-
-      list.add(_EventScheduleItemModel(
-        sequenceIndex: i + 1,
-        isMain: false,
-        scheduleItemId: rehearsal.id,
-        type: typeFormatted,
-        title: titleFormatted,
-        description: rehearsal.description,
-        dateStr: dateFormatted,
-        timeStr: timeFormatted,
-        location: locationFormatted,
-        status: schedStatus,
-        comment: schedComment,
-      ));
-    }
 
     return list;
   }
@@ -634,23 +636,34 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          scheduleItems[0].dateStr,
-                          style: GoogleFonts.inter(fontSize: 13, color: Colors.white),
+                          () {
+                            final startLocal = DateTime.tryParse(event.startDateTime)?.toLocal() ?? DateTime.now();
+                            final endLocal = DateTime.tryParse(event.endDateTime)?.toLocal() ?? startLocal;
+                            final isSameDay = startLocal.year == endLocal.year &&
+                                startLocal.month == endLocal.month &&
+                                startLocal.day == endLocal.day;
+                            return isSameDay
+                                ? DateFormat('EEEE, MMMM d, yyyy').format(startLocal)
+                                : '${DateFormat('MMM d, yyyy').format(startLocal)} – ${DateFormat('MMM d, yyyy').format(endLocal)}';
+                          }(),
+                          style: GoogleFonts.inter(fontSize: 13, color: Colors.white, fontWeight: FontWeight.w600),
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      const Icon(Icons.access_time_outlined, size: 14, color: AppTheme.textSecondary),
-                      const SizedBox(width: 8),
-                      Text(
-                        scheduleItems[0].timeStr,
-                        style: GoogleFonts.inter(fontSize: 13, color: Colors.white),
-                      ),
-                    ],
-                  ),
+                  if (!hasMultipleEvents) ...[
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        const Icon(Icons.access_time_outlined, size: 14, color: AppTheme.textSecondary),
+                        const SizedBox(width: 8),
+                        Text(
+                          scheduleItems[0].timeStr,
+                          style: GoogleFonts.inter(fontSize: 13, color: Colors.white),
+                        ),
+                      ],
+                    ),
+                  ],
                   if (event.location.isNotEmpty) ...[
                     const SizedBox(height: 6),
                     Row(
@@ -1535,8 +1548,8 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
               const SizedBox(height: 16),
             ],
 
-            // Event Creator Actions (Only for Event Creator or Leader/Admin)
-            if (currentUserId == event.createdBy || _isAdmin) ...[
+            // Event Creator Actions (Strictly for actual Event Creator)
+            if (currentUserId != null && currentUserId == event.createdBy) ...[
               Text(
                 'EVENT CREATOR ACTIONS',
                 style: GoogleFonts.outfit(

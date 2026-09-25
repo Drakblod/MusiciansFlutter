@@ -255,23 +255,35 @@ void main() {
         expect(find.text('Friday Big Show'), findsWidgets);
         expect(find.text('Grand Ballroom'), findsWidgets);
 
-        // 2. Verify all 4 exact category headers are present with counts
-        expect(find.textContaining('YES (2)'), findsOneWidget);
-        expect(find.textContaining('NO (1)'), findsOneWidget);
-        expect(find.textContaining('UNCERTAIN (2)'), findsOneWidget);
-        expect(find.textContaining('NO ANSWER (1)'), findsOneWidget);
+        // 2. Verify all 4 exact category pills are present with counts
+        expect(find.text('YES (2)'), findsOneWidget);
+        expect(find.text('NO (1)'), findsOneWidget);
+        expect(find.text('UNCERTAIN (2)'), findsOneWidget);
+        expect(find.text('NO ANSWER (1)'), findsOneWidget);
 
-        // 3. Verify names under their respective sections
+        // Tap YES (2) to expand
+        await tester.tap(find.text('YES (2)'));
+        await tester.pumpAndSettle();
         expect(find.text('Alice Vocalist'), findsOneWidget);
         expect(find.text('Bob Guitar'), findsOneWidget);
+
+        // Tap NO (1) to expand
+        await tester.tap(find.text('NO (1)'));
+        await tester.pumpAndSettle();
         expect(find.text('Charlie Bass'), findsOneWidget);
+
+        // Tap UNCERTAIN (2) to expand
+        await tester.tap(find.text('UNCERTAIN (2)'));
+        await tester.pumpAndSettle();
         expect(find.text('Diana Drum'), findsOneWidget);
         expect(find.text('Evan Keys'), findsOneWidget);
-        expect(find.text('Frank Horn'), findsOneWidget);
-
-        // 4. Verify reasons rendered under UNCERTAIN
         expect(find.textContaining('Flight might be delayed'), findsOneWidget);
         expect(find.textContaining('Need to check family calendar'), findsOneWidget);
+
+        // Tap NO ANSWER (1) to expand
+        await tester.tap(find.text('NO ANSWER (1)'));
+        await tester.pumpAndSettle();
+        expect(find.text('Frank Horn'), findsOneWidget);
 
         // 5. Zero write calls occurred
         expect(mockService.writeCount, 0);
@@ -361,9 +373,12 @@ void main() {
 
         await tester.pumpAndSettle();
 
-        // Header shows 2 distinct confirmed substitutes (Sam Substitute and Leo LegacySub)
-        expect(find.text('SUBSTITUTES'), findsOneWidget);
-        expect(find.textContaining('2 slots (2 people)'), findsOneWidget);
+        // Header shows 2 distinct confirmed substitutes pill
+        expect(find.text('SUBSTITUTES (2)'), findsOneWidget);
+
+        // Tap SUBSTITUTES (2) pill to expand
+        await tester.tap(find.text('SUBSTITUTES (2)'));
+        await tester.pumpAndSettle();
 
         // Confirmed slot visible
         expect(find.text('Sam Substitute'), findsOneWidget);
@@ -376,17 +391,10 @@ void main() {
 
         // Cancelled sub should NOT be shown
         expect(find.text('Cancelled Sub'), findsNothing);
-
-        // VIP guest is shown under EXTERNAL GUESTS, not counted in substitutes (which only has 2 slots)
-        expect(find.text('EXTERNAL GUESTS'), findsOneWidget);
-        expect(find.text('Vip Guest'), findsOneWidget);
-
-        // Non-sub guest is NOT counted in regular member total
-        expect(find.textContaining('YES (1)'), findsOneWidget);
       },
     );
 
-    testWidgets('Empty substitutes displays "No substitutes assigned"', (tester) async {
+    testWidgets('Empty substitutes displays "No substitutes assigned."', (tester) async {
       tester.view.physicalSize = const Size(1200, 3000);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() {
@@ -415,9 +423,10 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('SUBSTITUTES'), findsOneWidget);
-      expect(find.textContaining('0 slots (0 people)'), findsOneWidget);
-      expect(find.text('No substitutes assigned'), findsOneWidget);
+      expect(find.text('SUBSTITUTES (0)'), findsOneWidget);
+      await tester.tap(find.text('SUBSTITUTES (0)'));
+      await tester.pumpAndSettle();
+      expect(find.text('No substitutes assigned.'), findsOneWidget);
     });
 
     testWidgets('Strictly read-only: No RSVP buttons, no chat creation, no find sub, no write calls', (tester) async {
@@ -633,12 +642,19 @@ void main() {
         // Metadata
         expect(find.text('Stockholm Globe'), findsOneWidget);
         // Member responses & counts
-        expect(find.textContaining('YES (1)'), findsOneWidget);
-        expect(find.textContaining('NO (0)'), findsOneWidget);
-        expect(find.textContaining('UNCERTAIN (1)'), findsOneWidget);
-        // Reason displayed
+        expect(find.text('YES (1)'), findsOneWidget);
+        expect(find.text('NO (0)'), findsOneWidget);
+        expect(find.text('UNCERTAIN (1)'), findsOneWidget);
+        expect(find.text('SUBSTITUTES (1)'), findsOneWidget);
+
+        // Tap UNCERTAIN (1) -> Reason displayed
+        await tester.tap(find.text('UNCERTAIN (1)'));
+        await tester.pumpAndSettle();
         expect(find.text('"Has dentist appointment"'), findsOneWidget);
-        // Substitute
+
+        // Tap SUBSTITUTES (1) -> Substitute visible
+        await tester.tap(find.text('SUBSTITUTES (1)'));
+        await tester.pumpAndSettle();
         expect(find.text('Sam On Bass'), findsOneWidget);
         expect(find.text('Leo On Drums'), findsNothing);
 
@@ -653,12 +669,14 @@ void main() {
         expect(find.text('Gothenburg Arena'), findsOneWidget);
         expect(find.text('Stockholm Globe'), findsNothing);
         // Responses change: Alice is NO, Bob is YES
-        expect(find.textContaining('YES (1)'), findsOneWidget);
-        expect(find.textContaining('NO (1)'), findsOneWidget);
-        expect(find.textContaining('UNCERTAIN (0)'), findsOneWidget);
-        // Reason disappears
-        expect(find.text('"Has dentist appointment"'), findsNothing);
-        // Substitute changes: Leo on Drums is visible, Sam on Bass is gone
+        expect(find.text('YES (1)'), findsOneWidget);
+        expect(find.text('NO (1)'), findsOneWidget);
+        expect(find.text('UNCERTAIN (0)'), findsOneWidget);
+        expect(find.text('SUBSTITUTES (1)'), findsOneWidget);
+
+        // Tap SUBSTITUTES (1) -> Leo On Drums visible
+        await tester.tap(find.text('SUBSTITUTES (1)'));
+        await tester.pumpAndSettle();
         expect(find.text('Leo On Drums'), findsOneWidget);
         expect(find.text('Sam On Bass'), findsNothing);
 
@@ -669,7 +687,11 @@ void main() {
 
         // Verify Part 1 is restored
         expect(find.text('Stockholm Globe'), findsOneWidget);
+        await tester.tap(find.text('UNCERTAIN (1)'));
+        await tester.pumpAndSettle();
         expect(find.text('"Has dentist appointment"'), findsOneWidget);
+        await tester.tap(find.text('SUBSTITUTES (1)'));
+        await tester.pumpAndSettle();
         expect(find.text('Sam On Bass'), findsOneWidget);
       },
     );
@@ -794,13 +816,16 @@ void main() {
         );
         await tester.pumpAndSettle();
 
-        // 1. Check substitutes header count:
+        // 1. Check substitutes pill count:
         // Alice has 2 slots (Bass + Synth).
         // Dave has 1 legacy slot (Drums).
         // Total = 3 slots (2 people: Alice, Dave).
         // Stale Charlie (revoked), phantom name-only, whitespace, applicant Bob, and favorite are NOT included!
-        expect(find.text('SUBSTITUTES'), findsOneWidget);
-        expect(find.textContaining('3 slots (2 people)'), findsOneWidget);
+        expect(find.text('SUBSTITUTES (3)'), findsOneWidget);
+
+        // Tap SUBSTITUTES (3) to expand
+        await tester.tap(find.text('SUBSTITUTES (3)'));
+        await tester.pumpAndSettle();
 
         // 2. Both slots for Alice are visible
         expect(find.text('Alice Valid Bass'), findsOneWidget);

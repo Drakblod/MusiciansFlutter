@@ -222,8 +222,8 @@ void main() {
       // Initially "+ Add Event" is visible
       expect(find.text('+ Add Event'), findsOneWidget);
 
-      // Add 5 events to reach max 6 (1 main + 5 attached)
-      for (int i = 0; i < 5; i++) {
+      // Add 6 attached events to reach max 6
+      for (int i = 0; i < 6; i++) {
         final addBtn = find.text('+ Add Event');
         await tester.ensureVisible(addBtn);
         await tester.pumpAndSettle();
@@ -302,9 +302,9 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
       await tester.pump(const Duration(milliseconds: 300));
 
-      // Check EVENT 1 (Main Event) and EVENT 2 (Load-in) are displayed
-      expect(find.textContaining('EVENT 1'), findsWidgets);
-      expect(find.textContaining('EVENT 2'), findsWidgets);
+      // Check EVENT 1 (Attached item) is displayed
+      expect(find.text('EVENT 1'), findsOneWidget);
+      expect(find.text('Load-in & Line Check'), findsOneWidget);
 
       // Check RSVP buttons inside the active accordion item
       expect(find.text('YES'), findsWidgets);
@@ -323,6 +323,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 200));
 
       expect(mockService.lastUpdatedEventId, 'event_multi_1');
+      expect(mockService.lastUpdatedScheduleItemId, 'sched_loadin');
       expect(mockService.lastUpdatedUserId, 'user_1');
       expect(mockService.lastUpdatedStatus, 'Yes');
     });
@@ -474,18 +475,15 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
       await tester.pump(const Duration(milliseconds: 300));
 
-      // Check EVENT 1 and EVENT 2 headers
+      // Check attached schedule item header is EVENT 1
       expect(find.textContaining('EVENT 1'), findsOneWidget);
-      expect(find.textContaining('EVENT 2'), findsOneWidget);
+      expect(find.textContaining('Dress Rehearsal'), findsOneWidget);
 
-      // Event 1 has YES (1), NO (1)
-      expect(find.text('YES (1)'), findsWidgets);
-      expect(find.text('NO (1)'), findsWidgets);
-
-      // Event 2 has UNCERTAIN (1)
+      // Event 1 has YES (1), UNCERTAIN (1)
+      expect(find.text('YES (1)'), findsOneWidget);
       expect(find.text('UNCERTAIN (1)'), findsOneWidget);
 
-      // Tap on UNCERTAIN (1) pill on Event 2 to expand
+      // Tap on UNCERTAIN (1) pill on Event 1 to expand
       await tester.tap(find.text('UNCERTAIN (1)'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));

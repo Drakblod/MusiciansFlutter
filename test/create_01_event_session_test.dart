@@ -280,8 +280,8 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
-      // Label Name of Event is present
-      expect(find.widgetWithText(TextFormField, 'Name of Event'), findsOneWidget);
+      // Label Main Event Name is present
+      expect(find.widgetWithText(TextFormField, 'Main Event Name'), findsOneWidget);
       // Hint text is e.g. Club gig – Summer Tour
       expect(find.text('e.g. Club gig – Summer Tour'), findsOneWidget);
 
@@ -317,7 +317,7 @@ void main() {
       expect(appState.mockFirebase.savedBandEvents.isEmpty, isTrue);
 
       // Fill Name but leave Location empty
-      await tester.enterText(find.widgetWithText(TextFormField, 'Name of Event'), 'Club gig – Summer Tour');
+      await tester.enterText(find.widgetWithText(TextFormField, 'Main Event Name'), 'Club gig – Summer Tour');
       await tester.tap(find.text('Publish Event'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
@@ -355,8 +355,8 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
-      // Rehearsal (default type) session card is visible
-      expect(find.text('Rehearsal'), findsWidgets);
+      // Session card is visible
+      expect(find.text('EVENT 1'), findsOneWidget);
       expect(find.text('@ Studio A'), findsOneWidget);
       expect(find.text('Warmup rehearsal'), findsOneWidget);
       expect(find.text('1 Event'), findsOneWidget);
@@ -476,7 +476,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
 
       // Enter basic event info
-      await tester.enterText(find.widgetWithText(TextFormField, 'Name of Event'), 'Test Rehearsal');
+      await tester.enterText(find.widgetWithText(TextFormField, 'Main Event Name'), 'Test Rehearsal');
       await tester.enterText(find.widgetWithText(TextFormField, 'Location (City, Country)'), 'Berlin');
 
       // Switch to custom mode "Set your own"
@@ -535,7 +535,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
-      await tester.enterText(find.widgetWithText(TextFormField, 'Name of Event'), 'Preset 48 Event');
+      await tester.enterText(find.widgetWithText(TextFormField, 'Main Event Name'), 'Preset 48 Event');
       await tester.enterText(find.widgetWithText(TextFormField, 'Location (City, Country)'), 'Paris');
 
       // Select predefined 48 hours
@@ -571,7 +571,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
-      await tester.enterText(find.widgetWithText(TextFormField, 'Name of Event'), 'No Reminder Event');
+      await tester.enterText(find.widgetWithText(TextFormField, 'Main Event Name'), 'No Reminder Event');
       await tester.enterText(find.widgetWithText(TextFormField, 'Location (City, Country)'), 'Rome');
 
       // Select No automatic Reminders
@@ -911,13 +911,13 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
-      final nameField = find.widgetWithText(TextFormField, 'Name of Event');
+      final nameField = find.widgetWithText(TextFormField, 'Main Event Name');
       await tester.enterText(nameField, 'Club gig – Summer Tour');
 
       final locField = find.widgetWithText(TextFormField, 'Location (City, Country)');
       await tester.enterText(locField, 'Globen, Stockholm');
 
-      final descField = find.widgetWithText(TextFormField, 'Description');
+      final descField = find.widgetWithText(TextFormField, 'Event Description (Describe ALL parts of Main Event here)');
       await tester.enterText(descField, 'Main arena performance');
 
       // Add Session 1
@@ -999,7 +999,7 @@ void main() {
 
       expect(find.text('Headline Show'), findsWidgets);
       expect(find.text('Madison Square Garden'), findsOneWidget);
-      expect(find.text('Rehearsal'), findsWidgets);
+      expect(find.text('EVENT 1'), findsOneWidget);
       expect(find.text('@ Sound Stage 1'), findsOneWidget);
 
       // Save changes

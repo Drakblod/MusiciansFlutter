@@ -255,10 +255,23 @@ class _EventResultsPageState extends State<EventResultsPage> {
     return '';
   }
 
+  String _formatDateRange(String? startStr, String? endStr) {
+    if (startStr == null || startStr.isEmpty) return 'Date TBA';
+    final start = DateTime.tryParse(startStr)?.toLocal();
+    final end = (endStr != null && endStr.isNotEmpty) ? DateTime.tryParse(endStr)?.toLocal() : null;
+    if (start == null) return 'Date TBA';
+
+    if (end == null || (start.year == end.year && start.month == end.month && start.day == end.day)) {
+      return DateFormat('EEEE, MMMM d, yyyy').format(start);
+    } else {
+      return '${DateFormat('EEE, MMM d, yyyy').format(start)} – ${DateFormat('EEE, MMM d, yyyy').format(end)}';
+    }
+  }
+
   List<_EventResultScheduleItem> _buildResultScheduleItems(BandEvent event) {
     final List<_EventResultScheduleItem> items = [];
 
-    // Confirmed substitutes for main event
+    // Confirmed substitutes for the event
     final confirmedSubs = <SubstituteResultItem>[];
     final Set<String> claimedSlotOrRequestIds = {};
     final Set<String> revokedOrCancelledIds = {};
@@ -346,113 +359,19 @@ class _EventResultsPageState extends State<EventResultsPage> {
       }
     }
 
-    // 1. Process Main Event (Item 0)
-    final mainYes = <MemberResultItem>[];
-    final mainNo = <MemberResultItem>[];
-    final mainUncertain = <MemberResultItem>[];
-    final mainNoAnswer = <MemberResultItem>[];
+    if (event.rehearsals.isEmpty) {
+      // 1. Process Single Event (No attached schedule items)
+      final mainYes = <MemberResultItem>[];
+      final mainNo = <MemberResultItem>[];
+      final mainUncertain = <MemberResultItem>[];
+      final mainNoAnswer = <MemberResultItem>[];
 
-    final Set<String> processedUserIds = {};
-
-    for (final member in _members) {
-      final uid = member.userId;
-      if (uid == null || uid.isEmpty) continue;
-      processedUserIds.add(uid);
-
-      final profile = _cachedProfiles[uid];
-      final name = profile?.displayName ??
-          profile?.nickname ??
-          ((member.nickname != null && member.nickname!.trim().toLowerCase() != 'leader') ? member.nickname : null) ??
-          'Unknown Member';
-      final primarySkill = _getPrimarySkill(uid, member.role);
-
-      final resp = event.responses[uid];
-      final status = classifyEventResponse(resp?.status);
-      final reason = resp?.uncertainReason ?? resp?.comment;
-
-      final item = MemberResultItem(
-        userId: uid,
-        displayName: name,
-        primarySkill: primarySkill.isNotEmpty ? primarySkill : null,
-        reason: status == EventResponseStatus.uncertain ? reason : null,
-        responseStatus: status,
-      );
-
-      if (status == EventResponseStatus.yes) {
-        mainYes.add(item);
-      } else if (status == EventResponseStatus.no) {
-        mainNo.add(item);
-      } else if (status == EventResponseStatus.uncertain) {
-        mainUncertain.add(item);
-      } else {
-        mainNoAnswer.add(item);
-      }
-    }
-
-    // Process external invitees who are not substitutes for main event
-    final guests = <MemberResultItem>[];
-    for (final entry in event.externalInvitees.entries) {
-      final uid = entry.key;
-      if (processedUserIds.contains(uid)) continue;
-      final invitee = entry.value;
-      final isSub = invitee.source == 'subRequest' || (invitee.subRequestId != null && invitee.subRequestId!.isNotEmpty);
-      if (isSub) continue; // Captured under confirmedSubs
-
-      final profile = _cachedProfiles[uid];
-      final name = invitee.displayName ?? profile?.displayName ?? profile?.nickname ?? 'Guest';
-      final primarySkill = (invitee.instrument != null && invitee.instrument!.isNotEmpty)
-          ? invitee.instrument!
-          : _getPrimarySkill(uid);
-      final status = classifyEventResponse(invitee.status);
-      final reason = invitee.comment;
-
-      final item = MemberResultItem(
-        userId: uid,
-        displayName: name,
-        primarySkill: primarySkill.isNotEmpty ? primarySkill : null,
-        reason: status == EventResponseStatus.uncertain ? reason : null,
-        responseStatus: status,
-      );
-
-      guests.add(item);
-    }
-
-    final startLocal = DateTime.tryParse(event.startDateTime)?.toLocal() ?? DateTime.now();
-    final endLocal = DateTime.tryParse(event.endDateTime)?.toLocal() ?? DateTime.now();
-    final mainDateStr = DateFormat('EEEE, MMMM d, yyyy').format(startLocal);
-    final mainTimeStr = '${DateFormat('HH:mm').format(startLocal)} - ${DateFormat('HH:mm').format(endLocal)}';
-
-    items.add(
-      _EventResultScheduleItem(
-        index: 0,
-        isMain: true,
-        scheduleItemId: null,
-        type: event.eventType.isNotEmpty && event.eventType.toLowerCase() != 'event' ? event.eventType : 'Main Event',
-        title: event.title,
-        dateStr: mainDateStr,
-        timeStr: mainTimeStr,
-        location: event.location,
-        yesMembers: mainYes,
-        noMembers: mainNo,
-        uncertainMembers: mainUncertain,
-        noAnswerMembers: mainNoAnswer,
-        substitutes: confirmedSubs,
-      ),
-    );
-
-    // 2. Process Attached Schedule Items (Items 1..N)
-    for (int i = 0; i < event.rehearsals.length; i++) {
-      final rehearsal = event.rehearsals[i];
-      final schedYes = <MemberResultItem>[];
-      final schedNo = <MemberResultItem>[];
-      final schedUncertain = <MemberResultItem>[];
-      final schedNoAnswer = <MemberResultItem>[];
-
-      final scheduleResponses = event.scheduleResponses[rehearsal.id] ?? {};
+      final Set<String> processedUserIds = {};
 
       for (final member in _members) {
         final uid = member.userId;
         if (uid == null || uid.isEmpty) continue;
+        processedUserIds.add(uid);
 
         final profile = _cachedProfiles[uid];
         final name = profile?.displayName ??
@@ -461,7 +380,7 @@ class _EventResultsPageState extends State<EventResultsPage> {
             'Unknown Member';
         final primarySkill = _getPrimarySkill(uid, member.role);
 
-        final resp = scheduleResponses[uid];
+        final resp = event.responses[uid];
         final status = classifyEventResponse(resp?.status);
         final reason = resp?.uncertainReason ?? resp?.comment;
 
@@ -474,42 +393,147 @@ class _EventResultsPageState extends State<EventResultsPage> {
         );
 
         if (status == EventResponseStatus.yes) {
-          schedYes.add(item);
+          mainYes.add(item);
         } else if (status == EventResponseStatus.no) {
-          schedNo.add(item);
+          mainNo.add(item);
         } else if (status == EventResponseStatus.uncertain) {
-          schedUncertain.add(item);
+          mainUncertain.add(item);
         } else {
-          schedNoAnswer.add(item);
+          mainNoAnswer.add(item);
         }
       }
 
-      final parsedDate = DateTime.tryParse(rehearsal.date);
-      final dateFormatted = parsedDate != null
-          ? DateFormat('EEEE, MMMM d, yyyy').format(parsedDate)
-          : rehearsal.date;
-      final timeFormatted = '${rehearsal.startTime} - ${rehearsal.endTime}';
-      final titleFormatted = rehearsal.title.isNotEmpty ? rehearsal.title : event.title;
-      final typeFormatted = rehearsal.type.isNotEmpty ? rehearsal.type : 'Rehearsal';
-      final locationFormatted = rehearsal.location.isNotEmpty ? rehearsal.location : event.location;
+      // External invitees who are not substitutes
+      for (final entry in event.externalInvitees.entries) {
+        final uid = entry.key;
+        if (processedUserIds.contains(uid)) continue;
+        final invitee = entry.value;
+        final isSub = invitee.source == 'subRequest' || (invitee.subRequestId != null && invitee.subRequestId!.isNotEmpty);
+        if (isSub) continue;
+
+        final profile = _cachedProfiles[uid];
+        final name = invitee.displayName ?? profile?.displayName ?? profile?.nickname ?? 'Guest';
+        final primarySkill = (invitee.instrument != null && invitee.instrument!.isNotEmpty)
+            ? invitee.instrument!
+            : _getPrimarySkill(uid);
+        final status = classifyEventResponse(invitee.status);
+        final reason = invitee.comment;
+
+        final item = MemberResultItem(
+          userId: uid,
+          displayName: name,
+          primarySkill: primarySkill.isNotEmpty ? primarySkill : null,
+          reason: status == EventResponseStatus.uncertain ? reason : null,
+          responseStatus: status,
+        );
+
+        if (status == EventResponseStatus.yes) {
+          mainYes.add(item);
+        } else if (status == EventResponseStatus.no) {
+          mainNo.add(item);
+        } else if (status == EventResponseStatus.uncertain) {
+          mainUncertain.add(item);
+        } else {
+          mainNoAnswer.add(item);
+        }
+      }
+
+      final startLocal = DateTime.tryParse(event.startDateTime)?.toLocal() ?? DateTime.now();
+      final endLocal = DateTime.tryParse(event.endDateTime)?.toLocal() ?? DateTime.now();
+      final mainDateStr = DateFormat('EEEE, MMMM d, yyyy').format(startLocal);
+      final mainTimeStr = '${DateFormat('HH:mm').format(startLocal)} - ${DateFormat('HH:mm').format(endLocal)}';
 
       items.add(
         _EventResultScheduleItem(
-          index: i + 1,
-          isMain: false,
-          scheduleItemId: rehearsal.id,
-          type: typeFormatted,
-          title: titleFormatted,
-          dateStr: dateFormatted,
-          timeStr: timeFormatted,
-          location: locationFormatted,
-          yesMembers: schedYes,
-          noMembers: schedNo,
-          uncertainMembers: schedUncertain,
-          noAnswerMembers: schedNoAnswer,
-          substitutes: const [],
+          index: 0,
+          isMain: true,
+          scheduleItemId: null,
+          type: event.eventType.isNotEmpty && event.eventType.toLowerCase() != 'event' ? event.eventType : 'Main Event',
+          title: event.title,
+          dateStr: mainDateStr,
+          timeStr: mainTimeStr,
+          location: event.location,
+          yesMembers: mainYes,
+          noMembers: mainNo,
+          uncertainMembers: mainUncertain,
+          noAnswerMembers: mainNoAnswer,
+          substitutes: confirmedSubs,
         ),
       );
+    } else {
+      // 2. Process Attached Schedule Items (1..N) — parent container is NOT Event 1
+      for (int i = 0; i < event.rehearsals.length; i++) {
+        final rehearsal = event.rehearsals[i];
+        final schedYes = <MemberResultItem>[];
+        final schedNo = <MemberResultItem>[];
+        final schedUncertain = <MemberResultItem>[];
+        final schedNoAnswer = <MemberResultItem>[];
+
+        final scheduleResponses = event.scheduleResponses[rehearsal.id] ?? {};
+
+        for (final member in _members) {
+          final uid = member.userId;
+          if (uid == null || uid.isEmpty) continue;
+
+          final profile = _cachedProfiles[uid];
+          final name = profile?.displayName ??
+              profile?.nickname ??
+              ((member.nickname != null && member.nickname!.trim().toLowerCase() != 'leader') ? member.nickname : null) ??
+              'Unknown Member';
+          final primarySkill = _getPrimarySkill(uid, member.role);
+
+          final resp = scheduleResponses[uid];
+          final status = classifyEventResponse(resp?.status);
+          final reason = resp?.uncertainReason ?? resp?.comment;
+
+          final item = MemberResultItem(
+            userId: uid,
+            displayName: name,
+            primarySkill: primarySkill.isNotEmpty ? primarySkill : null,
+            reason: status == EventResponseStatus.uncertain ? reason : null,
+            responseStatus: status,
+          );
+
+          if (status == EventResponseStatus.yes) {
+            schedYes.add(item);
+          } else if (status == EventResponseStatus.no) {
+            schedNo.add(item);
+          } else if (status == EventResponseStatus.uncertain) {
+            schedUncertain.add(item);
+          } else {
+            schedNoAnswer.add(item);
+          }
+        }
+
+        final parsedDate = DateTime.tryParse(rehearsal.date);
+        final dateFormatted = parsedDate != null
+            ? DateFormat('EEEE, MMMM d, yyyy').format(parsedDate)
+            : rehearsal.date;
+        final timeFormatted = (rehearsal.startTime.isNotEmpty && rehearsal.endTime.isNotEmpty)
+            ? '${rehearsal.startTime} - ${rehearsal.endTime}'
+            : (rehearsal.startTime.isNotEmpty ? rehearsal.startTime : '');
+        final titleFormatted = rehearsal.title.isNotEmpty ? rehearsal.title : event.title;
+        final typeFormatted = rehearsal.type.isNotEmpty ? rehearsal.type : 'Rehearsal';
+        final locationFormatted = rehearsal.location.isNotEmpty ? rehearsal.location : event.location;
+
+        items.add(
+          _EventResultScheduleItem(
+            index: i + 1,
+            isMain: false,
+            scheduleItemId: rehearsal.id,
+            type: typeFormatted,
+            title: titleFormatted,
+            dateStr: dateFormatted,
+            timeStr: timeFormatted,
+            location: locationFormatted,
+            yesMembers: schedYes,
+            noMembers: schedNo,
+            uncertainMembers: schedUncertain,
+            noAnswerMembers: schedNoAnswer,
+            substitutes: confirmedSubs,
+          ),
+        );
+      }
     }
 
     return items;
@@ -693,8 +717,21 @@ class _EventResultsPageState extends State<EventResultsPage> {
                       ),
                   ],
                 ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    const Icon(Icons.calendar_today_outlined, size: 14, color: AppTheme.textSecondary),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        _formatDateRange(event.startDateTime, event.endDateTime),
+                        style: GoogleFonts.inter(fontSize: 13, color: Colors.white),
+                      ),
+                    ),
+                  ],
+                ),
                 if (event.location.isNotEmpty) ...[
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 6),
                   Row(
                     children: [
                       const Icon(Icons.location_on_outlined, size: 14, color: AppTheme.textSecondary),
@@ -719,445 +756,139 @@ class _EventResultsPageState extends State<EventResultsPage> {
             ),
           ),
 
-          // For Single Event: Render full categories, substitutes and guests sections
-          if (!hasMultipleEvents) ...[
-            _buildSingleEventResultsView(scheduleItems.first),
-          ] else ...[
-            // Render Results for Each Event in Multi-Schedule
-            ...List.generate(scheduleItems.length, (itemIndex) {
-              final item = scheduleItems[itemIndex];
-              final itemHeader = 'EVENT ${itemIndex + 1} · ${item.type.toUpperCase()} · "${item.title}"';
+          // Render Results for Schedule Items (Single Event or Multi-Schedule)
+          ...List.generate(scheduleItems.length, (itemIndex) {
+            final item = scheduleItems[itemIndex];
+            final itemHeader = hasMultipleEvents
+                ? 'EVENT ${item.index} · ${item.type.toUpperCase()} · "${item.title}"'
+                : 'ATTENDANCE RESPONSES';
 
-              final yesKey = '${itemIndex}_YES';
-              final noKey = '${itemIndex}_NO';
-              final uncertainKey = '${itemIndex}_UNCERTAIN';
-              final noAnswerKey = '${itemIndex}_NO_ANSWER';
-              final subsKey = '${itemIndex}_SUBSTITUTES';
+            final yesKey = '${itemIndex}_YES';
+            final noKey = '${itemIndex}_NO';
+            final uncertainKey = '${itemIndex}_UNCERTAIN';
+            final noAnswerKey = '${itemIndex}_NO_ANSWER';
+            final subsKey = '${itemIndex}_SUBSTITUTES';
 
-              final isYesActive = _activeGroupKey == yesKey;
-              final isNoActive = _activeGroupKey == noKey;
-              final isUncertainActive = _activeGroupKey == uncertainKey;
-              final isNoAnswerActive = _activeGroupKey == noAnswerKey;
-              final isSubsActive = _activeGroupKey == subsKey;
+            final isYesActive = _activeGroupKey == yesKey;
+            final isNoActive = _activeGroupKey == noKey;
+            final isUncertainActive = _activeGroupKey == uncertainKey;
+            final isNoAnswerActive = _activeGroupKey == noAnswerKey;
+            final isSubsActive = _activeGroupKey == subsKey;
 
-              return Container(
-                margin: const EdgeInsets.only(bottom: 14),
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: AppTheme.cardBackground,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      itemHeader,
-                      style: GoogleFonts.outfit(
-                        fontSize: 13,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '${item.dateStr} • ${item.timeStr}',
-                      style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary),
-                    ),
-                    const SizedBox(height: 10),
-
-                    // Compact Single Row of Clickable Filter Pills
-                    SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children: [
-                          _buildResultFilterPill(
-                            icon: Icons.check_circle_outline_rounded,
-                            label: 'YES (${item.yesMembers.length})',
-                            color: AppTheme.success,
-                            isSelected: isYesActive,
-                            onTap: () {
-                              setState(() {
-                                _activeGroupKey = isYesActive ? null : yesKey;
-                              });
-                            },
-                          ),
-                          const SizedBox(width: 6),
-                          _buildResultFilterPill(
-                            icon: Icons.cancel_outlined,
-                            label: 'NO (${item.noMembers.length})',
-                            color: AppTheme.danger,
-                            isSelected: isNoActive,
-                            onTap: () {
-                              setState(() {
-                                _activeGroupKey = isNoActive ? null : noKey;
-                              });
-                            },
-                          ),
-                          const SizedBox(width: 6),
-                          _buildResultFilterPill(
-                            icon: Icons.help_outline_rounded,
-                            label: 'UNCERTAIN (${item.uncertainMembers.length})',
-                            color: AppTheme.warning,
-                            isSelected: isUncertainActive,
-                            onTap: () {
-                              setState(() {
-                                _activeGroupKey = isUncertainActive ? null : uncertainKey;
-                              });
-                            },
-                          ),
-                          const SizedBox(width: 6),
-                          _buildResultFilterPill(
-                            icon: Icons.radio_button_unchecked_rounded,
-                            label: 'NO ANSWER (${item.noAnswerMembers.length})',
-                            color: AppTheme.textSecondary,
-                            isSelected: isNoAnswerActive,
-                            onTap: () {
-                              setState(() {
-                                _activeGroupKey = isNoAnswerActive ? null : noAnswerKey;
-                              });
-                            },
-                          ),
-                          if (item.substitutes.isNotEmpty) ...[
-                            const SizedBox(width: 6),
-                            _buildResultFilterPill(
-                              icon: Icons.person_search_outlined,
-                              label: 'SUBSTITUTES (${item.substitutes.length})',
-                              color: Colors.purpleAccent,
-                              isSelected: isSubsActive,
-                              onTap: () {
-                                setState(() {
-                                  _activeGroupKey = isSubsActive ? null : subsKey;
-                                });
-                              },
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-
-                    // Expanded Member / Substitute List
-                    if (isYesActive)
-                      _buildMemberListContainer('YES Respondents (${item.yesMembers.length})', item.yesMembers, AppTheme.success),
-                    if (isNoActive)
-                      _buildMemberListContainer('NO Respondents (${item.noMembers.length})', item.noMembers, AppTheme.danger),
-                    if (isUncertainActive)
-                      _buildMemberListContainer('UNCERTAIN Respondents (${item.uncertainMembers.length})', item.uncertainMembers, AppTheme.warning),
-                    if (isNoAnswerActive)
-                      _buildMemberListContainer('NO ANSWER (${item.noAnswerMembers.length})', item.noAnswerMembers, AppTheme.textSecondary),
-                    if (isSubsActive)
-                      _buildSubstituteListContainer('Confirmed Substitutes (${item.substitutes.length})', item.substitutes, Colors.purpleAccent),
-                  ],
-                ),
-              );
-            }),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSingleEventResultsView(_EventResultScheduleItem item) {
-    // Unique people in substitutes
-    final uniqueSubsPeople = <String>{};
-    for (final s in item.substitutes) {
-      uniqueSubsPeople.add(s.assignedUserId);
-    }
-
-    final nonSubGuests = <MemberResultItem>[];
-    if (_event != null) {
-      for (final entry in _event!.externalInvitees.entries) {
-        final uid = entry.key;
-        final invitee = entry.value;
-        final isSub = invitee.source == 'subRequest' || (invitee.subRequestId != null && invitee.subRequestId!.isNotEmpty);
-        if (isSub) continue;
-        final profile = _cachedProfiles[uid];
-        final name = invitee.displayName ?? profile?.displayName ?? profile?.nickname ?? 'Guest';
-        final primarySkill = (invitee.instrument != null && invitee.instrument!.isNotEmpty)
-            ? invitee.instrument!
-            : _getPrimarySkill(uid);
-        final status = classifyEventResponse(invitee.status);
-        final reason = invitee.comment;
-        nonSubGuests.add(
-          MemberResultItem(
-            userId: uid,
-            displayName: name,
-            primarySkill: primarySkill.isNotEmpty ? primarySkill : null,
-            reason: status == EventResponseStatus.uncertain ? reason : null,
-            responseStatus: status,
-          ),
-        );
-      }
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildCategorySection('YES (${item.yesMembers.length})', item.yesMembers, AppTheme.success),
-        const SizedBox(height: 12),
-        _buildCategorySection('NO (${item.noMembers.length})', item.noMembers, AppTheme.danger),
-        const SizedBox(height: 12),
-        _buildCategorySection('UNCERTAIN (${item.uncertainMembers.length})', item.uncertainMembers, AppTheme.warning),
-        const SizedBox(height: 12),
-        _buildCategorySection('NO ANSWER (${item.noAnswerMembers.length})', item.noAnswerMembers, AppTheme.textSecondary),
-        const SizedBox(height: 16),
-
-        // SUBSTITUTES section
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: AppTheme.cardBackground,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            return Container(
+              margin: const EdgeInsets.only(bottom: 14),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppTheme.cardBackground,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'SUBSTITUTES',
+                    itemHeader,
                     style: GoogleFonts.outfit(
-                      fontSize: 14,
+                      fontSize: 13,
                       fontWeight: FontWeight.bold,
                       color: Colors.white,
                       letterSpacing: 0.5,
                     ),
                   ),
-                  Text(
-                    '${item.substitutes.length} slots (${uniqueSubsPeople.length} people)',
-                    style: GoogleFonts.inter(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.purpleAccent,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              if (item.substitutes.isEmpty)
-                Text(
-                  'No substitutes assigned',
-                  style: GoogleFonts.inter(fontSize: 13, color: AppTheme.textSecondary),
-                )
-              else
-                ...item.substitutes.map((sub) {
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const CircleAvatar(
-                          radius: 11,
-                          backgroundColor: Color(0x33AB47BC),
-                          child: Icon(Icons.person_search_rounded, size: 12, color: Colors.purpleAccent),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Text(
-                                    sub.substituteName,
-                                    style: GoogleFonts.inter(
-                                      fontSize: 13,
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                  if (sub.primarySkill.isNotEmpty) ...[
-                                    const SizedBox(width: 6),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
-                                      decoration: BoxDecoration(
-                                        color: Colors.purpleAccent.withOpacity(0.15),
-                                        borderRadius: BorderRadius.circular(4),
-                                      ),
-                                      child: Text(
-                                        sub.primarySkill,
-                                        style: GoogleFonts.inter(
-                                          fontSize: 10,
-                                          color: Colors.purpleAccent,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ],
-                              ),
-                              if (sub.replacedMemberName != null && sub.replacedMemberName!.isNotEmpty) ...[
-                                const SizedBox(height: 2),
-                                Text(
-                                  'Replacing ${sub.replacedMemberName!}',
-                                  style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }),
-            ],
-          ),
-        ),
-
-        // EXTERNAL GUESTS section if any exist
-        if (nonSubGuests.isNotEmpty) ...[
-          const SizedBox(height: 16),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: AppTheme.cardBackground,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'EXTERNAL GUESTS',
-                  style: GoogleFonts.outfit(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                ...nonSubGuests.map((guest) {
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: Row(
-                      children: [
-                        const CircleAvatar(
-                          radius: 11,
-                          backgroundColor: Color(0x334CAF50),
-                          child: Icon(Icons.person_outline, size: 12, color: AppTheme.success),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          guest.displayName,
-                          style: GoogleFonts.inter(
-                            fontSize: 13,
-                            color: Colors.white,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }),
-              ],
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-
-  Widget _buildCategorySection(String title, List<MemberResultItem> list, Color color) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppTheme.cardBackground,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: GoogleFonts.outfit(
-              fontSize: 13,
-              fontWeight: FontWeight.bold,
-              color: color,
-              letterSpacing: 0.5,
-            ),
-          ),
-          const SizedBox(height: 8),
-          if (list.isEmpty)
-            Text(
-              'No members in this category',
-              style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
-            )
-          else
-            ...list.map((m) {
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    CircleAvatar(
-                      radius: 11,
-                      backgroundColor: color.withOpacity(0.2),
-                      child: Text(
-                        m.displayName.isNotEmpty ? m.displayName[0].toUpperCase() : 'M',
-                        style: GoogleFonts.inter(color: color, fontSize: 10, fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Flexible(
-                                child: Text(
-                                  m.displayName,
-                                  style: GoogleFonts.inter(
-                                    fontSize: 13,
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              if (m.primarySkill != null && m.primarySkill!.isNotEmpty) ...[
-                                const SizedBox(width: 6),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
-                                  decoration: BoxDecoration(
-                                    color: AppTheme.primaryAccent.withOpacity(0.15),
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
-                                  child: Text(
-                                    m.primarySkill!,
-                                    style: GoogleFonts.inter(
-                                      fontSize: 10,
-                                      color: AppTheme.primaryAccent,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                          if (m.reason != null && m.reason!.isNotEmpty) ...[
-                            const SizedBox(height: 2),
-                            Text(
-                              '"${m.reason!}"',
-                              style: GoogleFonts.inter(
-                                fontSize: 11.5,
-                                color: AppTheme.textSecondary,
-                                fontStyle: FontStyle.italic,
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
+                  if (hasMultipleEvents) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      item.timeStr.isNotEmpty
+                          ? '${item.dateStr} • ${item.timeStr}'
+                          : item.dateStr,
+                      style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary),
                     ),
                   ],
-                ),
-              );
-            }),
+                  const SizedBox(height: 10),
+
+                  // Compact Single Row of Clickable Filter Pills (Scrollable for narrow screens)
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        _buildResultFilterPill(
+                          icon: Icons.check_circle_outline_rounded,
+                          label: 'YES (${item.yesMembers.length})',
+                          color: AppTheme.success,
+                          isSelected: isYesActive,
+                          onTap: () {
+                            setState(() {
+                              _activeGroupKey = isYesActive ? null : yesKey;
+                            });
+                          },
+                        ),
+                        const SizedBox(width: 6),
+                        _buildResultFilterPill(
+                          icon: Icons.cancel_outlined,
+                          label: 'NO (${item.noMembers.length})',
+                          color: AppTheme.danger,
+                          isSelected: isNoActive,
+                          onTap: () {
+                            setState(() {
+                              _activeGroupKey = isNoActive ? null : noKey;
+                            });
+                          },
+                        ),
+                        const SizedBox(width: 6),
+                        _buildResultFilterPill(
+                          icon: Icons.help_outline_rounded,
+                          label: 'UNCERTAIN (${item.uncertainMembers.length})',
+                          color: AppTheme.warning,
+                          isSelected: isUncertainActive,
+                          onTap: () {
+                            setState(() {
+                              _activeGroupKey = isUncertainActive ? null : uncertainKey;
+                            });
+                          },
+                        ),
+                        const SizedBox(width: 6),
+                        _buildResultFilterPill(
+                          icon: Icons.radio_button_unchecked_rounded,
+                          label: 'NO ANSWER (${item.noAnswerMembers.length})',
+                          color: AppTheme.textSecondary,
+                          isSelected: isNoAnswerActive,
+                          onTap: () {
+                            setState(() {
+                              _activeGroupKey = isNoAnswerActive ? null : noAnswerKey;
+                            });
+                          },
+                        ),
+                        const SizedBox(width: 6),
+                        _buildResultFilterPill(
+                          icon: Icons.person_search_outlined,
+                          label: 'SUBSTITUTES (${item.substitutes.length})',
+                          color: Colors.purpleAccent,
+                          isSelected: isSubsActive,
+                          onTap: () {
+                            setState(() {
+                              _activeGroupKey = isSubsActive ? null : subsKey;
+                            });
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Expanded Member / Substitute List
+                  if (isYesActive)
+                    _buildMemberListContainer('YES Respondents (${item.yesMembers.length})', item.yesMembers, AppTheme.success),
+                  if (isNoActive)
+                    _buildMemberListContainer('NO Respondents (${item.noMembers.length})', item.noMembers, AppTheme.danger),
+                  if (isUncertainActive)
+                    _buildMemberListContainer('UNCERTAIN Respondents (${item.uncertainMembers.length})', item.uncertainMembers, AppTheme.warning),
+                  if (isNoAnswerActive)
+                    _buildMemberListContainer('NO ANSWER (${item.noAnswerMembers.length})', item.noAnswerMembers, AppTheme.textSecondary),
+                  if (isSubsActive)
+                    _buildSubstituteListContainer('Confirmed Substitutes (${item.substitutes.length})', item.substitutes, Colors.purpleAccent),
+                ],
+              ),
+            );
+          }),
         ],
       ),
     );
@@ -1301,6 +1032,13 @@ class _EventResultsPageState extends State<EventResultsPage> {
   }
 
   Widget _buildSubstituteListContainer(String title, List<SubstituteResultItem> list, Color color) {
+    if (list.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 10),
+        child: Text('No substitutes assigned.', style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary)),
+      );
+    }
+
     return Container(
       margin: const EdgeInsets.only(top: 10),
       padding: const EdgeInsets.all(12),
