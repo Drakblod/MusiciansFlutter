@@ -447,8 +447,8 @@ void main() {
 
       expect(find.text('SUBSTITUTE 1'), findsNothing);
 
-      // Tap ADD ANOTHER SUBSTITUTE
-      await tester.tap(find.text('ADD ANOTHER SUBSTITUTE'));
+      // Tap + Add Substitute
+      await tester.tap(find.text('+ Add Substitute'));
       await tester.pumpAndSettle();
 
       expect(find.textContaining('SUBSTITUTE 1 - "'), findsOneWidget);
@@ -464,14 +464,14 @@ void main() {
       await tester.pumpWidget(createWidgetUnderTest(eventId: null));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('ADD ANOTHER SUBSTITUTE'));
+      await tester.tap(find.text('+ Add Substitute'));
       await tester.pumpAndSettle();
 
       expect(find.textContaining('SUBSTITUTE 1 - "'), findsOneWidget);
       expect(find.textContaining('SUBSTITUTE 2 - "'), findsOneWidget);
 
-      // Find Remove Slot button for the second slot
-      final removeButtons = find.text('Remove Slot');
+      // Find Remove Substitute button for the second slot
+      final removeButtons = find.text('Remove Substitute');
       expect(removeButtons, findsNWidgets(2));
       await tester.tap(removeButtons.last);
       await tester.pumpAndSettle();
@@ -494,8 +494,8 @@ void main() {
       // Initially Event 1 has 1 slot and Event 2 has 1 slot -> neither shows SUBSTITUTE 1
       expect(find.textContaining('SUBSTITUTE 1 - "'), findsNothing);
 
-      // Tap ADD SUBSTITUTE TO EVENT 1
-      await tester.tap(find.text('ADD SUBSTITUTE TO EVENT 1'));
+      // Tap + Add Substitute for Event 1
+      await tester.tap(find.text('+ Add Substitute').first);
       await tester.pumpAndSettle();
 
       // Now Event 1 has 2 slots (shows SUBSTITUTE 1 & SUBSTITUTE 2)
@@ -715,7 +715,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Add second slot
-      await tester.tap(find.text('ADD ANOTHER SUBSTITUTE'));
+      await tester.tap(find.text('+ Add Substitute'));
       await tester.pumpAndSettle();
 
       final favButtons = find.text('Favorites List');
@@ -1127,7 +1127,7 @@ void main() {
       expect(find.text('[Draft]'), findsNothing);
 
       // B: 2 unpublished slots
-      await tester.tap(find.text('ADD ANOTHER SUBSTITUTE'));
+      await tester.tap(find.text('+ Add Substitute'));
       await tester.pumpAndSettle();
 
       expect(find.text('Draft'), findsNothing);
@@ -1286,8 +1286,8 @@ void main() {
       expect(tester.widget<CheckboxListTile>(find.widgetWithText(CheckboxListTile, 'Alice Bass')).value, isTrue);
     });
 
-    // 47. Add all favorites selects every saved Favorite without assigning a substitute, displays Chosen Substitutes, and allows individual removal.
-    testWidgets('47. Add all favorites selects all saved Favorites without assigning and displays Chosen Substitutes', (tester) async {
+    // 47. Select All selects every saved Favorite without assigning a substitute, displays Chosen Substitutes, and allows individual removal.
+    testWidgets('47. Select All selects all saved Favorites without assigning and displays Chosen Substitutes', (tester) async {
       tester.view.physicalSize = const Size(800, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -1299,9 +1299,9 @@ void main() {
       await tester.tap(find.text('Favorites List'));
       await tester.pumpAndSettle();
 
-      // Tap 'Add all favorites'
-      expect(find.text('Add all favorites'), findsOneWidget);
-      await tester.tap(find.text('Add all favorites'));
+      // Tap 'Select All'
+      expect(find.text('Select All'), findsOneWidget);
+      await tester.tap(find.text('Select All'));
       await tester.pumpAndSettle();
 
       // Both favorites are checked
@@ -1532,7 +1532,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Add second slot
-      await tester.tap(find.text('ADD ANOTHER SUBSTITUTE'));
+      await tester.tap(find.text('+ Add Substitute'));
       await tester.pumpAndSettle();
 
       expect(find.text('SUBSTITUTE 1 - "Sommarturné Gig"'), findsOneWidget);

@@ -503,7 +503,7 @@ void main() {
       // Under 03B, 1 slot hides SUBSTITUTE 1
       expect(find.text('SUBSTITUTE 1'), findsNothing);
 
-      await tester.tap(find.text('ADD ANOTHER SUBSTITUTE'));
+      await tester.tap(find.text('+ Add Substitute'));
       await tester.pumpAndSettle();
 
       expect(find.textContaining('SUBSTITUTE 1 - "'), findsOneWidget);
@@ -548,7 +548,7 @@ void main() {
       await tester.pumpWidget(createMultiSubsTestApp(mockService: mock, child: const FindSubScreen()));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('ADD ANOTHER SUBSTITUTE'));
+      await tester.tap(find.text('+ Add Substitute'));
       await tester.pumpAndSettle();
 
       final searchAllButtons = find.text('Search All');
@@ -581,7 +581,7 @@ void main() {
       await tester.pumpWidget(createMultiSubsTestApp(mockService: mock, child: const FindSubScreen(eventId: 'event_1', bandId: 'band_123')));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('ADD ANOTHER SUBSTITUTE'));
+      await tester.tap(find.text('+ Add Substitute'));
       await tester.pumpAndSettle();
 
       final publishContainer = find.textContaining('PUBLISH SUBSTITUTE REQUESTS');
@@ -658,7 +658,7 @@ void main() {
       await tester.pumpWidget(createMultiSubsTestApp(mockService: mock, child: const FindSubScreen()));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('ADD ANOTHER SUBSTITUTE'));
+      await tester.tap(find.text('+ Add Substitute'));
       await tester.pumpAndSettle();
 
       expect(find.textContaining('SUBSTITUTE 1 - "'), findsOneWidget);
@@ -725,8 +725,8 @@ void main() {
       await tester.pumpWidget(createMultiSubsTestApp(mockService: mock, child: const FindSubScreen()));
       await tester.pumpAndSettle();
 
-      await tester.ensureVisible(find.text('ADD ANOTHER SUBSTITUTE'));
-      await tester.tap(find.text('ADD ANOTHER SUBSTITUTE'));
+      await tester.ensureVisible(find.text('+ Add Substitute'));
+      await tester.tap(find.text('+ Add Substitute'));
       await tester.pumpAndSettle();
 
       expect(find.textContaining('SUBSTITUTE 2 - "'), findsOneWidget);
@@ -1711,7 +1711,7 @@ void main() {
       // Under 03B, single-slot events omit SUBSTITUTE 1
       expect(find.text('SUBSTITUTE 1'), findsNothing);
       expect(find.text('Instrument/Skill'), findsOneWidget);
-      expect(find.text('ADD ANOTHER SUBSTITUTE'), findsOneWidget);
+      expect(find.text('+ Add Substitute'), findsOneWidget);
       expect(find.textContaining('PUBLISH SUBSTITUTE REQUESTS'), findsOneWidget);
     });
 
@@ -1733,7 +1733,7 @@ void main() {
 
       // Substitute slot UI elements must not be present
       expect(find.text('SUBSTITUTE 1'), findsNothing);
-      expect(find.text('ADD ANOTHER SUBSTITUTE'), findsNothing);
+      expect(find.text('+ Add Substitute'), findsNothing);
       expect(find.textContaining('PUBLISH SUBSTITUTE REQUESTS'), findsNothing);
 
       // New Band Member UI elements must be present
@@ -1881,7 +1881,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Add second slot in Substitute mode
-      await tester.tap(find.text('ADD ANOTHER SUBSTITUTE'));
+      await tester.tap(find.text('+ Add Substitute'));
       await tester.pumpAndSettle();
       expect(find.textContaining('SUBSTITUTE 2 - "'), findsOneWidget);
 

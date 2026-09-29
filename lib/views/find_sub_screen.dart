@@ -14,6 +14,7 @@ import '../models/sub_request.dart';
 import '../models/user_profile.dart';
 import '../providers/app_state.dart';
 import '../theme/app_theme.dart';
+import '../utils/thousands_separator_input_formatter.dart';
 import '../widgets/animated_tap_detector.dart';
 import '../widgets/custom_top_bar.dart';
 import '../widgets/gradient_scaffold.dart';
@@ -131,7 +132,7 @@ class FindSubScreen extends StatefulWidget {
 class _FindSubScreenState extends State<FindSubScreen> {
   final _messageController = TextEditingController();
   final _locationController = TextEditingController();
-  final _amountController = TextEditingController(text: '1500');
+  final _amountController = TextEditingController(text: '1,500');
   final _payDetailsController = TextEditingController();
   String? _existingRequestGroupId;
   String? _canonicalMultipleEventParentId;
@@ -223,7 +224,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
         _messageController.text = init.description ?? '';
         _isPaid = init.isPaid;
         if (init.payAmount != null) {
-          _amountController.text = init.payAmount.toString();
+          _amountController.text = ThousandsSeparatorInputFormatter.format(init.payAmount);
         }
         if (init.payDetails != null) {
           _payDetailsController.text = init.payDetails!;
@@ -363,7 +364,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
               if (sIdx == 0) {
                 _isPaid = subReq.isPaid;
                 if (subReq.payAmount != null) {
-                  _amountController.text = subReq.payAmount.toString();
+                  _amountController.text = ThousandsSeparatorInputFormatter.format(subReq.payAmount);
                 }
                 if (subReq.payDetails != null && subReq.payDetails!.isNotEmpty) {
                   _payDetailsController.text = subReq.payDetails!;
@@ -738,7 +739,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
       final parentOrEventId = _canonicalMultipleEventParentId ?? widget.eventId ?? 'event';
       final safeEventId = parentOrEventId.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
       final groupId = _existingRequestGroupId ?? ('group_${safeBandId}_${safeEventId}');
-      final payAmount = _isPaid ? (int.tryParse(_amountController.text.trim()) ?? 0) : 0;
+      final payAmount = _isPaid ? (ThousandsSeparatorInputFormatter.parse(_amountController.text) ?? 0) : 0;
       final bandName = _bandName ?? appState.activeBandName ?? 'Freelance Gig';
       final pubId = 'pub_${groupId}_${now.millisecondsSinceEpoch}';
 
@@ -1580,10 +1581,6 @@ class _FindSubScreenState extends State<FindSubScreen> {
   }
 
   Widget _buildSubstituteSectionCard(EventStaffingSection section) {
-    final addLabel = _eventSections.length > 1
-        ? ('ADD SUBSTITUTE TO EVENT ' + section.sequence.toString())
-        : 'ADD ANOTHER SUBSTITUTE';
-
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
@@ -1632,7 +1629,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
 
                 SizedBox(
                   width: double.infinity,
-                  child: OutlinedButton.icon(
+                  child: OutlinedButton(
                     style: OutlinedButton.styleFrom(
                       foregroundColor: AppTheme.primaryAccent,
                       side: const BorderSide(color: AppTheme.primaryAccent, width: 1.5),
@@ -1640,9 +1637,8 @@ class _FindSubScreenState extends State<FindSubScreen> {
                       padding: const EdgeInsets.symmetric(vertical: 12),
                     ),
                     onPressed: () => _addSubstituteToEvent(section),
-                    icon: const Icon(Icons.add_rounded, size: 18),
-                    label: Text(
-                      addLabel,
+                    child: Text(
+                      '+ Add Substitute',
                       style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.bold),
                     ),
                   ),
@@ -2055,7 +2051,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
                         ? TextButton.icon(
                             onPressed: () => _removeSlot(section, slot),
                             icon: const Icon(Icons.delete_outline_rounded, color: AppTheme.danger, size: 16),
-                            label: Text('Remove Slot', style: GoogleFonts.inter(color: AppTheme.danger, fontSize: 12)),
+                            label: Text('Remove Substitute', style: GoogleFonts.inter(color: AppTheme.danger, fontSize: 12)),
                           )
                         : TextButton.icon(
                             onPressed: () => _cancelPublishedSlot(section, slot),
@@ -2158,37 +2154,15 @@ class _FindSubScreenState extends State<FindSubScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Favorites List',
-                style: GoogleFonts.outfit(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-              ),
-              if (onSelectAllFavorites != null)
-                TextButton(
-                  onPressed: _favorites.isNotEmpty ? onSelectAllFavorites : null,
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    minimumSize: Size.zero,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                  child: Text(
-                    'Add all favorites',
-                    style: GoogleFonts.inter(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: _favorites.isNotEmpty ? AppTheme.primaryAccent : AppTheme.textSecondary,
-                    ),
-                  ),
-                ),
-            ],
+          Text(
+            'Favorites List',
+            style: GoogleFonts.outfit(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
 
           if (_favorites.isEmpty)
             Padding(
@@ -2198,7 +2172,29 @@ class _FindSubScreenState extends State<FindSubScreen> {
                 style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
               ),
             )
-          else
+          else ...[
+            if (onSelectAllFavorites != null) ...[
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton(
+                  onPressed: onSelectAllFavorites,
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 4),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  child: Text(
+                    'Select All',
+                    style: GoogleFonts.inter(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.primaryAccent,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 4),
+            ],
             ..._favorites.map((fav) {
               final uid = fav.userId ?? '';
               final isChecked = selectedIds.contains(uid);
@@ -2220,6 +2216,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
                 onChanged: (val) => onSelect(uid, val == true),
               );
             }),
+          ],
 
           const SizedBox(height: 8),
           const Divider(color: Color(0xFF2E2A4E), height: 1),
@@ -2463,7 +2460,10 @@ class _FindSubScreenState extends State<FindSubScreen> {
             TextField(
               controller: _amountController,
               keyboardType: TextInputType.number,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              inputFormatters: [
+                FilteringTextInputFormatter.digitsOnly,
+                ThousandsSeparatorInputFormatter(),
+              ],
               style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
               decoration: InputDecoration(
                 prefixText: 'SEK ',
@@ -2472,7 +2472,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
                   fontWeight: FontWeight.bold,
                   fontSize: 16,
                 ),
-                hintText: '1500',
+                hintText: '1,500',
                 hintStyle: GoogleFonts.inter(color: Colors.white30),
                 filled: true,
                 fillColor: const Color(0xFF1E1A3A),

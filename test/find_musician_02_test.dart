@@ -489,8 +489,7 @@ void main() {
       expect(find.textContaining('EVENT 1 - '), findsWidgets);
       expect(find.textContaining('EVENT 2 - '), findsWidgets);
       expect(find.textContaining('·'), findsNothing);
-      expect(find.text('ADD SUBSTITUTE TO EVENT 1'), findsOneWidget);
-      expect(find.text('ADD SUBSTITUTE TO EVENT 2'), findsOneWidget);
+      expect(find.text('+ Add Substitute'), findsNWidgets(2));
     });
 
     testWidgets('15. Slot numbering restarts per event occurrence (single slot hides number)', (tester) async {
@@ -530,7 +529,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('ADD SUBSTITUTE TO EVENT 1'));
+      await tester.tap(find.text('+ Add Substitute').first);
       await tester.pumpAndSettle();
 
       // Event 1 now has 2 slots (shows SUBSTITUTE 1 and SUBSTITUTE 2 with event name), Event 2 still has 1 slot (no header)
@@ -1018,7 +1017,7 @@ void main() {
         voicePart: 'Electric Guitar',
         status: 'published',
         bandName: 'Group Band',
-        date: '2026-09-20T18:00:00Z',
+        date: DateTime.now().add(const Duration(days: 2)).toIso8601String(),
       );
       final slot2 = SubRequest(
         subRequestId: 'sub_g_slot_2',
@@ -1029,7 +1028,7 @@ void main() {
         voicePart: 'Bass',
         status: 'cancelled',
         bandName: 'Group Band',
-        date: '2026-09-21T18:00:00Z',
+        date: DateTime.now().add(const Duration(days: 3)).toIso8601String(),
       );
 
       appState.mockService.allSubRequests.clear();
