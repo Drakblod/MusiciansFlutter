@@ -16,6 +16,8 @@ import 'package:musicians_flutter/views/create_event_page.dart';
 import 'package:musicians_flutter/views/event_details_page.dart';
 import 'package:musicians_flutter/views/event_results_page.dart';
 import 'package:musicians_flutter/views/band_room_chat_screen.dart';
+import 'package:musicians_flutter/views/manage_events_screen.dart';
+import 'package:musicians_flutter/utils/date_parser.dart';
 
 class MockRsvpDesignFirebaseService extends FirebaseService {
   BandEvent? mockEvent;
@@ -29,6 +31,11 @@ class MockRsvpDesignFirebaseService extends FirebaseService {
   String? lastUpdatedUserId;
   String? lastUpdatedStatus;
   String? lastUpdatedUncertainReason;
+
+  @override
+  Future<Map<String, String>> getUserBandsAsync(String userId) async {
+    return {'band_1': 'Test Band'};
+  }
 
   @override
   Future<String?> getUserBandRoleAsync(String bandId, String userId) async {
@@ -625,6 +632,209 @@ void main() {
       expect(tester.takeException(), isNull);
       expect(find.text('Narrow Screen Gala'), findsOneWidget);
       expect(find.textContaining('EVENT 1'), findsOneWidget);
+    });
+
+    test('15. formatMainEventDateRange handles same day, same month, different months, and different years correctly', () {
+      // Case 1: Same day -> "September 27, 2026"
+      final sameDayStart = DateTime(2026, 9, 27, 10, 0);
+      final sameDayEnd = DateTime(2026, 9, 27, 18, 0);
+      expect(formatMainEventDateRange(sameDayStart, sameDayEnd), equals('September 27, 2026'));
+
+      // Case 2: Same month -> "September 27–29, 2026" (with en-dash)
+      final sameMonthStart = DateTime(2026, 9, 27);
+      final sameMonthEnd = DateTime(2026, 9, 29);
+      expect(formatMainEventDateRange(sameMonthStart, sameMonthEnd), equals('September 27\u201329, 2026'));
+
+      // Case 3: Different months, same year -> "September 30 – October 2, 2026"
+      final diffMonthsStart = DateTime(2026, 9, 30);
+      final diffMonthsEnd = DateTime(2026, 10, 2);
+      expect(formatMainEventDateRange(diffMonthsStart, diffMonthsEnd), equals('September 30 \u2013 October 2, 2026'));
+
+      // Case 4: Different years -> "December 30, 2026 – January 2, 2027"
+      final diffYearsStart = DateTime(2026, 12, 30);
+      final diffYearsEnd = DateTime(2027, 1, 2);
+      expect(formatMainEventDateRange(diffYearsStart, diffYearsEnd), equals('December 30, 2026 \u2013 January 2, 2027'));
+
+      // Verify no weekdays or clock times in formatted results
+      expect(formatMainEventDateRange(sameDayStart, sameDayEnd).contains(RegExp(r'(Mon|Tue|Wed|Thu|Fri|Sat|Sun|:\d\d)')), isFalse);
+      expect(formatMainEventDateRange(sameMonthStart, sameMonthEnd).contains(RegExp(r'(Mon|Tue|Wed|Thu|Fri|Sat|Sun|:\d\d)')), isFalse);
+      expect(formatMainEventDateRange(diffMonthsStart, diffMonthsEnd).contains(RegExp(r'(Mon|Tue|Wed|Thu|Fri|Sat|Sun|:\d\d)')), isFalse);
+      expect(formatMainEventDateRange(diffYearsStart, diffYearsEnd).contains(RegExp(r'(Mon|Tue|Wed|Thu|Fri|Sat|Sun|:\d\d)')), isFalse);
+    });
+
+    testWidgets('16. EventResultsPage standalone Event Description card directly below Main Event Name, with empty fallback', (tester) async {
+      tester.view.physicalSize = const Size(1200, 3000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      final now = DateTime.now();
+      // Case A: With description
+      final eventWithDesc = BandEvent(
+        id: 'ev_desc',
+        title: 'Festival Deluxe',
+        description: 'Complete festival details and soundcheck guidelines.',
+        eventType: 'Festival',
+        location: 'Park',
+        startDateTime: '2026-10-10T00:00:00Z',
+        endDateTime: '2026-10-10T23:59:59Z',
+        additionalNotes: '',
+        createdBy: 'creator_1',
+        createdAt: now.millisecondsSinceEpoch,
+        updatedAt: now.millisecondsSinceEpoch,
+        requireResponse: true,
+        isLocked: true,
+      );
+
+      final mockService = MockRsvpDesignFirebaseService();
+      mockService.mockEvent = eventWithDesc;
+      final appState = MockRsvpDesignAppState(mockService);
+
+      await tester.pumpWidget(
+        ChangeNotifierProvider<AppState>.value(
+          value: appState,
+          child: MaterialApp(
+            home: EventResultsPage(
+              key: const ValueKey('with_desc'),
+              bandId: 'band_1',
+              eventId: 'ev_desc',
+              initialEvent: eventWithDesc,
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.text('Event Description'), findsOneWidget);
+      expect(find.text('Complete festival details and soundcheck guidelines.'), findsOneWidget);
+
+      // Case B: Without description (empty) -> shows fallback
+      final eventNoDesc = BandEvent(
+        id: 'ev_no_desc',
+        title: 'Festival Deluxe No Desc',
+        description: '',
+        eventType: 'Festival',
+        location: 'Park',
+        startDateTime: '2026-10-10T00:00:00Z',
+        endDateTime: '2026-10-10T23:59:59Z',
+        additionalNotes: '',
+        createdBy: 'creator_1',
+        createdAt: now.millisecondsSinceEpoch,
+        updatedAt: now.millisecondsSinceEpoch,
+        requireResponse: true,
+        isLocked: true,
+      );
+      mockService.mockEvent = eventNoDesc;
+
+      await tester.pumpWidget(
+        ChangeNotifierProvider<AppState>.value(
+          value: appState,
+          child: MaterialApp(
+            home: EventResultsPage(
+              key: const ValueKey('no_desc'),
+              bandId: 'band_1',
+              eventId: 'ev_no_desc',
+              initialEvent: eventNoDesc,
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.text('Event Description'), findsOneWidget);
+      expect(find.text('No event description provided.'), findsOneWidget);
+    });
+
+    testWidgets('17. ManageEventsScreen displays upper Part Event badge and restricts edit action to Event Creator', (tester) async {
+      tester.view.physicalSize = const Size(1200, 3000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      final now = DateTime.now();
+      final futureDate = now.add(const Duration(days: 5));
+      final dateStr = '${futureDate.year}-${futureDate.month.toString().padLeft(2, '0')}-${futureDate.day.toString().padLeft(2, '0')}';
+      final event3Part = BandEvent(
+        id: 'ev_3part',
+        title: 'Three Part Gig',
+        description: 'Multi-part event',
+        eventType: 'Concert',
+        location: 'Arena',
+        startDateTime: futureDate.toIso8601String(),
+        endDateTime: futureDate.add(const Duration(hours: 5)).toIso8601String(),
+        additionalNotes: '',
+        createdBy: 'actual_creator_456',
+        createdAt: now.millisecondsSinceEpoch,
+        updatedAt: now.millisecondsSinceEpoch,
+        requireResponse: true,
+        rehearsals: [
+          EventRehearsal(id: 'r1', title: 'Part 1', type: 'Soundcheck', date: dateStr, startTime: '12:00', endTime: '13:00'),
+          EventRehearsal(id: 'r2', title: 'Part 2', type: 'Dinner', date: dateStr, startTime: '17:00', endTime: '18:00'),
+          EventRehearsal(id: 'r3', title: 'Part 3', type: 'Show', date: dateStr, startTime: '20:00', endTime: '22:00'),
+        ],
+      );
+
+      final mockService = MockRsvpDesignFirebaseService();
+      mockService.mockBandEvents = [event3Part];
+      mockService.mockMembers = [
+        BandMember(userId: 'non_creator_admin', role: 'Leader'),
+        BandMember(userId: 'actual_creator_456', role: 'Member'),
+      ];
+
+      // Non-creator view
+      final appStateNonCreator = MockRsvpDesignAppState(mockService, testUserId: 'non_creator_admin');
+      await tester.pumpWidget(
+        ChangeNotifierProvider<AppState>.value(
+          value: appStateNonCreator,
+          child: const MaterialApp(
+            home: ManageEventsScreen(),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pump(const Duration(milliseconds: 300));
+
+      // 3 Part Event badge shown in top-right
+      expect(find.text('3 Part Event'), findsOneWidget);
+      expect(find.textContaining('Sessions attached'), findsNothing);
+
+      // Popup menu for non-creator should NOT have 'Edit Event'
+      final popupBtn = find.byIcon(Icons.more_vert);
+      expect(popupBtn, findsOneWidget);
+      await tester.tap(popupBtn);
+      await tester.pumpAndSettle();
+      expect(find.text('Edit Event'), findsNothing);
+
+      // Dismiss popup
+      await tester.tapAt(const Offset(10, 10));
+      await tester.pumpAndSettle();
+
+      // Creator view
+      final appStateCreator = MockRsvpDesignAppState(mockService, testUserId: 'actual_creator_456');
+      await tester.pumpWidget(
+        ChangeNotifierProvider<AppState>.value(
+          value: appStateCreator,
+          child: const MaterialApp(
+            home: ManageEventsScreen(),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pump(const Duration(milliseconds: 300));
+
+      final popupBtnCreator = find.byIcon(Icons.more_vert);
+      expect(popupBtnCreator, findsOneWidget);
+      await tester.tap(popupBtnCreator);
+      await tester.pumpAndSettle();
+      expect(find.text('Edit Event'), findsOneWidget);
     });
   });
 }

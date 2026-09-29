@@ -24,6 +24,7 @@ import 'event_results_page.dart';
 import 'event_room_chat_screen.dart';
 import 'edit_band_info_screen.dart';
 import '../utils/band_section_utils.dart';
+import '../utils/date_parser.dart';
 import '../widgets/create_band_section_sheet.dart';
 
 class _EventGroup {
@@ -2749,8 +2750,7 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
   Widget _buildEventFeedCard(Map<String, dynamic> item, String? bandId) {
     final event = item['originalData'] as BandEvent;
     final isUpcoming = item['feedType'] == 'UpcomingEvent';
-    final startLocal = DateTime.tryParse(event.startDateTime)?.toLocal() ?? DateTime.now();
-    final formattedTime = DateFormat('EEEE, MMM d - HH:mm').format(startLocal);
+    final formattedTime = formatBandEventDateRange(event);
 
     // Regular member response counts
     final regularUserIds = _members
@@ -3287,16 +3287,7 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
     final startLocal = DateTime.tryParse(event.startDateTime)?.toLocal() ?? DateTime.now();
     final endLocal = DateTime.tryParse(event.endDateTime)?.toLocal() ?? startLocal;
 
-    final isSameDay = startLocal.year == endLocal.year &&
-        startLocal.month == endLocal.month &&
-        startLocal.day == endLocal.day;
-
-    final String timeOrDateRangeStr;
-    if (isSameDay) {
-      timeOrDateRangeStr = '${DateFormat('EEE, MMM d').format(startLocal)} • ${DateFormat('HH:mm').format(startLocal)} - ${DateFormat('HH:mm').format(endLocal)}';
-    } else {
-      timeOrDateRangeStr = '${DateFormat('EEE, MMM d').format(startLocal)} – ${DateFormat('EEE, MMM d').format(endLocal)}';
-    }
+    final String timeOrDateRangeStr = formatBandEventDateRange(event);
 
     final isPast = endLocal.isBefore(DateTime.now());
     final isFinalized = event.isLocked;
@@ -3375,7 +3366,7 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                   const SizedBox(height: 6),
                   Row(
                     children: [
-                      const Icon(Icons.access_time_outlined, size: 13, color: AppTheme.textSecondary),
+                      const Icon(Icons.calendar_today_outlined, size: 13, color: AppTheme.textSecondary),
                       const SizedBox(width: 6),
                       Text(
                         timeOrDateRangeStr,
@@ -3425,16 +3416,8 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
 
     final startLocal = group.overallStart;
     final endLocal = group.overallEnd;
-    final isSameDay = startLocal.year == endLocal.year &&
-        startLocal.month == endLocal.month &&
-        startLocal.day == endLocal.day;
 
-    final String dateRangeStr;
-    if (isSameDay) {
-      dateRangeStr = DateFormat('EEE, MMM d').format(startLocal);
-    } else {
-      dateRangeStr = '${DateFormat('EEE, MMM d').format(startLocal)} – ${DateFormat('EEE, MMM d').format(endLocal)}';
-    }
+    final String dateRangeStr = formatMainEventDateRange(startLocal, endLocal);
 
     final isPast = endLocal.isBefore(DateTime.now());
     final isFinalized = group.mainEvent.isLocked;

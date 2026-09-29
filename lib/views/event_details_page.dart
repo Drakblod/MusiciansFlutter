@@ -15,6 +15,7 @@ import '../widgets/animated_tap_detector.dart';
 import 'find_sub_screen.dart';
 import 'event_room_chat_screen.dart';
 import 'create_event_page.dart';
+import '../utils/date_parser.dart';
 
 class _EventScheduleItemModel {
   final int sequenceIndex; // 0 for main, 1..N for attached
@@ -636,34 +637,12 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          () {
-                            final startLocal = DateTime.tryParse(event.startDateTime)?.toLocal() ?? DateTime.now();
-                            final endLocal = DateTime.tryParse(event.endDateTime)?.toLocal() ?? startLocal;
-                            final isSameDay = startLocal.year == endLocal.year &&
-                                startLocal.month == endLocal.month &&
-                                startLocal.day == endLocal.day;
-                            return isSameDay
-                                ? DateFormat('EEEE, MMMM d, yyyy').format(startLocal)
-                                : '${DateFormat('MMM d, yyyy').format(startLocal)} – ${DateFormat('MMM d, yyyy').format(endLocal)}';
-                          }(),
+                          formatBandEventDateRange(event),
                           style: GoogleFonts.inter(fontSize: 13, color: Colors.white, fontWeight: FontWeight.w600),
                         ),
                       ),
                     ],
                   ),
-                  if (!hasMultipleEvents) ...[
-                    const SizedBox(height: 6),
-                    Row(
-                      children: [
-                        const Icon(Icons.access_time_outlined, size: 14, color: AppTheme.textSecondary),
-                        const SizedBox(width: 8),
-                        Text(
-                          scheduleItems[0].timeStr,
-                          style: GoogleFonts.inter(fontSize: 13, color: Colors.white),
-                        ),
-                      ],
-                    ),
-                  ],
                   if (event.location.isNotEmpty) ...[
                     const SizedBox(height: 6),
                     Row(

@@ -2268,9 +2268,6 @@ class FirebaseService {
       'timestamp': timestamp,
       if (comment != null) 'comment': comment,
     });
-    await _dbRef(
-      'Bands/$bandId/Events/$eventId/updatedAt',
-    ).set(DateTime.now().millisecondsSinceEpoch);
   }
 
   Future<void> updateScheduleItemResponseAsync(
@@ -2287,11 +2284,8 @@ class FirebaseService {
     ).set({
       'status': status,
       'timestamp': timestamp,
-      'uncertainReason': uncertainReason,
+      if (uncertainReason != null) 'uncertainReason': uncertainReason,
     });
-    await _dbRef(
-      'Bands/$bandId/Events/$eventId/updatedAt',
-    ).set(DateTime.now().millisecondsSinceEpoch);
   }
 
   Future<void> deleteBandEventAsync(String bandId, String eventId) async {
@@ -2444,12 +2438,10 @@ class FirebaseService {
     String status, {
     String? comment,
   }) async {
-    final timestamp = DateTime.now().millisecondsSinceEpoch;
     final updates = {'status': status, if (comment != null) 'comment': comment};
     await _dbRef(
       'Bands/$bandId/Events/$eventId/externalInvitees/$userId',
     ).update(updates);
-    await _dbRef('Bands/$bandId/Events/$eventId/updatedAt').set(timestamp);
   }
 
   Future<void> lockBandEventAsync(String bandId, String eventId) async {

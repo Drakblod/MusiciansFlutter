@@ -11,6 +11,7 @@ import '../widgets/custom_top_bar.dart';
 import 'event_details_page.dart';
 import 'event_results_page.dart';
 import 'create_event_page.dart';
+import '../utils/date_parser.dart';
 import '../controllers/global_create_event_launcher.dart';
 
 class ManageEventsScreen extends StatefulWidget {
@@ -586,9 +587,7 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> with SingleTick
         startLocal.month == endLocal.month &&
         startLocal.day == endLocal.day;
 
-    final String timeOrDateStr = isSameDay
-        ? '${DateFormat('EEEE, MMM d, yyyy').format(startLocal)} • ${DateFormat('HH:mm').format(startLocal)} - ${DateFormat('HH:mm').format(endLocal)}'
-        : '${DateFormat('MMM d, yyyy').format(startLocal)} – ${DateFormat('MMM d, yyyy').format(endLocal)}';
+    final String timeOrDateStr = formatBandEventDateRange(event);
 
     // Count responses
     int yesCount = 0;
@@ -606,7 +605,16 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> with SingleTick
     }
 
     final sessionType = event.eventType.isNotEmpty ? event.eventType : 'Event';
+    final typeBadgeText = event.rehearsals.isNotEmpty
+        ? '${event.rehearsals.length} Part Event'
+        : sessionType;
     final iconData = _getEventTypeIcon(sessionType);
+
+    final appState = Provider.of<AppState>(context, listen: false);
+    final currentUserId = appState.currentUserId;
+    final isCreator = currentUserId != null && currentUserId == event.createdBy;
+    final canEdit = isCreator;
+    final canDelete = isCreator || isAuthorized;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
@@ -646,7 +654,7 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> with SingleTick
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(
-                              sessionType,
+                              typeBadgeText,
                               style: GoogleFonts.inter(
                                 fontSize: 11,
                                 color: AppTheme.primaryAccent,
@@ -680,7 +688,7 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> with SingleTick
                     ],
                   ),
                 ),
-                if (isAuthorized)
+                if (canEdit || canDelete)
                   PopupMenuButton<String>(
                     icon: const Icon(Icons.more_vert, color: AppTheme.textSecondary),
                     color: const Color(0xFF1A1635),
@@ -701,26 +709,28 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> with SingleTick
                       }
                     },
                     itemBuilder: (ctx) => [
-                      PopupMenuItem(
-                        value: 'edit',
-                        child: Row(
-                          children: [
-                            const Icon(Icons.edit_outlined, color: AppTheme.primaryAccent, size: 18),
-                            const SizedBox(width: 10),
-                            Text('Edit Event', style: GoogleFonts.inter(color: Colors.white)),
-                          ],
+                      if (canEdit)
+                        PopupMenuItem(
+                          value: 'edit',
+                          child: Row(
+                            children: [
+                              const Icon(Icons.edit_outlined, color: AppTheme.primaryAccent, size: 18),
+                              const SizedBox(width: 10),
+                              Text('Edit Event', style: GoogleFonts.inter(color: Colors.white)),
+                            ],
+                          ),
                         ),
-                      ),
-                      PopupMenuItem(
-                        value: 'delete',
-                        child: Row(
-                          children: [
-                            const Icon(Icons.delete_outline, color: AppTheme.danger, size: 18),
-                            const SizedBox(width: 10),
-                            Text('Delete Event', style: GoogleFonts.inter(color: AppTheme.danger)),
-                          ],
+                      if (canDelete)
+                        PopupMenuItem(
+                          value: 'delete',
+                          child: Row(
+                            children: [
+                              const Icon(Icons.delete_outline, color: AppTheme.danger, size: 18),
+                              const SizedBox(width: 10),
+                              Text('Delete Event', style: GoogleFonts.inter(color: AppTheme.danger)),
+                            ],
+                          ),
                         ),
-                      ),
                     ],
                   ),
               ],
@@ -735,7 +745,7 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> with SingleTick
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.access_time_rounded, color: AppTheme.textSecondary, size: 15),
+                    const Icon(Icons.calendar_today_outlined, color: AppTheme.textSecondary, size: 15),
                     const SizedBox(width: 6),
                     Expanded(
                       child: Text(
@@ -785,34 +795,6 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> with SingleTick
                           ),
                           maxLines: 3,
                           overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-                if (event.rehearsals.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 4,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.06),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: const Color(0xFF2E2A4E)),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.layers_outlined, size: 13, color: AppTheme.primaryAccent),
-                            const SizedBox(width: 4),
-                            Text(
-                              '${event.rehearsals.length} Session${event.rehearsals.length == 1 ? '' : 's'} attached',
-                              style: GoogleFonts.inter(fontSize: 11, color: Colors.white70),
-                            ),
-                          ],
                         ),
                       ),
                     ],

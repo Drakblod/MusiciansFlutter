@@ -10,6 +10,7 @@ import '../models/band.dart';
 import '../models/user_profile.dart';
 import '../widgets/gradient_scaffold.dart';
 import '../widgets/custom_top_bar.dart';
+import '../utils/date_parser.dart';
 
 class MemberResultItem {
   final String userId;
@@ -31,7 +32,7 @@ class SubstituteResultItem {
   final String slotId;
   final String assignedUserId;
   final String substituteName;
-  final String primarySkill;
+  final String? primarySkill;
   final String? replacedMemberName;
   final bool isFromLegacyExternalInvitee;
 
@@ -39,7 +40,7 @@ class SubstituteResultItem {
     required this.slotId,
     required this.assignedUserId,
     required this.substituteName,
-    required this.primarySkill,
+    this.primarySkill,
     this.replacedMemberName,
     this.isFromLegacyExternalInvitee = false,
   });
@@ -232,40 +233,14 @@ class _EventResultsPageState extends State<EventResultsPage> {
     }
   }
 
-  String _getPrimarySkill(String userId, [String? fallbackRole]) {
+  String? _getPrimarySkill(String userId) {
     final profile = _cachedProfiles[userId];
     if (profile != null) {
       if (profile.mainInstrument != null && profile.mainInstrument!.trim().isNotEmpty) {
         return profile.mainInstrument!.trim();
       }
-      if (profile.instruments.isNotEmpty && profile.instruments.first.trim().isNotEmpty) {
-        return profile.instruments.first.trim();
-      }
-      if (profile.collabRoles.isNotEmpty && profile.collabRoles.first.trim().isNotEmpty) {
-        return profile.collabRoles.first.trim();
-      }
     }
-    if (fallbackRole != null &&
-        fallbackRole.trim().isNotEmpty &&
-        fallbackRole.trim().toLowerCase() != 'member' &&
-        fallbackRole.trim().toLowerCase() != 'leader' &&
-        fallbackRole.trim().toLowerCase() != 'admin') {
-      return fallbackRole.trim();
-    }
-    return '';
-  }
-
-  String _formatDateRange(String? startStr, String? endStr) {
-    if (startStr == null || startStr.isEmpty) return 'Date TBA';
-    final start = DateTime.tryParse(startStr)?.toLocal();
-    final end = (endStr != null && endStr.isNotEmpty) ? DateTime.tryParse(endStr)?.toLocal() : null;
-    if (start == null) return 'Date TBA';
-
-    if (end == null || (start.year == end.year && start.month == end.month && start.day == end.day)) {
-      return DateFormat('EEEE, MMMM d, yyyy').format(start);
-    } else {
-      return '${DateFormat('EEE, MMM d, yyyy').format(start)} – ${DateFormat('EEE, MMM d, yyyy').format(end)}';
-    }
+    return null;
   }
 
   List<_EventResultScheduleItem> _buildResultScheduleItems(BandEvent event) {
@@ -378,7 +353,7 @@ class _EventResultsPageState extends State<EventResultsPage> {
             profile?.nickname ??
             ((member.nickname != null && member.nickname!.trim().toLowerCase() != 'leader') ? member.nickname : null) ??
             'Unknown Member';
-        final primarySkill = _getPrimarySkill(uid, member.role);
+        final primarySkill = _getPrimarySkill(uid);
 
         final resp = event.responses[uid];
         final status = classifyEventResponse(resp?.status);
@@ -387,7 +362,7 @@ class _EventResultsPageState extends State<EventResultsPage> {
         final item = MemberResultItem(
           userId: uid,
           displayName: name,
-          primarySkill: primarySkill.isNotEmpty ? primarySkill : null,
+          primarySkill: primarySkill,
           reason: status == EventResponseStatus.uncertain ? reason : null,
           responseStatus: status,
         );
@@ -422,7 +397,7 @@ class _EventResultsPageState extends State<EventResultsPage> {
         final item = MemberResultItem(
           userId: uid,
           displayName: name,
-          primarySkill: primarySkill.isNotEmpty ? primarySkill : null,
+          primarySkill: primarySkill,
           reason: status == EventResponseStatus.uncertain ? reason : null,
           responseStatus: status,
         );
@@ -480,7 +455,7 @@ class _EventResultsPageState extends State<EventResultsPage> {
               profile?.nickname ??
               ((member.nickname != null && member.nickname!.trim().toLowerCase() != 'leader') ? member.nickname : null) ??
               'Unknown Member';
-          final primarySkill = _getPrimarySkill(uid, member.role);
+          final primarySkill = _getPrimarySkill(uid);
 
           final resp = scheduleResponses[uid];
           final status = classifyEventResponse(resp?.status);
@@ -489,7 +464,7 @@ class _EventResultsPageState extends State<EventResultsPage> {
           final item = MemberResultItem(
             userId: uid,
             displayName: name,
-            primarySkill: primarySkill.isNotEmpty ? primarySkill : null,
+            primarySkill: primarySkill,
             reason: status == EventResponseStatus.uncertain ? reason : null,
             responseStatus: status,
           );
@@ -717,25 +692,71 @@ class _EventResultsPageState extends State<EventResultsPage> {
                       ),
                   ],
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 12),
+
+                // 2. Event Description Card (Distinct card directly below Main Event Name)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF16132D),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Event Description',
+                        style: GoogleFonts.outfit(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.primaryAccent,
+                          letterSpacing: 1.0,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        event.description.trim().isNotEmpty
+                            ? event.description.trim()
+                            : 'No event description provided.',
+                        style: GoogleFonts.inter(
+                          fontSize: 13,
+                          color: event.description.trim().isNotEmpty
+                              ? Colors.white70
+                              : AppTheme.textSecondary,
+                          fontStyle: event.description.trim().isNotEmpty
+                              ? FontStyle.normal
+                              : FontStyle.italic,
+                          height: 1.35,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // 3. Main Event date range
                 Row(
                   children: [
                     const Icon(Icons.calendar_today_outlined, size: 14, color: AppTheme.textSecondary),
-                    const SizedBox(width: 6),
+                    const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        _formatDateRange(event.startDateTime, event.endDateTime),
-                        style: GoogleFonts.inter(fontSize: 13, color: Colors.white),
+                        formatBandEventDateRange(event),
+                        style: GoogleFonts.inter(fontSize: 13, color: Colors.white, fontWeight: FontWeight.w600),
                       ),
                     ),
                   ],
                 ),
+
+                // 4. Remaining metadata (Location)
                 if (event.location.isNotEmpty) ...[
                   const SizedBox(height: 6),
                   Row(
                     children: [
                       const Icon(Icons.location_on_outlined, size: 14, color: AppTheme.textSecondary),
-                      const SizedBox(width: 6),
+                      const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           event.location,
@@ -743,13 +764,6 @@ class _EventResultsPageState extends State<EventResultsPage> {
                         ),
                       ),
                     ],
-                  ),
-                ],
-                if (event.description.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    event.description,
-                    style: GoogleFonts.inter(fontSize: 12.5, color: AppTheme.textSecondary),
                   ),
                 ],
               ],
@@ -1087,7 +1101,7 @@ class _EventResultsPageState extends State<EventResultsPage> {
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
-                            if (sub.primarySkill.isNotEmpty) ...[
+                            if (sub.primarySkill != null && sub.primarySkill!.isNotEmpty) ...[
                               const SizedBox(width: 6),
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
@@ -1096,7 +1110,7 @@ class _EventResultsPageState extends State<EventResultsPage> {
                                   borderRadius: BorderRadius.circular(4),
                                 ),
                                 child: Text(
-                                  sub.primarySkill,
+                                  sub.primarySkill!,
                                   style: GoogleFonts.inter(
                                     fontSize: 10,
                                     color: Colors.purpleAccent,

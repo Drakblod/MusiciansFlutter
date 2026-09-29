@@ -1058,4 +1058,263 @@ describe('Real RTDB Emulator Rules Tests', function () {
       await assertFails(userAFinal.database().ref('userNotifications/user_a/notif_1').remove());
     });
   });
+
+  describe('8. Band Event & Schedule RSVP Security & Verification (database.rules.json)', () => {
+    const BAND_ID = 'band_sec_test';
+    const EVENT_OPEN = 'event_sec_open';
+    const EVENT_LOCKED = 'event_sec_locked';
+    const SCHED_ITEM_1 = 'sched_item_1';
+    const SCHED_ITEM_2 = 'sched_item_2';
+
+    beforeEach(async () => {
+      await testEnvFinal.withSecurityRulesDisabled(async (context) => {
+        const db = context.database();
+        // Seed band members
+        await db.ref(`Bands/${BAND_ID}/Members_band`).set({
+          user_creator: { Role: 'Member', Nickname: 'Creator' },
+          user_leader: { Role: 'Leader', Nickname: 'Leader' },
+          user_admin: { Role: 'Admin', Nickname: 'Admin' },
+          user_member: { Role: 'Member', Nickname: 'Regular Member' },
+        });
+
+        // Seed open event
+        await db.ref(`Bands/${BAND_ID}/Events/${EVENT_OPEN}`).set({
+          id: EVENT_OPEN,
+          title: 'Open Gig',
+          description: 'Gig Description',
+          createdBy: 'user_creator',
+          isLocked: false,
+          requireResponse: true,
+          rehearsals: [
+            { id: SCHED_ITEM_1, title: 'Rehearsal 1' },
+            { id: SCHED_ITEM_2, title: 'Rehearsal 2' },
+          ],
+          externalInvitees: {
+            user_external: {
+              userId: 'user_external',
+              status: 'pending',
+            },
+          },
+        });
+
+        // Seed locked event
+        await db.ref(`Bands/${BAND_ID}/Events/${EVENT_LOCKED}`).set({
+          id: EVENT_LOCKED,
+          title: 'Locked Gig',
+          description: 'Finalized Gig',
+          createdBy: 'user_creator',
+          isLocked: true,
+          requireResponse: true,
+          rehearsals: [
+            { id: SCHED_ITEM_1, title: 'Part 1' },
+          ],
+        });
+      });
+    });
+
+    it('1. Band member CAN submit own YES/NO/UNCERTAIN (with reason) RSVP to parent Responses', async () => {
+      const member = testEnvFinal.authenticatedContext('user_member');
+      const ref = member.database().ref(`Bands/${BAND_ID}/Events/${EVENT_OPEN}/Responses/user_member`);
+      await assertSucceeds(ref.set({
+        status: 'YES',
+        timestamp: new Date().toISOString(),
+      }));
+      await assertSucceeds(ref.set({
+        status: 'UNCERTAIN',
+        uncertainReason: 'Need to check schedule',
+        timestamp: new Date().toISOString(),
+      }));
+      await assertSucceeds(ref.set({
+        status: 'NO',
+        timestamp: new Date().toISOString(),
+      }));
+    });
+
+    it('2. Band member CAN submit own YES/NO/UNCERTAIN (with reason) RSVP to ScheduleResponses', async () => {
+      const member = testEnvFinal.authenticatedContext('user_member');
+      const ref = member.database().ref(`Bands/${BAND_ID}/Events/${EVENT_OPEN}/ScheduleResponses/${SCHED_ITEM_1}/user_member`);
+      await assertSucceeds(ref.set({
+        status: 'YES',
+        timestamp: new Date().toISOString(),
+      }));
+      await assertSucceeds(ref.set({
+        status: 'UNCERTAIN',
+        uncertainReason: 'May arrive 15 min late',
+        timestamp: new Date().toISOString(),
+      }));
+      await assertSucceeds(ref.set({
+        status: 'NO',
+        timestamp: new Date().toISOString(),
+      }));
+    });
+
+    it('3. External invitee CAN submit own RSVP to Responses and ScheduleResponses', async () => {
+      const external = testEnvFinal.authenticatedContext('user_external');
+      const respRef = external.database().ref(`Bands/${BAND_ID}/Events/${EVENT_OPEN}/Responses/user_external`);
+      const schedRef = external.database().ref(`Bands/${BAND_ID}/Events/${EVENT_OPEN}/ScheduleResponses/${SCHED_ITEM_1}/user_external`);
+      await assertSucceeds(respRef.set({
+        status: 'YES',
+        timestamp: new Date().toISOString(),
+      }));
+      await assertSucceeds(schedRef.set({
+        status: 'YES',
+        timestamp: new Date().toISOString(),
+      }));
+    });
+
+    it('4. Non-member and non-invitee CANNOT write RSVP to Responses or ScheduleResponses', async () => {
+      const outsider = testEnvFinal.authenticatedContext('user_outsider');
+      const respRef = outsider.database().ref(`Bands/${BAND_ID}/Events/${EVENT_OPEN}/Responses/user_outsider`);
+      const schedRef = outsider.database().ref(`Bands/${BAND_ID}/Events/${EVENT_OPEN}/ScheduleResponses/${SCHED_ITEM_1}/user_outsider`);
+      await assertFails(respRef.set({
+        status: 'YES',
+        timestamp: new Date().toISOString(),
+      }));
+      await assertFails(schedRef.set({
+        status: 'YES',
+        timestamp: new Date().toISOString(),
+      }));
+    });
+
+    it('5. User CANNOT write RSVP on behalf of another user (auth.uid != userId)', async () => {
+      const member = testEnvFinal.authenticatedContext('user_member');
+      const respRef = member.database().ref(`Bands/${BAND_ID}/Events/${EVENT_OPEN}/Responses/user_creator`);
+      const schedRef = member.database().ref(`Bands/${BAND_ID}/Events/${EVENT_OPEN}/ScheduleResponses/${SCHED_ITEM_1}/user_creator`);
+      await assertFails(respRef.set({
+        status: 'YES',
+        timestamp: new Date().toISOString(),
+      }));
+      await assertFails(schedRef.set({
+        status: 'YES',
+        timestamp: new Date().toISOString(),
+      }));
+    });
+
+    it('6. Member CANNOT write RSVP when event is locked (isLocked == true)', async () => {
+      const member = testEnvFinal.authenticatedContext('user_member');
+      const respRef = member.database().ref(`Bands/${BAND_ID}/Events/${EVENT_LOCKED}/Responses/user_member`);
+      const schedRef = member.database().ref(`Bands/${BAND_ID}/Events/${EVENT_LOCKED}/ScheduleResponses/${SCHED_ITEM_1}/user_member`);
+      await assertFails(respRef.set({
+        status: 'YES',
+        timestamp: new Date().toISOString(),
+      }));
+      await assertFails(schedRef.set({
+        status: 'YES',
+        timestamp: new Date().toISOString(),
+      }));
+    });
+
+    it('7. RSVP with invalid status string is REJECTED', async () => {
+      const member = testEnvFinal.authenticatedContext('user_member');
+      const respRef = member.database().ref(`Bands/${BAND_ID}/Events/${EVENT_OPEN}/Responses/user_member`);
+      const schedRef = member.database().ref(`Bands/${BAND_ID}/Events/${EVENT_OPEN}/ScheduleResponses/${SCHED_ITEM_1}/user_member`);
+      await assertFails(respRef.set({
+        status: 'INVALID_STATUS',
+        timestamp: new Date().toISOString(),
+      }));
+      await assertFails(schedRef.set({
+        status: 'MAYBE_LATER',
+        timestamp: new Date().toISOString(),
+      }));
+    });
+
+    it('8. RSVP with UNCERTAIN status requires non-empty uncertainReason / comment', async () => {
+      const member = testEnvFinal.authenticatedContext('user_member');
+      const respRef = member.database().ref(`Bands/${BAND_ID}/Events/${EVENT_OPEN}/Responses/user_member`);
+      const schedRef = member.database().ref(`Bands/${BAND_ID}/Events/${EVENT_OPEN}/ScheduleResponses/${SCHED_ITEM_1}/user_member`);
+      // Empty or missing reason -> fails
+      await assertFails(respRef.set({
+        status: 'UNCERTAIN',
+        timestamp: new Date().toISOString(),
+      }));
+      await assertFails(schedRef.set({
+        status: 'UNCERTAIN',
+        timestamp: new Date().toISOString(),
+      }));
+      await assertFails(schedRef.set({
+        status: 'UNCERTAIN',
+        uncertainReason: '',
+        timestamp: new Date().toISOString(),
+      }));
+      // Valid non-empty reason -> succeeds
+      await assertSucceeds(schedRef.set({
+        status: 'UNCERTAIN',
+        uncertainReason: 'Doctor appointment pending confirmation',
+        timestamp: new Date().toISOString(),
+      }));
+    });
+
+    it('9. Regular band member CANNOT overwrite event metadata (title, location, isLocked, rehearsals)', async () => {
+      const member = testEnvFinal.authenticatedContext('user_member');
+      const eventRef = member.database().ref(`Bands/${BAND_ID}/Events/${EVENT_OPEN}`);
+      await assertFails(eventRef.update({
+        title: 'Hacked Title',
+        isLocked: true,
+      }));
+      await assertFails(eventRef.child('title').set('Hacked Title'));
+      await assertFails(eventRef.child('isLocked').set(true));
+    });
+
+    it('10. Event Creator CAN update event details and lock event', async () => {
+      const creator = testEnvFinal.authenticatedContext('user_creator');
+      const eventRef = creator.database().ref(`Bands/${BAND_ID}/Events/${EVENT_OPEN}`);
+      await assertSucceeds(eventRef.update({
+        title: 'Updated Festival Title',
+        description: 'Updated Description',
+        isLocked: true,
+        lockedAt: Date.now(),
+        lockedBy: 'user_creator',
+      }));
+    });
+
+    it('11. Band Leader / Admin CAN update event details and lock event', async () => {
+      const leader = testEnvFinal.authenticatedContext('user_leader');
+      const admin = testEnvFinal.authenticatedContext('user_admin');
+      await assertSucceeds(leader.database().ref(`Bands/${BAND_ID}/Events/${EVENT_OPEN}`).update({
+        title: 'Leader Updated Title',
+      }));
+      await assertSucceeds(admin.database().ref(`Bands/${BAND_ID}/Events/${EVENT_OPEN}`).update({
+        title: 'Admin Updated Title',
+      }));
+    });
+
+    it('12. Event Creator and Band Leader CAN assign substitutes', async () => {
+      const creator = testEnvFinal.authenticatedContext('user_creator');
+      const leader = testEnvFinal.authenticatedContext('user_leader');
+      const subRef1 = creator.database().ref(`Bands/${BAND_ID}/Events/${EVENT_OPEN}/substituteAssignments/slot_1`);
+      const subRef2 = leader.database().ref(`Bands/${BAND_ID}/Events/${EVENT_OPEN}/substituteAssignments/slot_2`);
+      await assertSucceeds(subRef1.set({
+        slotId: 'slot_1',
+        assignedUserId: 'user_sub_1',
+        assignedUserName: 'Sam Sub',
+        instrument: 'Bass',
+        status: 'assigned',
+      }));
+      await assertSucceeds(subRef2.set({
+        slotId: 'slot_2',
+        assignedUserId: 'user_sub_2',
+        assignedUserName: 'Alex Sub',
+        instrument: 'Drums',
+        status: 'assigned',
+      }));
+    });
+
+    it('13. Regular member CANNOT assign substitutes', async () => {
+      const member = testEnvFinal.authenticatedContext('user_member');
+      const subRef = member.database().ref(`Bands/${BAND_ID}/Events/${EVENT_OPEN}/substituteAssignments/slot_hacked`);
+      await assertFails(subRef.set({
+        slotId: 'slot_hacked',
+        assignedUserId: 'user_member',
+        instrument: 'Vocals',
+        status: 'assigned',
+      }));
+    });
+
+    it('14. Unauthenticated user CANNOT read or write any RSVP or Event data', async () => {
+      const unauth = testEnvFinal.unauthenticatedContext();
+      await assertFails(unauth.database().ref(`Bands/${BAND_ID}/Events/${EVENT_OPEN}/Responses/user_member`).get());
+      await assertFails(unauth.database().ref(`Bands/${BAND_ID}/Events/${EVENT_OPEN}/Responses/user_member`).set({ status: 'YES' }));
+      await assertFails(unauth.database().ref(`Bands/${BAND_ID}/Events/${EVENT_OPEN}`).set({ title: 'Hack' }));
+    });
+  });
 });
