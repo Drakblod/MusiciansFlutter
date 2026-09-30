@@ -28,6 +28,12 @@ class SpyingFirebaseService extends FirebaseService {
     callCount++;
     return {'b1': 'Test Band'};
   }
+
+  @override
+  Future<List<PublicCalendarEvent>> getPublicCalendarEventsAsync() async => [];
+
+  @override
+  Future<String> savePublicCalendarEventAsync(PublicCalendarEvent event) async => event.id;
 }
 
 class MockAppStateForCalendarTest extends AppState {
@@ -76,6 +82,9 @@ class FailingThenSucceedingRepository implements PublicEventRepository {
     }
     return fallback.getUpcomingEvents();
   }
+
+  @override
+  Future<String> createEvent(PublicCalendarEvent event) async => fallback.createEvent(event);
 }
 
 void main() {

@@ -20,6 +20,7 @@ import '../models/event_room.dart';
 import '../models/collab_session.dart';
 import '../models/collab_studio.dart';
 import '../models/app_notification.dart';
+import '../models/public_calendar_event.dart';
 import '../utils/date_parser.dart';
 
 class FirebaseService {
@@ -3148,4 +3149,79 @@ class FirebaseService {
     await _dbRef('bandconversations/$bandId').remove();
     await _dbRef('Bands/$bandId').remove();
   }
+
+  // ==========================================
+  // Public Calendar Events
+  // ==========================================
+
+  Future<String> savePublicCalendarEventAsync(PublicCalendarEvent event) async {
+    final eventsRef = _dbRef('PublicEvents');
+    final eventId = (event.id.isNotEmpty && !event.id.startsWith('mock_'))
+        ? event.id
+        : eventsRef.push().key!;
+
+    final updatedEvent = event.copyWith(
+      id: eventId,
+      createdBy: (event.createdBy != null && event.createdBy!.isNotEmpty)
+          ? event.createdBy
+          : currentUserId,
+      createdAt: event.createdAt ?? DateTime.now().millisecondsSinceEpoch,
+      isMock: false,
+    );
+
+    await eventsRef.child(eventId).set(updatedEvent.toJson());
+    return eventId;
+  }
+
+  Future<List<PublicCalendarEvent>> getPublicCalendarEventsAsync() async {
+    final snapshot = await _dbRef('PublicEvents').get();
+    if (!snapshot.exists || snapshot.value == null) {
+      return [];
+    }
+    final data = snapshot.value;
+    final List<PublicCalendarEvent> events = [];
+    if (data is Map) {
+      data.forEach((key, value) {
+        if (value is Map) {
+          try {
+            events.add(PublicCalendarEvent.fromJson(value, key.toString()));
+          } catch (e) {
+            debugPrint('Error parsing PublicCalendarEvent ($key): $e');
+          }
+        }
+      });
+    }
+    return events;
+  }
+
+  Future<String> uploadPublicEventCoverImageAsync(
+    XFile image, [
+    String? eventId,
+  ]) async {
+    try {
+      final id = eventId ?? 'event_${DateTime.now().millisecondsSinceEpoch}';
+      final ref = FirebaseStorage.instance
+          .ref()
+          .child('publicEventImages')
+          .child(id)
+          .child('cover_${DateTime.now().millisecondsSinceEpoch}.jpg');
+
+      UploadTask uploadTask;
+      final metadata = SettableMetadata(contentType: 'image/jpeg');
+      if (kIsWeb) {
+        final bytes = await image.readAsBytes();
+        uploadTask = ref.putData(bytes, metadata);
+      } else {
+        uploadTask = ref.putFile(File(image.path), metadata);
+      }
+
+      final snapshot = await uploadTask;
+      final url = await snapshot.ref.getDownloadURL();
+      return url;
+    } catch (e) {
+      debugPrint("Error uploading public event cover image: $e");
+      rethrow;
+    }
+  }
 }
+

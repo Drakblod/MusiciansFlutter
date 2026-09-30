@@ -29,6 +29,12 @@ class SpyingFirebaseService extends FirebaseService {
     callCount++;
     return {'b1': 'Test Band'};
   }
+
+  @override
+  Future<List<PublicCalendarEvent>> getPublicCalendarEventsAsync() async => [];
+
+  @override
+  Future<String> savePublicCalendarEventAsync(PublicCalendarEvent event) async => event.id;
 }
 
 class MockAppStateForDetailsTest extends AppState {
@@ -258,8 +264,7 @@ void main() {
       expect(eventCalendarAction, findsOneWidget);
 
       await tester.tap(eventCalendarAction);
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pumpAndSettle();
 
       expect(find.text('EVENT CALENDAR'), findsOneWidget);
       expect(find.text('DEMO EVENTS'), findsOneWidget);

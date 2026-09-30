@@ -29,6 +29,8 @@ class PublicCalendarEvent {
   final PublicEventStatus status;
   final bool isMock;
   final String? imageUrl;
+  final String? createdBy;
+  final int? createdAt;
 
   const PublicCalendarEvent({
     required this.id,
@@ -49,7 +51,145 @@ class PublicCalendarEvent {
     this.status = PublicEventStatus.published,
     this.isMock = true,
     this.imageUrl,
+    this.createdBy,
+    this.createdAt,
   });
+
+  factory PublicCalendarEvent.fromJson(Map<dynamic, dynamic> json, [String? id]) {
+    PublicEventType parseType(String? val) {
+      final s = (val ?? '').toLowerCase().trim();
+      if (s == 'livegig' || s == 'live/gig' || s == 'live' || s == 'gig' || s == 'live_gig') {
+        return PublicEventType.liveGig;
+      }
+      if (s == 'opensession' || s == 'session' || s == 'open_session') {
+        return PublicEventType.openSession;
+      }
+      if (s == 'workshopcourse' || s == 'workshop' || s == 'course' || s == 'workshop_course') {
+        return PublicEventType.workshopCourse;
+      }
+      return PublicEventType.other;
+    }
+
+    PublicEventStatus parseStatus(String? val) {
+      final s = (val ?? '').toLowerCase().trim();
+      if (s == 'cancelled' || s == 'canceled') {
+        return PublicEventStatus.cancelled;
+      }
+      return PublicEventStatus.published;
+    }
+
+    List<String> parseGenres(dynamic raw) {
+      if (raw == null) return [];
+      if (raw is List) return raw.map((e) => e.toString()).toList();
+      if (raw is Map) return raw.values.map((e) => e.toString()).toList();
+      return [raw.toString()];
+    }
+
+    DateTime parseDate(dynamic raw) {
+      if (raw == null) return DateTime.now();
+      if (raw is int) return DateTime.fromMillisecondsSinceEpoch(raw);
+      if (raw is String) return DateTime.tryParse(raw) ?? DateTime.now();
+      return DateTime.now();
+    }
+
+    return PublicCalendarEvent(
+      id: json['id']?.toString() ?? id ?? '',
+      title: json['title']?.toString() ?? '',
+      shortDescription: json['shortDescription']?.toString() ?? '',
+      description: json['description']?.toString() ?? '',
+      eventType: parseType(json['eventType']?.toString()),
+      organizerName: json['organizerName']?.toString() ?? '',
+      venueName: json['venueName']?.toString() ?? '',
+      city: json['city']?.toString() ?? '',
+      address: json['address']?.toString() ?? '',
+      startDateTime: parseDate(json['startDateTime']),
+      endDateTime: parseDate(json['endDateTime']),
+      genres: parseGenres(json['genres']),
+      priceAmount: json['priceAmount'] is num
+          ? (json['priceAmount'] as num).toDouble()
+          : double.tryParse(json['priceAmount']?.toString() ?? ''),
+      currency: json['currency']?.toString() ?? 'SEK',
+      isFree: json['isFree'] == true,
+      status: parseStatus(json['status']?.toString()),
+      isMock: json['isMock'] == true,
+      imageUrl: json['imageUrl']?.toString(),
+      createdBy: json['createdBy']?.toString(),
+      createdAt: json['createdAt'] is int
+          ? json['createdAt'] as int
+          : int.tryParse(json['createdAt']?.toString() ?? ''),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'title': title,
+      'shortDescription': shortDescription,
+      'description': description,
+      'eventType': eventType.name,
+      'organizerName': organizerName,
+      'venueName': venueName,
+      'city': city,
+      'address': address,
+      'startDateTime': startDateTime.toIso8601String(),
+      'endDateTime': endDateTime.toIso8601String(),
+      'genres': genres,
+      if (priceAmount != null) 'priceAmount': priceAmount,
+      'currency': currency,
+      'isFree': isFree,
+      'status': status.name,
+      'isMock': isMock,
+      if (imageUrl != null && imageUrl!.isNotEmpty) 'imageUrl': imageUrl,
+      if (createdBy != null && createdBy!.isNotEmpty) 'createdBy': createdBy,
+      if (createdAt != null) 'createdAt': createdAt,
+    };
+  }
+
+  PublicCalendarEvent copyWith({
+    String? id,
+    String? title,
+    String? shortDescription,
+    String? description,
+    PublicEventType? eventType,
+    String? organizerName,
+    String? venueName,
+    String? city,
+    String? address,
+    DateTime? startDateTime,
+    DateTime? endDateTime,
+    List<String>? genres,
+    double? priceAmount,
+    String? currency,
+    bool? isFree,
+    PublicEventStatus? status,
+    bool? isMock,
+    String? imageUrl,
+    String? createdBy,
+    int? createdAt,
+  }) {
+    return PublicCalendarEvent(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      shortDescription: shortDescription ?? this.shortDescription,
+      description: description ?? this.description,
+      eventType: eventType ?? this.eventType,
+      organizerName: organizerName ?? this.organizerName,
+      venueName: venueName ?? this.venueName,
+      city: city ?? this.city,
+      address: address ?? this.address,
+      startDateTime: startDateTime ?? this.startDateTime,
+      endDateTime: endDateTime ?? this.endDateTime,
+      genres: genres ?? this.genres,
+      priceAmount: priceAmount ?? this.priceAmount,
+      currency: currency ?? this.currency,
+      isFree: isFree ?? this.isFree,
+      status: status ?? this.status,
+      isMock: isMock ?? this.isMock,
+      imageUrl: imageUrl ?? this.imageUrl,
+      createdBy: createdBy ?? this.createdBy,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
 
   /// Human-readable formatted price label (e.g. 'Free', '150 SEK', '295 SEK')
   String get formattedPrice {

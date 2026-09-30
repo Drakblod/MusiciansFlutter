@@ -25,6 +25,12 @@ class SpyingFirebaseService extends FirebaseService {
   Future<Map<String, String>> getUserBandsAsync(String userId) async {
     return {'b1': 'Test Band'};
   }
+
+  @override
+  Future<List<PublicCalendarEvent>> getPublicCalendarEventsAsync() async => [];
+
+  @override
+  Future<String> savePublicCalendarEventAsync(PublicCalendarEvent event) async => event.id;
 }
 
 class MockAppStateForFeedbackTest extends AppState {
@@ -72,6 +78,9 @@ class SingleNoImageEventRepository implements PublicEventRepository {
       ),
     ];
   }
+
+  @override
+  Future<String> createEvent(PublicCalendarEvent event) async => event.id;
 }
 
 void main() {

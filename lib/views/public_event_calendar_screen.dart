@@ -2,14 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import '../config/feature_toggles.dart';
 import '../models/public_calendar_event.dart';
+import '../providers/app_state.dart';
 import '../repositories/public_event_repository.dart';
+import '../services/firebase_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/animated_tap_detector.dart';
 import '../widgets/custom_top_bar.dart';
 import '../widgets/event_category_picker_sheet.dart';
 import '../widgets/gradient_scaffold.dart';
+import 'create_public_event_screen.dart';
 
 class PublicEventCalendarScreen extends StatefulWidget {
   final PublicEventRepository? repository;
@@ -26,7 +30,14 @@ class PublicEventCalendarScreen extends StatefulWidget {
 }
 
 class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
-  late final PublicEventRepository _repository;
+  PublicEventRepository? _repository;
+  PublicEventRepository get repository =>
+      _repository ??
+      (widget.repository ??
+          (FeatureToggles.useMockPublicEventCalendar
+              ? MockPublicEventRepository()
+              : EmptyPublicEventRepository()));
+
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
 
@@ -39,16 +50,36 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
   int _visibleCount = 2; // Initial pagination limit for 3-event prototype
   bool _isOpeningPicker = false;
   bool _hasOpenedCategoryPickerOnSearchTap = false;
+  bool _initialized = false;
 
   @override
   void initState() {
     super.initState();
-    _repository = widget.repository ??
-        (FeatureToggles.useMockPublicEventCalendar
-            ? MockPublicEventRepository()
-            : EmptyPublicEventRepository());
     _searchFocusNode.addListener(_handleSearchFocusChange);
-    _loadEvents();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_initialized) {
+      _initialized = true;
+      if (widget.repository != null) {
+        _repository = widget.repository;
+      } else {
+        try {
+          final appState = Provider.of<AppState>(context, listen: false);
+          _repository = FirebasePublicEventRepository(
+            firebaseService: appState.firebaseService,
+            includeMock: FeatureToggles.useMockPublicEventCalendar,
+          );
+        } catch (_) {
+          _repository = FeatureToggles.useMockPublicEventCalendar
+              ? MockPublicEventRepository()
+              : EmptyPublicEventRepository();
+        }
+      }
+      _loadEvents();
+    }
   }
 
   void _handleSearchFocusChange() {
@@ -72,7 +103,7 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
     });
 
     try {
-      final events = await _repository.getUpcomingEvents();
+      final events = await repository.getUpcomingEvents();
       if (mounted) {
         setState(() {
           _allEvents = events;
@@ -91,7 +122,7 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
 
   Future<void> _handleRefresh() async {
     try {
-      final events = await _repository.getUpcomingEvents();
+      final events = await repository.getUpcomingEvents();
       if (mounted) {
         setState(() {
           _allEvents = events;
@@ -168,6 +199,18 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
     });
   }
 
+  Future<void> _navigateToAddEvent() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => CreatePublicEventScreen(repository: repository),
+      ),
+    );
+    if (result == true && mounted) {
+      _loadEvents();
+    }
+  }
+
   List<PublicCalendarEvent> _getFilteredEvents() {
     return _allEvents.where((event) {
       // Category / Type Filter
@@ -209,6 +252,19 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
 
     return GradientScaffold(
       appBar: const CustomTopBar(showBack: true),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _navigateToAddEvent,
+        backgroundColor: AppTheme.primaryAccent,
+        icon: const Icon(Icons.add_rounded, color: Colors.white),
+        label: Text(
+          'Add Event',
+          style: GoogleFonts.outfit(
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+            letterSpacing: 0.5,
+          ),
+        ),
+      ),
       body: SafeArea(
         top: false,
         child: Align(
@@ -270,12 +326,58 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
                         ],
                       ),
                       const SizedBox(height: 6),
-                      Text(
-                        'Discover live music, sessions, workshops and music events.',
-                        style: GoogleFonts.inter(
-                          fontSize: 13,
-                          color: AppTheme.textSecondary,
-                        ),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              'Discover live music, sessions, workshops and music events.',
+                              style: GoogleFonts.inter(
+                                fontSize: 13,
+                                color: AppTheme.textSecondary,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Semantics(
+                            button: true,
+                            label: 'Add Event',
+                            child: AnimatedTapDetector(
+                              onTap: _navigateToAddEvent,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                                decoration: BoxDecoration(
+                                  gradient: const LinearGradient(
+                                    colors: [AppTheme.primaryAccent, AppTheme.secondaryAccent],
+                                  ),
+                                  borderRadius: BorderRadius.circular(10),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: AppTheme.primaryAccent.withValues(alpha: 0.3),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(Icons.add_rounded, size: 16, color: Colors.white),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      'Add Event',
+                                      style: GoogleFonts.outfit(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 16),
 
@@ -476,6 +578,19 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
                               color: AppTheme.textSecondary,
                             ),
                             textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 20),
+                          ElevatedButton.icon(
+                            onPressed: _navigateToAddEvent,
+                            icon: const Icon(Icons.add_rounded, size: 18),
+                            label: const Text('Add an Event'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppTheme.primaryAccent,
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                            ),
                           ),
                         ],
                       ),

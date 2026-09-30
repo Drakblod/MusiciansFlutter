@@ -1,14 +1,18 @@
+import 'package:flutter/foundation.dart';
 import '../models/public_calendar_event.dart';
+import '../services/firebase_service.dart';
 
-/// Contract for fetching public calendar events
+/// Contract for fetching and creating public calendar events
 abstract class PublicEventRepository {
   Future<List<PublicCalendarEvent>> getUpcomingEvents();
+  Future<String> createEvent(PublicCalendarEvent event) async => event.id;
 }
 
 /// Mock repository implementation returning 3 deterministic upcoming events
 /// based on an injected reference time (defaults to local DateTime.now()).
 class MockPublicEventRepository implements PublicEventRepository {
   final DateTime? referenceNow;
+  final List<PublicCalendarEvent> _createdEvents = [];
 
   MockPublicEventRepository({this.referenceNow});
 
@@ -94,16 +98,85 @@ class MockPublicEventRepository implements PublicEventRepository {
       ),
     ];
 
+    events.addAll(_createdEvents);
+
     // Sort ascending by startDateTime
     events.sort((a, b) => a.startDateTime.compareTo(b.startDateTime));
     return events;
   }
+
+  @override
+  Future<String> createEvent(PublicCalendarEvent event) async {
+    final id = event.id.isNotEmpty ? event.id : 'mock_created_${DateTime.now().millisecondsSinceEpoch}';
+    final created = event.copyWith(id: id);
+    _createdEvents.add(created);
+    return id;
+  }
 }
 
-/// Fallback empty repository when mock data toggle is disabled
+/// Fallback empty repository when mock data toggle is disabled and offline/testing
 class EmptyPublicEventRepository implements PublicEventRepository {
+  final List<PublicCalendarEvent> _createdEvents = [];
+
   @override
   Future<List<PublicCalendarEvent>> getUpcomingEvents() async {
-    return [];
+    final list = List<PublicCalendarEvent>.from(_createdEvents);
+    list.sort((a, b) => a.startDateTime.compareTo(b.startDateTime));
+    return list;
+  }
+
+  @override
+  Future<String> createEvent(PublicCalendarEvent event) async {
+    final id = event.id.isNotEmpty ? event.id : 'event_${DateTime.now().millisecondsSinceEpoch}';
+    final created = event.copyWith(id: id);
+    _createdEvents.add(created);
+    return id;
+  }
+}
+
+/// Production repository fetching real events from Firebase Realtime Database
+/// and optionally merging mock demonstration events.
+class FirebasePublicEventRepository implements PublicEventRepository {
+  final FirebaseService firebaseService;
+  final bool includeMock;
+  final DateTime? referenceNow;
+
+  FirebasePublicEventRepository({
+    required this.firebaseService,
+    this.includeMock = true,
+    this.referenceNow,
+  });
+
+  @override
+  Future<List<PublicCalendarEvent>> getUpcomingEvents() async {
+    final List<PublicCalendarEvent> events = [];
+
+    // 1. Fetch real events from Firebase
+    try {
+      final realEvents = await firebaseService.getPublicCalendarEventsAsync();
+      events.addAll(realEvents.where((e) => e.status == PublicEventStatus.published));
+    } catch (e) {
+      debugPrint('Error fetching public events from Firebase: $e');
+    }
+
+    // 2. Fetch mock events if enabled
+    if (includeMock) {
+      try {
+        final mockRepo = MockPublicEventRepository(referenceNow: referenceNow);
+        final mockEvents = await mockRepo.getUpcomingEvents();
+        events.addAll(mockEvents);
+      } catch (e) {
+        debugPrint('Error fetching mock public events: $e');
+      }
+    }
+
+    // 3. Sort ascending by startDateTime
+    events.sort((a, b) => a.startDateTime.compareTo(b.startDateTime));
+    return events;
+  }
+
+  @override
+  Future<String> createEvent(PublicCalendarEvent event) async {
+    return await firebaseService.savePublicCalendarEventAsync(event);
   }
 }
