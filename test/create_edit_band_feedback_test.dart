@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:firebase_core/firebase_core.dart' hide FirebaseService;
 import 'package:firebase_core_platform_interface/test.dart';
 import 'package:musicians_flutter/models/band.dart';
+import 'package:musicians_flutter/models/user_profile.dart';
 import 'package:musicians_flutter/providers/app_state.dart';
 import 'package:musicians_flutter/services/firebase_service.dart';
 import 'package:musicians_flutter/views/create_band_screen.dart';
@@ -21,6 +22,16 @@ class MockBandFirebaseService extends FirebaseService {
   @override
   Future<void> updateBandAsync(String bandId, Band band) async {
     updatedBand = band;
+  }
+
+  @override
+  Future<List<BandMember>> getBandMembersAsync(String bandId) async {
+    return [];
+  }
+
+  @override
+  Future<UserProfile?> getUserProfileAsync([String? userId]) async {
+    return null;
   }
 }
 

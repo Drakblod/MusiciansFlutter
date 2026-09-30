@@ -260,19 +260,19 @@ void main() {
       userId: 'musician_alice',
       displayName: 'Alice Bass',
       location: 'Stockholm, Sweden',
-      instruments: ['Bass'],
+      instruments: ['Electric Guitar', 'Bass'],
     );
     mockService.userProfiles['musician_bob'] = UserProfile(
       userId: 'musician_bob',
       displayName: 'Bob Drums',
       location: 'Stockholm, Sweden',
-      instruments: ['Drums'],
+      instruments: ['Electric Guitar', 'Drums'],
     );
     mockService.userProfiles['musician_new'] = UserProfile(
       userId: 'musician_new',
       displayName: 'New Global Musician',
       location: 'Stockholm, Sweden',
-      instruments: ['Keys', 'Piano'],
+      instruments: ['Electric Guitar', 'Keys', 'Piano'],
     );
 
     // Initial favorites: Gurra and Alice

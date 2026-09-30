@@ -166,14 +166,28 @@ class BandMember {
   final String? userId;
   final String? nickname;
   final String? role;
+  final String? status;
 
-  BandMember({this.userId, this.nickname, this.role});
+  BandMember({
+    this.userId,
+    this.nickname,
+    this.role,
+    this.status = 'active',
+  });
+
+  bool get isOnHold =>
+      (status ?? '').toLowerCase() == 'on_hold' ||
+      (status ?? '').toLowerCase() == 'temporarily_off' ||
+      (status ?? '').toLowerCase() == 'inactive';
+
+  bool get isActive => !isOnHold;
 
   factory BandMember.fromJson(Map<dynamic, dynamic> json, [String? userId]) {
     return BandMember(
       userId: userId,
-      nickname: json['Nickname']?.toString(),
-      role: json['Role']?.toString(),
+      nickname: json['Nickname']?.toString() ?? json['nickname']?.toString(),
+      role: json['Role']?.toString() ?? json['role']?.toString(),
+      status: json['Status']?.toString() ?? json['status']?.toString() ?? 'active',
     );
   }
 
@@ -181,6 +195,7 @@ class BandMember {
     return {
       'Nickname': nickname,
       'Role': role,
+      'Status': status ?? 'active',
     };
   }
 }

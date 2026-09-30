@@ -34,10 +34,27 @@ class MockFirebaseServiceForManageEvents extends Fake implements FirebaseService
         createdAt: 0,
         updatedAt: 0,
         requireResponse: true,
+        isLocked: false,
         responses: {
           'user_1': EventResponse(status: 'YES', timestamp: DateTime.now()),
           'user_2': EventResponse(status: 'NO', timestamp: DateTime.now()),
         },
+      ),
+      BandEvent(
+        id: 'ev_locked_1',
+        title: 'Finalized Stadium Tour',
+        eventType: 'Concert',
+        location: 'Tele2 Arena',
+        description: 'Fully booked locked concert',
+        startDateTime: DateTime.now().add(const Duration(days: 12)).toIso8601String(),
+        endDateTime: DateTime.now().add(const Duration(days: 12, hours: 4)).toIso8601String(),
+        additionalNotes: '',
+        createdBy: 'user_1',
+        createdAt: 0,
+        updatedAt: 0,
+        requireResponse: true,
+        isLocked: true,
+        responses: {},
       ),
       BandEvent(
         id: 'ev_2',
@@ -69,6 +86,7 @@ class MockFirebaseServiceForManageEvents extends Fake implements FirebaseService
         createdAt: 0,
         updatedAt: 0,
         requireResponse: true,
+        isLocked: false,
         responses: {},
       ),
     ],
@@ -180,7 +198,7 @@ void main() {
       expect(find.text('View, edit, track RSVPs & manage your events...'), findsOneWidget);
     });
 
-    testWidgets('2. ManageEventsScreen displays upcoming events, band chips, search bar, and RSVP stats', (WidgetTester tester) async {
+    testWidgets('2. ManageEventsScreen displays 3 tabs and shows events needing RSVP under NEW EVENTS tab', (WidgetTester tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() => tester.view.resetPhysicalSize());
@@ -199,22 +217,51 @@ void main() {
       // Search bar
       expect(find.byType(TextField), findsOneWidget);
 
-      // Tabs
+      // 3 Tabs
+      expect(find.text('NEW EVENTS'), findsOneWidget);
       expect(find.text('UPCOMING'), findsOneWidget);
       expect(find.text('PAST EVENTS'), findsOneWidget);
 
-      // Upcoming event title and description for band 1
+      // New Events tab (active by default): displays event needing RSVP
       expect(find.text('Summer Arena Concert'), findsOneWidget);
       expect(find.text('Big festival headline'), findsOneWidget);
       expect(find.text('1 Yes'), findsOneWidget);
       expect(find.text('1 No'), findsOneWidget);
+
+      // Finalized event should NOT be in NEW EVENTS tab
+      expect(find.text('Finalized Stadium Tour'), findsNothing);
 
       // RSVPs and View Event buttons
       expect(find.text('RSVPs'), findsWidgets);
       expect(find.text('View Event'), findsWidgets);
     });
 
-    testWidgets('3. ManageEventsScreen switching to Past Events tab shows past events', (WidgetTester tester) async {
+    testWidgets('3. ManageEventsScreen switching to UPCOMING tab shows only finalized events', (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      final appState = MockAppStateForManageEvents();
+
+      await tester.pumpWidget(createTestWrapper(
+        appState: appState,
+        child: const ManageEventsScreen(),
+      ));
+      await tester.pumpAndSettle();
+
+      // Tap UPCOMING tab
+      await tester.tap(find.text('UPCOMING'));
+      await tester.pumpAndSettle();
+
+      // Finalized event is visible
+      expect(find.text('Finalized Stadium Tour'), findsOneWidget);
+      expect(find.text('Fully booked locked concert'), findsOneWidget);
+
+      // Non-finalized event needing RSVP should NOT be visible
+      expect(find.text('Summer Arena Concert'), findsNothing);
+    });
+
+    testWidgets('4. ManageEventsScreen switching to Past Events tab shows past events', (WidgetTester tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() => tester.view.resetPhysicalSize());
@@ -234,9 +281,11 @@ void main() {
       // Verify past event and description are visible
       expect(find.text('Old Rehearsal Session'), findsOneWidget);
       expect(find.text('Tutti practice'), findsOneWidget);
+      expect(find.text('Finalized Stadium Tour'), findsNothing);
+      expect(find.text('Summer Arena Concert'), findsNothing);
     });
 
-    testWidgets('4. ManageEventsScreen filter search narrows down displayed events', (WidgetTester tester) async {
+    testWidgets('5. ManageEventsScreen filter search narrows down displayed events in active tab', (WidgetTester tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() => tester.view.resetPhysicalSize());
@@ -251,7 +300,7 @@ void main() {
 
       final searchFinder = find.byType(TextField).first;
 
-      // Search for 'Arena'
+      // Search for 'Arena' in NEW EVENTS tab
       await tester.enterText(searchFinder, 'Arena');
       await tester.pumpAndSettle();
 

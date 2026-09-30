@@ -567,9 +567,19 @@ class _CreateEventPageState extends State<CreateEventPage> {
                       controller: draftDescriptionController,
                       style: GoogleFonts.inter(color: Colors.white),
                       maxLines: 2,
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         labelText: 'Description (Optional)',
+                        labelStyle: GoogleFonts.inter(
+                          color: AppTheme.textSecondary,
+                          fontStyle: FontStyle.italic,
+                          fontSize: 13,
+                        ),
                         hintText: 'e.g. Load-in at 16:00, Soundcheck at 17:30...',
+                        hintStyle: GoogleFonts.inter(
+                          color: AppTheme.textSecondary.withValues(alpha: 0.7),
+                          fontStyle: FontStyle.italic,
+                          fontSize: 13,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 20),
@@ -775,9 +785,19 @@ class _CreateEventPageState extends State<CreateEventPage> {
                       controller: _descriptionController,
                       style: GoogleFonts.inter(color: Colors.white),
                       maxLines: 3,
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         labelText: 'Event Description (Describe ALL parts of Main Event here)',
+                        labelStyle: GoogleFonts.inter(
+                          color: AppTheme.textSecondary,
+                          fontStyle: FontStyle.italic,
+                          fontSize: 13,
+                        ),
                         hintText: 'What is this event about?',
+                        hintStyle: GoogleFonts.inter(
+                          color: AppTheme.textSecondary.withValues(alpha: 0.7),
+                          fontStyle: FontStyle.italic,
+                          fontSize: 13,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 16),

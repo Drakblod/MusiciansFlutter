@@ -81,7 +81,7 @@ void main() {
       );
 
       appState.mockService.favoriteUserIds.clear();
-      appState.mockService.favoriteUserIds.addAll(['fav_1', 'fav_2']);
+      appState.mockService.favoriteUserIds.addAll(['fav_1', 'fav_2', 'fav_3']);
       appState.mockService.userProfiles['fav_1'] = UserProfile(
         userId: 'fav_1',
         displayName: 'Gurra Guitar',
@@ -90,7 +90,13 @@ void main() {
       appState.mockService.userProfiles['fav_2'] = UserProfile(
         userId: 'fav_2',
         displayName: 'Alice Bass',
-        instruments: ['Bass'],
+        instruments: ['Electric Guitar', 'Bass'],
+      );
+      appState.mockService.userProfiles['fav_3'] = UserProfile(
+        userId: 'fav_3',
+        displayName: 'Alex Prod',
+        instruments: ['Producer'],
+        userType: 'Producer',
       );
     });
 
@@ -407,5 +413,127 @@ void main() {
       final ex = tester.takeException();
       expect(ex, isNull);
     });
+
+    testWidgets('16. Favorites list filters out favorites who do not play the chosen instrument', (tester) async {
+      tester.view.physicalSize = const Size(800, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      await tester.pumpWidget(createWidgetUnderTest());
+      await tester.pumpAndSettle();
+
+      // Open Favorites List for slot 1 (Electric Guitar)
+      await tester.tap(find.text('Favorites List'));
+      await tester.pumpAndSettle();
+
+      // Electric Guitar players (Gurra Guitar, Alice Bass) should be visible
+      expect(find.text('Gurra Guitar'), findsOneWidget);
+      expect(find.text('Alice Bass'), findsOneWidget);
+
+      // Alex Prod does not play Electric Guitar, so should be filtered out
+      expect(find.text('Alex Prod'), findsNothing);
+    });
+
+    testWidgets('17. Changing slot instrument dynamically filters the favorites list', (tester) async {
+      tester.view.physicalSize = const Size(800, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      await tester.pumpWidget(createWidgetUnderTest());
+      await tester.pumpAndSettle();
+
+      // Change instrument of Slot 1 from Electric Guitar to Bass
+      final instrumentPicker = find.widgetWithText(InkWell, 'Instrument/Skill');
+      await tester.tap(instrumentPicker);
+      await tester.pumpAndSettle();
+
+      final searchField = find.byType(TextField).last;
+      await tester.enterText(searchField, 'Bass');
+      await tester.pumpAndSettle();
+
+      final bassChip = find.widgetWithText(ChoiceChip, 'Bass');
+      await tester.tap(bassChip);
+      await tester.pumpAndSettle();
+
+      // Open Favorites List
+      await tester.tap(find.text('Favorites List'));
+      await tester.pumpAndSettle();
+
+      // Bass players: only Alice Bass
+      expect(find.text('Alice Bass'), findsOneWidget);
+      expect(find.text('Gurra Guitar'), findsNothing);
+      expect(find.text('Alex Prod'), findsNothing);
+    });
+
+    testWidgets('18. Selecting an instrument with no matching favorites displays informative empty state and hides Select All', (tester) async {
+      tester.view.physicalSize = const Size(800, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      await tester.pumpWidget(createWidgetUnderTest());
+      await tester.pumpAndSettle();
+
+      // Change instrument of Slot 1 to Drums
+      final instrumentPicker = find.widgetWithText(InkWell, 'Instrument/Skill');
+      await tester.tap(instrumentPicker);
+      await tester.pumpAndSettle();
+
+      final searchField = find.byType(TextField).last;
+      await tester.enterText(searchField, 'Drums');
+      await tester.pumpAndSettle();
+
+      final drumsChip = find.widgetWithText(ChoiceChip, 'Drums');
+      await tester.tap(drumsChip);
+      await tester.pumpAndSettle();
+
+      // Open Favorites List
+      await tester.tap(find.text('Favorites List'));
+      await tester.pumpAndSettle();
+
+      // Empty state specifically for Drums
+      expect(find.textContaining('No favorites saved for "Drums"'), findsOneWidget);
+      expect(find.text('Select All'), findsNothing);
+      expect(find.text('Gurra Guitar'), findsNothing);
+      expect(find.text('Alice Bass'), findsNothing);
+      expect(find.text('Alex Prod'), findsNothing);
+    });
+
+    testWidgets('19. Changing instrument prunes non-matching favorite IDs', (tester) async {
+      tester.view.physicalSize = const Size(800, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      await tester.pumpWidget(createWidgetUnderTest());
+      await tester.pumpAndSettle();
+
+      // Open Favorites List for slot 1 (Electric Guitar) and select all
+      await tester.tap(find.text('Favorites List'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Select All'));
+      await tester.pumpAndSettle();
+
+      // Chosen Substitutes summary should show Gurra Guitar and Alice Bass
+      expect(find.textContaining('Gurra Guitar, Alice Bass'), findsOneWidget);
+
+      // Now change instrument to Bass (which Gurra Guitar does not play)
+      final instrumentPicker = find.widgetWithText(InkWell, 'Instrument/Skill');
+      await tester.tap(instrumentPicker);
+      await tester.pumpAndSettle();
+
+      final searchField = find.byType(TextField).last;
+      await tester.enterText(searchField, 'Bass');
+      await tester.pumpAndSettle();
+
+      final bassChip = find.widgetWithText(ChoiceChip, 'Bass');
+      await tester.tap(bassChip);
+      await tester.pumpAndSettle();
+
+      // Chosen Substitute summary should now only include Alice Bass (singular Chosen Substitute)
+      expect(find.text('Chosen Substitute'), findsOneWidget);
+      expect(find.widgetWithText(CheckboxListTile, 'Alice Bass'), findsOneWidget);
+      expect(find.widgetWithText(CheckboxListTile, 'Gurra Guitar'), findsNothing);
+    });
   });
 }
+

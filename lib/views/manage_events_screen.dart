@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_state.dart';
 import '../theme/app_theme.dart';
@@ -13,6 +12,8 @@ import 'event_results_page.dart';
 import 'create_event_page.dart';
 import '../utils/date_parser.dart';
 import '../controllers/global_create_event_launcher.dart';
+
+enum EventTabType { newEvents, upcoming, past }
 
 class ManageEventsScreen extends StatefulWidget {
   final String? initialBandId;
@@ -43,7 +44,7 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> with SingleTick
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
     _selectedBandId = widget.initialBandId;
     _loadBandsAndEvents();
   }
@@ -136,7 +137,7 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> with SingleTick
     return role == 'leader' || role == 'admin' || role == 'mod';
   }
 
-  List<MapEntry<String, BandEvent>> _getFilteredEvents({required bool isUpcoming}) {
+  List<MapEntry<String, BandEvent>> _getFilteredEvents({required EventTabType tabType}) {
     final now = DateTime.now();
     final List<MapEntry<String, BandEvent>> result = [];
 
@@ -153,7 +154,20 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> with SingleTick
 
         final isEventUpcoming = end != null ? end.isAfter(now) : start.isAfter(now);
 
-        if (isUpcoming == isEventUpcoming) {
+        bool matchesTab = false;
+        switch (tabType) {
+          case EventTabType.newEvents:
+            matchesTab = isEventUpcoming && event.requireResponse && !event.isLocked;
+            break;
+          case EventTabType.upcoming:
+            matchesTab = isEventUpcoming && (!event.requireResponse || event.isLocked);
+            break;
+          case EventTabType.past:
+            matchesTab = !isEventUpcoming;
+            break;
+        }
+
+        if (matchesTab) {
           if (_searchQuery.isNotEmpty) {
             final q = _searchQuery.toLowerCase();
             final titleMatch = event.title.toLowerCase().contains(q);
@@ -172,11 +186,11 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> with SingleTick
       }
     }
 
-    // Sort: upcoming ascending (closest first), past descending (most recent past first)
+    // Sort: newEvents & upcoming ascending (closest first), past descending (most recent past first)
     result.sort((a, b) {
       final aDate = DateTime.tryParse(a.value.startDateTime)?.toLocal() ?? DateTime.now();
       final bDate = DateTime.tryParse(b.value.startDateTime)?.toLocal() ?? DateTime.now();
-      return isUpcoming ? aDate.compareTo(bDate) : bDate.compareTo(aDate);
+      return tabType == EventTabType.past ? bDate.compareTo(aDate) : aDate.compareTo(bDate);
     });
 
     return result;
@@ -404,7 +418,7 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> with SingleTick
                   ),
                   const SizedBox(height: 10),
 
-                  // Tabs: Upcoming & Past
+                  // Tabs: New Events, Upcoming & Past
                   TabBar(
                     controller: _tabController,
                     indicatorColor: AppTheme.primaryAccent,
@@ -413,6 +427,7 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> with SingleTick
                     unselectedLabelColor: AppTheme.textSecondary,
                     labelStyle: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.bold),
                     tabs: const [
+                      Tab(text: 'NEW EVENTS'),
                       Tab(text: 'UPCOMING'),
                       Tab(text: 'PAST EVENTS'),
                     ],
@@ -430,8 +445,9 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> with SingleTick
                       : TabBarView(
                           controller: _tabController,
                           children: [
-                            _buildEventListView(isUpcoming: true),
-                            _buildEventListView(isUpcoming: false),
+                            _buildEventListView(tabType: EventTabType.newEvents),
+                            _buildEventListView(tabType: EventTabType.upcoming),
+                            _buildEventListView(tabType: EventTabType.past),
                           ],
                         ),
             ),
@@ -507,10 +523,32 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> with SingleTick
     );
   }
 
-  Widget _buildEventListView({required bool isUpcoming}) {
-    final eventEntries = _getFilteredEvents(isUpcoming: isUpcoming);
+  Widget _buildEventListView({required EventTabType tabType}) {
+    final eventEntries = _getFilteredEvents(tabType: tabType);
 
     if (eventEntries.isEmpty) {
+      IconData emptyIcon;
+      String emptyTitle;
+      String emptyMessage;
+
+      switch (tabType) {
+        case EventTabType.newEvents:
+          emptyIcon = Icons.mark_email_unread_outlined;
+          emptyTitle = 'No New Events';
+          emptyMessage = 'You have no events waiting for RSVP.';
+          break;
+        case EventTabType.upcoming:
+          emptyIcon = Icons.event_available_outlined;
+          emptyTitle = 'No Upcoming Events';
+          emptyMessage = 'You have no finalized upcoming events scheduled for the selected band(s).';
+          break;
+        case EventTabType.past:
+          emptyIcon = Icons.history_rounded;
+          emptyTitle = 'No Past Events';
+          emptyMessage = 'No past event history found.';
+          break;
+      }
+
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24.0),
@@ -518,13 +556,13 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> with SingleTick
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(
-                isUpcoming ? Icons.event_available_outlined : Icons.history_rounded,
+                emptyIcon,
                 size: 56,
                 color: AppTheme.textSecondary.withOpacity(0.6),
               ),
               const SizedBox(height: 14),
               Text(
-                isUpcoming ? 'No Upcoming Events' : 'No Past Events',
+                emptyTitle,
                 style: GoogleFonts.outfit(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -535,9 +573,7 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> with SingleTick
               Text(
                 _searchQuery.isNotEmpty
                     ? 'No events match "$_searchQuery".'
-                    : isUpcoming
-                        ? 'You have no upcoming events scheduled for the selected band(s).'
-                        : 'No past event history found.',
+                    : emptyMessage,
                 textAlign: TextAlign.center,
                 style: GoogleFonts.inter(
                   fontSize: 13,
@@ -566,7 +602,7 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> with SingleTick
           bandName: bandName,
           event: event,
           isAuthorized: isAuthorized,
-          isUpcoming: isUpcoming,
+          tabType: tabType,
         );
       },
     );
@@ -578,15 +614,8 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> with SingleTick
     required String bandName,
     required BandEvent event,
     required bool isAuthorized,
-    required bool isUpcoming,
+    required EventTabType tabType,
   }) {
-    final startLocal = DateTime.tryParse(event.startDateTime)?.toLocal() ?? DateTime.now();
-    final endLocal = DateTime.tryParse(event.endDateTime)?.toLocal() ?? startLocal;
-
-    final isSameDay = startLocal.year == endLocal.year &&
-        startLocal.month == endLocal.month &&
-        startLocal.day == endLocal.day;
-
     final String timeOrDateStr = formatBandEventDateRange(event);
 
     // Count responses

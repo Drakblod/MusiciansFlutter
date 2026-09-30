@@ -2322,6 +2322,17 @@ class FirebaseService {
     await _dbRef('Bands/$bandId/Members_band/$userId/Role').set(newRole);
   }
 
+  Future<void> updateBandMemberStatusAsync(
+    String bandId,
+    String userId,
+    String newStatus,
+  ) async {
+    await _dbRef('Bands/$bandId/Members_band/$userId/Status').set(newStatus);
+    try {
+      await _dbRef('users/$userId/Bands/$bandId/Members_band/$userId/Status').set(newStatus);
+    } catch (_) {}
+  }
+
   Future<void> postGigsNewsAsync(
     String bandId,
     Map<String, dynamic> data,

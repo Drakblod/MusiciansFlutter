@@ -17,6 +17,10 @@ class MockSettingsFirebaseService extends FirebaseService {
   Band? bandToReturn;
   Map<String, String> userBandsToReturn = {};
   final List<Map<String, String>> addedMembers = [];
+  final List<Map<String, String>> removedMembers = [];
+  List<BandMember> membersToReturn = [];
+  Map<String, UserProfile> userProfiles = {};
+  List<UserProfile> allUsersToReturn = [];
   Completer<void>? addMemberCompleter;
 
   @override
@@ -27,6 +31,31 @@ class MockSettingsFirebaseService extends FirebaseService {
   @override
   Future<Band?> getBandInfoAsync(String bandId) async {
     return bandToReturn;
+  }
+
+  @override
+  Future<List<BandMember>> getBandMembersAsync(String bandId) async {
+    if (membersToReturn.isNotEmpty) return membersToReturn;
+    if (bandToReturn != null && bandToReturn!.membersBand.isNotEmpty) {
+      return bandToReturn!.membersBand.values.toList();
+    }
+    return [];
+  }
+
+  @override
+  Future<UserProfile?> getUserProfileAsync([String? userId]) async {
+    return userId != null ? userProfiles[userId] : null;
+  }
+
+  @override
+  Future<List<UserProfile>> getAllUsersAsync() async {
+    return allUsersToReturn;
+  }
+
+  @override
+  Future<void> removeBandMemberAsync(String bandId, String userId) async {
+    removedMembers.add({'bandId': bandId, 'userId': userId});
+    membersToReturn.removeWhere((m) => m.userId == userId);
   }
 
   @override
@@ -45,6 +74,7 @@ class MockSettingsFirebaseService extends FirebaseService {
       'role': role,
       'nickname': nickname,
     });
+    membersToReturn.add(BandMember(userId: userId, role: role, nickname: nickname));
   }
 }
 
@@ -460,4 +490,136 @@ void main() {
       expect(helperY, lessThan(inputY), reason: 'Explanatory text must be above input field');
     });
   });
+
+  group('EDIT-BAND-02: Band Members Management on EditBandInfoScreen', () {
+    testWidgets('EditBandInfoScreen displays BAND MEMBERS section with members and details', (tester) async {
+      tester.view.physicalSize = const Size(800, 3000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      final mockService = MockSettingsFirebaseService();
+      mockService.membersToReturn = [
+        BandMember(userId: 'user_leader', nickname: 'Boss Leader', role: 'Leader'),
+        BandMember(userId: 'user_guitarist', nickname: 'Guitar Guy', role: 'Member'),
+      ];
+      mockService.userProfiles = {
+        'user_leader': UserProfile(userId: 'user_leader', displayName: 'Boss Leader', instruments: ['Lead Vocals']),
+        'user_guitarist': UserProfile(userId: 'user_guitarist', displayName: 'Gary Guitar', instruments: ['Electric Guitar']),
+      };
+      final appState = MockSettingsAppState(mockService, currentUserId: 'user_leader');
+      final band = Band(
+        id: 'band_edit_1',
+        name: 'The Rockers',
+        userRole: 'Leader',
+        membersBand: {
+          'user_leader': BandMember(userId: 'user_leader', nickname: 'Boss Leader', role: 'Leader'),
+          'user_guitarist': BandMember(userId: 'user_guitarist', nickname: 'Guitar Guy', role: 'Member'),
+        },
+      );
+
+      await tester.pumpWidget(createSettingsTestWidget(EditBandInfoScreen(band: band), appState));
+      await tester.pumpAndSettle();
+
+      expect(find.text('BAND MEMBERS'), findsOneWidget);
+      expect(find.text('Boss Leader'), findsOneWidget);
+      expect(find.text('(You)'), findsOneWidget);
+      expect(find.text('Gary Guitar'), findsOneWidget);
+      expect(find.text('Electric Guitar'), findsOneWidget);
+      expect(find.text('+ Add Member'), findsWidgets);
+    });
+
+    testWidgets('EditBandInfoScreen allows removing a member with confirmation dialog', (tester) async {
+      tester.view.physicalSize = const Size(800, 3000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      final mockService = MockSettingsFirebaseService();
+      mockService.membersToReturn = [
+        BandMember(userId: 'user_leader', nickname: 'Boss Leader', role: 'Leader'),
+        BandMember(userId: 'user_guitarist', nickname: 'Guitar Guy', role: 'Member'),
+      ];
+      mockService.userProfiles = {
+        'user_leader': UserProfile(userId: 'user_leader', displayName: 'Boss Leader'),
+        'user_guitarist': UserProfile(userId: 'user_guitarist', displayName: 'Gary Guitar'),
+      };
+      final appState = MockSettingsAppState(mockService, currentUserId: 'user_leader');
+      final band = Band(
+        id: 'band_edit_1',
+        name: 'The Rockers',
+        userRole: 'Leader',
+      );
+
+      await tester.pumpWidget(createSettingsTestWidget(EditBandInfoScreen(band: band), appState));
+      await tester.pumpAndSettle();
+
+      // Find the remove member icon for Gary Guitar
+      final removeIconFinder = find.byIcon(Icons.person_remove_outlined);
+      expect(removeIconFinder, findsOneWidget);
+
+      await tester.tap(removeIconFinder);
+      await tester.pumpAndSettle();
+
+      // Verify confirmation dialog
+      expect(find.text('Remove Member'), findsOneWidget);
+      expect(find.text('Are you sure you want to remove Gary Guitar from the band?'), findsOneWidget);
+
+      // Confirm removal
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Remove'));
+      await tester.pumpAndSettle();
+
+      // Verify API was called
+      expect(mockService.removedMembers.length, 1);
+      expect(mockService.removedMembers.first['userId'], 'user_guitarist');
+      expect(mockService.removedMembers.first['bandId'], 'band_edit_1');
+
+      // Member should be removed from view
+      expect(find.text('Gary Guitar'), findsNothing);
+      expect(find.text('Gary Guitar removed from band'), findsOneWidget);
+    });
+
+    testWidgets('EditBandInfoScreen allows adding a new member via Add Member dialog', (tester) async {
+      tester.view.physicalSize = const Size(800, 3000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      final mockService = MockSettingsFirebaseService();
+      mockService.membersToReturn = [
+        BandMember(userId: 'user_leader', nickname: 'Boss Leader', role: 'Leader'),
+      ];
+      mockService.userProfiles = {
+        'user_leader': UserProfile(userId: 'user_leader', displayName: 'Boss Leader'),
+      };
+      mockService.allUsersToReturn = [
+        UserProfile(userId: 'user_drummer', displayName: 'Dan Drummer', instruments: ['Drums']),
+      ];
+      final appState = MockSettingsAppState(mockService, currentUserId: 'user_leader');
+      final band = Band(
+        id: 'band_edit_1',
+        name: 'The Rockers',
+        userRole: 'Leader',
+      );
+
+      await tester.pumpWidget(createSettingsTestWidget(EditBandInfoScreen(band: band), appState));
+      await tester.pumpAndSettle();
+
+      // Tap '+ Add Member'
+      await tester.tap(find.text('+ Add Member').first);
+      await tester.pumpAndSettle();
+
+      // Verify dialog is open
+      expect(find.text('Add Band Member'), findsOneWidget);
+      expect(find.text('Dan Drummer'), findsOneWidget);
+
+      // Tap Dan Drummer to add
+      await tester.tap(find.text('Dan Drummer'));
+      await tester.pumpAndSettle();
+
+      // Verify member addition
+      expect(mockService.addedMembers.length, 1);
+      expect(mockService.addedMembers.first['userId'], 'user_drummer');
+      expect(mockService.addedMembers.first['bandId'], 'band_edit_1');
+      expect(find.text('Dan Drummer added to the band!'), findsOneWidget);
+    });
+  });
 }
+

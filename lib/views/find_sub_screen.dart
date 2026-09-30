@@ -161,12 +161,14 @@ class _FindSubScreenState extends State<FindSubScreen> {
   static Map<String, List<String>> get _allSkillsCategoryMap =>
       SkillsTaxonomy.categoryMapFor(SkillTaxonomyContext.findSub);
 
-  List<UserProfile> _getFilteredFavoritesForInstrument(String instrument) {
-    final instrumentLower = instrument.toLowerCase();
+  List<UserProfile> _getFilteredFavoritesForInstrument(String? instrument) {
+    if (instrument == null || instrument.trim().isEmpty) return _favorites;
+    final instrumentLower = instrument.trim().toLowerCase();
     return _favorites.where((m) {
-      final matchesInstrument = (m.userType?.toLowerCase() == instrumentLower) ||
-          m.instruments.any((i) => i.toLowerCase() == instrumentLower);
-      return matchesInstrument;
+      final userTypeLower = (m.userType ?? '').trim().toLowerCase();
+      final matchesUserType = userTypeLower.isNotEmpty && userTypeLower == instrumentLower;
+      final matchesInstrument = m.instruments.any((i) => i.trim().toLowerCase() == instrumentLower);
+      return matchesUserType || matchesInstrument;
     }).toList();
   }
 
@@ -683,6 +685,12 @@ class _FindSubScreenState extends State<FindSubScreen> {
     if (selectedList != null && selectedList.isNotEmpty) {
       setState(() {
         slot.instrument = selectedList.first;
+        final matchingIds = _getFilteredFavoritesForInstrument(slot.instrument)
+            .map((f) => f.userId)
+            .where((id) => id != null && id.isNotEmpty)
+            .cast<String>()
+            .toSet();
+        slot.selectedFavoriteIds = slot.selectedFavoriteIds.intersection(matchingIds);
       });
     }
   }
@@ -1919,6 +1927,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
 
             if (slot.searchSource == 'favorites' && slot.isFavoritesListOpen) ...[
               _buildFavoritesListPanel(
+                filterInstrument: slot.instrument,
                 isSingleSelect: true,
                 selectedIds: slot.selectedFavoriteIds,
                 onSelect: (uid, selected) {
@@ -1937,7 +1946,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
                 },
                 onSelectAllFavorites: () {
                   setState(() {
-                    final allIds = _favorites
+                    final allIds = _getFilteredFavoritesForInstrument(slot.instrument)
                         .map((f) => f.userId)
                         .where((id) => id != null && id.isNotEmpty)
                         .cast<String>()
@@ -2132,6 +2141,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
   }
 
   Widget _buildFavoritesListPanel({
+    String? filterInstrument,
     required bool isSingleSelect,
     required Set<String> selectedIds,
     required void Function(String uid, bool selected) onSelect,
@@ -2143,6 +2153,9 @@ class _FindSubScreenState extends State<FindSubScreen> {
     required VoidCallback onFavoriteAdded,
   }) {
     final appState = Provider.of<AppState>(context, listen: false);
+    final displayedFavorites = (filterInstrument != null && filterInstrument.trim().isNotEmpty)
+        ? _getFilteredFavoritesForInstrument(filterInstrument)
+        : _favorites;
 
     return Container(
       padding: const EdgeInsets.all(12),
@@ -2172,6 +2185,14 @@ class _FindSubScreenState extends State<FindSubScreen> {
                 style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
               ),
             )
+          else if (displayedFavorites.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Text(
+                'No favorites saved for "$filterInstrument". Use + Add Favorite(s) below to add musicians to your favorites.',
+                style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
+              ),
+            )
           else ...[
             if (onSelectAllFavorites != null) ...[
               Align(
@@ -2195,7 +2216,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
               ),
               const SizedBox(height: 4),
             ],
-            ..._favorites.map((fav) {
+            ...displayedFavorites.map((fav) {
               final uid = fav.userId ?? '';
               final isChecked = selectedIds.contains(uid);
               return CheckboxListTile(
@@ -2703,6 +2724,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
               if (_newMemberSource == 'favorites' && _isNewMemberFavoritesOpen) ...[
                 const SizedBox(height: 10),
                 _buildFavoritesListPanel(
+                  filterInstrument: _selectedNewMemberInstrument,
                   isSingleSelect: false,
                   selectedIds: _selectedNewMemberFavorites,
                   onSelect: (uid, selected) {
@@ -2716,7 +2738,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
                   },
                   onSelectAllFavorites: () {
                     setState(() {
-                      final allFavIds = _favorites
+                      final allFavIds = _getFilteredFavoritesForInstrument(_selectedNewMemberInstrument)
                           .map((f) => f.userId)
                           .where((id) => id != null && id.isNotEmpty)
                           .cast<String>()
@@ -2780,6 +2802,12 @@ class _FindSubScreenState extends State<FindSubScreen> {
     if (selectedList != null && selectedList.isNotEmpty) {
       setState(() {
         _selectedNewMemberInstrument = selectedList.first;
+        final matchingIds = _getFilteredFavoritesForInstrument(_selectedNewMemberInstrument)
+            .map((f) => f.userId)
+            .where((id) => id != null && id.isNotEmpty)
+            .cast<String>()
+            .toSet();
+        _selectedNewMemberFavorites = _selectedNewMemberFavorites.intersection(matchingIds);
       });
     }
   }
