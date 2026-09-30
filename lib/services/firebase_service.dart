@@ -413,40 +413,73 @@ class FirebaseService {
   // ==========================================
 
   Future<Map<String, String>> getUserBandsAsync(String userId) async {
-    final snapshot = await _dbRef('users/$userId/Bands').get();
     final Map<String, String> bands = {};
-    if (snapshot.exists) {
-      final value = snapshot.value;
-      if (value is Map) {
-        value.forEach((k, v) {
-          final bandId = k.toString();
-          if (v is Map) {
-            final name =
-                v['Name']?.toString() ?? v['name']?.toString() ?? bandId;
-            bands[bandId] = name;
-          } else if (v is String) {
-            bands[bandId] = v;
-          } else {
-            bands[bandId] = bandId;
-          }
-        });
-      } else if (value is List) {
-        for (int i = 0; i < value.length; i++) {
-          final item = value[i];
-          if (item != null) {
-            if (item is Map) {
+
+    // 1. Check user's direct Bands map
+    try {
+      final snapshot = await _dbRef('users/$userId/Bands').get();
+      if (snapshot.exists) {
+        final value = snapshot.value;
+        if (value is Map) {
+          value.forEach((k, v) {
+            final bandId = k.toString();
+            if (v is Map) {
               final name =
-                  item['Name']?.toString() ??
-                  item['name']?.toString() ??
-                  i.toString();
-              bands[i.toString()] = name;
+                  v['Name']?.toString() ?? v['name']?.toString() ?? bandId;
+              bands[bandId] = name;
+            } else if (v is String) {
+              bands[bandId] = v;
             } else {
-              bands[i.toString()] = item.toString();
+              bands[bandId] = bandId;
+            }
+          });
+        } else if (value is List) {
+          for (int i = 0; i < value.length; i++) {
+            final item = value[i];
+            if (item != null) {
+              if (item is Map) {
+                final name =
+                    item['Name']?.toString() ??
+                    item['name']?.toString() ??
+                    i.toString();
+                bands[i.toString()] = name;
+              } else {
+                bands[i.toString()] = item.toString();
+              }
             }
           }
         }
       }
-    }
+    } catch (_) {}
+
+    // 2. Fallback / discovery from root Bands collection where user is listed in Members_band
+    try {
+      final bandsSnap = await _dbRef('Bands').get();
+      if (bandsSnap.exists && bandsSnap.value is Map) {
+        final allBands = Map<String, dynamic>.from(bandsSnap.value as Map);
+        for (final entry in allBands.entries) {
+          final bandId = entry.key.toString();
+          final bandData = entry.value;
+          if (bandData is Map) {
+            final members = bandData['Members_band'];
+            if (members is Map &&
+                (members.containsKey(userId) ||
+                    members.keys.any((k) => k.toString() == userId))) {
+              final name =
+                  bandData['Name']?.toString() ?? bandData['name']?.toString() ?? bandId;
+              bands[bandId] = name;
+              // If querying for the currently authenticated user, self-sync to users/$userId/Bands
+              if (userId == currentUserId) {
+                try {
+                  await _dbRef('users/$userId/Bands/$bandId').set(bandData);
+                } catch (_) {}
+              }
+            }
+          }
+        }
+      }
+    } catch (_) {}
+
     return bands;
   }
 
@@ -523,7 +556,9 @@ class FirebaseService {
     for (final member in members) {
       final userId = member.userId;
       if (userId != null) {
-        await _dbRef('users/$userId/Bands/$bandId').update(updateData);
+        try {
+          await _dbRef('users/$userId/Bands/$bandId').update(updateData);
+        } catch (_) {}
       }
     }
   }
@@ -2300,18 +2335,34 @@ class FirebaseService {
   ) async {
     await _dbRef(
       'Bands/$bandId/Members_band/$userId',
-    ).set({'Nickname': nickname, 'Role': role});
-    final band = await getBandInfoAsync(bandId);
-    if (band != null) {
-      await _dbRef('users/$userId/Bands/$bandId').set(band.toJson());
+    ).set({'Nickname': nickname, 'Role': role, 'Status': 'active'});
+    try {
+      final band = await getBandInfoAsync(bandId);
+      if (band != null) {
+        await _dbRef('users/$userId/Bands/$bandId').set(band.toJson());
+      }
+    } catch (e) {
+      debugPrint('[FirebaseService] Could not write to users/$userId/Bands/$bandId: $e');
     }
-    await _dbRef('bandconversations/$bandId/members/$userId').set(true);
+    try {
+      await _dbRef('bandconversations/$bandId/members/$userId').set(true);
+    } catch (e) {
+      debugPrint('[FirebaseService] Could not set bandconversations/$bandId/members/$userId: $e');
+    }
   }
 
   Future<void> removeBandMemberAsync(String bandId, String userId) async {
     await _dbRef('Bands/$bandId/Members_band/$userId').remove();
-    await _dbRef('users/$userId/Bands/$bandId').remove();
-    await _dbRef('bandconversations/$bandId/members/$userId').remove();
+    try {
+      await _dbRef('users/$userId/Bands/$bandId').remove();
+    } catch (e) {
+      debugPrint('[FirebaseService] Could not remove from users/$userId/Bands/$bandId: $e');
+    }
+    try {
+      await _dbRef('bandconversations/$bandId/members/$userId').remove();
+    } catch (e) {
+      debugPrint('[FirebaseService] Could not remove from bandconversations/$bandId/members/$userId: $e');
+    }
   }
 
   Future<void> updateBandMemberRoleAsync(
@@ -2320,6 +2371,9 @@ class FirebaseService {
     String newRole,
   ) async {
     await _dbRef('Bands/$bandId/Members_band/$userId/Role').set(newRole);
+    try {
+      await _dbRef('users/$userId/Bands/$bandId/Members_band/$userId/Role').set(newRole);
+    } catch (_) {}
   }
 
   Future<void> updateBandMemberStatusAsync(
