@@ -314,6 +314,7 @@ class BandEvent {
   final int? subEventSequence;
   final List<EventRehearsal> rehearsals;
   final Map<String, Map<String, EventResponse>> scheduleResponses;
+  final List<String> excludedMemberIds;
 
   BandEvent({
     this.id,
@@ -346,6 +347,7 @@ class BandEvent {
     this.subEventSequence,
     this.rehearsals = const [],
     this.scheduleResponses = const {},
+    this.excludedMemberIds = const [],
   });
 
   factory BandEvent.fromJson(Map<dynamic, dynamic> json, String keyId) {
@@ -417,6 +419,24 @@ class BandEvent {
       });
     }
 
+    final List<String> parsedExcludedMemberIds = [];
+    final excludedRaw = json['excludedMemberIds'] ?? json['ExcludedMemberIds'];
+    if (excludedRaw is List) {
+      for (final item in excludedRaw) {
+        if (item != null) {
+          parsedExcludedMemberIds.add(item.toString());
+        }
+      }
+    } else if (excludedRaw is Map) {
+      excludedRaw.forEach((k, v) {
+        if (v == true || v == 1 || v == 'true') {
+          parsedExcludedMemberIds.add(k.toString());
+        } else if (v is String && v.isNotEmpty) {
+          parsedExcludedMemberIds.add(v);
+        }
+      });
+    }
+
     return BandEvent(
       id: keyId,
       title: json['title']?.toString() ?? '',
@@ -460,6 +480,7 @@ class BandEvent {
           : int.tryParse(json['subEventSequence']?.toString() ?? ''),
       rehearsals: parsedRehearsals,
       scheduleResponses: parsedScheduleResponses,
+      excludedMemberIds: parsedExcludedMemberIds,
     );
   }
 
@@ -518,6 +539,7 @@ class BandEvent {
       if (subAssignmentsMap.isNotEmpty) 'substituteAssignments': subAssignmentsMap,
       if (rehearsalsList.isNotEmpty) 'rehearsals': rehearsalsList,
       if (scheduleResponsesMap.isNotEmpty) 'ScheduleResponses': scheduleResponsesMap,
+      if (excludedMemberIds.isNotEmpty) 'excludedMemberIds': excludedMemberIds,
       if (rsvpDeadline != null) 'rsvpDeadline': rsvpDeadline,
       if (reminderIntervalHours != null)
         'reminderIntervalHours': reminderIntervalHours,

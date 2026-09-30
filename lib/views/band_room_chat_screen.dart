@@ -96,7 +96,7 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
       final end = DateTime.tryParse(event.endDateTime)?.toLocal() ?? start;
       final isUpcoming = (end != null && end.isAfter(now)) || (start != null && start.isAfter(now));
 
-      if (event.requireResponse && !event.isLocked && isUpcoming) {
+      if (event.requireResponse && !event.isLocked && isUpcoming && !event.excludedMemberIds.contains(userId)) {
         final userResp = event.responses[userId];
         if (userResp == null) {
           _hasPromptedRsvpReminder = true;
@@ -3577,7 +3577,7 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                   if (event.requireResponse) ...[
                     const SizedBox(height: 6),
                     Builder(builder: (context) {
-                      final activeCount = _members.where((m) => !m.isOnHold).length;
+                      final activeCount = _members.where((m) => !m.isOnHold && !event.excludedMemberIds.contains(m.userId)).length + event.externalInvitees.length;
                       final totalExpected = activeCount > 0 ? activeCount : _members.length;
                       return Text(
                         '${event.responses.length}/$totalExpected responded',
@@ -3743,7 +3743,7 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                   if (group.mainEvent.requireResponse) ...[
                     const SizedBox(height: 8),
                     Builder(builder: (context) {
-                      final activeCount = _members.where((m) => !m.isOnHold).length;
+                      final activeCount = _members.where((m) => !m.isOnHold && !group.mainEvent.excludedMemberIds.contains(m.userId)).length + group.mainEvent.externalInvitees.length;
                       final totalExpected = activeCount > 0 ? activeCount : _members.length;
                       return Text(
                         '${group.mainEvent.responses.length}/$totalExpected responded',

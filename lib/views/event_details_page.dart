@@ -1979,6 +1979,7 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
       for (final member in _members) {
         final uid = member.userId;
         if (uid == null || uid.isEmpty) continue;
+        if (event.excludedMemberIds.contains(uid)) continue;
 
         final profile = _cachedProfiles[uid];
         final name = profile?.displayName ??
@@ -2021,6 +2022,7 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
       for (final member in _members) {
         final uid = member.userId;
         if (uid == null || uid.isEmpty) continue;
+        if (event.excludedMemberIds.contains(uid)) continue;
 
         final profile = _cachedProfiles[uid];
         final name = profile?.displayName ??

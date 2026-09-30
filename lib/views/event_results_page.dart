@@ -346,6 +346,7 @@ class _EventResultsPageState extends State<EventResultsPage> {
       for (final member in _members) {
         final uid = member.userId;
         if (uid == null || uid.isEmpty) continue;
+        if (event.excludedMemberIds.contains(uid)) continue;
         processedUserIds.add(uid);
 
         final profile = _cachedProfiles[uid];
@@ -357,13 +358,13 @@ class _EventResultsPageState extends State<EventResultsPage> {
 
         final resp = event.responses[uid];
         final status = classifyEventResponse(resp?.status);
-        final reason = resp?.uncertainReason ?? resp?.comment;
+        final reason = status == EventResponseStatus.uncertain ? (resp?.uncertainReason ?? resp?.comment) : resp?.comment;
 
         final item = MemberResultItem(
           userId: uid,
           displayName: name,
           primarySkill: primarySkill,
-          reason: status == EventResponseStatus.uncertain ? reason : null,
+          reason: reason,
           responseStatus: status,
         );
 
@@ -449,6 +450,7 @@ class _EventResultsPageState extends State<EventResultsPage> {
         for (final member in _members) {
           final uid = member.userId;
           if (uid == null || uid.isEmpty) continue;
+          if (event.excludedMemberIds.contains(uid)) continue;
 
           final profile = _cachedProfiles[uid];
           final name = profile?.displayName ??
