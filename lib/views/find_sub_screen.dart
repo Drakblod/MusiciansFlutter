@@ -154,6 +154,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
 
   BandEvent? _primaryEvent;
   String? _bandName;
+  int _activeBandSubCount = 0;
   List<UserProfile> _favorites = [];
   List<UserProfile> _allMusicianProfiles = [];
   List<EventStaffingSection> _eventSections = [];
@@ -266,6 +267,21 @@ class _FindSubScreenState extends State<FindSubScreen> {
         final band = await appState.firebaseService.getBandInfoAsync(effectiveBandId);
         if (band != null) {
           _bandName = band.name;
+        }
+
+        final currentUserId = appState.currentUserId;
+        if (currentUserId != null) {
+          final userSubs = await appState.firebaseService.getUserSubRequestsAsync(currentUserId);
+          final activeSubs = userSubs.where((req) {
+            final matchesBand = (req.bandId != null && req.bandId == effectiveBandId) ||
+                (req.bandName != null &&
+                    (req.bandName == _bandName ||
+                        req.bandName == effectiveBandId ||
+                        req.bandName!.replaceAll(' ', '_') == effectiveBandId));
+            final isNotDeleted = req.status != 'deleted';
+            return matchesBand && isNotDeleted;
+          }).toList();
+          _activeBandSubCount = activeSubs.length;
         }
       } catch (e) {
         debugPrint('Error loading band info: ' + e.toString());
@@ -1103,6 +1119,84 @@ class _FindSubScreenState extends State<FindSubScreen> {
                         ),
                       ),
                       const SizedBox(height: 16),
+                    ],
+
+                    if (_activeBandSubCount > 0) ...[
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 16),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF1B1638),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.4)),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: AppTheme.primaryAccent.withOpacity(0.2),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.people_outline_rounded,
+                                color: AppTheme.primaryAccent,
+                                size: 20,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '$_activeBandSubCount Active Sub Request${_activeBandSubCount == 1 ? '' : 's'}',
+                                    style: GoogleFonts.outfit(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    'Review applicants or manage active postings',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 11,
+                                      color: AppTheme.textSecondary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppTheme.primaryAccent,
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                elevation: 0,
+                              ),
+                              onPressed: () {
+                                final effectiveBandId = widget.bandId ?? appState.activeBandId;
+                                if (effectiveBandId != null) {
+                                  Navigator.pushNamed(
+                                    context,
+                                    '/sub-request-responses',
+                                    arguments: {'bandId': effectiveBandId},
+                                  );
+                                }
+                              },
+                              child: Text(
+                                'Manage',
+                                style: GoogleFonts.inter(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ],
 
                     // Event information block (rendered once per occurrence before mode selector)

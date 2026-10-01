@@ -54,9 +54,10 @@ class _SubRequestResponsesScreenState extends State<SubRequestResponsesScreen>
       
       // 2. Filter requests matching the selected band
       final bandRequests = list.where((req) {
+        if (req.bandId != null && req.bandId == widget.bandId) return true;
         if (req.bandName == null) return false;
         final cleanBandName = req.bandName!.replaceAll(' ', '_');
-        return cleanBandName == widget.bandId;
+        return cleanBandName == widget.bandId || req.bandName == widget.bandId;
       }).toList();
 
       // 3. Concurrently fetch responses count for each request

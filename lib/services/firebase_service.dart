@@ -760,7 +760,6 @@ class FirebaseService {
     final currentUserId = _auth.currentUser?.uid;
     final now = DateTime.now().millisecondsSinceEpoch;
     final List<String> createdIds = [];
-    final Map<String, dynamic> multiLocationUpdates = {};
 
     for (final req in requests) {
       final cleanBandId = req.bandId != null ? _sanitizeRtdbKey(req.bandId!) : (currentUserId != null ? _sanitizeRtdbKey(currentUserId) : 'band');
@@ -786,31 +785,45 @@ class FirebaseService {
       );
 
       final json = updated.toJson();
-      multiLocationUpdates['SubRequests/$key'] = json;
-      if (currentUserId != null) {
-        multiLocationUpdates['users/$currentUserId/SubRequests/$key'] = json;
+
+      // 1. Direct write to canonical /SubRequests/$key
+      try {
+        await _dbRef('SubRequests/$key').set(json);
+      } catch (e) {
+        debugPrint('[FirebaseService] Error saving SubRequests/$key: $e');
       }
 
+      // 2. Direct write to user's personal /users/$currentUserId/SubRequests/$key
+      if (currentUserId != null) {
+        try {
+          await _dbRef('users/$currentUserId/SubRequests/$key').set(json);
+        } catch (e) {
+          debugPrint('[FirebaseService] Error saving users/$currentUserId/SubRequests/$key: $e');
+        }
+      }
+
+      // 3. Optional invitee tracking (non-blocking for permission boundaries)
       if (req.bandId != null && req.eventId != null) {
         final targets = req.targetUserIds;
         if (targets != null && targets.isNotEmpty) {
           for (final targetId in targets) {
-            multiLocationUpdates[
-                'Bands/${req.bandId}/Events/${req.eventId}/externalInvitees/$targetId'] = {
-              'userId': targetId,
-              'status': 'pending',
-              'instrument': req.voicePart,
-              'invitedAt': now,
-              'source': 'subRequest',
-              'subRequestId': key,
-            };
+            try {
+              await _dbRef(
+                'Bands/${req.bandId}/Events/${req.eventId}/externalInvitees/$targetId',
+              ).set({
+                'userId': targetId,
+                'status': 'pending',
+                'instrument': req.voicePart,
+                'invitedAt': now,
+                'source': 'subRequest',
+                'subRequestId': key,
+              });
+            } catch (e) {
+              debugPrint('[FirebaseService] Notice: could not record externalInvitee: $e');
+            }
           }
         }
       }
-    }
-
-    if (multiLocationUpdates.isNotEmpty) {
-      await _dbRef('').update(multiLocationUpdates);
     }
 
     return createdIds;

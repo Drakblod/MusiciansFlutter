@@ -134,7 +134,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
-      expect(find.text('WHAT WOULD YOU LIKE TO CREATE?'), findsOneWidget);
+      expect(find.text('EVENTS & SESSIONS'), findsOneWidget);
       expect(find.text('Create Event'), findsWidgets);
       expect(find.text('Create Session'), findsOneWidget);
       expect(find.text('Create rehearsal, gig, tour, show...'), findsOneWidget);

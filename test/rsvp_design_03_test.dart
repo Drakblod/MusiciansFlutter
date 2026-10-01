@@ -216,9 +216,9 @@ void main() {
       // 2. Exact label "Event Description (Describe ALL parts of Main Event here)"
       expect(find.text('Event Description (Describe ALL parts of Main Event here)'), findsOneWidget);
 
-      // 3. Parent container has Start Date and End Date date pickers, no separate clock time pickers
-      expect(find.text('Start Date'), findsOneWidget);
-      expect(find.text('End Date'), findsOneWidget);
+      // 3. Parent container Date Range (Start Date and End Date) removed to save space and computed automatically
+      expect(find.text('Start Date'), findsNothing);
+      expect(find.text('End Date'), findsNothing);
       expect(find.text('Start Time'), findsNothing);
       expect(find.text('End Time'), findsNothing);
 

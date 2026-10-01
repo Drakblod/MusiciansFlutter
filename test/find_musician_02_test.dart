@@ -103,6 +103,11 @@ class MockFirebaseService extends Fake implements FirebaseService {
   }
 
   @override
+  Future<List<SubRequest>> getUserSubRequestsAsync(String userId) async {
+    return allSubRequests;
+  }
+
+  @override
   Future<List<String>> saveSubRequestsBatchAsync(List<SubRequest> requests) async {
     savedBatchRequests.addAll(requests);
     return requests.asMap().entries.map((e) => 'sub_generated_${e.key}').toList();

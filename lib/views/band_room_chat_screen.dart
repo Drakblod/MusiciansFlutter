@@ -1018,30 +1018,6 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                   ),
                 ],
               ),
-              AnimatedTapDetector(
-                onTap: () {
-                  final appState = Provider.of<AppState>(context, listen: false);
-                  final bandId = appState.activeBandId;
-                  if (bandId != null) {
-                    final currentUserId = appState.currentUserId;
-                    final currentUserMember = _members.firstWhere(
-                      (m) => m.userId == currentUserId,
-                      orElse: () => BandMember(role: 'Member'),
-                    );
-                    final userRole = currentUserMember.role;
-                    if (userRole == 'Leader') {
-                      _showLeaderSettingsSheet(context, bandId);
-                    } else {
-                      Navigator.pushNamed(
-                        context,
-                        '/sub-request-responses',
-                        arguments: {'bandId': bandId},
-                      );
-                    }
-                  }
-                },
-                child: const Icon(Icons.settings_outlined, color: Colors.white, size: 24),
-              ),
             ],
           ),
         ),

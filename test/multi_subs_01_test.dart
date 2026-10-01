@@ -130,6 +130,11 @@ class MockMultiSubsFirebaseService extends FirebaseService {
   }
 
   @override
+  Future<List<SubRequest>> getUserSubRequestsAsync(String userId) async {
+    return storedSubRequests.values.toList();
+  }
+
+  @override
   Future<String?> saveSubRequestAsync(SubRequest request) async {
     writeOperationCount++;
     singleSaveCalls++;

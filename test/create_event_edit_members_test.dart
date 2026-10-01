@@ -163,9 +163,9 @@ void main() {
       await tester.pumpAndSettle();
 
       // Now sub-sections should be visible
-      expect(find.text('A) ADD GUEST / EXTRA MUSICIAN'), findsOneWidget);
-      expect(find.text('+ Add Musician'), findsOneWidget);
-      expect(find.text('B) BAND MEMBERS FOR THIS EVENT'), findsOneWidget);
+      expect(find.text('ADD SUB'), findsOneWidget);
+      expect(find.text('+ Add Sub'), findsOneWidget);
+      expect(find.text('MANAGE BAND MEMBERS FOR THIS SPECIFIC EVENT'), findsOneWidget);
 
       // Members should be listed
       expect(find.text('Alice Singer'), findsOneWidget);
@@ -239,12 +239,13 @@ void main() {
       await tester.tap(find.text('EDIT BAND MEMBERS'));
       await tester.pumpAndSettle();
 
-      // Tap + Add Musician
-      await tester.tap(find.text('+ Add Musician'));
+      // Tap + Add Sub
+      await tester.tap(find.text('+ Add Sub'));
       await tester.pumpAndSettle();
 
       // Check sheet opened with Dave Bass (u4)
-      expect(find.text('Add Musician for this Event'), findsOneWidget);
+      expect(find.text('Add Sub for this Event'), findsOneWidget);
+      expect(find.text('+ Add External / Non-registered Sub'), findsOneWidget);
       expect(find.text('Dave Bass'), findsOneWidget);
       expect(find.text('+ Add'), findsOneWidget);
 
@@ -256,10 +257,10 @@ void main() {
       await tester.tap(find.byIcon(Icons.close).last);
       await tester.pumpAndSettle();
 
-      // Check that Dave Bass is now rendered as a Guest
-      expect(find.text('+1 Guest'), findsOneWidget);
+      // Check that Dave Bass is now rendered as a Sub
+      expect(find.text('+1 Sub'), findsOneWidget);
       expect(find.text('Dave Bass'), findsOneWidget);
-      expect(find.text('Guest'), findsOneWidget);
+      expect(find.text('Sub'), findsOneWidget);
 
       // Save event
       await tester.enterText(find.widgetWithText(TextFormField, 'Main Event Name'), 'Special Show');
@@ -276,5 +277,73 @@ void main() {
       expect(appState.mockFirebase.lastSavedEvent!.externalInvitees.containsKey('u4'), true);
       expect(appState.mockFirebase.lastSavedEvent!.externalInvitees['u4']?.displayName, 'Dave Bass');
     });
+
+    testWidgets('Date range is automatically derived from sub-events/rehearsals', (tester) async {
+      await tester.binding.setSurfaceSize(const Size(800, 1400));
+
+      final initialEvent = BandEvent(
+        id: 'ev_existing',
+        title: 'Festival Weekend',
+        description: 'Multi-day music festival',
+        location: 'Gothenburg',
+        startDateTime: '2026-10-02T00:00:00.000',
+        endDateTime: '2026-10-02T23:59:59.000',
+        additionalNotes: 'Bring wristbands',
+        createdBy: 'u1',
+        createdAt: 1000,
+        updatedAt: 1000,
+        requireResponse: true,
+        rehearsals: [
+          EventRehearsal(
+            id: 'reh_1',
+            title: 'Day 1 Gig',
+            date: '2026-10-02',
+            startTime: '18:00',
+            endTime: '20:00',
+            location: 'Main Stage',
+            type: 'Festival',
+          ),
+          EventRehearsal(
+            id: 'reh_2',
+            title: 'Day 2 Gig',
+            date: '2026-10-04',
+            startTime: '14:00',
+            endTime: '16:00',
+            location: 'Acoustic Tent',
+            type: 'Festival',
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        ChangeNotifierProvider<AppState>.value(
+          value: appState,
+          child: MaterialApp(
+            home: CreateEventPage(
+              bandId: 'band_1',
+              existingEvent: initialEvent,
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      // Main Event schedule card should display the derived date range across the sub-events
+      expect(find.text('"Festival Weekend"'), findsOneWidget);
+      expect(find.text('Fri, Oct 2 – Sun, Oct 4, 2026'), findsOneWidget);
+
+      // Save the event
+      await tester.drag(find.byType(ListView), const Offset(0, -600));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Publish Event'));
+      await tester.pumpAndSettle();
+
+      expect(appState.mockFirebase.lastSavedEvent, isNotNull);
+      expect(appState.mockFirebase.lastSavedEvent!.startDateTime.startsWith('2026-10-02'), isTrue);
+      expect(appState.mockFirebase.lastSavedEvent!.endDateTime.startsWith('2026-10-04'), isTrue);
+    });
   });
 }
+

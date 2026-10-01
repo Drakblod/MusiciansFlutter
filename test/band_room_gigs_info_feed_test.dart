@@ -202,7 +202,7 @@ void main() {
 
     // EventResultsPage should be active with its 4 regular member groups
     expect(find.byType(EventResultsPage), findsOneWidget);
-    expect(find.text('REGULAR BAND MEMBERS'), findsOneWidget);
+    expect(find.text('ATTENDANCE RESPONSES'), findsOneWidget);
     expect(find.textContaining('YES (1)'), findsOneWidget);
     expect(find.textContaining('NO (1)'), findsOneWidget);
     expect(find.textContaining('UNCERTAIN (0)'), findsOneWidget);

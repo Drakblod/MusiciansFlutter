@@ -121,6 +121,10 @@ class _CreateEventPageState extends State<CreateEventPage> {
       _selectedDate = _startDate;
       _startTime = TimeOfDay(hour: startLocal.hour, minute: startLocal.minute);
       _endTime = TimeOfDay(hour: endLocal.hour, minute: endLocal.minute);
+
+      if (_rehearsals.isNotEmpty) {
+        _updateDateRangeFromRehearsals();
+      }
     }
   }
 
@@ -256,68 +260,59 @@ class _CreateEventPageState extends State<CreateEventPage> {
     }
   }
 
-  Future<void> _selectStartDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _startDate,
-      firstDate: DateTime.now().subtract(const Duration(days: 365)),
-      lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.dark(
-              primary: AppTheme.primaryAccent,
-              onPrimary: Colors.white,
-              surface: Color(0xFF16132D),
-              onSurface: Colors.white,
-            ),
-            dialogBackgroundColor: const Color(0xFF0F0C20),
-          ),
-          child: child!,
-        );
-      },
-    );
-    if (picked != null) {
-      setState(() {
-        _startDate = picked;
-        _selectedDate = picked;
-        if (_endDate.isBefore(_startDate)) {
-          _endDate = _startDate;
+  void _updateDateRangeFromRehearsals() {
+    if (_rehearsals.isEmpty) return;
+    DateTime? minDate;
+    DateTime? maxDate;
+    for (final reh in _rehearsals) {
+      final d = DateTime.tryParse(reh.date);
+      if (d != null) {
+        final pureDate = DateTime(d.year, d.month, d.day);
+        if (minDate == null || pureDate.isBefore(minDate)) {
+          minDate = pureDate;
         }
-      });
+        if (maxDate == null || pureDate.isAfter(maxDate)) {
+          maxDate = pureDate;
+        }
+      }
+    }
+    if (minDate != null && maxDate != null) {
+      _startDate = minDate;
+      _endDate = maxDate;
+      _selectedDate = minDate;
     }
   }
 
-  Future<void> _selectEndDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _endDate.isBefore(_startDate) ? _startDate : _endDate,
-      firstDate: DateTime.now().subtract(const Duration(days: 365)),
-      lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.dark(
-              primary: AppTheme.primaryAccent,
-              onPrimary: Colors.white,
-              surface: Color(0xFF16132D),
-              onSurface: Colors.white,
-            ),
-            dialogBackgroundColor: const Color(0xFF0F0C20),
-          ),
-          child: child!,
-        );
-      },
-    );
-    if (picked != null) {
-      setState(() {
-        _endDate = picked;
-        if (_startDate.isAfter(_endDate)) {
-          _startDate = _endDate;
-          _selectedDate = _endDate;
-        }
-      });
+  String get _formattedAutoDateRange {
+    if (_rehearsals.isEmpty) {
+      return DateFormat('EEE, MMM d, yyyy').format(_startDate);
     }
+    DateTime? minDate;
+    DateTime? maxDate;
+    for (final reh in _rehearsals) {
+      final d = DateTime.tryParse(reh.date);
+      if (d != null) {
+        final pureDate = DateTime(d.year, d.month, d.day);
+        if (minDate == null || pureDate.isBefore(minDate)) {
+          minDate = pureDate;
+        }
+        if (maxDate == null || pureDate.isAfter(maxDate)) {
+          maxDate = pureDate;
+        }
+      }
+    }
+    if (minDate == null || maxDate == null) {
+      return DateFormat('EEE, MMM d, yyyy').format(_startDate);
+    }
+    if (minDate.year == maxDate.year &&
+        minDate.month == maxDate.month &&
+        minDate.day == maxDate.day) {
+      return DateFormat('EEE, MMM d, yyyy').format(minDate);
+    }
+    if (minDate.year == maxDate.year) {
+      return '${DateFormat('EEE, MMM d').format(minDate)} – ${DateFormat('EEE, MMM d, yyyy').format(maxDate)}';
+    }
+    return '${DateFormat('EEE, MMM d, yyyy').format(minDate)} – ${DateFormat('EEE, MMM d, yyyy').format(maxDate)}';
   }
 
   Future<void> _selectDate() async {
@@ -433,12 +428,12 @@ class _CreateEventPageState extends State<CreateEventPage> {
 
     DateTime draftDate;
     if (isEditing) {
-      draftDate = DateTime.tryParse(rehearsalToEdit!.date) ?? _selectedDate;
+      draftDate = DateTime.tryParse(rehearsalToEdit!.date) ?? _startDate;
     } else if (_rehearsals.isNotEmpty) {
       final lastDate = DateTime.tryParse(_rehearsals.last.date);
-      draftDate = lastDate != null ? lastDate.add(const Duration(days: 1)) : _selectedDate;
+      draftDate = lastDate != null ? lastDate.add(const Duration(days: 1)) : _startDate;
     } else {
-      draftDate = _selectedDate;
+      draftDate = _startDate;
     }
 
     TimeOfDay draftStart = isEditing
@@ -711,6 +706,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                             } else {
                               _rehearsals.add(updatedRehearsal);
                             }
+                            _updateDateRangeFromRehearsals();
                           });
 
                           Navigator.pop(ctx);
@@ -870,7 +866,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                                   borderRadius: BorderRadius.circular(6),
                                 ),
                                 child: Text(
-                                  '+$guestCount Guest${guestCount > 1 ? 's' : ''}',
+                                  '+$guestCount Sub${guestCount > 1 ? 's' : ''}',
                                   style: GoogleFonts.inter(
                                     fontSize: 10,
                                     color: Colors.purpleAccent,
@@ -883,7 +879,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          'Include/exclude members or add guests for this event.',
+                          'Include/exclude members or add subs for this event.',
                           style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary),
                         ),
                       ],
@@ -907,12 +903,12 @@ class _CreateEventPageState extends State<CreateEventPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // SECTION A: Extra Members / Guests for this specific event
+                  // SECTION: Extra Members / Subs for this specific event
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        'A) ADD GUEST / EXTRA MUSICIAN',
+                        'ADD SUB',
                         style: GoogleFonts.outfit(
                           fontSize: 11,
                           fontWeight: FontWeight.bold,
@@ -936,7 +932,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                               const Icon(Icons.person_add_alt_1_outlined, color: AppTheme.primaryAccent, size: 14),
                               const SizedBox(width: 4),
                               Text(
-                                '+ Add Musician',
+                                '+ Add Sub',
                                 style: GoogleFonts.inter(
                                   fontSize: 11,
                                   fontWeight: FontWeight.bold,
@@ -960,7 +956,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                         border: Border.all(color: const Color(0xFF252044)),
                       ),
                       child: Text(
-                        'No extra guests or musicians added for this event.',
+                        'No subs added for this event.',
                         style: GoogleFonts.inter(
                           fontSize: 11,
                           color: AppTheme.textSecondary,
@@ -1026,7 +1022,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                                           borderRadius: BorderRadius.circular(4),
                                         ),
                                         child: Text(
-                                          'Guest',
+                                          'Sub',
                                           style: GoogleFonts.inter(
                                             fontSize: 9,
                                             color: Colors.purpleAccent,
@@ -1068,19 +1064,23 @@ class _CreateEventPageState extends State<CreateEventPage> {
                   const Divider(height: 1, color: Color(0xFF2E2A4E)),
                   const SizedBox(height: 14),
 
-                  // SECTION B: Band Members Roster (Exclude / Include)
+                  // SECTION: Band Members Roster (Exclude / Include)
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        'B) BAND MEMBERS FOR THIS EVENT',
-                        style: GoogleFonts.outfit(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white70,
-                          letterSpacing: 0.8,
+                      Expanded(
+                        child: Text(
+                          'MANAGE BAND MEMBERS FOR THIS SPECIFIC EVENT',
+                          style: GoogleFonts.outfit(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white70,
+                            letterSpacing: 0.8,
+                          ),
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
+                      const SizedBox(width: 8),
                       Text(
                         'Toggle off to exclude',
                         style: GoogleFonts.inter(
@@ -1268,6 +1268,8 @@ class _CreateEventPageState extends State<CreateEventPage> {
         _reminderIntervalHours = parsed;
       }
 
+      _updateDateRangeFromRehearsals();
+
       final start = DateTime(
         _startDate.year,
         _startDate.month,
@@ -1439,90 +1441,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                     ),
                     const SizedBox(height: 20),
 
-                    // 4. Date Range
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: AppTheme.cardBackground,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'DATE RANGE',
-                            style: GoogleFonts.outfit(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                              color: AppTheme.primaryAccent,
-                              letterSpacing: 1.2,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-
-                          // Start Date picker trigger
-                          GestureDetector(
-                            onTap: _selectStartDate,
-                            child: Row(
-                              children: [
-                                const Icon(Icons.calendar_today_outlined, color: AppTheme.textSecondary, size: 20),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        'Start Date',
-                                        style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary),
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        DateFormat('EEEE, MMM d, yyyy').format(_startDate),
-                                        style: GoogleFonts.inter(fontSize: 15, color: Colors.white, fontWeight: FontWeight.w500),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const Icon(Icons.arrow_forward_ios_rounded, color: AppTheme.textSecondary, size: 14),
-                              ],
-                            ),
-                          ),
-                          const Divider(height: 24, color: Color(0xFF2E2A4E)),
-
-                          // End Date picker trigger
-                          GestureDetector(
-                            onTap: _selectEndDate,
-                            child: Row(
-                              children: [
-                                const Icon(Icons.calendar_today_outlined, color: AppTheme.textSecondary, size: 20),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        'End Date',
-                                        style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary),
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        DateFormat('EEEE, MMM d, yyyy').format(_endDate),
-                                        style: GoogleFonts.inter(fontSize: 15, color: Colors.white, fontWeight: FontWeight.w500),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const Icon(Icons.arrow_forward_ios_rounded, color: AppTheme.textSecondary, size: 14),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-
-                    // 5 & 6. Attached Events / Event Schedule Section
+                    // 4 & 5. Attached Events / Event Schedule Section
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
@@ -1581,21 +1500,78 @@ class _CreateEventPageState extends State<CreateEventPage> {
                           ),
                           const SizedBox(height: 12),
 
-                          // Name of "Main event" on top of the schedule items
+                          // Name of "Main event" and auto-derived Date Range on top of the schedule items
                           AnimatedBuilder(
                             animation: _titleController,
                             builder: (context, _) {
                               final entered = _titleController.text.trim();
-                              return Padding(
-                                padding: const EdgeInsets.only(bottom: 8),
-                                child: Text(
-                                  entered.isEmpty ? '"Main Event Name"' : '"$entered"',
-                                  style: GoogleFonts.outfit(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                    letterSpacing: 0.5,
-                                  ),
+                              final titleDisplay = entered.isEmpty ? 'Main Event Name' : entered;
+                              final hasEvents = _rehearsals.isNotEmpty;
+                              final dateDisplay = _formattedAutoDateRange;
+
+                              return Container(
+                                margin: const EdgeInsets.only(bottom: 12),
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF141029),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: const Color(0xFF2E2A4E)),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        color: AppTheme.primaryAccent.withOpacity(0.15),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: const Icon(
+                                        Icons.event_note_rounded,
+                                        color: AppTheme.primaryAccent,
+                                        size: 20,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            '"$titleDisplay"',
+                                            style: GoogleFonts.outfit(
+                                              fontSize: 15,
+                                              fontWeight: FontWeight.bold,
+                                              color: Colors.white,
+                                              letterSpacing: 0.5,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 3),
+                                          Row(
+                                            children: [
+                                              Icon(
+                                                Icons.calendar_today_rounded,
+                                                size: 12,
+                                                color: hasEvents ? AppTheme.secondaryAccent : AppTheme.textSecondary,
+                                              ),
+                                              const SizedBox(width: 5),
+                                              Expanded(
+                                                child: Text(
+                                                  hasEvents
+                                                      ? dateDisplay
+                                                      : 'Date Range: $dateDisplay',
+                                                  style: GoogleFonts.inter(
+                                                    fontSize: 12,
+                                                    color: hasEvents ? Colors.white : AppTheme.textSecondary,
+                                                    fontWeight: hasEvents ? FontWeight.w600 : FontWeight.normal,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               );
                             },
@@ -1697,6 +1673,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                                       onPressed: () {
                                         setState(() {
                                           _rehearsals.removeAt(index);
+                                          _updateDateRangeFromRehearsals();
                                         });
                                       },
                                     ),
@@ -1995,14 +1972,14 @@ class _AddEventGuestSheetState extends State<_AddEventGuestSheet> {
             side: const BorderSide(color: Color(0xFF2E2A4E)),
           ),
           title: Text(
-            'Add External Guest',
+            'Add External Sub',
             style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold),
           ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                'Add a musician who is not registered in the app.',
+                'Add a substitute musician who is not registered in the app.',
                 style: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 12),
               ),
               const SizedBox(height: 12),
@@ -2041,7 +2018,7 @@ class _AddEventGuestSheetState extends State<_AddEventGuestSheet> {
                 final invitee = ExternalInvitee(
                   userId: customId,
                   displayName: name,
-                  instrument: inst.isNotEmpty ? inst : 'Guest Musician',
+                  instrument: inst.isNotEmpty ? inst : 'Sub',
                   status: 'pending',
                   invitedAt: DateTime.now().millisecondsSinceEpoch,
                   source: 'eventCustomInvitee',
@@ -2051,7 +2028,7 @@ class _AddEventGuestSheetState extends State<_AddEventGuestSheet> {
                 Navigator.pop(ctx); // Close dialog
                 Navigator.pop(context); // Close sheet
               },
-              child: Text('Add Guest', style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold)),
+              child: Text('Add Sub', style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold)),
             ),
           ],
         );
@@ -2098,7 +2075,7 @@ class _AddEventGuestSheetState extends State<_AddEventGuestSheet> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  'Add Musician for this Event',
+                  'Add Sub for this Event',
                   style: GoogleFonts.outfit(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
@@ -2163,7 +2140,7 @@ class _AddEventGuestSheetState extends State<_AddEventGuestSheet> {
                     const Icon(Icons.person_add_alt_1, color: Colors.purpleAccent, size: 16),
                     const SizedBox(width: 8),
                     Text(
-                      '+ Add External / Non-registered Guest',
+                      '+ Add External / Non-registered Sub',
                       style: GoogleFonts.inter(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
@@ -2318,7 +2295,7 @@ class _AddEventGuestSheetState extends State<_AddEventGuestSheet> {
                                     widget.onGuestAdded(invitee, user);
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       SnackBar(
-                                        content: Text('$name added as guest for this event!'),
+                                        content: Text('$name added as sub for this event!'),
                                         duration: const Duration(seconds: 2),
                                         backgroundColor: AppTheme.success,
                                       ),

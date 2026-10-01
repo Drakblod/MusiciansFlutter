@@ -40,9 +40,14 @@ class HomeScreen extends StatelessWidget {
           Navigator.pushNamed(context, routeName);
         }
       } else if (bands.length == 1) {
-        appState.selectBand(bands.keys.first, bands.values.first);
         if (context.mounted) {
-          Navigator.pushNamed(context, routeName);
+          _proceedToBandRoute(
+            context,
+            appState,
+            bands.keys.first,
+            bands.values.first,
+            routeName,
+          );
         }
       } else {
         if (context.mounted) {
@@ -62,6 +67,272 @@ class HomeScreen extends StatelessWidget {
     }
   }
 
+  Future<void> _proceedToBandRoute(
+    BuildContext context,
+    AppState appState,
+    String bandId,
+    String bandName,
+    String routeName,
+  ) async {
+    appState.selectBand(bandId, bandName);
+
+    if (routeName == '/find-sub') {
+      final userId = appState.currentUserId;
+      if (userId != null) {
+        try {
+          final subRequests = await appState.firebaseService.getUserSubRequestsAsync(userId);
+          final activeForBand = subRequests.where((req) {
+            final matchesBand = (req.bandId != null && req.bandId == bandId) ||
+                (req.bandName != null &&
+                    (req.bandName == bandName ||
+                        req.bandName == bandId ||
+                        req.bandName!.replaceAll(' ', '_') == bandId));
+            final isNotDeleted = req.status != 'deleted';
+            return matchesBand && isNotDeleted;
+          }).toList();
+
+          if (activeForBand.isNotEmpty && context.mounted) {
+            _showSubRequestChoiceBottomSheet(
+              context,
+              appState,
+              bandId,
+              bandName,
+              activeForBand.length,
+            );
+            return;
+          }
+        } catch (e) {
+          debugPrint("Error checking active sub requests for band $bandId: $e");
+        }
+      }
+    }
+
+    if (context.mounted) {
+      Navigator.pushNamed(context, routeName);
+    }
+  }
+
+  void _showSubRequestChoiceBottomSheet(
+    BuildContext context,
+    AppState appState,
+    String bandId,
+    String bandName,
+    int activeCount,
+  ) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        return Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFF0F0C22).withOpacity(0.98),
+            borderRadius: const BorderRadius.only(
+              topLeft: Radius.circular(24),
+              topRight: Radius.circular(24),
+            ),
+            border: Border.all(color: const Color(0xFF2E2A4E), width: 1.5),
+          ),
+          padding: EdgeInsets.only(
+            left: 24,
+            right: 24,
+            top: 16,
+            bottom: MediaQuery.of(sheetContext).padding.bottom + 24,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.white24,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primaryAccent.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      bandName.toUpperCase(),
+                      style: GoogleFonts.outfit(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.primaryAccent,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'FIND MUSICIAN / SUBSTITUTE',
+                style: GoogleFonts.outfit(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                  letterSpacing: 1.5,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'You have $activeCount active substitute request${activeCount == 1 ? '' : 's'} for $bandName.',
+                style: GoogleFonts.inter(
+                  fontSize: 13,
+                  color: AppTheme.textSecondary,
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // Option 1: Manage Active Sub Requests
+              AnimatedTapDetector(
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  Navigator.pushNamed(
+                    context,
+                    '/sub-request-responses',
+                    arguments: {'bandId': bandId},
+                  );
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primaryAccent.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: AppTheme.primaryAccent.withOpacity(0.6),
+                      width: 1.5,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: AppTheme.primaryAccent.withOpacity(0.25),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.assignment_ind_outlined,
+                          color: AppTheme.primaryAccent,
+                          size: 24,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Manage Active Sub Requests ($activeCount)',
+                              style: GoogleFonts.outfit(
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              'Review applicants, assign subs, or edit postings',
+                              style: GoogleFonts.inter(
+                                fontSize: 12,
+                                color: AppTheme.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Icon(
+                        Icons.arrow_forward_ios_rounded,
+                        color: AppTheme.primaryAccent,
+                        size: 16,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // Option 2: Create New Sub Request
+              AnimatedTapDetector(
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  Navigator.pushNamed(context, '/find-sub');
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppTheme.cardBackground,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: const Color(0xFF2E2A4E),
+                      width: 1.5,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.06),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.person_add_alt_1_outlined,
+                          color: Colors.white,
+                          size: 24,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Create New Sub Request',
+                              style: GoogleFonts.outfit(
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              'Select an event or rehearsal and find a new sub',
+                              style: GoogleFonts.inter(
+                                fontSize: 12,
+                                color: AppTheme.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Icon(
+                        Icons.arrow_forward_ios_rounded,
+                        color: AppTheme.textSecondary,
+                        size: 16,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   void _showBandSelectorBottomSheet(
     BuildContext context,
     AppState appState,
@@ -72,7 +343,7 @@ class HomeScreen extends StatelessWidget {
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (context) {
+      builder: (sheetContext) {
         return Container(
           decoration: BoxDecoration(
             color: const Color(0xFF0F0C22).withOpacity(0.95),
@@ -86,7 +357,7 @@ class HomeScreen extends StatelessWidget {
             left: 24,
             right: 24,
             top: 16,
-            bottom: MediaQuery.of(context).padding.bottom + 24,
+            bottom: MediaQuery.of(sheetContext).padding.bottom + 24,
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -123,7 +394,7 @@ class HomeScreen extends StatelessWidget {
               const SizedBox(height: 20),
               ConstrainedBox(
                 constraints: BoxConstraints(
-                  maxHeight: MediaQuery.of(context).size.height * 0.4,
+                  maxHeight: MediaQuery.of(sheetContext).size.height * 0.4,
                 ),
                 child: ListView.builder(
                   shrinkWrap: true,
@@ -137,9 +408,14 @@ class HomeScreen extends StatelessWidget {
                       padding: const EdgeInsets.only(bottom: 12),
                       child: AnimatedTapDetector(
                         onTap: () {
-                          appState.selectBand(bandId, bandName);
-                          Navigator.pop(context); // Close bottom sheet
-                          Navigator.pushNamed(context, routeName);
+                          Navigator.pop(sheetContext); // Close bottom sheet
+                          _proceedToBandRoute(
+                            context,
+                            appState,
+                            bandId,
+                            bandName,
+                            routeName,
+                          );
                         },
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -423,7 +699,7 @@ class HomeScreen extends StatelessWidget {
                   child: Padding(
                     padding: const EdgeInsets.only(bottom: 10, right: 10),
                     child: Text(
-                      '2.63.0',
+                      '2.64.0',
                       style: GoogleFonts.inter(
                         color: AppTheme.textSecondary.withOpacity(0.5),
                         fontSize: 12,
@@ -582,9 +858,14 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
           await Navigator.pushNamed(context, routeName);
         }
       } else if (bands.length == 1) {
-        appState.selectBand(bands.keys.first, bands.values.first);
         if (context.mounted) {
-          await Navigator.pushNamed(context, routeName);
+          await _proceedToBandRoute(
+            context,
+            appState,
+            bands.keys.first,
+            bands.values.first,
+            routeName,
+          );
         }
       } else {
         if (context.mounted) {
@@ -604,6 +885,272 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
     }
   }
 
+  Future<void> _proceedToBandRoute(
+    BuildContext context,
+    AppState appState,
+    String bandId,
+    String bandName,
+    String routeName,
+  ) async {
+    appState.selectBand(bandId, bandName);
+
+    if (routeName == '/find-sub') {
+      final userId = appState.currentUserId;
+      if (userId != null) {
+        try {
+          final subRequests = await appState.firebaseService.getUserSubRequestsAsync(userId);
+          final activeForBand = subRequests.where((req) {
+            final matchesBand = (req.bandId != null && req.bandId == bandId) ||
+                (req.bandName != null &&
+                    (req.bandName == bandName ||
+                        req.bandName == bandId ||
+                        req.bandName!.replaceAll(' ', '_') == bandId));
+            final isNotDeleted = req.status != 'deleted';
+            return matchesBand && isNotDeleted;
+          }).toList();
+
+          if (activeForBand.isNotEmpty && context.mounted) {
+            _showSubRequestChoiceBottomSheet(
+              context,
+              appState,
+              bandId,
+              bandName,
+              activeForBand.length,
+            );
+            return;
+          }
+        } catch (e) {
+          debugPrint("Error checking active sub requests for band $bandId: $e");
+        }
+      }
+    }
+
+    if (context.mounted) {
+      await Navigator.pushNamed(context, routeName);
+    }
+  }
+
+  void _showSubRequestChoiceBottomSheet(
+    BuildContext context,
+    AppState appState,
+    String bandId,
+    String bandName,
+    int activeCount,
+  ) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        return Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFF0F0C22).withOpacity(0.98),
+            borderRadius: const BorderRadius.only(
+              topLeft: Radius.circular(24),
+              topRight: Radius.circular(24),
+            ),
+            border: Border.all(color: const Color(0xFF2E2A4E), width: 1.5),
+          ),
+          padding: EdgeInsets.only(
+            left: 24,
+            right: 24,
+            top: 16,
+            bottom: MediaQuery.of(sheetContext).padding.bottom + 24,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.white24,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primaryAccent.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      bandName.toUpperCase(),
+                      style: GoogleFonts.outfit(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.primaryAccent,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'FIND MUSICIAN / SUBSTITUTE',
+                style: GoogleFonts.outfit(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                  letterSpacing: 1.5,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'You have $activeCount active substitute request${activeCount == 1 ? '' : 's'} for $bandName.',
+                style: GoogleFonts.inter(
+                  fontSize: 13,
+                  color: AppTheme.textSecondary,
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // Option 1: Manage Active Sub Requests
+              AnimatedTapDetector(
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  Navigator.pushNamed(
+                    context,
+                    '/sub-request-responses',
+                    arguments: {'bandId': bandId},
+                  );
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primaryAccent.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: AppTheme.primaryAccent.withOpacity(0.6),
+                      width: 1.5,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: AppTheme.primaryAccent.withOpacity(0.25),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.assignment_ind_outlined,
+                          color: AppTheme.primaryAccent,
+                          size: 24,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Manage Active Sub Requests ($activeCount)',
+                              style: GoogleFonts.outfit(
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              'Review applicants, assign subs, or edit postings',
+                              style: GoogleFonts.inter(
+                                fontSize: 12,
+                                color: AppTheme.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Icon(
+                        Icons.arrow_forward_ios_rounded,
+                        color: AppTheme.primaryAccent,
+                        size: 16,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // Option 2: Create New Sub Request
+              AnimatedTapDetector(
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  Navigator.pushNamed(context, '/find-sub');
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppTheme.cardBackground,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: const Color(0xFF2E2A4E),
+                      width: 1.5,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.06),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.person_add_alt_1_outlined,
+                          color: Colors.white,
+                          size: 24,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Create New Sub Request',
+                              style: GoogleFonts.outfit(
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              'Select an event or rehearsal and find a new sub',
+                              style: GoogleFonts.inter(
+                                fontSize: 12,
+                                color: AppTheme.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Icon(
+                        Icons.arrow_forward_ios_rounded,
+                        color: AppTheme.textSecondary,
+                        size: 16,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   void _showBandSelectorBottomSheet(
     BuildContext context,
     AppState appState,
@@ -614,7 +1161,7 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (context) {
+      builder: (sheetContext) {
         return Container(
           decoration: BoxDecoration(
             color: const Color(0xFF0F0C22).withOpacity(0.95),
@@ -628,7 +1175,7 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
             left: 24,
             right: 24,
             top: 16,
-            bottom: MediaQuery.of(context).padding.bottom + 24,
+            bottom: MediaQuery.of(sheetContext).padding.bottom + 24,
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -665,7 +1212,7 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
               const SizedBox(height: 20),
               ConstrainedBox(
                 constraints: BoxConstraints(
-                  maxHeight: MediaQuery.of(context).size.height * 0.4,
+                  maxHeight: MediaQuery.of(sheetContext).size.height * 0.4,
                 ),
                 child: ListView.builder(
                   shrinkWrap: true,
@@ -679,9 +1226,14 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
                       padding: const EdgeInsets.only(bottom: 12),
                       child: AnimatedTapDetector(
                         onTap: () {
-                          appState.selectBand(bandId, bandName);
-                          Navigator.pop(context); // Close bottom sheet
-                          Navigator.pushNamed(context, routeName);
+                          Navigator.pop(sheetContext); // Close bottom sheet
+                          _proceedToBandRoute(
+                            context,
+                            appState,
+                            bandId,
+                            bandName,
+                            routeName,
+                          );
                         },
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -1227,7 +1779,7 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
                                 }
                               },
                               child: Text(
-                                '2.63.0',
+                                '2.64.0',
                                 style: GoogleFonts.inter(
                                   color: AppTheme.textSecondary.withOpacity(0.5),
                                   fontSize: 12,

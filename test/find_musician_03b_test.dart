@@ -128,6 +128,11 @@ class Mock03bFirebaseService extends Fake implements FirebaseService {
   }
 
   @override
+  Future<List<SubRequest>> getUserSubRequestsAsync(String userId) async {
+    return allSubRequests;
+  }
+
+  @override
   Future<List<SubRequest>> getAllSubRequestsAsync() async {
     return allSubRequests;
   }
