@@ -85,6 +85,9 @@ class FailingThenSucceedingRepository implements PublicEventRepository {
 
   @override
   Future<String> createEvent(PublicCalendarEvent event) async => fallback.createEvent(event);
+
+  @override
+  Future<void> deleteEvent(String eventId) async => fallback.deleteEvent(eventId);
 }
 
 void main() {

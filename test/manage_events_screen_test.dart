@@ -218,8 +218,8 @@ void main() {
       expect(find.byType(TextField), findsOneWidget);
 
       // 3 Tabs
-      expect(find.text('NEW EVENTS'), findsOneWidget);
-      expect(find.text('UPCOMING'), findsOneWidget);
+      expect(find.text('NEW EVENTS (Needs RSVP)'), findsOneWidget);
+      expect(find.text('UPCOMING (Finalized)'), findsOneWidget);
       expect(find.text('PAST EVENTS'), findsOneWidget);
 
       // New Events tab (active by default): displays event needing RSVP
@@ -250,7 +250,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Tap UPCOMING tab
-      await tester.tap(find.text('UPCOMING'));
+      await tester.tap(find.text('UPCOMING (Finalized)'));
       await tester.pumpAndSettle();
 
       // Finalized event is visible

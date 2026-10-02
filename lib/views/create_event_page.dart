@@ -908,7 +908,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        'ADD SUB',
+                        'ADD SUB (if needed)',
                         style: GoogleFonts.outfit(
                           fontSize: 11,
                           fontWeight: FontWeight.bold,
@@ -1492,11 +1492,6 @@ class _CreateEventPageState extends State<CreateEventPage> {
                                   ),
                                 ),
                             ],
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Attach scheduled events, rehearsals, soundchecks, gigs, or meetings.',
-                            style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary),
                           ),
                           const SizedBox(height: 12),
 

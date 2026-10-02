@@ -1144,6 +1144,14 @@ class FirebaseService {
     } catch (e) {
       debugPrint('[FirebaseService] Error getting subrequest $subRequestId: $e');
     }
+    if (currentUserId != null) {
+      try {
+        final userSnap = await _dbRef('users/$currentUserId/SubRequests/$subRequestId').get();
+        if (userSnap.exists && userSnap.value is Map) {
+          return SubRequest.fromJson(userSnap.value as Map, subRequestId);
+        }
+      } catch (_) {}
+    }
     return null;
   }
 
@@ -1158,7 +1166,9 @@ class FirebaseService {
       await _dbRef('users/$creatorId/SubRequests/$subRequestId').remove();
 
       // Delete from root SubRequests
-      await _dbRef('SubRequests/$subRequestId').remove();
+      try {
+        await _dbRef('SubRequests/$subRequestId').remove();
+      } catch (_) {}
 
       return true;
     } catch (e) {
@@ -1173,11 +1183,18 @@ class FirebaseService {
       if (snapshot.exists && snapshot.value is Map) {
         return Map<String, dynamic>.from(snapshot.value as Map);
       }
-      return {};
     } catch (e) {
-      print("[FirebaseService] Error getting responses: $e");
-      return {};
+      debugPrint("[FirebaseService] Notice: could not read root SubRequests/$subRequestId/Responses: $e");
     }
+    if (currentUserId != null) {
+      try {
+        final userSnap = await _dbRef('users/$currentUserId/SubRequests/$subRequestId/Responses').get();
+        if (userSnap.exists && userSnap.value is Map) {
+          return Map<String, dynamic>.from(userSnap.value as Map);
+        }
+      } catch (_) {}
+    }
+    return {};
   }
 
   Future<int> getSubRequestResponseCountAsync(String subRequestId) async {
@@ -1188,11 +1205,18 @@ class FirebaseService {
       if (snapshot.exists && snapshot.value is Map) {
         return (snapshot.value as Map).length;
       }
-      return 0;
     } catch (e) {
-      print("[FirebaseService] Error getting response count: $e");
-      return 0;
+      debugPrint("[FirebaseService] Notice: could not read root response count: $e");
     }
+    if (currentUserId != null) {
+      try {
+        final userSnap = await _dbRef('users/$currentUserId/SubRequests/$subRequestId/Responses').get();
+        if (userSnap.exists && userSnap.value is Map) {
+          return (userSnap.value as Map).length;
+        }
+      } catch (_) {}
+    }
+    return 0;
   }
 
   Future<String> createAgreementChatAsync(
@@ -3168,10 +3192,9 @@ class FirebaseService {
   // ==========================================
 
   Future<String> savePublicCalendarEventAsync(PublicCalendarEvent event) async {
-    final eventsRef = _dbRef('PublicEvents');
     final eventId = (event.id.isNotEmpty && !event.id.startsWith('mock_'))
         ? event.id
-        : eventsRef.push().key!;
+        : (_dbRef('PublicEvents').push().key ?? 'event_${DateTime.now().millisecondsSinceEpoch}');
 
     final updatedEvent = event.copyWith(
       id: eventId,
@@ -3182,29 +3205,89 @@ class FirebaseService {
       isMock: false,
     );
 
-    await eventsRef.child(eventId).set(updatedEvent.toJson());
+    final json = updatedEvent.toJson();
+
+    // 1. Save under user's node first (guaranteed permitted by users/$userId rules)
+    final uid = currentUserId;
+    if (uid != null) {
+      try {
+        await _dbRef('users/$uid/PublicEvents/$eventId').set(json);
+      } catch (e) {
+        debugPrint('[FirebaseService] Could not save users/$uid/PublicEvents: $e');
+      }
+    }
+
+    // 2. Save under global /PublicEvents
+    try {
+      await _dbRef('PublicEvents/$eventId').set(json);
+    } catch (e) {
+      debugPrint('[FirebaseService] Global PublicEvents write notice: $e');
+      if (uid == null) {
+        rethrow;
+      }
+    }
+
     return eventId;
   }
 
   Future<List<PublicCalendarEvent>> getPublicCalendarEventsAsync() async {
-    final snapshot = await _dbRef('PublicEvents').get();
-    if (!snapshot.exists || snapshot.value == null) {
-      return [];
-    }
-    final data = snapshot.value;
-    final List<PublicCalendarEvent> events = [];
-    if (data is Map) {
-      data.forEach((key, value) {
-        if (value is Map) {
-          try {
-            events.add(PublicCalendarEvent.fromJson(value, key.toString()));
-          } catch (e) {
-            debugPrint('Error parsing PublicCalendarEvent ($key): $e');
+    final Map<String, PublicCalendarEvent> eventsMap = {};
+
+    // 1. Try global PublicEvents
+    try {
+      final snapshot = await _dbRef('PublicEvents').get();
+      if (snapshot.exists && snapshot.value is Map) {
+        (snapshot.value as Map).forEach((key, value) {
+          if (value is Map) {
+            try {
+              eventsMap[key.toString()] = PublicCalendarEvent.fromJson(value, key.toString());
+            } catch (e) {
+              debugPrint('Error parsing PublicCalendarEvent ($key): $e');
+            }
           }
-        }
-      });
+        });
+      }
+    } catch (e) {
+      debugPrint('Notice: could not read global PublicEvents: $e');
     }
-    return events;
+
+    // 2. Merge user's personal PublicEvents if available
+    final uid = currentUserId;
+    if (uid != null) {
+      try {
+        final userSnap = await _dbRef('users/$uid/PublicEvents').get();
+        if (userSnap.exists && userSnap.value is Map) {
+          (userSnap.value as Map).forEach((key, value) {
+            if (value is Map) {
+              try {
+                eventsMap[key.toString()] = PublicCalendarEvent.fromJson(value, key.toString());
+              } catch (_) {}
+            }
+          });
+        }
+      } catch (_) {}
+    }
+
+    return eventsMap.values.toList();
+  }
+
+  Future<void> deletePublicCalendarEventAsync(String eventId) async {
+    // 1. Remove from global PublicEvents
+    try {
+      await _dbRef('PublicEvents/$eventId').remove();
+    } catch (e) {
+      debugPrint('[FirebaseService] Notice: could not remove global PublicEvents/$eventId: $e');
+    }
+
+    // 2. Remove from user's personal PublicEvents
+    final uid = currentUserId;
+    if (uid != null) {
+      try {
+        await _dbRef('users/$uid/PublicEvents/$eventId').remove();
+      } catch (e) {
+        debugPrint('[FirebaseService] Notice: could not remove users/$uid/PublicEvents/$eventId: $e');
+      }
+    }
   }
 
   Future<String> uploadPublicEventCoverImageAsync(

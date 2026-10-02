@@ -427,8 +427,8 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> with SingleTick
                     unselectedLabelColor: AppTheme.textSecondary,
                     labelStyle: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.bold),
                     tabs: const [
-                      Tab(text: 'NEW EVENTS'),
-                      Tab(text: 'UPCOMING'),
+                      Tab(text: 'NEW EVENTS (Needs RSVP)'),
+                      Tab(text: 'UPCOMING (Finalized)'),
                       Tab(text: 'PAST EVENTS'),
                     ],
                   ),

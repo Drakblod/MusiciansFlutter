@@ -6,6 +6,7 @@ import '../services/firebase_service.dart';
 abstract class PublicEventRepository {
   Future<List<PublicCalendarEvent>> getUpcomingEvents();
   Future<String> createEvent(PublicCalendarEvent event) async => event.id;
+  Future<void> deleteEvent(String eventId) async {}
 }
 
 /// Mock repository implementation returning 3 deterministic upcoming events
@@ -112,6 +113,11 @@ class MockPublicEventRepository implements PublicEventRepository {
     _createdEvents.add(created);
     return id;
   }
+
+  @override
+  Future<void> deleteEvent(String eventId) async {
+    _createdEvents.removeWhere((e) => e.id == eventId);
+  }
 }
 
 /// Fallback empty repository when mock data toggle is disabled and offline/testing
@@ -131,6 +137,11 @@ class EmptyPublicEventRepository implements PublicEventRepository {
     final created = event.copyWith(id: id);
     _createdEvents.add(created);
     return id;
+  }
+
+  @override
+  Future<void> deleteEvent(String eventId) async {
+    _createdEvents.removeWhere((e) => e.id == eventId);
   }
 }
 
@@ -178,5 +189,10 @@ class FirebasePublicEventRepository implements PublicEventRepository {
   @override
   Future<String> createEvent(PublicCalendarEvent event) async {
     return await firebaseService.savePublicCalendarEventAsync(event);
+  }
+
+  @override
+  Future<void> deleteEvent(String eventId) async {
+    await firebaseService.deletePublicCalendarEventAsync(eventId);
   }
 }

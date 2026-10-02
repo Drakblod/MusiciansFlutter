@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:musicians_flutter/models/public_calendar_event.dart';
 import 'package:musicians_flutter/models/user_profile.dart';
 import 'package:musicians_flutter/providers/app_state.dart';
+import 'package:musicians_flutter/repositories/public_event_repository.dart';
 import 'package:musicians_flutter/services/firebase_service.dart';
 import 'package:musicians_flutter/views/calendar_screen.dart';
 import 'package:musicians_flutter/views/home_screen.dart';
@@ -14,6 +15,21 @@ import 'package:musicians_flutter/views/public_event_calendar_screen.dart';
 import 'package:musicians_flutter/views/public_event_details_screen.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
+
+class SpyingPublicEventRepository implements PublicEventRepository {
+  final List<String> deletedEventIds = [];
+
+  @override
+  Future<List<PublicCalendarEvent>> getUpcomingEvents() async => [];
+
+  @override
+  Future<String> createEvent(PublicCalendarEvent event) async => event.id;
+
+  @override
+  Future<void> deleteEvent(String eventId) async {
+    deletedEventIds.add(eventId);
+  }
+}
 
 class SpyingFirebaseService extends FirebaseService {
   int callCount = 0;
@@ -115,7 +131,11 @@ void main() {
     isMock: true,
   );
 
-  Widget createDetailsTestWidget({PublicCalendarEvent? event, Object? routeArgument}) {
+  Widget createDetailsTestWidget({
+    PublicCalendarEvent? event,
+    Object? routeArgument,
+    PublicEventRepository? repository,
+  }) {
     return ChangeNotifierProvider<AppState>(
       create: (_) => MockAppStateForDetailsTest(SpyingFirebaseService()),
       child: MaterialApp(
@@ -125,7 +145,10 @@ void main() {
                 ? settings.arguments as PublicCalendarEvent
                 : null;
             return MaterialPageRoute(
-              builder: (context) => PublicEventDetailsScreen(event: arg),
+              builder: (context) => PublicEventDetailsScreen(
+                event: arg,
+                repository: repository,
+              ),
               settings: settings,
             );
           }
@@ -204,6 +227,21 @@ void main() {
       expect(find.text('Song Lab Göteborg, Göteborg'), findsOneWidget);
     });
 
+    testWidgets('2b. Event with imageUrl displays cover image widget', (tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      final eventWithImage = testEvent.copyWith(imageUrl: 'https://example.com/test_cover.jpg');
+      await tester.pumpWidget(createDetailsTestWidget(event: eventWithImage));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Open Details'));
+      await tester.pumpAndSettle();
+
+      expect(find.image(const NetworkImage('https://example.com/test_cover.jpg')), findsOneWidget);
+    });
+
     testWidgets('3. Invalid navigation argument gracefully displays fallback without crashing', (tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
@@ -235,6 +273,61 @@ void main() {
       await tester.tap(find.text('Back to Calendar'));
       await tester.pumpAndSettle();
 
+      expect(find.text('Open Details'), findsOneWidget);
+    });
+
+    testWidgets('4b. Delete button shows confirmation dialog and Cancel retains view', (tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      final spyRepo = SpyingPublicEventRepository();
+      await tester.pumpWidget(createDetailsTestWidget(event: testEvent, repository: spyRepo));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Open Details'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Delete'), findsOneWidget);
+      await tester.tap(find.text('Delete'));
+      await tester.pumpAndSettle();
+
+      // Dialog is displayed
+      expect(find.text('Delete Event'), findsOneWidget);
+      expect(find.text('Are you sure you want to delete "Stockholm Jazz Night"? This action cannot be undone.'), findsOneWidget);
+
+      // Tap Cancel
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Delete Event'), findsNothing);
+      expect(find.text('Stockholm Jazz Night'), findsOneWidget);
+      expect(spyRepo.deletedEventIds, isEmpty);
+    });
+
+    testWidgets('4c. Confirming Delete calls repository.deleteEvent and pops view', (tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      final spyRepo = SpyingPublicEventRepository();
+      await tester.pumpWidget(createDetailsTestWidget(event: testEvent, repository: spyRepo));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Open Details'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Delete'));
+      await tester.pumpAndSettle();
+
+      // Tap Delete in dialog (there are two Delete texts: one on the button and one on the dialog)
+      final dialogDeleteBtn = find.widgetWithText(ElevatedButton, 'Delete');
+      expect(dialogDeleteBtn, findsOneWidget);
+      await tester.tap(dialogDeleteBtn);
+      await tester.pumpAndSettle();
+
+      expect(spyRepo.deletedEventIds, contains('mock_test_1'));
+      expect(find.text('Event "Stockholm Jazz Night" deleted.'), findsOneWidget);
       expect(find.text('Open Details'), findsOneWidget);
     });
 

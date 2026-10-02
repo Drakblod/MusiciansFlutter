@@ -97,8 +97,8 @@
     "SubRequests": {
       ".indexOn": ["eventId", "EventId", "bandId", "BandId", "Status", "CreatorUserId", "RequestGroupId", "requestGroupId"],
       "$subRequestId": {
-        ".read": "auth != null && (data.child('CreatorUserId').val() == auth.uid || data.child('UserId').val() == auth.uid || root.child('subRequestAudience').child($subRequestId).child(auth.uid).val() == true || (data.child('bandId').exists() && (root.child('Bands').child(data.child('bandId').val()).child('Members_band').child(auth.uid).child('Role').val() == 'Leader' || root.child('Bands').child(data.child('bandId').val()).child('Members_band').child(auth.uid).child('Role').val() == 'Admin')) || (data.child('BandId').exists() && (root.child('Bands').child(data.child('BandId').val()).child('Members_band').child(auth.uid).child('Role').val() == 'Leader' || root.child('Bands').child(data.child('BandId').val()).child('Members_band').child(auth.uid).child('Role').val() == 'Admin')) || data.child('Responses').child(auth.uid).exists())",
-        ".write": false,
+        ".read": "auth != null && (data.child('CreatorUserId').val() == auth.uid || data.child('creatorUserId').val() == auth.uid || data.child('UserId').val() == auth.uid || data.child('userId').val() == auth.uid || data.child('creatorId').val() == auth.uid || (data.child('RequestGroupId').exists() && root.child('creatorSubRequestGroups').child(auth.uid).child(data.child('RequestGroupId').val()).exists()) || (data.child('requestGroupId').exists() && root.child('creatorSubRequestGroups').child(auth.uid).child(data.child('requestGroupId').val()).exists()) || root.child('subRequestAudience').child($subRequestId).child(auth.uid).val() == true || (data.child('bandId').exists() && (root.child('Bands').child(data.child('bandId').val()).child('Members_band').child(auth.uid).child('Role').val() == 'Leader' || root.child('Bands').child(data.child('bandId').val()).child('Members_band').child(auth.uid).child('Role').val() == 'Admin')) || (data.child('BandId').exists() && (root.child('Bands').child(data.child('BandId').val()).child('Members_band').child(auth.uid).child('Role').val() == 'Leader' || root.child('Bands').child(data.child('BandId').val()).child('Members_band').child(auth.uid).child('Role').val() == 'Admin')) || data.child('Responses').child(auth.uid).exists())",
+        ".write": "auth != null && !data.exists() && (newData.child('CreatorUserId').val() == auth.uid || newData.child('creatorUserId').val() == auth.uid || newData.child('UserId').val() == auth.uid || newData.child('userId').val() == auth.uid)",
         "Status": {
           ".write": "auth != null && newData.val() == 'cancelled' && (data.parent().child('CreatorUserId').val() == auth.uid || data.parent().child('UserId').val() == auth.uid || (data.parent().child('bandId').exists() && (root.child('Bands').child(data.parent().child('bandId').val()).child('Members_band').child(auth.uid).child('Role').val() == 'Leader' || root.child('Bands').child(data.parent().child('bandId').val()).child('Members_band').child(auth.uid).child('Role').val() == 'Admin')) || (data.parent().child('BandId').exists() && (root.child('Bands').child(data.parent().child('BandId').val()).child('Members_band').child(auth.uid).child('Role').val() == 'Leader' || root.child('Bands').child(data.parent().child('BandId').val()).child('Members_band').child(auth.uid).child('Role').val() == 'Admin')))"
         },
@@ -248,6 +248,13 @@
     "reportedListings": {
       ".read": "auth != null",
       ".write": "auth != null"
+    },
+    "PublicEvents": {
+      ".read": "auth != null",
+      ".indexOn": ["startDateTime", "createdBy", "status", "eventType"],
+      "$eventId": {
+        ".write": "auth != null && ( (!data.exists() && (newData.child('createdBy').val() == auth.uid || !newData.child('createdBy').exists())) || (data.exists() && (data.child('createdBy').val() == auth.uid || !data.child('createdBy').exists())) )"
+      }
     },
     "BandEvents": {
       ".read": "auth != null",

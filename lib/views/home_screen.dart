@@ -92,7 +92,7 @@ class HomeScreen extends StatelessWidget {
           }).toList();
 
           if (activeForBand.isNotEmpty && context.mounted) {
-            _showSubRequestChoiceBottomSheet(
+            await _showSubRequestChoiceBottomSheet(
               context,
               appState,
               bandId,
@@ -112,14 +112,14 @@ class HomeScreen extends StatelessWidget {
     }
   }
 
-  void _showSubRequestChoiceBottomSheet(
+  Future<void> _showSubRequestChoiceBottomSheet(
     BuildContext context,
     AppState appState,
     String bandId,
     String bandName,
     int activeCount,
-  ) {
-    showModalBottomSheet(
+  ) async {
+    final choice = await showModalBottomSheet<String>(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
@@ -194,80 +194,10 @@ class HomeScreen extends StatelessWidget {
               ),
               const SizedBox(height: 20),
 
-              // Option 1: Manage Active Sub Requests
+              // Option 1: Create New Sub Request
               AnimatedTapDetector(
                 onTap: () {
-                  Navigator.pop(sheetContext);
-                  Navigator.pushNamed(
-                    context,
-                    '/sub-request-responses',
-                    arguments: {'bandId': bandId},
-                  );
-                },
-                child: Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: AppTheme.primaryAccent.withOpacity(0.12),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                      color: AppTheme.primaryAccent.withOpacity(0.6),
-                      width: 1.5,
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: AppTheme.primaryAccent.withOpacity(0.25),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.assignment_ind_outlined,
-                          color: AppTheme.primaryAccent,
-                          size: 24,
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Manage Active Sub Requests ($activeCount)',
-                              style: GoogleFonts.outfit(
-                                fontSize: 15,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                              ),
-                            ),
-                            const SizedBox(height: 3),
-                            Text(
-                              'Review applicants, assign subs, or edit postings',
-                              style: GoogleFonts.inter(
-                                fontSize: 12,
-                                color: AppTheme.textSecondary,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const Icon(
-                        Icons.arrow_forward_ios_rounded,
-                        color: AppTheme.primaryAccent,
-                        size: 16,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-
-              // Option 2: Create New Sub Request
-              AnimatedTapDetector(
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  Navigator.pushNamed(context, '/find-sub');
+                  Navigator.pop(sheetContext, 'create');
                 },
                 child: Container(
                   padding: const EdgeInsets.all(16),
@@ -326,20 +256,96 @@ class HomeScreen extends StatelessWidget {
                   ),
                 ),
               ),
+              const SizedBox(height: 12),
+
+              // Option 2: Manage Active Requests
+              AnimatedTapDetector(
+                onTap: () {
+                  Navigator.pop(sheetContext, 'manage');
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primaryAccent.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: AppTheme.primaryAccent.withOpacity(0.6),
+                      width: 1.5,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: AppTheme.primaryAccent.withOpacity(0.25),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.assignment_ind_outlined,
+                          color: AppTheme.primaryAccent,
+                          size: 24,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Manage Active Requests',
+                              style: GoogleFonts.outfit(
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              'Review applicants, assign subs, or edit postings',
+                              style: GoogleFonts.inter(
+                                fontSize: 12,
+                                color: AppTheme.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Icon(
+                        Icons.arrow_forward_ios_rounded,
+                        color: AppTheme.primaryAccent,
+                        size: 16,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ],
           ),
         );
       },
     );
+
+    if (context.mounted && choice != null) {
+      if (choice == 'manage') {
+        Navigator.pushNamed(
+          context,
+          '/sub-request-responses',
+          arguments: {'bandId': bandId},
+        );
+      } else if (choice == 'create') {
+        Navigator.pushNamed(context, '/find-sub');
+      }
+    }
   }
 
-  void _showBandSelectorBottomSheet(
+  Future<void> _showBandSelectorBottomSheet(
     BuildContext context,
     AppState appState,
     Map<String, String> bands,
     String routeName,
-  ) {
-    showModalBottomSheet(
+  ) async {
+    final selectedBand = await showModalBottomSheet<MapEntry<String, String>>(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
@@ -399,7 +405,7 @@ class HomeScreen extends StatelessWidget {
                 child: ListView.builder(
                   shrinkWrap: true,
                   itemCount: bands.length,
-                  itemBuilder: (context, index) {
+                  itemBuilder: (itemCtx, index) {
                     final bandId = bands.keys.elementAt(index);
                     final bandName = bands[bandId]!;
                     final isSelected = appState.activeBandId == bandId;
@@ -408,14 +414,7 @@ class HomeScreen extends StatelessWidget {
                       padding: const EdgeInsets.only(bottom: 12),
                       child: AnimatedTapDetector(
                         onTap: () {
-                          Navigator.pop(sheetContext); // Close bottom sheet
-                          _proceedToBandRoute(
-                            context,
-                            appState,
-                            bandId,
-                            bandName,
-                            routeName,
-                          );
+                          Navigator.pop(sheetContext, MapEntry(bandId, bandName));
                         },
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -699,7 +698,7 @@ class HomeScreen extends StatelessWidget {
                   child: Padding(
                     padding: const EdgeInsets.only(bottom: 10, right: 10),
                     child: Text(
-                      '2.64.0',
+                      '2.65.0',
                       style: GoogleFonts.inter(
                         color: AppTheme.textSecondary.withOpacity(0.5),
                         fontSize: 12,
@@ -869,7 +868,7 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
         }
       } else {
         if (context.mounted) {
-          _showBandSelectorBottomSheet(context, appState, bands, routeName);
+          await _showBandSelectorBottomSheet(context, appState, bands, routeName);
         }
       }
     } catch (e) {
@@ -910,7 +909,7 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
           }).toList();
 
           if (activeForBand.isNotEmpty && context.mounted) {
-            _showSubRequestChoiceBottomSheet(
+            await _showSubRequestChoiceBottomSheet(
               context,
               appState,
               bandId,
@@ -930,14 +929,14 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
     }
   }
 
-  void _showSubRequestChoiceBottomSheet(
+  Future<void> _showSubRequestChoiceBottomSheet(
     BuildContext context,
     AppState appState,
     String bandId,
     String bandName,
     int activeCount,
-  ) {
-    showModalBottomSheet(
+  ) async {
+    final choice = await showModalBottomSheet<String>(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
@@ -1012,80 +1011,10 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
               ),
               const SizedBox(height: 20),
 
-              // Option 1: Manage Active Sub Requests
+              // Option 1: Create New Sub Request
               AnimatedTapDetector(
                 onTap: () {
-                  Navigator.pop(sheetContext);
-                  Navigator.pushNamed(
-                    context,
-                    '/sub-request-responses',
-                    arguments: {'bandId': bandId},
-                  );
-                },
-                child: Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: AppTheme.primaryAccent.withOpacity(0.12),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                      color: AppTheme.primaryAccent.withOpacity(0.6),
-                      width: 1.5,
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: AppTheme.primaryAccent.withOpacity(0.25),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.assignment_ind_outlined,
-                          color: AppTheme.primaryAccent,
-                          size: 24,
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Manage Active Sub Requests ($activeCount)',
-                              style: GoogleFonts.outfit(
-                                fontSize: 15,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                              ),
-                            ),
-                            const SizedBox(height: 3),
-                            Text(
-                              'Review applicants, assign subs, or edit postings',
-                              style: GoogleFonts.inter(
-                                fontSize: 12,
-                                color: AppTheme.textSecondary,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const Icon(
-                        Icons.arrow_forward_ios_rounded,
-                        color: AppTheme.primaryAccent,
-                        size: 16,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-
-              // Option 2: Create New Sub Request
-              AnimatedTapDetector(
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  Navigator.pushNamed(context, '/find-sub');
+                  Navigator.pop(sheetContext, 'create');
                 },
                 child: Container(
                   padding: const EdgeInsets.all(16),
@@ -1144,20 +1073,96 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
                   ),
                 ),
               ),
+              const SizedBox(height: 12),
+
+              // Option 2: Manage Active Requests
+              AnimatedTapDetector(
+                onTap: () {
+                  Navigator.pop(sheetContext, 'manage');
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primaryAccent.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: AppTheme.primaryAccent.withOpacity(0.6),
+                      width: 1.5,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: AppTheme.primaryAccent.withOpacity(0.25),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.assignment_ind_outlined,
+                          color: AppTheme.primaryAccent,
+                          size: 24,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Manage Active Requests',
+                              style: GoogleFonts.outfit(
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              'Review applicants, assign subs, or edit postings',
+                              style: GoogleFonts.inter(
+                                fontSize: 12,
+                                color: AppTheme.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Icon(
+                        Icons.arrow_forward_ios_rounded,
+                        color: AppTheme.primaryAccent,
+                        size: 16,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ],
           ),
         );
       },
     );
+
+    if (context.mounted && choice != null) {
+      if (choice == 'manage') {
+        Navigator.pushNamed(
+          context,
+          '/sub-request-responses',
+          arguments: {'bandId': bandId},
+        );
+      } else if (choice == 'create') {
+        Navigator.pushNamed(context, '/find-sub');
+      }
+    }
   }
 
-  void _showBandSelectorBottomSheet(
+  Future<void> _showBandSelectorBottomSheet(
     BuildContext context,
     AppState appState,
     Map<String, String> bands,
     String routeName,
-  ) {
-    showModalBottomSheet(
+  ) async {
+    final selectedBand = await showModalBottomSheet<MapEntry<String, String>>(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
@@ -1217,7 +1222,7 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
                 child: ListView.builder(
                   shrinkWrap: true,
                   itemCount: bands.length,
-                  itemBuilder: (context, index) {
+                  itemBuilder: (itemCtx, index) {
                     final bandId = bands.keys.elementAt(index);
                     final bandName = bands[bandId]!;
                     final isSelected = appState.activeBandId == bandId;
@@ -1226,14 +1231,7 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
                       padding: const EdgeInsets.only(bottom: 12),
                       child: AnimatedTapDetector(
                         onTap: () {
-                          Navigator.pop(sheetContext); // Close bottom sheet
-                          _proceedToBandRoute(
-                            context,
-                            appState,
-                            bandId,
-                            bandName,
-                            routeName,
-                          );
+                          Navigator.pop(sheetContext, MapEntry(bandId, bandName));
                         },
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -1295,6 +1293,16 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
         );
       },
     );
+
+    if (context.mounted && selectedBand != null) {
+      await _proceedToBandRoute(
+        context,
+        appState,
+        selectedBand.key,
+        selectedBand.value,
+        routeName,
+      );
+    }
   }
 
   String _getShortLabel(String id, String fullTitle) {
@@ -1779,7 +1787,7 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
                                 }
                               },
                               child: Text(
-                                '2.64.0',
+                                '2.65.0',
                                 style: GoogleFonts.inter(
                                   color: AppTheme.textSecondary.withOpacity(0.5),
                                   fontSize: 12,

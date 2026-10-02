@@ -43,17 +43,19 @@ class _SubRequestResponseDetailsScreenState
         throw Exception("Invalid request ID");
       }
 
-      // Fetch the responses snapshot directly from root SubRequests
-      final list = await appState.firebaseService.getAllSubRequestsAsync();
-      final matchingReq = list.firstWhere(
-        (r) => (r.subRequestId ?? r.id) == reqId,
-        orElse: () => widget.subRequest,
-      );
+      // 1. Fetch targeted SubRequest or fallback to widget.subRequest
+      final freshReq = await appState.firebaseService.getSubRequestAsync(reqId);
+      final effectiveReq = freshReq ?? widget.subRequest;
 
-      final responderIds = matchingReq.responses.keys.toList();
+      // 2. Collect responder IDs
+      Map<String, dynamic> responses = Map<String, dynamic>.from(effectiveReq.responses);
+      if (responses.isEmpty) {
+        responses = await appState.firebaseService.getSubRequestResponsesAsync(reqId);
+      }
+      final responderIds = responses.keys.toList();
       final List<ResponderItem> items = [];
 
-      // Fetch profiles for each responder ID
+      // 3. Fetch profiles for each responder ID
       for (final uid in responderIds) {
         final profile = await appState.firebaseService.getUserProfileAsync(uid);
         if (profile != null) {
@@ -70,9 +72,11 @@ class _SubRequestResponseDetailsScreenState
         }
       }
 
-      setState(() {
-        _responders = items;
-      });
+      if (mounted) {
+        setState(() {
+          _responders = items;
+        });
+      }
     } catch (e) {
       debugPrint("Error loading responses: $e");
       if (mounted) {
@@ -84,7 +88,9 @@ class _SubRequestResponseDetailsScreenState
         );
       }
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 

@@ -163,7 +163,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Now sub-sections should be visible
-      expect(find.text('ADD SUB'), findsOneWidget);
+      expect(find.text('ADD SUB (if needed)'), findsOneWidget);
       expect(find.text('+ Add Sub'), findsOneWidget);
       expect(find.text('MANAGE BAND MEMBERS FOR THIS SPECIFIC EVENT'), findsOneWidget);
 

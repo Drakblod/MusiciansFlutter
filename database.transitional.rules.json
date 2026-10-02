@@ -247,6 +247,13 @@
       ".read": "auth != null",
       ".write": "auth != null"
     },
+    "PublicEvents": {
+      ".read": "auth != null",
+      ".indexOn": ["startDateTime", "createdBy", "status", "eventType"],
+      "$eventId": {
+        ".write": "auth != null && ( (!data.exists() && (newData.child('createdBy').val() == auth.uid || !newData.child('createdBy').exists())) || (data.exists() && (data.child('createdBy').val() == auth.uid || !data.child('createdBy').exists())) )"
+      }
+    },
     "BandEvents": {
       ".read": "auth != null",
       ".write": "auth != null"

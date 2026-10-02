@@ -759,20 +759,29 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
         },
         actions: {
           ActivateIntent: CallbackAction<ActivateIntent>(
-            onInvoke: (_) => Navigator.pushNamed(
-              context,
-              '/public-event-details',
-              arguments: event,
-            ),
+            onInvoke: (_) async {
+              final result = await Navigator.pushNamed(
+                context,
+                '/public-event-details',
+                arguments: event,
+              );
+              if (result == true && mounted) {
+                _loadEvents();
+              }
+              return null;
+            },
           ),
         },
         child: AnimatedTapDetector(
-          onTap: () {
-            Navigator.pushNamed(
+          onTap: () async {
+            final result = await Navigator.pushNamed(
               context,
               '/public-event-details',
               arguments: event,
             );
+            if (result == true && mounted) {
+              _loadEvents();
+            }
           },
           child: Container(
             decoration: BoxDecoration(
