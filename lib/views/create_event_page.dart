@@ -879,7 +879,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          'Include/exclude members or add subs for this event.',
+                          'Include/exclude band members and/or add Subs for this specific event.',
                           style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textSecondary),
                         ),
                       ],
