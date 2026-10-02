@@ -386,7 +386,7 @@ void main() {
       };
       final parsedGig = EventRehearsal.fromJson(jsonGig);
       expect(parsedGig.type, equals('Club gig'));
-      expect(EventRehearsal.standardSessionTypes, containsAll(['Rehearsal', 'Club gig', 'Concert', 'Show', 'Tour', 'Private Event', 'Festival', 'Other']));
+      expect(EventRehearsal.standardSessionTypes, containsAll(['Rehearsal', 'Club Gig', 'Concert', 'Show', 'Tour', 'Private Event', 'Festival', 'Other']));
       
       final namedRehearsal = EventRehearsal(
         id: 'reh_named',

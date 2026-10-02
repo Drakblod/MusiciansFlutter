@@ -178,6 +178,10 @@ void main() {
     expect(find.text('Summer Fest Gig'), findsOneWidget);
     expect(find.text('Main Stage'), findsOneWidget);
 
+    // Verify Gig Type Badge 'Concert' is displayed
+    expect(find.text('Concert'), findsOneWidget);
+    expect(find.text('UPCOMING (Finalized)'), findsOneWidget);
+
     // 2. Verify normalized response counts
     expect(find.textContaining('1 Attending (2 responses)'), findsOneWidget);
 
@@ -207,5 +211,107 @@ void main() {
     expect(find.textContaining('NO (1)'), findsOneWidget);
     expect(find.textContaining('UNCERTAIN (0)'), findsOneWidget);
     expect(find.textContaining('NO ANSWER (0)'), findsOneWidget);
+  });
+
+  testWidgets('Gigs/Info sub-tabs: Events (left) & Other (right), sub-filters Upcoming & Past, and newest first sorting', (tester) async {
+    tester.view.physicalSize = const Size(1200, 2400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    final mockService = MockGigsInfoFirebaseService();
+    mockService.testMembers = [
+      BandMember(userId: 'leader_1', nickname: 'Leader', role: 'Leader'),
+    ];
+
+    final now = DateTime.now();
+    final event1 = BandEvent(
+      id: 'ev_1',
+      title: 'Upcoming Gig One',
+      description: 'Older upcoming',
+      eventType: 'Club Gig',
+      location: 'Club A',
+      startDateTime: now.add(const Duration(days: 2)).toIso8601String(),
+      endDateTime: now.add(const Duration(days: 2, hours: 2)).toIso8601String(),
+      additionalNotes: '',
+      createdBy: 'leader_1',
+      createdAt: now.millisecondsSinceEpoch,
+      updatedAt: now.millisecondsSinceEpoch,
+      requireResponse: false,
+    );
+
+    final event2 = BandEvent(
+      id: 'ev_2',
+      title: 'Upcoming Gig Two (Newer)',
+      description: 'Newer upcoming',
+      eventType: 'Festival',
+      location: 'Park B',
+      startDateTime: now.add(const Duration(days: 5)).toIso8601String(),
+      endDateTime: now.add(const Duration(days: 5, hours: 4)).toIso8601String(),
+      additionalNotes: '',
+      createdBy: 'leader_1',
+      createdAt: now.millisecondsSinceEpoch,
+      updatedAt: now.millisecondsSinceEpoch,
+      requireResponse: false,
+    );
+
+    final pastEvent = BandEvent(
+      id: 'ev_past',
+      title: 'Past Rehearsal',
+      description: 'Past rehearsal event',
+      eventType: 'Rehearsal',
+      location: 'Studio 1',
+      startDateTime: now.subtract(const Duration(days: 4)).toIso8601String(),
+      endDateTime: now.subtract(const Duration(days: 4, hours: -2)).toIso8601String(),
+      additionalNotes: '',
+      createdBy: 'leader_1',
+      createdAt: now.millisecondsSinceEpoch,
+      updatedAt: now.millisecondsSinceEpoch,
+      requireResponse: false,
+    );
+
+    mockService.testEvent = event1; // Single stream subscriber returns this
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider<AppState>(
+        create: (_) => MockGigsInfoAppState(mockService),
+        child: const MaterialApp(
+          home: BandRoomChatScreen(),
+        ),
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    // Tap Gigs/Info tab
+    await tester.tap(find.text('Gigs/Info'));
+    for (int i = 0; i < 10; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+
+    // Top sub-tabs: Events on left, Other on right
+    expect(find.widgetWithText(AnimatedTapDetector, 'Events'), findsOneWidget);
+    expect(find.widgetWithText(AnimatedTapDetector, 'Other'), findsOneWidget);
+
+    // Sub-filters under Events
+    expect(find.text('Upcoming (Finalized)'), findsOneWidget);
+    expect(find.text('Past Events'), findsOneWidget);
+
+    // Switch to Past Events
+    await tester.tap(find.text('Past Events'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('No past events found.'), findsOneWidget);
+
+    // Switch to Other tab
+    await tester.tap(find.text('Other'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Create Post / Update'), findsOneWidget);
+    expect(find.text('No posts or updates found.'), findsOneWidget);
   });
 }

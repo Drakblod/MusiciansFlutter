@@ -23,36 +23,10 @@ import 'event_details_page.dart';
 import 'event_results_page.dart';
 import 'event_room_chat_screen.dart';
 import 'edit_band_info_screen.dart';
+import 'manage_events_screen.dart';
 import '../utils/band_section_utils.dart';
 import '../utils/date_parser.dart';
 import '../widgets/create_band_section_sheet.dart';
-
-class _EventGroup {
-  final BandEvent mainEvent;
-  final List<BandEvent> subEvents;
-
-  _EventGroup({required this.mainEvent, required this.subEvents});
-
-  bool get isGroup => subEvents.length > 1;
-
-  DateTime get overallStart {
-    DateTime earliest = DateTime.tryParse(mainEvent.startDateTime)?.toLocal() ?? DateTime.now();
-    for (var e in subEvents) {
-      final t = DateTime.tryParse(e.startDateTime)?.toLocal();
-      if (t != null && t.isBefore(earliest)) earliest = t;
-    }
-    return earliest;
-  }
-
-  DateTime get overallEnd {
-    DateTime latest = DateTime.tryParse(mainEvent.endDateTime)?.toLocal() ?? DateTime.now();
-    for (var e in subEvents) {
-      final t = DateTime.tryParse(e.endDateTime)?.toLocal();
-      if (t != null && t.isAfter(latest)) latest = t;
-    }
-    return latest;
-  }
-}
 
 class BandRoomChatScreen extends StatefulWidget {
   const BandRoomChatScreen({super.key});
@@ -115,7 +89,8 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
       }
     }
   }
-  String _gigsTabFilter = 'All';
+  String _gigsTabFilter = 'Events';
+  String _eventsSubFilter = 'Upcoming (Finalized)';
   String? _loadedBandId;
 
   @override
@@ -2213,8 +2188,10 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
     final feedItems = <Map<String, dynamic>>[];
     final now = DateTime.now();
 
-    // Add News/Gigs
-    if (_gigsTabFilter == 'All' || _gigsTabFilter == 'News') {
+    final isOtherSelected = _gigsTabFilter == 'Other' || _gigsTabFilter == 'News';
+
+    if (isOtherSelected) {
+      // Add Other posts / updates
       for (var post in _gigsNews) {
         feedItems.add({
           'id': post['id'] ?? '',
@@ -2227,16 +2204,34 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
           'originalData': post,
         });
       }
-    }
-
-    // Add Events
-    if (_gigsTabFilter == 'All' || _gigsTabFilter == 'Events') {
+      // Sort posts by timestamp descending (newest on top)
+      feedItems.sort((a, b) => (b['timestamp'] as int).compareTo(a['timestamp'] as int));
+    } else {
+      // Default: Events
+      final filteredEvents = <BandEvent>[];
       for (var event in _bandEvents) {
         final endLocal = DateTime.tryParse(event.endDateTime)?.toLocal() ?? now;
         final isUpcoming = endLocal.isAfter(now);
-        final timestamp = event.createdAt > 0
-            ? event.createdAt
-            : (DateTime.tryParse(event.startDateTime)?.millisecondsSinceEpoch ?? 0);
+
+        if (_eventsSubFilter.startsWith('Upcoming') && isUpcoming) {
+          filteredEvents.add(event);
+        } else if (_eventsSubFilter.startsWith('Past') && !isUpcoming) {
+          filteredEvents.add(event);
+        }
+      }
+
+      // Sort chronologically with newest on top (by startDateTime descending)
+      filteredEvents.sort((a, b) {
+        final aDate = DateTime.tryParse(a.startDateTime)?.millisecondsSinceEpoch ?? a.createdAt;
+        final bDate = DateTime.tryParse(b.startDateTime)?.millisecondsSinceEpoch ?? b.createdAt;
+        return bDate.compareTo(aDate);
+      });
+
+      for (var event in filteredEvents) {
+        final endLocal = DateTime.tryParse(event.endDateTime)?.toLocal() ?? now;
+        final isUpcoming = endLocal.isAfter(now);
+        final timestamp = DateTime.tryParse(event.startDateTime)?.millisecondsSinceEpoch ??
+            (event.createdAt > 0 ? event.createdAt : 0);
 
         feedItems.add({
           'id': event.id ?? '',
@@ -2251,36 +2246,46 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
       }
     }
 
-    // Sort by timestamp descending
-    feedItems.sort((a, b) => (b['timestamp'] as int).compareTo(a['timestamp'] as int));
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Filter Chips Bar
+        // Top Filter Bar: Events (left) & Other (right)
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.fromLTRB(16.0, 10.0, 16.0, 6.0),
+          child: Row(
+            children: [
+              Expanded(
+                child: _buildMainGigsTabChip('Events', Icons.event_rounded),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _buildMainGigsTabChip('Other', Icons.feed_rounded),
+              ),
+            ],
+          ),
+        ),
+
+        // Sub-filter row when Events is selected: Upcoming (Finalized) vs Past Events
+        if (!isOtherSelected) ...[
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16.0, 2.0, 16.0, 8.0),
             child: Row(
               children: [
-                _buildFilterChip('All', Icons.feed_rounded),
+                _buildEventsSubFilterChip('Upcoming (Finalized)', Icons.upcoming_rounded),
                 const SizedBox(width: 8),
-                _buildFilterChip('News', Icons.campaign_rounded),
-                const SizedBox(width: 8),
-                _buildFilterChip('Events', Icons.event_rounded),
+                _buildEventsSubFilterChip('Past Events', Icons.history_rounded),
               ],
             ),
           ),
-        ),
+        ],
 
         Expanded(
           child: ListView(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             physics: const BouncingScrollPhysics(),
             children: [
-              // Post Button for Leaders/Admins (under News filter, or top of feed when appropriate)
-              if (isLeaderOrAdmin && bandId != null && (_gigsTabFilter == 'All' || _gigsTabFilter == 'News')) ...[
+              // Post Button for Leaders/Admins (under Other filter)
+              if (isLeaderOrAdmin && bandId != null && isOtherSelected) ...[
                 AnimatedTapDetector(
                   onTap: () => _showPostGigsNewsDialog(bandId),
                   child: Container(
@@ -2304,7 +2309,7 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                           const Icon(Icons.add_circle_outline_rounded, color: Colors.white, size: 20),
                           const SizedBox(width: 8),
                           Text(
-                            "Create Gig or News Update",
+                            "Create Post / Update",
                             style: GoogleFonts.outfit(
                               color: Colors.white,
                               fontWeight: FontWeight.bold,
@@ -2324,7 +2329,11 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                   height: 200,
                   child: Center(
                     child: Text(
-                      "No posts or events found.",
+                      !isOtherSelected
+                          ? (_eventsSubFilter.startsWith('Upcoming')
+                              ? "No upcoming events found."
+                              : "No past events found.")
+                          : "No posts or updates found.",
                       style: GoogleFonts.inter(color: AppTheme.textSecondary),
                     ),
                   ),
@@ -2346,8 +2355,10 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
     );
   }
 
-  Widget _buildFilterChip(String filterVal, IconData icon) {
-    final isSelected = _gigsTabFilter == filterVal;
+  Widget _buildMainGigsTabChip(String filterVal, IconData icon) {
+    final isSelected = (_gigsTabFilter == filterVal) ||
+        (filterVal == 'Other' && _gigsTabFilter == 'News') ||
+        (filterVal == 'Events' && (_gigsTabFilter != 'Other' && _gigsTabFilter != 'News'));
     return AnimatedTapDetector(
       onTap: () {
         setState(() {
@@ -2355,9 +2366,50 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
         });
       },
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
           color: isSelected ? AppTheme.primaryAccent : AppTheme.cardBackground,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected ? AppTheme.primaryAccent : const Color(0xFF2E2A4E),
+            width: 1.5,
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 17,
+              color: isSelected ? Colors.white : AppTheme.textSecondary,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              filterVal,
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                color: isSelected ? Colors.white : AppTheme.textSecondary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEventsSubFilterChip(String subFilterVal, IconData icon) {
+    final isSelected = _eventsSubFilter == subFilterVal;
+    return AnimatedTapDetector(
+      onTap: () {
+        setState(() {
+          _eventsSubFilter = subFilterVal;
+        });
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected ? AppTheme.primaryAccent.withOpacity(0.2) : const Color(0xFF1E1938),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: isSelected ? AppTheme.primaryAccent : const Color(0xFF2E2A4E),
@@ -2369,15 +2421,15 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
           children: [
             Icon(
               icon,
-              size: 16,
-              color: isSelected ? Colors.white : AppTheme.textSecondary,
+              size: 14,
+              color: isSelected ? AppTheme.primaryAccent : AppTheme.textSecondary,
             ),
             const SizedBox(width: 6),
             Text(
-              filterVal == 'News' ? 'Gigs & News' : filterVal,
+              subFilterVal,
               style: GoogleFonts.inter(
-                fontSize: 12,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                fontSize: 11.5,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
                 color: isSelected ? Colors.white : AppTheme.textSecondary,
               ),
             ),
@@ -2953,8 +3005,25 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
         eventIcon = Icons.music_note_rounded;
         break;
       case 'concert':
+        eventIcon = Icons.stadium_rounded;
+        break;
+      case 'tour':
+        eventIcon = Icons.flight_takeoff_rounded;
+        break;
+      case 'festival':
+        eventIcon = Icons.celebration_rounded;
+        break;
+      case 'club gig':
+      case 'club':
       case 'gig':
-        eventIcon = Icons.campaign_rounded;
+        eventIcon = Icons.nightlife_rounded;
+        break;
+      case 'show':
+        eventIcon = Icons.theater_comedy_rounded;
+        break;
+      case 'private event':
+      case 'private':
+        eventIcon = Icons.lock_outline_rounded;
         break;
       case 'recording session':
         eventIcon = Icons.mic_rounded;
@@ -3023,7 +3092,7 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: Text(
-                              isUpcoming ? 'NEW EVENT' : 'PAST EVENT',
+                              isUpcoming ? 'UPCOMING (Finalized)' : 'PAST EVENT',
                               style: GoogleFonts.inter(
                                 fontSize: 9,
                                 fontWeight: FontWeight.bold,
@@ -3031,6 +3100,24 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                               ),
                             ),
                           ),
+                          if (event.eventType.isNotEmpty && event.eventType.toLowerCase() != 'event') ...[
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: AppTheme.primaryAccent.withOpacity(0.18),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                event.eventType,
+                                style: GoogleFonts.inter(
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppTheme.primaryAccent,
+                                ),
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                       const SizedBox(height: 4),
@@ -3416,609 +3503,14 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
     );
   }
 
-  Widget _getEventTypeBadge(String type) {
-    String emoji = '📅';
-    switch (type) {
-      case 'Rehearsal':
-        emoji = '🎼';
-        break;
-      case 'Concert':
-        emoji = '🎺';
-        break;
-      case 'Gig':
-        emoji = '🎸';
-        break;
-      case 'Recording Session':
-        emoji = '🎙️';
-        break;
-      case 'Meeting':
-        emoji = '👥';
-        break;
-    }
-    return Container(
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: AppTheme.primaryAccent.withOpacity(0.1),
-        shape: BoxShape.circle,
-      ),
-      child: Text(emoji, style: GoogleFonts.inter(fontSize: 20)),
-    );
-  }
 
-  Widget _buildEventCard(BandEvent event, String bandId) {
-    final startLocal = DateTime.tryParse(event.startDateTime)?.toLocal() ?? DateTime.now();
-    final endLocal = DateTime.tryParse(event.endDateTime)?.toLocal() ?? startLocal;
-
-    final String timeOrDateRangeStr = formatBandEventDateRange(event);
-
-    final isPast = endLocal.isBefore(DateTime.now());
-    final isFinalized = event.isLocked;
-    final isNewRsvp = !isPast && !isFinalized;
-
-    return GestureDetector(
-      onTap: () {
-        if (isNewRsvp) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => EventDetailsPage(
-                bandId: bandId,
-                eventId: event.id!,
-                initialEvent: event,
-              ),
-            ),
-          );
-        } else {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => EventResultsPage(
-                bandId: bandId,
-                eventId: event.id!,
-                initialEvent: event,
-              ),
-            ),
-          );
-        }
-      },
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: AppTheme.cardBackground,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFF231F45), width: 1),
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (event.eventType.isNotEmpty && event.eventType.toLowerCase() != 'event') ...[
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: AppTheme.primaryAccent.withOpacity(0.18),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            event.eventType,
-                            style: GoogleFonts.inter(
-                              fontSize: 10,
-                              color: AppTheme.primaryAccent,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                  ],
-                  Text(
-                    event.title,
-                    style: GoogleFonts.outfit(
-                      fontSize: 16,
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      const Icon(Icons.calendar_today_outlined, size: 13, color: AppTheme.textSecondary),
-                      const SizedBox(width: 6),
-                      Text(
-                        timeOrDateRangeStr,
-                        style: GoogleFonts.inter(fontSize: 12, color: Colors.white70),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      const Icon(Icons.location_on_outlined, size: 13, color: AppTheme.textSecondary),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          event.location,
-                          style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (event.requireResponse) ...[
-                    const SizedBox(height: 6),
-                    Builder(builder: (context) {
-                      final activeCount = _members.where((m) => !m.isOnHold && !event.excludedMemberIds.contains(m.userId)).length + event.externalInvitees.length;
-                      final totalExpected = activeCount > 0 ? activeCount : _members.length;
-                      return Text(
-                        '${event.responses.length}/$totalExpected responded',
-                        style: GoogleFonts.inter(
-                          fontSize: 11,
-                          color: AppTheme.primaryAccent,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      );
-                    }),
-                  ],
-                ],
-              ),
-            ),
-            const Icon(Icons.arrow_forward_ios_rounded, color: AppTheme.textSecondary, size: 14),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildGroupCard(_EventGroup group, String bandId) {
-    if (!group.isGroup) {
-      return _buildEventCard(group.mainEvent, bandId);
-    }
-
-    final startLocal = group.overallStart;
-    final endLocal = group.overallEnd;
-
-    final String dateRangeStr = formatMainEventDateRange(startLocal, endLocal);
-
-    final isPast = endLocal.isBefore(DateTime.now());
-    final isFinalized = group.mainEvent.isLocked;
-    final isNewRsvp = !isPast && !isFinalized;
-
-    return GestureDetector(
-      onTap: () {
-        if (isNewRsvp) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => EventDetailsPage(
-                bandId: bandId,
-                eventId: group.mainEvent.id!,
-                initialEvent: group.mainEvent,
-              ),
-            ),
-          );
-        } else {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => EventResultsPage(
-                bandId: bandId,
-                eventId: group.mainEvent.id!,
-                initialEvent: group.mainEvent,
-              ),
-            ),
-          );
-        }
-      },
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 14),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: AppTheme.cardBackground,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.5), width: 1.5),
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: Colors.purple.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: Colors.purpleAccent.withOpacity(0.4)),
-                        ),
-                        child: Text(
-                          'Tour',
-                          style: GoogleFonts.inter(
-                            fontSize: 10,
-                            color: Colors.purpleAccent,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: AppTheme.primaryAccent.withOpacity(0.18),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          '${group.subEvents.length} Events',
-                          style: GoogleFonts.inter(
-                            fontSize: 10,
-                            color: AppTheme.primaryAccent,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    group.mainEvent.title,
-                    style: GoogleFonts.outfit(
-                      fontSize: 17,
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      const Icon(Icons.calendar_today_outlined, size: 13, color: AppTheme.textSecondary),
-                      const SizedBox(width: 6),
-                      Text(
-                        dateRangeStr,
-                        style: GoogleFonts.inter(fontSize: 12, color: Colors.white70, fontWeight: FontWeight.w600),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF16132D),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: group.subEvents.map((sub) {
-                        final subStart = DateTime.tryParse(sub.startDateTime)?.toLocal() ?? DateTime.now();
-                        final subTimeStr = DateFormat('EEE, MMM d • HH:mm').format(subStart);
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 4),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.check_circle_outline, size: 12, color: AppTheme.primaryAccent),
-                              const SizedBox(width: 6),
-                              Expanded(
-                                child: Text(
-                                  '${sub.title} ($subTimeStr)',
-                                  style: GoogleFonts.inter(fontSize: 11, color: Colors.white70),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                  ),
-                  if (group.mainEvent.requireResponse) ...[
-                    const SizedBox(height: 8),
-                    Builder(builder: (context) {
-                      final activeCount = _members.where((m) => !m.isOnHold && !group.mainEvent.excludedMemberIds.contains(m.userId)).length + group.mainEvent.externalInvitees.length;
-                      final totalExpected = activeCount > 0 ? activeCount : _members.length;
-                      return Text(
-                        '${group.mainEvent.responses.length}/$totalExpected responded',
-                        style: GoogleFonts.inter(
-                          fontSize: 11,
-                          color: AppTheme.primaryAccent,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      );
-                    }),
-                  ],
-                ],
-              ),
-            ),
-            const Icon(Icons.arrow_forward_ios_rounded, color: AppTheme.textSecondary, size: 14),
-          ],
-        ),
-      ),
-    );
-  }
-
-  List<_EventGroup> _groupEventsList(List<BandEvent> rawEvents) {
-    final Map<String, List<BandEvent>> parentMap = {};
-    final Map<String, List<BandEvent>> titleMap = {};
-
-    String normalizeTitle(String rawTitle) {
-      final t = rawTitle.replaceAll(RegExp(r'\s*[\-\(]?\s*(Part|Date|Day)\s*\d+[\)]?', caseSensitive: false), '').trim();
-      return t.toLowerCase();
-    }
-
-    for (var e in rawEvents) {
-      if (e.parentEventId != null && e.parentEventId!.isNotEmpty) {
-        parentMap.putIfAbsent(e.parentEventId!, () => []).add(e);
-      } else {
-        final norm = normalizeTitle(e.title);
-        if (norm.isNotEmpty) {
-          titleMap.putIfAbsent(norm, () => []).add(e);
-        }
-      }
-    }
-
-    final List<_EventGroup> result = [];
-    final Set<String> processedParentIds = {};
-    final Set<String> processedEventIds = {};
-
-    // 1. Process explicit parentEventId groups first
-    for (var e in rawEvents) {
-      final pId = e.parentEventId;
-      if (pId != null && pId.isNotEmpty) {
-        if (!processedParentIds.contains(pId)) {
-          processedParentIds.add(pId);
-          final subList = parentMap[pId] ?? [e];
-          for (var sub in subList) {
-            if (sub.id != null) processedEventIds.add(sub.id!);
-          }
-          subList.sort((a, b) {
-            final seqA = a.subEventSequence ?? 0;
-            final seqB = b.subEventSequence ?? 0;
-            if (seqA != seqB) return seqA.compareTo(seqB);
-            final aTime = DateTime.tryParse(a.startDateTime) ?? DateTime.now();
-            final bTime = DateTime.tryParse(b.startDateTime) ?? DateTime.now();
-            return aTime.compareTo(bTime);
-          });
-          result.add(_EventGroup(mainEvent: subList.first, subEvents: subList));
-        }
-      }
-    }
-
-    // 2. Process title-matched events for remaining un-grouped events
-    for (var e in rawEvents) {
-      if (e.id != null && processedEventIds.contains(e.id)) continue;
-      if (e.parentEventId != null && e.parentEventId!.isNotEmpty) continue;
-
-      final norm = normalizeTitle(e.title);
-      final candidateList = titleMap[norm];
-
-      if (candidateList != null && candidateList.length > 1) {
-        final unProcessedGroup = candidateList.where((item) => item.id == null || !processedEventIds.contains(item.id)).toList();
-        if (unProcessedGroup.length > 1) {
-          for (var item in unProcessedGroup) {
-            if (item.id != null) processedEventIds.add(item.id!);
-          }
-          unProcessedGroup.sort((a, b) {
-            final seqA = a.subEventSequence ?? 0;
-            final seqB = b.subEventSequence ?? 0;
-            if (seqA != seqB) return seqA.compareTo(seqB);
-            final aTime = DateTime.tryParse(a.startDateTime) ?? DateTime.now();
-            final bTime = DateTime.tryParse(b.startDateTime) ?? DateTime.now();
-            return aTime.compareTo(bTime);
-          });
-          result.add(_EventGroup(mainEvent: unProcessedGroup.first, subEvents: unProcessedGroup));
-          continue;
-        }
-      }
-
-      if (e.id != null) processedEventIds.add(e.id!);
-      result.add(_EventGroup(mainEvent: e, subEvents: [e]));
-    }
-
-    return result;
-  }
 
   Widget _buildEventsTab() {
     final appState = Provider.of<AppState>(context, listen: false);
     final bandId = appState.activeBandId;
-    if (bandId == null) {
-      return Center(child: Text("No active band", style: GoogleFonts.inter(color: AppTheme.textSecondary)));
-    }
-
-    final selfId = appState.currentUserId;
-    final currentMember = _members.firstWhere(
-      (m) => m.userId == selfId,
-      orElse: () => BandMember(role: 'Member'),
-    );
-    final cRole = (currentMember.role ?? '').toLowerCase();
-    final isLeaderAdminOrMod = cRole.contains('leader') || cRole.contains('admin') || cRole.contains('mod');
-
-    // Separate upcoming and past events
-    final now = DateTime.now();
-    final upcomingEvents = <BandEvent>[];
-    final pastEvents = <BandEvent>[];
-
-    for (var event in _bandEvents) {
-      final endLocal = DateTime.tryParse(event.endDateTime)?.toLocal() ?? DateTime.now();
-      if (endLocal.isAfter(now)) {
-        upcomingEvents.add(event);
-      } else {
-        pastEvents.add(event);
-      }
-    }
-
-    // Group multi-part events
-    final upcomingGroups = _groupEventsList(upcomingEvents);
-    final pastGroups = _groupEventsList(pastEvents);
-
-    final needRsvpGroups = upcomingGroups.where((g) => g.mainEvent.requireResponse && !g.mainEvent.isLocked).toList();
-    final finalizedUpcomingGroups = upcomingGroups.where((g) => !g.mainEvent.requireResponse || g.mainEvent.isLocked).toList();
-
-    return Column(
-      children: [
-        // Create Event Button for Leaders/Admins/MODs
-        if (isLeaderAdminOrMod)
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: AnimatedTapDetector(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => CreateEventPage(bandId: bandId),
-                  ),
-                );
-              },
-              child: Container(
-                height: 50,
-                decoration: BoxDecoration(
-                  gradient: AppTheme.primaryGradient,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Center(
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.add_circle_outline, color: Colors.white),
-                      SizedBox(width: 8),
-                      Text(
-                        "Create Event",
-                        style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-
-        Expanded(
-          child: _bandEvents.isEmpty
-              ? Center(
-                  child: Text(
-                    "No events planned yet.",
-                    style: GoogleFonts.inter(color: AppTheme.textSecondary),
-                  ),
-                )
-              : ListView(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  children: [
-                    if (needRsvpGroups.isNotEmpty) ...[
-                      Padding(
-                        padding: const EdgeInsets.only(top: 8, bottom: 12),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Text("📩", style: GoogleFonts.inter(fontSize: 18)),
-                                const SizedBox(width: 8),
-                                Text(
-                                  "New Events (Need RSVP)",
-                                  style: GoogleFonts.outfit(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    color: AppTheme.primaryAccent,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              "Events demanding RSVP response",
-                              style: GoogleFonts.inter(
-                                fontSize: 11,
-                                color: AppTheme.textSecondary,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      ...needRsvpGroups.map((g) => _buildGroupCard(g, bandId)),
-                    ],
-
-                    if (finalizedUpcomingGroups.isNotEmpty) ...[
-                      Padding(
-                        padding: const EdgeInsets.only(top: 16, bottom: 12),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Text("⏳", style: GoogleFonts.inter(fontSize: 18)),
-                                const SizedBox(width: 8),
-                                Text(
-                                  "Upcoming Events (Finalized)",
-                                  style: GoogleFonts.outfit(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              "Finalized gigs happening in the future",
-                              style: GoogleFonts.inter(
-                                fontSize: 11,
-                                color: AppTheme.textSecondary,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      ...finalizedUpcomingGroups.map((g) => _buildGroupCard(g, bandId)),
-                    ],
-
-                    if (pastGroups.isNotEmpty) ...[
-                      const SizedBox(height: 16),
-                      Theme(
-                        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-                        child: ExpansionTile(
-                          tilePadding: EdgeInsets.zero,
-                          title: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Text("🏛️", style: GoogleFonts.inter(fontSize: 16)),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    "Past Events",
-                                    style: GoogleFonts.outfit(
-                                      fontSize: 16,
-                                      color: AppTheme.textSecondary,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                "Completed events",
-                                style: GoogleFonts.inter(
-                                  fontSize: 11,
-                                  color: AppTheme.textMuted,
-                                ),
-                              ),
-                            ],
-                          ),
-                          iconColor: AppTheme.textSecondary,
-                          collapsedIconColor: AppTheme.textSecondary,
-                          children: pastGroups.map((g) => _buildGroupCard(g, bandId)).toList(),
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 24),
-                  ],
-                ),
-        ),
-      ],
+    return ManageEventsScreen(
+      initialBandId: bandId,
+      embedded: true,
     );
   }
 }

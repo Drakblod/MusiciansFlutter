@@ -441,12 +441,20 @@ void main() {
       await tester.tap(find.text('Events'));
       await tester.pumpAndSettle();
 
-      // 8. Verify exact headings
-      expect(find.text('New Events (Need RSVP)'), findsOneWidget);
-      expect(find.text('Upcoming Events (Finalized)'), findsOneWidget);
-      expect(find.text('Past Events'), findsOneWidget);
+      // 8. Verify exact tabs in ManageEventsScreen
+      expect(find.text('NEW EVENTS (Needs RSVP)'), findsOneWidget);
+      expect(find.text('UPCOMING (Finalized)'), findsOneWidget);
+      expect(find.text('PAST EVENTS'), findsOneWidget);
+
+      // Verify unfinalized event on new events tab
+      expect(find.text('New Unfinalized Event'), findsOneWidget);
+
+      // Switch to Upcoming tab
+      await tester.tap(find.text('UPCOMING (Finalized)'));
+      await tester.pumpAndSettle();
 
       // 9. Tap on Finalized event card -> navigates to EventResultsPage
+      expect(find.text('Finalized Upcoming Event'), findsOneWidget);
       await tester.tap(find.text('Finalized Upcoming Event'));
       await tester.pumpAndSettle();
       expect(find.byType(EventResultsPage), findsOneWidget);

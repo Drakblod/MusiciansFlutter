@@ -17,10 +17,12 @@ enum EventTabType { newEvents, upcoming, past }
 
 class ManageEventsScreen extends StatefulWidget {
   final String? initialBandId;
+  final bool embedded;
 
   const ManageEventsScreen({
     super.key,
     this.initialBandId,
+    this.embedded = false,
   });
 
   @override
@@ -276,34 +278,30 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> with SingleTick
   Widget build(BuildContext context) {
     final appState = Provider.of<AppState>(context);
 
-    return GradientScaffold(
-      appBar: const CustomTopBar(
-        title: 'Events',
-        showBack: true,
-      ),
-      body: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Page Header Title
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-              child: Row(
-                children: [
-                  const Icon(Icons.event_note_rounded, color: AppTheme.primaryAccent, size: 22),
-                  const SizedBox(width: 8),
-                  Text(
-                    'EVENTS',
-                    style: GoogleFonts.outfit(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                      letterSpacing: 1.5,
-                    ),
+    final content = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (!widget.embedded) ...[
+          // Page Header Title
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+            child: Row(
+              children: [
+                const Icon(Icons.event_note_rounded, color: AppTheme.primaryAccent, size: 22),
+                const SizedBox(width: 8),
+                Text(
+                  'EVENTS',
+                  style: GoogleFonts.outfit(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    letterSpacing: 1.5,
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
+          ),
+        ],
 
             // Search & Filter Header
             Container(
@@ -452,7 +450,31 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> with SingleTick
                         ),
             ),
           ],
+        );
+
+    if (widget.embedded) {
+      return Scaffold(
+        backgroundColor: Colors.transparent,
+        body: content,
+        floatingActionButton: FloatingActionButton.extended(
+          backgroundColor: AppTheme.primaryAccent,
+          icon: const Icon(Icons.add_rounded, color: Colors.white),
+          label: Text(
+            'Create Event',
+            style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: Colors.white),
+          ),
+          onPressed: () => GlobalCreateEventLauncher.handleCreateBandEvent(context, appState),
         ),
+      );
+    }
+
+    return GradientScaffold(
+      appBar: const CustomTopBar(
+        title: 'Events',
+        showBack: true,
+      ),
+      body: SafeArea(
+        child: content,
       ),
       floatingActionButton: FloatingActionButton.extended(
         backgroundColor: AppTheme.primaryAccent,
@@ -645,6 +667,34 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> with SingleTick
     final canEdit = isCreator;
     final canDelete = isCreator || isAuthorized;
 
+    final VoidCallback openEvent = () {
+      if (event.id != null) {
+        if (event.isLocked || tabType == EventTabType.past) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => EventResultsPage(
+                bandId: bandId,
+                eventId: event.id!,
+                initialEvent: event,
+              ),
+            ),
+          );
+        } else {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => EventDetailsPage(
+                bandId: bandId,
+                eventId: event.id!,
+                initialEvent: event,
+              ),
+            ),
+          );
+        }
+      }
+    };
+
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
       decoration: BoxDecoration(
@@ -656,71 +706,74 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> with SingleTick
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Header Row with Type, Band Name & Options
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 12, 10),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: AppTheme.primaryAccent.withOpacity(0.18),
-                    borderRadius: BorderRadius.circular(12),
+          InkWell(
+            onTap: openEvent,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 12, 10),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primaryAccent.withOpacity(0.18),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(iconData, color: AppTheme.primaryAccent, size: 22),
                   ),
-                  child: Icon(iconData, color: AppTheme.primaryAccent, size: 22),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: AppTheme.primaryAccent.withOpacity(0.2),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(
-                              typeBadgeText,
-                              style: GoogleFonts.inter(
-                                fontSize: 11,
-                                color: AppTheme.primaryAccent,
-                                fontWeight: FontWeight.bold,
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: AppTheme.primaryAccent.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                typeBadgeText,
+                                style: GoogleFonts.inter(
+                                  fontSize: 11,
+                                  color: AppTheme.primaryAccent,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                             ),
-                          ),
-                          const SizedBox(width: 8),
-                          Flexible(
-                            child: Text(
-                              bandName,
-                              style: GoogleFonts.inter(
-                                fontSize: 11,
-                                color: AppTheme.textSecondary,
-                                fontWeight: FontWeight.w500,
+                            const SizedBox(width: 8),
+                            Flexible(
+                              child: Text(
+                                bandName,
+                                style: GoogleFonts.inter(
+                                  fontSize: 11,
+                                  color: AppTheme.textSecondary,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                                overflow: TextOverflow.ellipsis,
                               ),
-                              overflow: TextOverflow.ellipsis,
                             ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        event.title,
-                        style: GoogleFonts.outfit(
-                          fontSize: 17,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
+                          ],
                         ),
-                      ),
-                    ],
+                        const SizedBox(height: 4),
+                        Text(
+                          event.title,
+                          style: GoogleFonts.outfit(
+                            fontSize: 17,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                if (canEdit || canDelete)
-                  PopupMenuButton<String>(
-                    icon: const Icon(Icons.more_vert, color: AppTheme.textSecondary),
-                    color: const Color(0xFF1A1635),
+                  if (canEdit || canDelete)
+                    PopupMenuButton<String>(
+                      icon: const Icon(Icons.more_vert, color: AppTheme.textSecondary),
+                      color: const Color(0xFF1A1635),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     onSelected: (action) {
                       if (action == 'edit') {
@@ -765,71 +818,75 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> with SingleTick
               ],
             ),
           ),
+        ),
 
           // Date & Location Info
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    const Icon(Icons.calendar_today_outlined, color: AppTheme.textSecondary, size: 15),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        timeOrDateStr,
-                        style: GoogleFonts.inter(
-                          fontSize: 12,
-                          color: Colors.white70,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                if (event.location.isNotEmpty) ...[
-                  const SizedBox(height: 4),
+          InkWell(
+            onTap: openEvent,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   Row(
                     children: [
-                      const Icon(Icons.location_on_outlined, color: AppTheme.textSecondary, size: 15),
+                      const Icon(Icons.calendar_today_outlined, color: AppTheme.textSecondary, size: 15),
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(
-                          event.location,
-                          style: GoogleFonts.inter(
-                            fontSize: 12,
-                            color: AppTheme.textSecondary,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-                if (event.description.isNotEmpty) ...[
-                  const SizedBox(height: 6),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Icon(Icons.notes_rounded, color: AppTheme.textSecondary, size: 15),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          event.description,
+                          timeOrDateStr,
                           style: GoogleFonts.inter(
                             fontSize: 12,
                             color: Colors.white70,
-                            height: 1.3,
+                            fontWeight: FontWeight.w500,
                           ),
-                          maxLines: 3,
-                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ],
                   ),
+                  if (event.location.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        const Icon(Icons.location_on_outlined, color: AppTheme.textSecondary, size: 15),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            event.location,
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              color: AppTheme.textSecondary,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                  if (event.description.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(Icons.notes_rounded, color: AppTheme.textSecondary, size: 15),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            event.description,
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              color: Colors.white70,
+                              height: 1.3,
+                            ),
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
 

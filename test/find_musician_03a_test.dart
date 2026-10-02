@@ -456,10 +456,10 @@ void main() {
       await tester.tap(find.text('Concert').first);
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Club gig').last);
+      await tester.tap(find.text('Club Gig').last);
       await tester.pumpAndSettle();
 
-      expect(find.text('Club gig'), findsWidgets);
+      expect(find.text('Club Gig'), findsWidgets);
     });
 
     testWidgets('8. Request-local edits do not mutate the source BandEvent', (WidgetTester tester) async {

@@ -164,10 +164,11 @@ void main() {
       expect(BandEvent.standardEventTypes, equals([
         'Rehearsal',
         'Concert',
-        'Club gig',
-        'Private Event',
         'Tour',
+        'Festival',
+        'Club Gig',
         'Show',
+        'Private Event',
         'Other',
       ]));
       expect(BandEvent.standardEventTypes.contains('Recording Session'), isFalse);

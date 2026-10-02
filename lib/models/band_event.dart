@@ -186,12 +186,12 @@ class SubstituteAssignment {
 class EventRehearsal {
   static const List<String> standardSessionTypes = [
     'Rehearsal',
-    'Club gig',
     'Concert',
-    'Show',
     'Tour',
-    'Private Event',
     'Festival',
+    'Club Gig',
+    'Show',
+    'Private Event',
     'Other',
   ];
 
@@ -275,10 +275,11 @@ class BandEvent {
   static const List<String> standardEventTypes = [
     'Rehearsal',
     'Concert',
-    'Club gig',
-    'Private Event',
     'Tour',
+    'Festival',
+    'Club Gig',
     'Show',
+    'Private Event',
     'Other',
   ];
 
