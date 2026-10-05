@@ -97,7 +97,15 @@ class _FindGigsScreenState extends State<FindGigsScreen>
 
       final first = reqs.first;
       final isMulti = reqs.length > 1 || (first.requestGroupId != null && first.requestGroupId!.isNotEmpty);
-      final groupTitle = first.bandName ?? first.eventTitle ?? first.role ?? 'Substitute Request';
+      final groupTitle = (first.bandName != null && first.bandName!.trim().isNotEmpty)
+          ? first.bandName!
+          : ((first.eventTitle != null && first.eventTitle!.trim().isNotEmpty)
+              ? first.eventTitle!
+              : (first.role != null && first.role!.trim().isNotEmpty && first.role != 'Substitute'
+                  ? first.role!
+                  : (first.voicePart != null && first.voicePart!.trim().isNotEmpty
+                      ? '${first.voicePart} Needed'
+                      : 'Substitute Request')));
 
       DateTime earliest = DateTime(3000);
       for (final r in reqs) {
@@ -132,6 +140,43 @@ class _FindGigsScreenState extends State<FindGigsScreen>
     return groups;
   }
 
+  bool _isInstrumentMatch(String? requestedInstrument, List<String> userSkills) {
+    if (userSkills.isEmpty) return true;
+    if (requestedInstrument == null || requestedInstrument.trim().isEmpty) return true;
+
+    final reqLower = requestedInstrument.trim().toLowerCase();
+
+    for (final skill in userSkills) {
+      final skillLower = skill.trim().toLowerCase();
+      if (skillLower.isEmpty) continue;
+      if (skillLower == reqLower) return true;
+      if (skillLower.contains(reqLower) || reqLower.contains(skillLower)) return true;
+
+      // Stem / instrument family matching
+      if (reqLower.contains('guitar') && skillLower.contains('guitar')) return true;
+      if (reqLower.contains('gitarr') && (skillLower.contains('guitar') || skillLower.contains('gitarr'))) return true;
+      if (reqLower.contains('bass') && skillLower.contains('bass')) return true;
+      if (reqLower.contains('bas') && (skillLower.contains('bass') || skillLower.contains('bas'))) return true;
+      if ((reqLower.contains('drum') || reqLower.contains('slagverk') || reqLower.contains('percussion') || reqLower.contains('trumm')) &&
+          (skillLower.contains('drum') || skillLower.contains('slagverk') || skillLower.contains('percussion') || skillLower.contains('trumm'))) {
+        return true;
+      }
+      if ((reqLower.contains('vocal') || reqLower.contains('sing') || reqLower.contains('sång') || reqLower.contains('sang') || reqLower.contains('voice')) &&
+          (skillLower.contains('vocal') || skillLower.contains('sing') || skillLower.contains('sång') || skillLower.contains('sang') || skillLower.contains('voice'))) {
+        return true;
+      }
+      if ((reqLower.contains('key') || reqLower.contains('piano') || reqLower.contains('synth') || reqLower.contains('klaviatur')) &&
+          (skillLower.contains('key') || skillLower.contains('piano') || skillLower.contains('synth') || skillLower.contains('klaviatur'))) {
+        return true;
+      }
+      if ((reqLower.contains('sax') || reqLower.contains('horn') || reqLower.contains('brass') || reqLower.contains('trumpet') || reqLower.contains('trombone') || reqLower.contains('blås')) &&
+          (skillLower.contains('sax') || skillLower.contains('horn') || skillLower.contains('brass') || skillLower.contains('trumpet') || skillLower.contains('trombone') || skillLower.contains('blås'))) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   Future<void> _loadSubRequests() async {
     setState(() => _isLoading = true);
     try {
@@ -140,41 +185,49 @@ class _FindGigsScreenState extends State<FindGigsScreen>
       final currentUserId = appState.currentUserId;
 
       final userProfile = appState.currentUserProfile;
-      final userInstruments = userProfile?.instruments ?? [];
+      final List<String> userInstruments = [];
+      if (userProfile != null) {
+        userInstruments.addAll(userProfile.instruments);
+        if (userProfile.mainInstrument != null && userProfile.mainInstrument!.trim().isNotEmpty) {
+          userInstruments.addAll(userProfile.mainInstrument!.split(',').map((s) => s.trim()));
+        }
+        if (userProfile.userType != null && userProfile.userType!.trim().isNotEmpty) {
+          userInstruments.add(userProfile.userType!.trim());
+        }
+      }
 
       final filteredUpcoming = list.where((gig) {
-        if (gig.bandName == null || gig.bandName!.trim().isEmpty) return false;
-        if (gig.voicePart == null || gig.voicePart!.trim().isEmpty) return false;
-        if (gig.date == null || gig.date!.trim().isEmpty) return false;
+        if (gig.date != null && gig.date!.trim().isNotEmpty) {
+          final gigDate = DateTime.tryParse(gig.date!);
+          if (gigDate != null) {
+            final now = DateTime.now();
+            final today = DateTime(now.year, now.month, now.day);
+            if (gigDate.isBefore(today)) return false;
+          }
+        }
 
-        final gigDate = DateTime.tryParse(gig.date!);
-        if (gigDate == null) return false;
+        final instToCheck = (gig.voicePart != null && gig.voicePart!.trim().isNotEmpty)
+            ? gig.voicePart
+            : ((gig.role != null && gig.role!.trim().isNotEmpty && gig.role != 'Substitute')
+                ? gig.role
+                : gig.extraFields['instrument']?.toString());
 
-        final now = DateTime.now();
-        final today = DateTime(now.year, now.month, now.day);
-        if (gigDate.isBefore(today)) return false;
+        if (instToCheck != null && instToCheck.trim().isNotEmpty) {
+          if (!_isInstrumentMatch(instToCheck, userInstruments)) return false;
+        }
 
-        if (userInstruments.isEmpty) return true;
-
-        final voicePartLower = gig.voicePart!.toLowerCase();
-        final matches = userInstruments.any((inst) {
-          final instLower = inst.toLowerCase();
-          return instLower == voicePartLower ||
-              voicePartLower.contains(instLower) ||
-              instLower.contains(voicePartLower);
-        });
-        return matches;
+        return true;
       }).toList();
 
       final filteredInvites = list.where((gig) {
-        if (gig.bandName == null || gig.bandName!.trim().isEmpty) return false;
-        if (gig.date == null || gig.date!.trim().isEmpty) return false;
-
-        final gigDate = DateTime.tryParse(gig.date!);
-        if (gigDate == null) return false;
-        final now = DateTime.now();
-        final today = DateTime(now.year, now.month, now.day);
-        if (gigDate.isBefore(today)) return false;
+        if (gig.date != null && gig.date!.trim().isNotEmpty) {
+          final gigDate = DateTime.tryParse(gig.date!);
+          if (gigDate != null) {
+            final now = DateTime.now();
+            final today = DateTime(now.year, now.month, now.day);
+            if (gigDate.isBefore(today)) return false;
+          }
+        }
 
         final targets = gig.targetUserIds;
         return targets != null && currentUserId != null && targets.contains(currentUserId);

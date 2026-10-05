@@ -625,29 +625,40 @@ class FirebaseService {
     final selfId = currentUserId;
     if (selfId == null) return [];
 
+    final Map<String, SubRequest> combined = {};
+
+    // 1. Always load all canonical public/accessible subrequests
     try {
-      final feedSnap = await _dbRef('userSubRequestFeed/$selfId').get();
-      if (feedSnap.exists && feedSnap.value is Map) {
-        final List<String> reqIds = [];
-        (feedSnap.value as Map).forEach((k, v) {
-          reqIds.add(k.toString());
-        });
-        if (reqIds.isNotEmpty) {
-          final List<SubRequest> feedRequests = [];
-          for (final id in reqIds) {
-            final reqSnap = await _dbRef('SubRequests/$id').get();
-            if (reqSnap.exists && reqSnap.value is Map) {
-              feedRequests.add(SubRequest.fromJson(reqSnap.value as Map, id));
-            }
-          }
-          return feedRequests;
+      final all = await getAllSubRequestsAsync();
+      for (final r in all) {
+        final id = r.subRequestId ?? r.id;
+        if (id != null && id.isNotEmpty) {
+          combined[id] = r;
         }
       }
     } catch (e) {
-      print('[FirebaseService] Error loading userSubRequestFeed, falling back to canonical index: $e');
+      debugPrint('[FirebaseService] Error loading all subrequests: $e');
     }
 
-    return getAllSubRequestsAsync();
+    // 2. Also load any targeted feed entries
+    try {
+      final feedSnap = await _dbRef('userSubRequestFeed/$selfId').get();
+      if (feedSnap.exists && feedSnap.value is Map) {
+        for (final entry in (feedSnap.value as Map).entries) {
+          final id = entry.key.toString();
+          if (!combined.containsKey(id)) {
+            final reqSnap = await _dbRef('SubRequests/$id').get();
+            if (reqSnap.exists && reqSnap.value is Map) {
+              combined[id] = SubRequest.fromJson(reqSnap.value as Map, id);
+            }
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('[FirebaseService] Error loading userSubRequestFeed: $e');
+    }
+
+    return combined.values.toList();
   }
 
   Future<List<SubRequest>> getAllSubRequestsAsync() async {
@@ -835,25 +846,29 @@ class FirebaseService {
     required List<SubRequest> requests,
     String? bandName,
   }) async {
+    // 1. Direct write to canonical RTDB /SubRequests and /users/$currentUserId/SubRequests
+    final savedIds = await saveSubRequestsBatchAsync(requests);
+
+    // 2. Attempt cloud function for push notifications / background tasks
     try {
       final callable = FirebaseFunctions.instanceFor(region: 'europe-west1')
           .httpsCallable('publishSubRequestGroup');
-      final result = await callable.call<Map<dynamic, dynamic>>({
+      await callable.call<Map<dynamic, dynamic>>({
         'bandId': bandId,
         'requestGroupId': requestGroupId,
         'bandName': bandName,
         'slots': requests.map((r) => r.toJson()).toList(),
       });
-      if (result.data != null && result.data['publicationId'] != null) {
-        return requests
-            .map((r) => r.subRequestId ?? r.slotId ?? r.id ?? '')
-            .where((id) => id.isNotEmpty)
-            .toList();
-      }
     } catch (e) {
       debugPrint('[FirebaseService] publishSubRequestGroup callable exception: $e');
     }
-    return saveSubRequestsBatchAsync(requests);
+
+    return savedIds.isNotEmpty
+        ? savedIds
+        : requests
+            .map((r) => r.subRequestId ?? r.slotId ?? r.id ?? '')
+            .where((id) => id.isNotEmpty)
+            .toList();
   }
 
   Future<void> assignSubstituteCandidateAsync({

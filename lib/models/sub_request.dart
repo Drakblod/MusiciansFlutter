@@ -201,53 +201,59 @@ class SubRequest {
 
     return SubRequest(
       id: keyId,
-      subRequestId: json['SubRequestId']?.toString() ?? keyId,
-      slotId: json['SlotId']?.toString() ?? json['SubRequestId']?.toString() ?? keyId,
-      creatorUserId: json['CreatorUserId']?.toString(),
-      userId: json['UserId']?.toString(),
-      voicePart: json['VoicePart']?.toString(),
-      location: json['Location']?.toString(),
-      startTime: json['StartTime']?.toString(),
-      endTime: json['EndTime']?.toString(),
-      description: json['Description']?.toString(),
-      date: json['Date']?.toString(),
-      role: json['Role']?.toString(),
-      isPaid: json['IsPaid'] == true,
-      bandName: json['BandName']?.toString(),
-      rehearsalDayOfWeek: json['RehearsalDayOfWeek']?.toString(),
+      subRequestId: json['SubRequestId']?.toString() ?? json['subRequestId']?.toString() ?? keyId,
+      slotId: json['SlotId']?.toString() ?? json['slotId']?.toString() ?? json['SubRequestId']?.toString() ?? json['subRequestId']?.toString() ?? keyId,
+      creatorUserId: json['CreatorUserId']?.toString() ?? json['creatorUserId']?.toString(),
+      userId: json['UserId']?.toString() ?? json['userId']?.toString(),
+      voicePart: json['VoicePart']?.toString() ?? json['voicePart']?.toString() ?? json['Instrument']?.toString() ?? json['instrument']?.toString(),
+      location: json['Location']?.toString() ?? json['location']?.toString(),
+      startTime: json['StartTime']?.toString() ?? json['startTime']?.toString(),
+      endTime: json['EndTime']?.toString() ?? json['endTime']?.toString(),
+      description: json['Description']?.toString() ?? json['description']?.toString(),
+      date: json['Date']?.toString() ?? json['date']?.toString(),
+      role: json['Role']?.toString() ?? json['role']?.toString(),
+      isPaid: json['IsPaid'] == true || json['isPaid'] == true,
+      bandName: json['BandName']?.toString() ?? json['bandName']?.toString(),
+      rehearsalDayOfWeek: json['RehearsalDayOfWeek']?.toString() ?? json['rehearsalDayOfWeek']?.toString(),
       isSelected: isSelected,
       responseCount: json['ResponseCount'] is int
           ? json['ResponseCount'] as int
-          : parsedResponses.length,
-      formattedTimeRange: json['FormattedTimeRange']?.toString(),
-      dateLabel: json['DateLabel']?.toString(),
-      level: json['Level']?.toString(),
-      style: json['Style']?.toString(),
+          : (json['responseCount'] is int ? json['responseCount'] as int : parsedResponses.length),
+      formattedTimeRange: json['FormattedTimeRange']?.toString() ?? json['formattedTimeRange']?.toString(),
+      dateLabel: json['DateLabel']?.toString() ?? json['dateLabel']?.toString(),
+      level: json['Level']?.toString() ?? json['level']?.toString(),
+      style: json['Style']?.toString() ?? json['style']?.toString(),
       responses: parsedResponses,
       latitude: parsedLat,
       longitude: parsedLng,
       targetUserIds: parsedTargetUserIds,
       eventId: json['eventId']?.toString() ?? json['EventId']?.toString(),
       bandId: json['bandId']?.toString() ?? json['BandId']?.toString(),
-      replacedMemberId: json['ReplacedMemberId']?.toString(),
-      replacedMemberName: json['ReplacedMemberName']?.toString(),
+      replacedMemberId: json['ReplacedMemberId']?.toString() ?? json['replacedMemberId']?.toString(),
+      replacedMemberName: json['ReplacedMemberName']?.toString() ?? json['replacedMemberName']?.toString(),
       status: derivedStatus,
-      assignedUserId: json['AssignedUserId']?.toString(),
-      assignedUserName: json['AssignedUserName']?.toString(),
+      assignedUserId: json['AssignedUserId']?.toString() ?? json['assignedUserId']?.toString(),
+      assignedUserName: json['AssignedUserName']?.toString() ?? json['assignedUserName']?.toString(),
       assignedAt: json['AssignedAt'] is int
           ? json['AssignedAt'] as int
-          : int.tryParse(json['AssignedAt']?.toString() ?? ''),
+          : (json['assignedAt'] is int
+              ? json['assignedAt'] as int
+              : int.tryParse(json['AssignedAt']?.toString() ?? json['assignedAt']?.toString() ?? '')),
       createdAt: json['CreatedAt'] is int
           ? json['CreatedAt'] as int
-          : int.tryParse(json['CreatedAt']?.toString() ?? ''),
+          : (json['createdAt'] is int
+              ? json['createdAt'] as int
+              : int.tryParse(json['CreatedAt']?.toString() ?? json['createdAt']?.toString() ?? '')),
       searchSource: derivedSource,
       requestGroupId: json['RequestGroupId']?.toString() ?? json['requestGroupId']?.toString(),
       eventSequence: json['EventSequence'] is int
           ? json['EventSequence'] as int
-          : int.tryParse(json['EventSequence']?.toString() ?? ''),
+          : (json['eventSequence'] is int
+              ? json['eventSequence'] as int
+              : int.tryParse(json['EventSequence']?.toString() ?? json['eventSequence']?.toString() ?? '')),
       eventTitle: json['EventTitle']?.toString() ?? json['eventTitle']?.toString(),
       payAmountMinor: effectiveMinor,
-      currency: json['Currency']?.toString() ?? json['currency']?.toString() ?? (json['IsPaid'] == true ? 'SEK' : null),
+      currency: json['Currency']?.toString() ?? json['currency']?.toString() ?? (json['IsPaid'] == true || json['isPaid'] == true ? 'SEK' : null),
       payDetails: json['PayDetails']?.toString() ?? json['payDetails']?.toString(),
       extraFields: extra,
     );
