@@ -1091,6 +1091,8 @@ class FirebaseService {
     String subRequestId,
     String userId,
   ) async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+
     // 1. User's own applied subrequests tracking (guaranteed write permission under auth.uid)
     try {
       await _dbRef('users/$userId/AppliedSubRequests/$subRequestId').set(true);
@@ -1098,14 +1100,24 @@ class FirebaseService {
       debugPrint('[FirebaseService] Could not write users/$userId/AppliedSubRequests: $e');
     }
 
-    // 2. Direct write to canonical SubRequests Responses (best-effort)
+    // 2. Direct write to BandEvents / SubRequestResponses (universally accessible write permission)
+    try {
+      await _dbRef('BandEvents/SubRequestResponses/$subRequestId/$userId').set({
+        'userId': userId,
+        'appliedAt': now,
+      });
+    } catch (e) {
+      debugPrint('[FirebaseService] Could not write BandEvents/SubRequestResponses: $e');
+    }
+
+    // 3. Direct write to canonical SubRequests Responses (best-effort)
     try {
       await _dbRef('SubRequests/$subRequestId/Responses/$userId').set(true);
     } catch (e) {
       debugPrint('[FirebaseService] Direct RTDB write for response notice: $e');
     }
 
-    // 3. Optional server-side Cloud Function callable (best-effort)
+    // 4. Optional server-side Cloud Function callable (best-effort)
     try {
       final callable = _functions.httpsCallable('respondToSubRequest');
       await callable.call<Map<String, dynamic>>({
@@ -1115,7 +1127,7 @@ class FirebaseService {
       debugPrint('[FirebaseService] Cloud Function respondToSubRequest notice: $cfError');
     }
 
-    // 4. Also record in creator's personal SubRequests if found (best-effort)
+    // 5. Also record in creator's personal SubRequests if found (best-effort)
     try {
       final snapshot = await _dbRef('SubRequests/$subRequestId').get();
       if (snapshot.exists && snapshot.value is Map) {
@@ -1128,7 +1140,7 @@ class FirebaseService {
       }
     } catch (_) {}
 
-    // 5. Optional event invitee linking (non-blocking for permission boundaries)
+    // 6. Optional event invitee linking (non-blocking for permission boundaries)
     try {
       final snapshot = await _dbRef('SubRequests/$subRequestId').get();
       if (snapshot.exists && snapshot.value is Map) {
@@ -1149,7 +1161,7 @@ class FirebaseService {
             instrument: profile?.instruments.isNotEmpty == true
                 ? profile?.instruments.first
                 : profile?.userType,
-            invitedAt: DateTime.now().millisecondsSinceEpoch,
+            invitedAt: now,
             source: 'subRequest',
             subRequestId: subRequestId,
             displayName: profile?.displayName ?? profile?.nickname,
@@ -1160,7 +1172,7 @@ class FirebaseService {
             ).set(invitee.toJson());
             await _dbRef(
               'Bands/$bandId/Events/$eventId/updatedAt',
-            ).set(DateTime.now().millisecondsSinceEpoch);
+            ).set(now);
           } catch (e) {
             debugPrint('[FirebaseService] External invitee linking skipped (normal for candidate): $e');
           }
@@ -1229,45 +1241,63 @@ class FirebaseService {
   }
 
   Future<Map<String, dynamic>> getSubRequestResponsesAsync(String subRequestId) async {
+    final Map<String, dynamic> combined = {};
+
+    // 1. Root SubRequests Responses
     try {
       final snapshot = await _dbRef('SubRequests/$subRequestId/Responses').get();
       if (snapshot.exists && snapshot.value is Map) {
-        return Map<String, dynamic>.from(snapshot.value as Map);
+        (snapshot.value as Map).forEach((k, v) {
+          combined[k.toString()] = v;
+        });
       }
     } catch (e) {
       debugPrint("[FirebaseService] Notice: could not read root SubRequests/$subRequestId/Responses: $e");
     }
+
+    // 2. BandEvents / SubRequestResponses
+    try {
+      final snap = await _dbRef('BandEvents/SubRequestResponses/$subRequestId').get();
+      if (snap.exists && snap.value is Map) {
+        (snap.value as Map).forEach((k, v) {
+          combined[k.toString()] = v;
+        });
+      }
+    } catch (_) {}
+
+    // 3. Current user personal copy
     if (currentUserId != null) {
       try {
         final userSnap = await _dbRef('users/$currentUserId/SubRequests/$subRequestId/Responses').get();
         if (userSnap.exists && userSnap.value is Map) {
-          return Map<String, dynamic>.from(userSnap.value as Map);
+          (userSnap.value as Map).forEach((k, v) {
+            combined[k.toString()] = v;
+          });
         }
       } catch (_) {}
     }
-    return {};
+
+    // 4. Scan externalInvitees if bandId/eventId are accessible
+    try {
+      final sub = await getSubRequestAsync(subRequestId);
+      if (sub != null && sub.bandId != null && sub.eventId != null && sub.bandId!.isNotEmpty && sub.eventId!.isNotEmpty) {
+        final invSnap = await _dbRef('Bands/${sub.bandId}/Events/${sub.eventId}/externalInvitees').get();
+        if (invSnap.exists && invSnap.value is Map) {
+          (invSnap.value as Map).forEach((k, v) {
+            if (v is Map && (v['subRequestId'] == subRequestId || v['source'] == 'subRequest')) {
+              combined[k.toString()] = true;
+            }
+          });
+        }
+      }
+    } catch (_) {}
+
+    return combined;
   }
 
   Future<int> getSubRequestResponseCountAsync(String subRequestId) async {
-    try {
-      final snapshot = await _dbRef(
-        'SubRequests/$subRequestId/Responses',
-      ).get();
-      if (snapshot.exists && snapshot.value is Map) {
-        return (snapshot.value as Map).length;
-      }
-    } catch (e) {
-      debugPrint("[FirebaseService] Notice: could not read root response count: $e");
-    }
-    if (currentUserId != null) {
-      try {
-        final userSnap = await _dbRef('users/$currentUserId/SubRequests/$subRequestId/Responses').get();
-        if (userSnap.exists && userSnap.value is Map) {
-          return (userSnap.value as Map).length;
-        }
-      } catch (_) {}
-    }
-    return 0;
+    final responses = await getSubRequestResponsesAsync(subRequestId);
+    return responses.length;
   }
 
   Future<String> createAgreementChatAsync(

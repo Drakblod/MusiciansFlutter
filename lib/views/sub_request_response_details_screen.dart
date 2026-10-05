@@ -47,11 +47,11 @@ class _SubRequestResponseDetailsScreenState
       final freshReq = await appState.firebaseService.getSubRequestAsync(reqId);
       final effectiveReq = freshReq ?? widget.subRequest;
 
-      // 2. Collect responder IDs
-      Map<String, dynamic> responses = Map<String, dynamic>.from(effectiveReq.responses);
-      if (responses.isEmpty) {
-        responses = await appState.firebaseService.getSubRequestResponsesAsync(reqId);
-      }
+      // 2. Collect responder IDs from both the subrequest object and all RTDB paths
+      final Map<String, dynamic> responses = Map<String, dynamic>.from(effectiveReq.responses);
+      final asyncResponses = await appState.firebaseService.getSubRequestResponsesAsync(reqId);
+      responses.addAll(asyncResponses);
+
       final responderIds = responses.keys.toList();
       final List<ResponderItem> items = [];
 
@@ -63,10 +63,21 @@ class _SubRequestResponseDetailsScreenState
             ResponderItem(
               userId: uid,
               name: profile.displayName ?? profile.nickname ?? 'Unknown',
-              instruments: profile.instruments.join(', '),
+              instruments: profile.instruments.isNotEmpty ? profile.instruments.join(', ') : 'Musician',
               location: profile.location ?? 'Stockholm, Sweden',
               level: profile.level ?? 'Intermediate',
               about: profile.about ?? 'No description provided.',
+            ),
+          );
+        } else {
+          items.add(
+            ResponderItem(
+              userId: uid,
+              name: 'Musician Candidate',
+              instruments: 'Musician',
+              location: 'Available',
+              level: 'Intermediate',
+              about: 'Applied to sub request.',
             ),
           );
         }
