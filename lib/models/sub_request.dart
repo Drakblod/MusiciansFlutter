@@ -116,8 +116,8 @@ class SubRequest {
       parsedTargetUserIds = targetUserIdsRaw.values.map((e) => e.toString()).toList();
     }
 
-    final isSelected = json['IsSelected'] == true;
-    final explicitStatus = json['Status']?.toString();
+    final isSelected = json['IsSelected'] == true || json['isSelected'] == true;
+    final explicitStatus = json['Status']?.toString() ?? json['status']?.toString();
     final derivedStatus = explicitStatus ?? (isSelected ? 'assigned' : 'published');
 
     final explicitSource = json['SearchSource']?.toString();

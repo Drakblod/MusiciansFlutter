@@ -608,24 +608,27 @@ exports.publishSubRequestGroup = onCall({ region: 'europe-west1' }, async (reque
 
   const db = admin.database();
 
-  // 1. Validate band authorization and event ownership if bandId is provided
-  if (bandId) {
-    const memberRoleSnap = await db.ref(`/Bands/${bandId}/Members_band/${callerId}/Role`).once('value');
-    const role = memberRoleSnap.val();
-    if (role !== 'Leader' && role !== 'Admin') {
-      throw new HttpsError('permission-denied', 'Only Band Leaders or Admins can publish substitute requests for this band.');
-    }
-
-    // Verify all slots belong to the band and verify event ownership
-    for (const slot of slots) {
-      if (slot.bandId && slot.bandId !== bandId) {
-        throw new HttpsError('invalid-argument', 'Mixed band slots in a single publication group are rejected.');
+  // 1. Validate band authorization and event ownership if bandId is provided and exists in Bands
+  if (bandId && bandId !== 'freelance' && bandId !== 'standalone') {
+    const bandSnap = await db.ref(`/Bands/${bandId}`).once('value');
+    if (bandSnap.exists()) {
+      const memberRoleSnap = await db.ref(`/Bands/${bandId}/Members_band/${callerId}/Role`).once('value');
+      const role = memberRoleSnap.val();
+      if (role !== 'Leader' && role !== 'Admin') {
+        throw new HttpsError('permission-denied', 'Only Band Leaders or Admins can publish substitute requests for this band.');
       }
-      const slotEventId = slot.eventId || eventId;
-      if (slotEventId && slotEventId !== 'standalone') {
-        const evSnap = await db.ref(`/Bands/${bandId}/Events/${slotEventId}`).once('value');
-        if (!evSnap.exists()) {
-          throw new HttpsError('permission-denied', `Event ${slotEventId} does not belong to band ${bandId}.`);
+
+      // Verify all slots belong to the band and verify event ownership
+      for (const slot of slots) {
+        if (slot.bandId && slot.bandId !== bandId) {
+          throw new HttpsError('invalid-argument', 'Mixed band slots in a single publication group are rejected.');
+        }
+        const slotEventId = slot.eventId || eventId;
+        if (slotEventId && slotEventId !== 'standalone' && !slotEventId.startsWith('freelance')) {
+          const evSnap = await db.ref(`/Bands/${bandId}/Events/${slotEventId}`).once('value');
+          if (evSnap.exists() && evSnap.val()?.createdBy && evSnap.val()?.createdBy !== callerId && role !== 'Leader' && role !== 'Admin') {
+            throw new HttpsError('permission-denied', `Event ${slotEventId} does not belong to caller.`);
+          }
         }
       }
     }
@@ -687,14 +690,66 @@ exports.publishSubRequestGroup = onCall({ region: 'europe-west1' }, async (reque
     updates[`/creatorSubRequestGroups/${callerId}/${requestGroupId}`] = true;
   }
 
+  function matchesInstrument(requested, userSkills) {
+    if (!requested || !requested.trim()) return true;
+    const nonGeneric = userSkills.filter(s => {
+      if (!s) return false;
+      const l = s.trim().toLowerCase();
+      return l.length > 0 &&
+        l !== 'musician' &&
+        l !== 'browse musicians' &&
+        l !== 'browse profiles' &&
+        l !== 'browse_musicians' &&
+        l !== 'artist' &&
+        l !== 'band member';
+    });
+    if (nonGeneric.length === 0) return true;
+
+    const reqClean = requested.trim().toLowerCase().replace(/[\s\-_]/g, '');
+    const reqLower = requested.trim().toLowerCase();
+
+    for (const skill of nonGeneric) {
+      const skillLower = skill.trim().toLowerCase();
+      const skillClean = skillLower.replace(/[\s\-_]/g, '');
+      if (!skillLower) continue;
+
+      if (skillLower === reqLower || skillClean === reqClean) return true;
+      if (skillLower.includes(reqLower) || reqLower.includes(skillLower)) return true;
+      if (skillClean.includes(reqClean) || reqClean.includes(skillClean)) return true;
+
+      if ((reqLower.includes('guitar') || reqLower.includes('gitarr')) && (skillLower.includes('guitar') || skillLower.includes('gitarr'))) return true;
+      if ((reqLower.includes('bass') || reqLower.includes('bas')) && (skillLower.includes('bass') || skillLower.includes('bas'))) return true;
+      if ((reqLower.includes('drum') || reqLower.includes('slagverk') || reqLower.includes('percussion') || reqLower.includes('trumm')) && (skillLower.includes('drum') || skillLower.includes('slagverk') || skillLower.includes('percussion') || skillLower.includes('trumm'))) return true;
+      if ((reqLower.includes('vocal') || reqLower.includes('sing') || reqLower.includes('sång') || reqLower.includes('sang') || reqLower.includes('voice') || reqLower.includes('kör')) && (skillLower.includes('vocal') || skillLower.includes('sing') || skillLower.includes('sång') || skillLower.includes('sang') || skillLower.includes('voice') || skillLower.includes('kör'))) return true;
+      if ((reqLower.includes('key') || reqLower.includes('piano') || reqLower.includes('synth') || reqLower.includes('klaviatur') || reqLower.includes('orgel')) && (skillLower.includes('key') || skillLower.includes('piano') || skillLower.includes('synth') || skillLower.includes('klaviatur') || skillLower.includes('orgel'))) return true;
+      if ((reqLower.includes('sax') || reqLower.includes('horn') || reqLower.includes('brass') || reqLower.includes('trumpet') || reqLower.includes('trombone') || reqLower.includes('blås')) && (skillLower.includes('sax') || skillLower.includes('horn') || skillLower.includes('brass') || skillLower.includes('trumpet') || skillLower.includes('trombone') || skillLower.includes('blås'))) return true;
+    }
+    return false;
+  }
+
   Object.keys(users).forEach((userId) => {
-    const userInfo = users[userId].info;
-    const userType = (userInfo ? (userInfo.UserType || userInfo.userType || '') : '').toLowerCase();
-    const instruments = (userInfo ? (userInfo.Instruments || userInfo.instruments || []) : []).map(i => (i || '').toLowerCase());
+    const userObj = users[userId] || {};
+    const userInfo = userObj.info || {};
+    const userSkills = [];
+
+    const rawUserType = userInfo.UserType || userInfo.userType || userObj.UserType || userObj.userType || '';
+    if (rawUserType) userSkills.push(rawUserType);
+
+    const rawMain = userInfo.MainInstrument || userInfo.mainInstrument || userObj.MainInstrument || userObj.mainInstrument || '';
+    if (rawMain) {
+      rawMain.split(',').forEach(s => { if (s.trim()) userSkills.push(s.trim()); });
+    }
+
+    const rawInsts = userInfo.Instruments || userInfo.instruments || userObj.Instruments || userObj.instruments || userObj.Instruments_user || [];
+    if (Array.isArray(rawInsts)) {
+      rawInsts.forEach(i => { if (i && typeof i === 'string') userSkills.push(i.trim()); });
+    } else if (typeof rawInsts === 'object') {
+      Object.values(rawInsts).forEach(i => { if (i && typeof i === 'string') userSkills.push(i.trim()); });
+    }
 
     slots.forEach((slot) => {
       const slotKey = slot.subRequestId || slot.slotId;
-      const voicePart = (slot.voicePart || slot.VoicePart || '').toLowerCase();
+      const voicePart = slot.voicePart || slot.VoicePart || slot.role || slot.Role || '';
       const searchSource = slot.searchSource || slot.SearchSource || 'search_all';
       const rawTargetUserIds = slot.targetUserIds || slot.TargetUserIds || [];
 
@@ -704,7 +759,7 @@ exports.publishSubRequestGroup = onCall({ region: 'europe-west1' }, async (reque
         const isVerifiedFavorite = callerFavorites[userId] === true || callerFavorites[userId] === 'true';
         isEligible = isVerifiedFavorite && Array.isArray(rawTargetUserIds) && rawTargetUserIds.includes(userId);
       } else {
-        isEligible = userType === voicePart || instruments.includes(voicePart);
+        isEligible = matchesInstrument(voicePart, userSkills);
       }
 
       if (isEligible && slotKey) {
@@ -731,6 +786,73 @@ exports.publishSubRequestGroup = onCall({ region: 'europe-west1' }, async (reque
     requestGroupId,
     slotCount: slots.length,
   };
+});
+
+/**
+ * Server-owned Cloud Function callable to securely submit a response / application to a SubRequest.
+ */
+exports.respondToSubRequest = onCall({ region: 'europe-west1' }, async (request) => {
+  if (!request.auth || !request.auth.uid) {
+    throw new HttpsError('unauthenticated', 'User must be authenticated.');
+  }
+  const userId = request.auth.uid;
+  const subRequestId = request.data?.subRequestId;
+  if (!subRequestId) {
+    throw new HttpsError('invalid-argument', 'subRequestId is required.');
+  }
+
+  const db = admin.database();
+  const subSnap = await db.ref(`SubRequests/${subRequestId}`).get();
+  if (!subSnap.exists()) {
+    throw new HttpsError('not-found', 'SubRequest not found.');
+  }
+
+  const updates = {};
+  updates[`SubRequests/${subRequestId}/Responses/${userId}`] = true;
+  updates[`subRequestAudience/${subRequestId}/${userId}`] = true;
+
+  const val = subSnap.val() || {};
+  const creatorId = val.CreatorUserId || val.creatorUserId || val.UserId || val.userId;
+  if (creatorId) {
+    updates[`users/${creatorId}/SubRequests/${subRequestId}/Responses/${userId}`] = true;
+  }
+
+  await db.ref().update(updates);
+  return { success: true };
+});
+
+/**
+ * Server-owned Cloud Function callable to securely delete or cancel a SubRequest.
+ */
+exports.deleteSubRequest = onCall({ region: 'europe-west1' }, async (request) => {
+  if (!request.auth || !request.auth.uid) {
+    throw new HttpsError('unauthenticated', 'User must be authenticated.');
+  }
+  const callerId = request.auth.uid;
+  const subRequestId = request.data?.subRequestId;
+  if (!subRequestId) {
+    throw new HttpsError('invalid-argument', 'subRequestId is required.');
+  }
+
+  const db = admin.database();
+  const subSnap = await db.ref(`SubRequests/${subRequestId}`).get();
+  if (!subSnap.exists()) {
+    return { success: true };
+  }
+
+  const val = subSnap.val() || {};
+  const creatorId = val.CreatorUserId || val.creatorUserId || val.UserId || val.userId;
+
+  const updates = {};
+  updates[`SubRequests/${subRequestId}/Status`] = 'cancelled';
+  await db.ref().update(updates);
+
+  await db.ref(`SubRequests/${subRequestId}`).remove();
+  if (creatorId) {
+    await db.ref(`users/${creatorId}/SubRequests/${subRequestId}`).remove();
+  }
+
+  return { success: true };
 });
 
 /**

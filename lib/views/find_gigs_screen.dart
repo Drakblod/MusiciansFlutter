@@ -246,6 +246,9 @@ class _FindGigsScreenState extends State<FindGigsScreen>
       final today = DateTime(now.year, now.month, now.day);
 
       final filteredUpcoming = list.where((gig) {
+        final st = gig.status.toLowerCase();
+        if (st == 'cancelled' || st == 'deleted' || st == 'closed') return false;
+
         if (gig.date != null && gig.date!.trim().isNotEmpty) {
           final gigDate = _parseGigDate(gig.date);
           if (gigDate != null) {
@@ -268,6 +271,9 @@ class _FindGigsScreenState extends State<FindGigsScreen>
       }).toList();
 
       final filteredInvites = list.where((gig) {
+        final st = gig.status.toLowerCase();
+        if (st == 'cancelled' || st == 'deleted' || st == 'closed') return false;
+
         if (gig.date != null && gig.date!.trim().isNotEmpty) {
           final gigDate = _parseGigDate(gig.date);
           if (gigDate != null) {

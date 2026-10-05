@@ -202,4 +202,60 @@ void main() {
 
     expect(find.text('Electric Groove'), findsOneWidget);
   });
+
+  testWidgets('FindGigsScreen filters out cancelled and deleted gigs', (WidgetTester tester) async {
+    final mockFirebase = MockFindGigsFirebaseService();
+    final tomorrow = DateTime.now().add(const Duration(days: 2));
+    final dateStr = "${tomorrow.year}-${tomorrow.month.toString().padLeft(2, '0')}-${tomorrow.day.toString().padLeft(2, '0')}";
+
+    mockFirebase.storedRequests = [
+      SubRequest(
+        id: 'sub_active',
+        subRequestId: 'sub_active',
+        bandName: 'Active Rockers',
+        voicePart: 'Electric Guitar',
+        date: dateStr,
+        status: 'published',
+      ),
+      SubRequest(
+        id: 'sub_cancelled',
+        subRequestId: 'sub_cancelled',
+        bandName: 'Cancelled Band',
+        voicePart: 'Electric Guitar',
+        date: dateStr,
+        status: 'cancelled',
+      ),
+      SubRequest(
+        id: 'sub_deleted',
+        subRequestId: 'sub_deleted',
+        bandName: 'Deleted Band',
+        voicePart: 'Electric Guitar',
+        date: dateStr,
+        status: 'deleted',
+      ),
+    ];
+
+    final appState = MockFindGigsAppState(mockFirebase);
+    appState.testUserId = 'test_musician_4';
+    appState.testUserProfile = UserProfile(
+      userId: 'test_musician_4',
+      displayName: 'Electric Player',
+      instruments: ['Electric Guitar'],
+    );
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider<AppState>.value(
+        value: appState,
+        child: const MaterialApp(
+          home: FindGigsScreen(),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('Active Rockers'), findsOneWidget);
+    expect(find.text('Cancelled Band'), findsNothing);
+    expect(find.text('Deleted Band'), findsNothing);
+  });
 }

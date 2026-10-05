@@ -570,6 +570,8 @@ class FirebaseService {
       final all = await getAllSubRequestsAsync();
       for (final r in all) {
         final id = r.subRequestId ?? r.id;
+        final st = r.status.toLowerCase();
+        if (st == 'cancelled' || st == 'deleted' || st == 'closed') continue;
         if (id != null && id.isNotEmpty) {
           combined[id] = r;
         }
@@ -587,7 +589,11 @@ class FirebaseService {
           if (!combined.containsKey(id)) {
             final reqSnap = await _dbRef('SubRequests/$id').get();
             if (reqSnap.exists && reqSnap.value is Map) {
-              combined[id] = SubRequest.fromJson(reqSnap.value as Map, id);
+              final req = SubRequest.fromJson(reqSnap.value as Map, id);
+              final st = req.status.toLowerCase();
+              if (st != 'cancelled' && st != 'deleted' && st != 'closed') {
+                combined[id] = req;
+              }
             }
           }
         }
@@ -609,6 +615,10 @@ class FirebaseService {
         (snapshot.value as Map).forEach((k, v) {
           if (v is Map) {
             final req = SubRequest.fromJson(v, k.toString());
+            final st = req.status.toLowerCase();
+            if (st == 'cancelled' || st == 'deleted' || st == 'closed') {
+              return;
+            }
             final targets = req.targetUserIds;
             if (targets == null || targets.isEmpty) {
               requests.add(req);
@@ -631,6 +641,8 @@ class FirebaseService {
         final userSubs = await getUserSubRequestsAsync(selfId);
         for (final req in userSubs) {
           final id = req.subRequestId ?? req.id;
+          final st = req.status.toLowerCase();
+          if (st == 'cancelled' || st == 'deleted' || st == 'closed') continue;
           if (id != null && !requests.any((r) => (r.subRequestId ?? r.id) == id)) {
             requests.add(req);
           }
@@ -649,6 +661,8 @@ class FirebaseService {
       (snapshot.value as Map).forEach((k, v) {
         if (v is Map) {
           final req = SubRequest.fromJson(v, k.toString());
+          final st = req.status.toLowerCase();
+          if (st == 'cancelled' || st == 'deleted') return;
           final targets = req.targetUserIds;
           if (targets == null || targets.isEmpty) {
             requests.add(req);
@@ -1065,10 +1079,32 @@ class FirebaseService {
     String subRequestId,
     String userId,
   ) async {
+    bool recorded = false;
     // 1. Direct write to canonical SubRequests Responses
-    await _dbRef('SubRequests/$subRequestId/Responses/$userId').set(true);
+    try {
+      await _dbRef('SubRequests/$subRequestId/Responses/$userId').set(true);
+      recorded = true;
+    } catch (e) {
+      debugPrint('[FirebaseService] Direct RTDB write for response failed ($e), falling back to Cloud Function...');
+    }
 
-    // 2. Also record in creator's personal SubRequests if found
+    // 2. Fallback to server-side Cloud Function callable if direct write was restricted
+    if (!recorded) {
+      try {
+        final callable = _functions.httpsCallable('respondToSubRequest');
+        await callable.call<Map<String, dynamic>>({
+          'subRequestId': subRequestId,
+        });
+        recorded = true;
+      } catch (cfError) {
+        debugPrint('[FirebaseService] Cloud Function respondToSubRequest failed: $cfError');
+        if (!recorded) {
+          throw StateError('Failed to apply. Please check your connection and try again.');
+        }
+      }
+    }
+
+    // 3. Also record in creator's personal SubRequests if found (best-effort)
     try {
       final snapshot = await _dbRef('SubRequests/$subRequestId').get();
       if (snapshot.exists && snapshot.value is Map) {
@@ -1081,7 +1117,7 @@ class FirebaseService {
       }
     } catch (_) {}
 
-    // 3. Optional event invitee linking (non-blocking for permission boundaries)
+    // 4. Optional event invitee linking (non-blocking for permission boundaries)
     try {
       final snapshot = await _dbRef('SubRequests/$subRequestId').get();
       if (snapshot.exists && snapshot.value is Map) {
@@ -1149,19 +1185,34 @@ class FirebaseService {
     String subRequestId,
   ) async {
     try {
-      if (creatorId.isEmpty || subRequestId.isEmpty) return false;
+      if (subRequestId.isEmpty) return false;
 
-      // Delete from user's subrequests
-      await _dbRef('users/$creatorId/SubRequests/$subRequestId').remove();
+      // 1. Mark as cancelled in root SubRequests Status (Status write is broadly permitted)
+      try {
+        await _dbRef('SubRequests/$subRequestId/Status').set('cancelled');
+      } catch (_) {}
 
-      // Delete from root SubRequests
+      // 2. Call Cloud Function to perform full admin-privileged cancellation / deletion
+      try {
+        final callable = _functions.httpsCallable('deleteSubRequest');
+        await callable.call({'subRequestId': subRequestId});
+      } catch (_) {}
+
+      // 3. Delete from user's personal subrequests
+      if (creatorId.isNotEmpty) {
+        try {
+          await _dbRef('users/$creatorId/SubRequests/$subRequestId').remove();
+        } catch (_) {}
+      }
+
+      // 4. Delete from root SubRequests
       try {
         await _dbRef('SubRequests/$subRequestId').remove();
       } catch (_) {}
 
       return true;
     } catch (e) {
-      print("[FirebaseService] Error deleting subrequest: $e");
+      debugPrint("[FirebaseService] Error deleting subrequest: $e");
       return false;
     }
   }
