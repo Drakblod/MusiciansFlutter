@@ -162,4 +162,44 @@ void main() {
 
     expect(find.text('The Rockers'), findsOneWidget);
   });
+
+  testWidgets('FindGigsScreen displays today gig with ISO string for user with mainInstrument', (WidgetTester tester) async {
+    final mockFirebase = MockFindGigsFirebaseService();
+    final todayIso = DateTime.now().toIso8601String();
+
+    mockFirebase.storedRequests = [
+      SubRequest(
+        id: 'sub_today',
+        subRequestId: 'sub_today',
+        bandName: 'Electric Groove',
+        voicePart: 'Electric Guitar',
+        date: todayIso,
+        startTime: '20:00',
+        endTime: '23:00',
+        location: 'Stockholm',
+      ),
+    ];
+
+    final appState = MockFindGigsAppState(mockFirebase);
+    appState.testUserId = 'test_musician_3';
+    appState.testUserProfile = UserProfile(
+      userId: 'test_musician_3',
+      userType: 'Musician',
+      mainInstrument: 'Electric Guitar',
+      instruments: ['Electric Guitar'],
+    );
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider<AppState>.value(
+        value: appState,
+        child: const MaterialApp(
+          home: FindGigsScreen(),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('Electric Groove'), findsOneWidget);
+  });
 }

@@ -59,7 +59,9 @@ class UserProfile {
       userId:
           keyUserId ??
           json['UserId']?.toString() ??
-          infoMap['UserId']?.toString(),
+          json['userId']?.toString() ??
+          infoMap['UserId']?.toString() ??
+          infoMap['userId']?.toString(),
       userType:
           infoMap['UserType']?.toString() ??
           json['UserType']?.toString() ??
@@ -78,28 +80,59 @@ class UserProfile {
       email:
           infoMap['Email']?.toString() ??
           json['Email']?.toString() ??
+          infoMap['email']?.toString() ??
+          json['email']?.toString() ??
           infoMap['Contact']?.toString() ??
           infoMap['contact']?.toString(),
-      instruments: _toList(infoMap['Instruments'] ?? json['Instruments']),
-      styles: _toList(infoMap['Styles'] ?? json['Styles']),
-      genres: _toList(infoMap['Genres'] ?? json['Genres']),
-      level: (infoMap['Level'] ?? json['Level'])?.toString(),
-      location: (infoMap['Location'] ?? json['Location'])?.toString(),
-      about: (infoMap['About'] ?? json['About'])?.toString(),
-      contact: (infoMap['Contact'] ?? json['Contact'])?.toString(),
-      history: (infoMap['History'] ?? json['History'])?.toString(),
-      projects: (infoMap['Projects'] ?? json['Projects'])?.toString(),
+      instruments: _toList(
+        infoMap['Instruments'] ??
+            json['Instruments'] ??
+            infoMap['instruments'] ??
+            json['instruments'],
+      ),
+      styles: _toList(
+        infoMap['Styles'] ??
+            json['Styles'] ??
+            infoMap['styles'] ??
+            json['styles'],
+      ),
+      genres: _toList(
+        infoMap['Genres'] ??
+            json['Genres'] ??
+            infoMap['genres'] ??
+            json['genres'],
+      ),
+      level: (infoMap['Level'] ?? json['Level'] ?? infoMap['level'] ?? json['level'])?.toString(),
+      location: (infoMap['Location'] ?? json['Location'] ?? infoMap['location'] ?? json['location'])?.toString(),
+      about: (infoMap['About'] ?? json['About'] ?? infoMap['about'] ?? json['about'])?.toString(),
+      contact: (infoMap['Contact'] ?? json['Contact'] ?? infoMap['contact'] ?? json['contact'])?.toString(),
+      history: (infoMap['History'] ?? json['History'] ?? infoMap['history'] ?? json['history'])?.toString(),
+      projects: (infoMap['Projects'] ?? json['Projects'] ?? infoMap['projects'] ?? json['projects'])?.toString(),
       profilePictureUrl:
-          (infoMap['ProfilePictureUrl'] ?? json['ProfilePictureUrl'])
+          (infoMap['ProfilePictureUrl'] ??
+                  json['ProfilePictureUrl'] ??
+                  infoMap['profilePictureUrl'] ??
+                  json['profilePictureUrl'])
               ?.toString(),
-      spotifyUrl: (infoMap['SpotifyUrl'] ?? json['SpotifyUrl'])?.toString(),
-      youtubeUrl: (infoMap['YoutubeUrl'] ?? json['YoutubeUrl'])?.toString(),
-      audioSnippetUrl: (infoMap['AudioSnippetUrl'] ?? json['AudioSnippetUrl'])
+      spotifyUrl: (infoMap['SpotifyUrl'] ?? json['SpotifyUrl'] ?? infoMap['spotifyUrl'] ?? json['spotifyUrl'])?.toString(),
+      youtubeUrl: (infoMap['YoutubeUrl'] ?? json['YoutubeUrl'] ?? infoMap['youtubeUrl'] ?? json['youtubeUrl'])?.toString(),
+      audioSnippetUrl: (infoMap['AudioSnippetUrl'] ??
+              json['AudioSnippetUrl'] ??
+              infoMap['audioSnippetUrl'] ??
+              json['audioSnippetUrl'])
           ?.toString(),
-      collabRoles: _toList(infoMap['CollabRoles'] ?? json['CollabRoles']),
-      collabRemote: (infoMap['CollabRemote'] ?? json['CollabRemote']) == true,
-      collabBio: (infoMap['CollabBio'] ?? json['CollabBio'])?.toString(),
-      mainInstrument: (infoMap['MainInstrument'] ?? json['MainInstrument'])
+      collabRoles: _toList(
+        infoMap['CollabRoles'] ??
+            json['CollabRoles'] ??
+            infoMap['collabRoles'] ??
+            json['collabRoles'],
+      ),
+      collabRemote: (infoMap['CollabRemote'] ?? json['CollabRemote'] ?? infoMap['collabRemote'] ?? json['collabRemote']) == true,
+      collabBio: (infoMap['CollabBio'] ?? json['CollabBio'] ?? infoMap['collabBio'] ?? json['collabBio'])?.toString(),
+      mainInstrument: (infoMap['MainInstrument'] ??
+              json['MainInstrument'] ??
+              infoMap['mainInstrument'] ??
+              json['mainInstrument'])
           ?.toString(),
     );
   }
@@ -199,8 +232,27 @@ class UserProfile {
 
   static List<String> _toList(dynamic val) {
     if (val == null) return [];
-    if (val is List) return val.map((e) => e.toString()).toList();
-    if (val is Map) return val.values.map((e) => e.toString()).toList();
-    return [val.toString()];
+    if (val is List) {
+      return val
+          .map((e) => e.toString().trim())
+          .where((e) => e.isNotEmpty)
+          .toList();
+    }
+    if (val is Map) {
+      return val.values
+          .map((e) => e.toString().trim())
+          .where((e) => e.isNotEmpty)
+          .toList();
+    }
+    final str = val.toString().trim();
+    if (str.isEmpty) return [];
+    if (str.contains(',')) {
+      return str
+          .split(',')
+          .map((e) => e.trim())
+          .where((e) => e.isNotEmpty)
+          .toList();
+    }
+    return [str];
   }
 }

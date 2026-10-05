@@ -226,36 +226,7 @@ class FirebaseService {
 
     final snapshot = await _dbRef('users/$targetId').get();
     if (snapshot.exists && snapshot.value is Map) {
-      final rootMap = snapshot.value as Map;
-      final infoMap = rootMap['info'] is Map ? rootMap['info'] as Map : {};
-      return UserProfile(
-        userId: targetId,
-        userType:
-            rootMap['UserType']?.toString() ?? infoMap['UserType']?.toString(),
-        nickname:
-            rootMap['Nickname']?.toString() ?? infoMap['Nickname']?.toString(),
-        displayName:
-            infoMap['DisplayName']?.toString() ??
-            rootMap['DisplayName']?.toString(),
-        email: infoMap['Email']?.toString() ?? infoMap['Contact']?.toString(),
-        location: infoMap['Location']?.toString(),
-        about: infoMap['About']?.toString(),
-        level: infoMap['Level']?.toString(),
-        instruments: _parseList(infoMap['Instruments']),
-        styles: _parseList(infoMap['Styles']),
-        genres: _parseList(infoMap['Genres']),
-        contact: infoMap['Contact']?.toString(),
-        history: infoMap['History']?.toString(),
-        projects: infoMap['Projects']?.toString(),
-        profilePictureUrl: infoMap['ProfilePictureUrl']?.toString(),
-        spotifyUrl: infoMap['SpotifyUrl']?.toString(),
-        youtubeUrl: infoMap['YoutubeUrl']?.toString(),
-        audioSnippetUrl: infoMap['AudioSnippetUrl']?.toString(),
-        collabRoles: _parseList(infoMap['CollabRoles']),
-        collabRemote: infoMap['CollabRemote'] == true,
-        collabBio: infoMap['CollabBio']?.toString(),
-        mainInstrument: infoMap['MainInstrument']?.toString(),
-      );
+      return UserProfile.fromJson(snapshot.value as Map, targetId);
     }
     return null;
   }
@@ -267,40 +238,7 @@ class FirebaseService {
       final data = snapshot.value as Map;
       data.forEach((k, v) {
         if (v is Map) {
-          final userId = k.toString();
-          final rootMap = v;
-          final infoMap = rootMap['info'] is Map ? rootMap['info'] as Map : {};
-          users.add(
-            UserProfile(
-              userId: userId,
-              userType:
-                  rootMap['UserType']?.toString() ??
-                  infoMap['UserType']?.toString(),
-              nickname:
-                  rootMap['Nickname']?.toString() ??
-                  infoMap['Nickname']?.toString(),
-              displayName:
-                  infoMap['DisplayName']?.toString() ??
-                  rootMap['DisplayName']?.toString(),
-              location: infoMap['Location']?.toString(),
-              about: infoMap['About']?.toString(),
-              level: infoMap['Level']?.toString(),
-              instruments: _parseList(infoMap['Instruments']),
-              styles: _parseList(infoMap['Styles']),
-              genres: _parseList(infoMap['Genres']),
-              contact: infoMap['Contact']?.toString(),
-              history: infoMap['History']?.toString(),
-              projects: infoMap['Projects']?.toString(),
-              profilePictureUrl: infoMap['ProfilePictureUrl']?.toString(),
-              spotifyUrl: infoMap['SpotifyUrl']?.toString(),
-              youtubeUrl: infoMap['YoutubeUrl']?.toString(),
-              audioSnippetUrl: infoMap['AudioSnippetUrl']?.toString(),
-              collabRoles: _parseList(infoMap['CollabRoles']),
-              collabRemote: infoMap['CollabRemote'] == true,
-              collabBio: infoMap['CollabBio']?.toString(),
-              mainInstrument: infoMap['MainInstrument']?.toString(),
-            ),
-          );
+          users.add(UserProfile.fromJson(v, k.toString()));
         }
       });
     }
@@ -662,25 +600,44 @@ class FirebaseService {
   }
 
   Future<List<SubRequest>> getAllSubRequestsAsync() async {
-    final snapshot = await _dbRef('SubRequests').get();
     final List<SubRequest> requests = [];
     final selfId = currentUserId;
-    if (snapshot.exists && snapshot.value is Map) {
-      (snapshot.value as Map).forEach((k, v) {
-        if (v is Map) {
-          final req = SubRequest.fromJson(v, k.toString());
-          final targets = req.targetUserIds;
-          if (targets == null || targets.isEmpty) {
-            requests.add(req);
-          } else {
-            if (selfId != null &&
-                (targets.contains(selfId) || req.creatorUserId == selfId)) {
+
+    try {
+      final snapshot = await _dbRef('SubRequests').get();
+      if (snapshot.exists && snapshot.value is Map) {
+        (snapshot.value as Map).forEach((k, v) {
+          if (v is Map) {
+            final req = SubRequest.fromJson(v, k.toString());
+            final targets = req.targetUserIds;
+            if (targets == null || targets.isEmpty) {
               requests.add(req);
+            } else {
+              if (selfId != null &&
+                  (targets.contains(selfId) || req.creatorUserId == selfId)) {
+                requests.add(req);
+              }
             }
           }
-        }
-      });
+        });
+      }
+    } catch (e) {
+      debugPrint('[FirebaseService] Error querying root SubRequests: $e');
     }
+
+    // Always supplement with user's personal SubRequests if logged in
+    if (selfId != null) {
+      try {
+        final userSubs = await getUserSubRequestsAsync(selfId);
+        for (final req in userSubs) {
+          final id = req.subRequestId ?? req.id;
+          if (id != null && !requests.any((r) => (r.subRequestId ?? r.id) == id)) {
+            requests.add(req);
+          }
+        }
+      } catch (_) {}
+    }
+
     return requests;
   }
 

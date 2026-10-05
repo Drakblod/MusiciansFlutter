@@ -140,33 +140,79 @@ class _FindGigsScreenState extends State<FindGigsScreen>
     return groups;
   }
 
+  DateTime? _parseGigDate(String? raw) {
+    if (raw == null || raw.trim().isEmpty) return null;
+    final str = raw.trim();
+    final parsed = DateTime.tryParse(str);
+    if (parsed != null) return parsed.toLocal();
+    try {
+      if (str.contains('/')) {
+        final parts = str.split('/');
+        if (parts.length == 3) {
+          if (parts[0].length == 4) {
+            return DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
+          } else if (parts[2].length == 4) {
+            final p0 = int.parse(parts[0]);
+            final p1 = int.parse(parts[1]);
+            final p2 = int.parse(parts[2]);
+            if (p0 > 12) {
+              return DateTime(p2, p1, p0);
+            } else {
+              return DateTime(p2, p0, p1);
+            }
+          }
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
+
   bool _isInstrumentMatch(String? requestedInstrument, List<String> userSkills) {
-    if (userSkills.isEmpty) return true;
+    final nonGenericSkills = userSkills.where((s) {
+      final l = s.trim().toLowerCase();
+      return l.isNotEmpty &&
+          l != 'musician' &&
+          l != 'browse musicians' &&
+          l != 'browse profiles' &&
+          l != 'browse_musicians' &&
+          l != 'artist' &&
+          l != 'band member';
+    }).toList();
+
+    if (nonGenericSkills.isEmpty) return true;
     if (requestedInstrument == null || requestedInstrument.trim().isEmpty) return true;
 
+    final reqClean = requestedInstrument.trim().toLowerCase().replaceAll(RegExp(r'[\s\-_]'), '');
     final reqLower = requestedInstrument.trim().toLowerCase();
 
-    for (final skill in userSkills) {
+    for (final skill in nonGenericSkills) {
       final skillLower = skill.trim().toLowerCase();
+      final skillClean = skillLower.replaceAll(RegExp(r'[\s\-_]'), '');
       if (skillLower.isEmpty) continue;
-      if (skillLower == reqLower) return true;
+
+      if (skillLower == reqLower || skillClean == reqClean) return true;
       if (skillLower.contains(reqLower) || reqLower.contains(skillLower)) return true;
+      if (skillClean.contains(reqClean) || reqClean.contains(skillClean)) return true;
 
       // Stem / instrument family matching
-      if (reqLower.contains('guitar') && skillLower.contains('guitar')) return true;
-      if (reqLower.contains('gitarr') && (skillLower.contains('guitar') || skillLower.contains('gitarr'))) return true;
-      if (reqLower.contains('bass') && skillLower.contains('bass')) return true;
-      if (reqLower.contains('bas') && (skillLower.contains('bass') || skillLower.contains('bas'))) return true;
+      if ((reqLower.contains('guitar') || reqLower.contains('gitarr')) &&
+          (skillLower.contains('guitar') || skillLower.contains('gitarr'))) {
+        return true;
+      }
+      if ((reqLower.contains('bass') || reqLower.contains('bas')) &&
+          (skillLower.contains('bass') || skillLower.contains('bas'))) {
+        return true;
+      }
       if ((reqLower.contains('drum') || reqLower.contains('slagverk') || reqLower.contains('percussion') || reqLower.contains('trumm')) &&
           (skillLower.contains('drum') || skillLower.contains('slagverk') || skillLower.contains('percussion') || skillLower.contains('trumm'))) {
         return true;
       }
-      if ((reqLower.contains('vocal') || reqLower.contains('sing') || reqLower.contains('sång') || reqLower.contains('sang') || reqLower.contains('voice')) &&
-          (skillLower.contains('vocal') || skillLower.contains('sing') || skillLower.contains('sång') || skillLower.contains('sang') || skillLower.contains('voice'))) {
+      if ((reqLower.contains('vocal') || reqLower.contains('sing') || reqLower.contains('sång') || reqLower.contains('sang') || reqLower.contains('voice') || reqLower.contains('kör')) &&
+          (skillLower.contains('vocal') || skillLower.contains('sing') || skillLower.contains('sång') || skillLower.contains('sang') || skillLower.contains('voice') || skillLower.contains('kör'))) {
         return true;
       }
-      if ((reqLower.contains('key') || reqLower.contains('piano') || reqLower.contains('synth') || reqLower.contains('klaviatur')) &&
-          (skillLower.contains('key') || skillLower.contains('piano') || skillLower.contains('synth') || skillLower.contains('klaviatur'))) {
+      if ((reqLower.contains('key') || reqLower.contains('piano') || reqLower.contains('synth') || reqLower.contains('klaviatur') || reqLower.contains('orgel')) &&
+          (skillLower.contains('key') || skillLower.contains('piano') || skillLower.contains('synth') || skillLower.contains('klaviatur') || skillLower.contains('orgel'))) {
         return true;
       }
       if ((reqLower.contains('sax') || reqLower.contains('horn') || reqLower.contains('brass') || reqLower.contains('trumpet') || reqLower.contains('trombone') || reqLower.contains('blås')) &&
@@ -196,13 +242,15 @@ class _FindGigsScreenState extends State<FindGigsScreen>
         }
       }
 
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+
       final filteredUpcoming = list.where((gig) {
         if (gig.date != null && gig.date!.trim().isNotEmpty) {
-          final gigDate = DateTime.tryParse(gig.date!);
+          final gigDate = _parseGigDate(gig.date);
           if (gigDate != null) {
-            final now = DateTime.now();
-            final today = DateTime(now.year, now.month, now.day);
-            if (gigDate.isBefore(today)) return false;
+            final gigDay = DateTime(gigDate.year, gigDate.month, gigDate.day);
+            if (gigDay.isBefore(today)) return false;
           }
         }
 
@@ -221,11 +269,10 @@ class _FindGigsScreenState extends State<FindGigsScreen>
 
       final filteredInvites = list.where((gig) {
         if (gig.date != null && gig.date!.trim().isNotEmpty) {
-          final gigDate = DateTime.tryParse(gig.date!);
+          final gigDate = _parseGigDate(gig.date);
           if (gigDate != null) {
-            final now = DateTime.now();
-            final today = DateTime(now.year, now.month, now.day);
-            if (gigDate.isBefore(today)) return false;
+            final gigDay = DateTime(gigDate.year, gigDate.month, gigDate.day);
+            if (gigDay.isBefore(today)) return false;
           }
         }
 
