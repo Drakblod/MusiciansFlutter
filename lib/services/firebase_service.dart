@@ -1381,6 +1381,57 @@ class FirebaseService {
     } catch (e) {
       debugPrint("[FirebaseService] Error in addResponseToSubRequestAsync linking event: $e");
     }
+
+    // 7. Insert real-time notification for the subrequest creator
+    try {
+      SubRequest? subRequest;
+      final subSnap = await _dbRef('SubRequests/$subRequestId').get();
+      if (subSnap.exists && subSnap.value is Map) {
+        subRequest = SubRequest.fromJson(subSnap.value as Map, subRequestId);
+      } else {
+        final pubSnap = await _dbRef('BandEvents/PublishedSubRequests/$subRequestId').get();
+        if (pubSnap.exists && pubSnap.value is Map) {
+          subRequest = SubRequest.fromJson(pubSnap.value as Map, subRequestId);
+        }
+      }
+
+      final creatorId = subRequest?.creatorUserId ?? subRequest?.userId;
+      if (creatorId != null && creatorId.isNotEmpty && creatorId != userId) {
+        final applicantProfile = await getUserProfileAsync(userId);
+        final applicantName = applicantProfile?.displayName ?? applicantProfile?.nickname ?? 'A musician';
+        final role = subRequest?.role ?? subRequest?.voicePart ?? 'Musician';
+        final bandName = subRequest?.bandName ?? 'Band';
+        final notifId = 'notif_sub_resp_${subRequestId}_$userId';
+        final notifMap = {
+          'id': notifId,
+          'type': 'sub_request_response',
+          'category': 'requests',
+          'title': 'New Sub Candidate',
+          'body': '$applicantName applied for $role in $bandName',
+          'createdAt': DateTime.now().millisecondsSinceEpoch,
+          'isRead': false,
+          'data': {
+            'subRequestId': subRequestId,
+            'applicantId': userId,
+            'applicantName': applicantName,
+            'bandId': subRequest?.bandId ?? '',
+            'eventId': subRequest?.eventId ?? '',
+            'voicePart': role,
+            'bandName': bandName,
+          },
+        };
+
+        try {
+          await _dbRef('userNotifications/$creatorId/$notifId').set(notifMap);
+        } catch (_) {}
+
+        try {
+          await _dbRef('BandEvents/Notifications/$creatorId/$notifId').set(notifMap);
+        } catch (_) {}
+      }
+    } catch (notifErr) {
+      debugPrint('[FirebaseService] Notification dispatch notice: $notifErr');
+    }
   }
 
   Future<SubRequest?> getSubRequestAsync(String subRequestId) async {
@@ -1945,17 +1996,33 @@ class FirebaseService {
     final uid = userId ?? currentUserId;
     if (uid == null || uid.isEmpty) return Stream.value([]);
 
-    return _dbRef('userNotifications/$uid').onValue.map((event) {
+    return _dbRef('userNotifications/$uid').onValue.asyncMap((event) async {
       final List<AppNotification> list = [];
+      final Set<String> seenIds = {};
       final data = event.snapshot.value;
       if (data is Map) {
         data.forEach((k, v) {
           if (v is Map) {
+            seenIds.add(k.toString());
             list.add(AppNotification.fromJson(v, k.toString()));
           }
         });
-        list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       }
+
+      // Check BandEvents fallback notifications
+      try {
+        final bandSnap = await _dbRef('BandEvents/Notifications/$uid').get();
+        if (bandSnap.exists && bandSnap.value is Map) {
+          (bandSnap.value as Map).forEach((k, v) {
+            if (v is Map && !seenIds.contains(k.toString())) {
+              seenIds.add(k.toString());
+              list.add(AppNotification.fromJson(v, k.toString()));
+            }
+          });
+        }
+      } catch (_) {}
+
+      list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       return list;
     });
   }
@@ -1964,36 +2031,65 @@ class FirebaseService {
     final uid = userId ?? currentUserId;
     if (uid == null || uid.isEmpty) return Stream.value(0);
 
-    return _dbRef('userNotifications/$uid').onValue.map((event) {
-      int count = 0;
-      final data = event.snapshot.value;
-      if (data is Map) {
-        data.forEach((k, v) {
-          if (v is Map) {
-            final isRead = v['isRead'] == true ||
-                v['IsRead'] == true ||
-                v['isRead'] == 'true' ||
-                v['IsRead'] == 'true';
-            if (!isRead) {
-              count++;
-            }
-          }
-        });
-      }
-      return count;
+    return subscribeToUserNotifications(uid).map((notifications) {
+      return notifications.where((n) => !n.isRead).length;
     });
   }
 
   Future<void> markNotificationReadAsync(String notificationId) async {
-    final callable = _functions.httpsCallable('markNotificationRead');
-    await callable.call<Map<String, dynamic>>({
-      'notificationId': notificationId,
-    });
+    final uid = currentUserId;
+    if (uid != null && uid.isNotEmpty) {
+      try {
+        await _dbRef('userNotifications/$uid/$notificationId').update({
+          'isRead': true,
+          'readAt': DateTime.now().millisecondsSinceEpoch,
+        });
+      } catch (_) {}
+      try {
+        await _dbRef('BandEvents/Notifications/$uid/$notificationId').update({
+          'isRead': true,
+          'readAt': DateTime.now().millisecondsSinceEpoch,
+        });
+      } catch (_) {}
+    }
+    try {
+      final callable = _functions.httpsCallable('markNotificationRead');
+      await callable.call<Map<String, dynamic>>({
+        'notificationId': notificationId,
+      });
+    } catch (_) {}
   }
 
   Future<void> markAllNotificationsReadAsync() async {
-    final callable = _functions.httpsCallable('markAllNotificationsRead');
-    await callable.call<Map<String, dynamic>>();
+    final uid = currentUserId;
+    if (uid != null && uid.isNotEmpty) {
+      try {
+        final snap = await _dbRef('userNotifications/$uid').get();
+        if (snap.exists && snap.value is Map) {
+          final updates = <String, dynamic>{};
+          (snap.value as Map).forEach((k, v) {
+            updates['userNotifications/$uid/$k/isRead'] = true;
+            updates['userNotifications/$uid/$k/readAt'] = DateTime.now().millisecondsSinceEpoch;
+          });
+          await _dbRef().update(updates);
+        }
+      } catch (_) {}
+      try {
+        final bandSnap = await _dbRef('BandEvents/Notifications/$uid').get();
+        if (bandSnap.exists && bandSnap.value is Map) {
+          final updates = <String, dynamic>{};
+          (bandSnap.value as Map).forEach((k, v) {
+            updates['BandEvents/Notifications/$uid/$k/isRead'] = true;
+            updates['BandEvents/Notifications/$uid/$k/readAt'] = DateTime.now().millisecondsSinceEpoch;
+          });
+          await _dbRef().update(updates);
+        }
+      } catch (_) {}
+    }
+    try {
+      final callable = _functions.httpsCallable('markAllNotificationsRead');
+      await callable.call<Map<String, dynamic>>();
+    } catch (_) {}
   }
 
   Future<List<Map<String, dynamic>>> getActiveConversationsAsync() async {

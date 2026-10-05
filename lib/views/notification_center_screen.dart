@@ -15,6 +15,7 @@ import 'chat_detail_screen.dart';
 import 'band_section_chat_screen.dart';
 import 'event_details_page.dart';
 import 'sub_request_details_screen.dart';
+import 'sub_request_response_details_screen.dart';
 import 'session_details_screen.dart';
 
 /// Shows the compact notification panel as an overlay/dialog on desktop/tablet (>600px)
@@ -314,6 +315,29 @@ class _NotificationPanelContentState extends State<NotificationPanelContent> {
                 ),
               ),
             );
+          }
+          break;
+
+        case 'sub_request_response':
+        case 'sub_response':
+          final subRequestId = (data['subRequestId'] ?? '').toString();
+          final bandId = (data['bandId'] ?? '').toString();
+          final eventId = (data['eventId'] ?? '').toString();
+          if (subRequestId.isNotEmpty) {
+            navigator.push(
+              MaterialPageRoute(
+                builder: (context) => SubRequestResponseDetailsScreen(
+                  subRequest: SubRequest(
+                    id: subRequestId,
+                    subRequestId: subRequestId,
+                    bandId: bandId.isNotEmpty ? bandId : null,
+                    eventId: eventId.isNotEmpty ? eventId : null,
+                  ),
+                ),
+              ),
+            );
+          } else {
+            navigator.pushNamed('/find-sub');
           }
           break;
 

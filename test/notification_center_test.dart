@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:firebase_core/firebase_core.dart' hide FirebaseService;
 import 'package:firebase_core_platform_interface/test.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:musicians_flutter/models/app_notification.dart';
 import 'package:musicians_flutter/models/user_profile.dart';
 import 'package:musicians_flutter/providers/app_state.dart';
@@ -38,6 +39,12 @@ class MockNotificationFirebaseService extends FirebaseService {
   void setMockUserId(String uid) {
     _mockUserId = uid;
   }
+
+  @override
+  bool get isLoggedIn => true;
+
+  @override
+  Future<Map<String, int>> getUserButtonClicksAsync(String userId) async => {};
 
   @override
   Stream<List<AppNotification>> subscribeToUserNotifications([String? userId]) async* {
@@ -704,6 +711,46 @@ void main() {
       // In standard HomeView, there should NOT be a "5 unread notifications" card
       expect(find.text('5 unread notifications'), findsNothing);
       expect(find.text('No unread notifications'), findsNothing);
+    });
+
+    testWidgets('5. SubRequest response notification sets AppState unreadSubResponses and shows badge on Find Musicians button', (tester) async {
+      final mockService = MockNotificationFirebaseService();
+      final appState = MockNotificationAppState(mockService);
+
+      final subResponseNotif = AppNotification(
+        id: 'notif_sub_resp_1',
+        type: 'sub_request_response',
+        category: 'requests',
+        title: 'New Sub Candidate',
+        body: 'John Doe applied for Guitar in The Rockers',
+        createdAt: DateTime.now().millisecondsSinceEpoch,
+        isRead: false,
+        data: {'subRequestId': 'sub_123', 'applicantId': 'john_1'},
+      );
+
+      SharedPreferences.setMockInitialValues({});
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData.dark(),
+          home: ChangeNotifierProvider<AppState>.value(
+            value: appState,
+            child: const Scaffold(
+              body: HomeScreen(),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      mockService.emitNotifications([subResponseNotif]);
+      await tester.pumpAndSettle();
+
+      expect(appState.hasUnreadSubResponses, isTrue);
+      expect(appState.unreadSubResponsesCount, 1);
+      expect(find.text('Find\nMusician/Vocalist'), findsOneWidget);
+      // Badge with count 1 should be visible
+      expect(find.text('1'), findsWidgets);
     });
   });
 }

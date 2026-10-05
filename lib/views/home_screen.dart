@@ -495,6 +495,8 @@ class HomeScreen extends StatelessWidget {
         icon: Icons.people_outline_rounded,
         title: 'Find Musicians',
         subtitle: 'Find and connect with talented musicians near you',
+        badgeCount: appState.unreadSubResponsesCount,
+        showRedDot: appState.hasUnreadSubResponses,
         onTap: () {
           appState.trackButtonClick('find_musicians');
           final isProducer = profile?.instruments.contains('PRODUCER') == true ||
@@ -521,6 +523,8 @@ class HomeScreen extends StatelessWidget {
         icon: Icons.local_activity_outlined,
         title: 'Find Gigs',
         subtitle: 'Find gigs and opportunities in your area',
+        badgeCount: appState.unreadGigsCount,
+        showRedDot: appState.hasUnreadGigs,
         onTap: () {
           appState.trackButtonClick('find_gigs');
           Navigator.pushNamed(context, '/find-gigs');
@@ -531,6 +535,8 @@ class HomeScreen extends StatelessWidget {
         icon: Icons.groups_outlined,
         title: 'Band Room',
         subtitle: 'Manage your band, chat and organize everything',
+        badgeCount: appState.unreadBandRoomCount,
+        showRedDot: appState.hasUnreadBandRoom,
         onTap: () {
           appState.trackButtonClick('band_room');
           _handleBandNavigation(context, appState, '/band-room');
@@ -551,6 +557,8 @@ class HomeScreen extends StatelessWidget {
         icon: Icons.handshake_outlined,
         title: 'Collabs',
         subtitle: 'Collaborate with other musicians on projects',
+        badgeCount: appState.unreadCollabsCount,
+        showRedDot: appState.hasUnreadCollabs,
         onTap: () {
           appState.trackButtonClick('collabs');
           Navigator.pushNamed(context, '/collabs');
@@ -640,6 +648,8 @@ class HomeScreen extends StatelessWidget {
                 icon: item.icon,
                 title: item.title,
                 subtitle: item.subtitle,
+                badgeCount: item.badgeCount,
+                showRedDot: item.showRedDot,
                 onTap: item.onTap,
               ),
               const SizedBox(height: 16),
@@ -698,7 +708,7 @@ class HomeScreen extends StatelessWidget {
                   child: Padding(
                     padding: const EdgeInsets.only(bottom: 10, right: 10),
                     child: Text(
-                      '2.66.8',
+                      '2.66.9',
                       style: GoogleFonts.inter(
                         color: AppTheme.textSecondary.withOpacity(0.5),
                         fontSize: 12,
@@ -721,6 +731,8 @@ class HomeScreen extends StatelessWidget {
     required String title,
     required String subtitle,
     required VoidCallback onTap,
+    int badgeCount = 0,
+    bool showRedDot = false,
   }) {
     return AnimatedTapDetector(
       onTap: onTap,
@@ -736,30 +748,84 @@ class HomeScreen extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppTheme.primaryAccent.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(
-                icon,
-                color: AppTheme.primaryAccent,
-                size: 26,
-              ),
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primaryAccent.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    icon,
+                    color: AppTheme.primaryAccent,
+                    size: 26,
+                  ),
+                ),
+                if (showRedDot || badgeCount > 0)
+                  Positioned(
+                    top: -2,
+                    right: -2,
+                    child: Container(
+                      padding: badgeCount > 0
+                          ? const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5)
+                          : const EdgeInsets.all(4.5),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFF3B30),
+                        shape: badgeCount > 0 ? BoxShape.rectangle : BoxShape.circle,
+                        borderRadius: badgeCount > 0 ? BorderRadius.circular(8) : null,
+                        border: Border.all(color: AppTheme.cardBackground, width: 2),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFFFF3B30).withOpacity(0.6),
+                            blurRadius: 6,
+                            spreadRadius: 1,
+                          ),
+                        ],
+                      ),
+                      child: badgeCount > 0
+                          ? Text(
+                              badgeCount > 99 ? '99+' : '$badgeCount',
+                              style: GoogleFonts.inter(
+                                color: Colors.white,
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            )
+                          : null,
+                    ),
+                  ),
+              ],
             ),
             const SizedBox(width: 16),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    title,
-                    style: GoogleFonts.outfit(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          title,
+                          style: GoogleFonts.outfit(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      if (showRedDot || badgeCount > 0)
+                        Container(
+                          margin: const EdgeInsets.only(left: 8),
+                          width: 8,
+                          height: 8,
+                          decoration: const BoxDecoration(
+                            color: Color(0xFFFF3B30),
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                    ],
                   ),
                   const SizedBox(height: 4),
                   Text(
@@ -787,6 +853,8 @@ class HomeActionItem {
   final String title;
   final String subtitle;
   final VoidCallback onTap;
+  final int badgeCount;
+  final bool showRedDot;
 
   HomeActionItem({
     required this.id,
@@ -794,6 +862,8 @@ class HomeActionItem {
     required this.title,
     required this.subtitle,
     required this.onTap,
+    this.badgeCount = 0,
+    this.showRedDot = false,
   });
 }
 
@@ -1335,65 +1405,104 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
 
     return AnimatedTapDetector(
       onTap: item.onTap,
-      child: Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          gradient: const RadialGradient(
-            colors: [
-              Color(0xFF2E1756), // Dark purple center
-              Color(0xFF0D0822), // Deep black-purple edge
-            ],
-            center: Alignment.center,
-            radius: 0.85,
-          ),
-          border: Border.all(
-            color: const Color(0xFFE5A9FF).withOpacity(0.9), // Bright glowing edge border
-            width: 1.5,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFFC066F6).withOpacity(0.55),
-              blurRadius: 24,
-              spreadRadius: 1,
-            ),
-          ],
-        ),
-        child: Container(
-          margin: const EdgeInsets.all(4), // Space between outer and inner ring
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.all(
-              color: const Color(0xFFC066F6).withOpacity(0.25), // Subtle inner ring
-              width: 1,
-            ),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  item.icon,
-                  color: Colors.white,
-                  size: iconSize,
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  _getShortLabel(item.id, item.title),
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.inter(
-                    color: Colors.white.withOpacity(0.95),
-                    fontSize: fontSize,
-                    fontWeight: FontWeight.bold,
-                    height: 1.2,
-                  ),
+      child: Stack(
+        clipBehavior: Clip.none,
+        alignment: Alignment.center,
+        children: [
+          Container(
+            width: size,
+            height: size,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: const RadialGradient(
+                colors: [
+                  Color(0xFF2E1756), // Dark purple center
+                  Color(0xFF0D0822), // Deep black-purple edge
+                ],
+                center: Alignment.center,
+                radius: 0.85,
+              ),
+              border: Border.all(
+                color: const Color(0xFFE5A9FF).withOpacity(0.9), // Bright glowing edge border
+                width: 1.5,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFFC066F6).withOpacity(0.55),
+                  blurRadius: 24,
+                  spreadRadius: 1,
                 ),
               ],
             ),
+            child: Container(
+              margin: const EdgeInsets.all(4), // Space between outer and inner ring
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: const Color(0xFFC066F6).withOpacity(0.25), // Subtle inner ring
+                  width: 1,
+                ),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      item.icon,
+                      color: Colors.white,
+                      size: iconSize,
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      _getShortLabel(item.id, item.title),
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.inter(
+                        color: Colors.white.withOpacity(0.95),
+                        fontSize: fontSize,
+                        fontWeight: FontWeight.bold,
+                        height: 1.2,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
-        ),
+          if (item.showRedDot || item.badgeCount > 0)
+            Positioned(
+              top: 2,
+              right: 6,
+              child: Container(
+                padding: item.badgeCount > 0
+                    ? const EdgeInsets.symmetric(horizontal: 6, vertical: 2)
+                    : const EdgeInsets.all(5),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFF3B30),
+                  shape: item.badgeCount > 0 ? BoxShape.rectangle : BoxShape.circle,
+                  borderRadius: item.badgeCount > 0 ? BorderRadius.circular(10) : null,
+                  border: Border.all(color: const Color(0xFF0F0C20), width: 2),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFFFF3B30).withOpacity(0.8),
+                      blurRadius: 8,
+                      spreadRadius: 1,
+                    ),
+                  ],
+                ),
+                child: item.badgeCount > 0
+                    ? Text(
+                        item.badgeCount > 99 ? '99+' : '${item.badgeCount}',
+                        style: GoogleFonts.inter(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      )
+                    : null,
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -1404,6 +1513,8 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
     required String title,
     required String subtitle,
     required VoidCallback onTap,
+    int badgeCount = 0,
+    bool showRedDot = false,
   }) {
     return AnimatedTapDetector(
       onTap: onTap,
@@ -1419,30 +1530,84 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
         ),
         child: Row(
           children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppTheme.primaryAccent.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(
-                icon,
-                color: AppTheme.primaryAccent,
-                size: 26,
-              ),
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primaryAccent.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    icon,
+                    color: AppTheme.primaryAccent,
+                    size: 26,
+                  ),
+                ),
+                if (showRedDot || badgeCount > 0)
+                  Positioned(
+                    top: -2,
+                    right: -2,
+                    child: Container(
+                      padding: badgeCount > 0
+                          ? const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5)
+                          : const EdgeInsets.all(4.5),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFF3B30),
+                        shape: badgeCount > 0 ? BoxShape.rectangle : BoxShape.circle,
+                        borderRadius: badgeCount > 0 ? BorderRadius.circular(8) : null,
+                        border: Border.all(color: AppTheme.cardBackground, width: 2),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFFFF3B30).withOpacity(0.6),
+                            blurRadius: 6,
+                            spreadRadius: 1,
+                          ),
+                        ],
+                      ),
+                      child: badgeCount > 0
+                          ? Text(
+                              badgeCount > 99 ? '99+' : '$badgeCount',
+                              style: GoogleFonts.inter(
+                                color: Colors.white,
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            )
+                          : null,
+                    ),
+                  ),
+              ],
             ),
             const SizedBox(width: 16),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    title,
-                    style: GoogleFonts.outfit(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          title,
+                          style: GoogleFonts.outfit(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      if (showRedDot || badgeCount > 0)
+                        Container(
+                          margin: const EdgeInsets.only(left: 8),
+                          width: 8,
+                          height: 8,
+                          decoration: const BoxDecoration(
+                            color: Color(0xFFFF3B30),
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                    ],
                   ),
                   const SizedBox(height: 4),
                   Text(
@@ -1480,6 +1645,8 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
         icon: Icons.people_outline_rounded,
         title: 'Find Musicians',
         subtitle: 'Find and connect with talented musicians near you',
+        badgeCount: appState.unreadSubResponsesCount,
+        showRedDot: appState.hasUnreadSubResponses,
         onTap: () async {
           await HomeUsageTracker.incrementClick('find_musicians');
           final isProducer = profile?.instruments.contains('PRODUCER') == true ||
@@ -1508,6 +1675,8 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
         icon: Icons.local_activity_outlined,
         title: 'Find Gigs',
         subtitle: 'Find gigs and opportunities in your area',
+        badgeCount: appState.unreadGigsCount,
+        showRedDot: appState.hasUnreadGigs,
         onTap: () async {
           await HomeUsageTracker.incrementClick('find_gigs');
           await Navigator.pushNamed(context, '/find-gigs');
@@ -1519,6 +1688,8 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
         icon: Icons.handshake_outlined,
         title: 'Collabs',
         subtitle: 'Collaborate with other musicians on projects',
+        badgeCount: appState.unreadCollabsCount,
+        showRedDot: appState.hasUnreadCollabs,
         onTap: () async {
           await HomeUsageTracker.incrementClick('collabs');
           await Navigator.pushNamed(context, '/collabs');
@@ -1541,6 +1712,8 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
         icon: Icons.groups_outlined,
         title: 'Band Room',
         subtitle: 'Manage your band, chat and organize everything',
+        badgeCount: appState.unreadBandRoomCount,
+        showRedDot: appState.hasUnreadBandRoom,
         onTap: () async {
           await HomeUsageTracker.incrementClick('band_room');
           await _handleBandNavigation(context, appState, '/band-room');
@@ -1720,6 +1893,8 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
                           icon: item.icon,
                           title: item.title,
                           subtitle: item.subtitle,
+                          badgeCount: item.badgeCount,
+                          showRedDot: item.showRedDot,
                           onTap: item.onTap,
                         ),
                         const SizedBox(height: 16),
@@ -1787,7 +1962,7 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
                                 }
                               },
                               child: Text(
-                                '2.66.8',
+                                '2.66.9',
                                 style: GoogleFonts.inter(
                                   color: AppTheme.textSecondary.withOpacity(0.5),
                                   fontSize: 12,

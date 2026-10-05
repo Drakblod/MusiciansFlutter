@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/firebase_service.dart';
 import '../models/user_profile.dart';
+import '../models/app_notification.dart';
 import '../main.dart';
 import '../models/sub_request.dart';
 import '../views/event_details_page.dart';
@@ -17,11 +18,13 @@ class AppState extends ChangeNotifier {
   String? _activeBandName;
   bool _hasUnreadMessages = false;
   int _unreadNotificationCount = 0;
+  List<AppNotification> _userNotifications = [];
   bool _isLoading = true;
   int _currentTab = 0;
   Map<String, int> _buttonClicks = {};
   Map<String, dynamic>? _pendingNotificationPayload;
   StreamSubscription? _unreadNotificationsSubscription;
+  StreamSubscription? _userNotificationsSubscription;
 
   static const List<String> validBubbleIds = [
     'find_musicians',
@@ -176,8 +179,43 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setUnreadNotificationCountForTest(int count) {
-    _unreadNotificationCount = count;
+  List<AppNotification> get userNotifications => _userNotifications;
+
+  int get unreadSubResponsesCount {
+    return _userNotifications
+        .where((n) => !n.isRead && (n.type == 'sub_request_response' || n.type == 'sub_response'))
+        .length;
+  }
+
+  bool get hasUnreadSubResponses => unreadSubResponsesCount > 0;
+
+  int get unreadGigsCount {
+    return _userNotifications
+        .where((n) => !n.isRead && (n.type == 'sub_request_invite' || n.type == 'sub_request' || n.type == 'grouped_sub_request'))
+        .length;
+  }
+
+  bool get hasUnreadGigs => unreadGigsCount > 0;
+
+  int get unreadBandRoomCount {
+    return _userNotifications
+        .where((n) => !n.isRead && (n.type == 'band_room_message' || n.type == 'band_section_chat'))
+        .length;
+  }
+
+  bool get hasUnreadBandRoom => unreadBandRoomCount > 0;
+
+  int get unreadCollabsCount {
+    return _userNotifications
+        .where((n) => !n.isRead && (n.type == 'session_application' || n.type == 'session_application_status' || n.type == 'session_message'))
+        .length;
+  }
+
+  bool get hasUnreadCollabs => unreadCollabsCount > 0;
+
+  void setUserNotificationsForTest(List<AppNotification> notifs) {
+    _userNotifications = notifs;
+    _unreadNotificationCount = notifs.where((n) => !n.isRead).length;
     notifyListeners();
   }
 
@@ -187,11 +225,14 @@ class AppState extends ChangeNotifier {
     _activeBandName = null;
     _hasUnreadMessages = false;
     _unreadNotificationCount = 0;
+    _userNotifications = [];
     _buttonClicks = {};
     _unreadSubscription?.cancel();
     _unreadSubscription = null;
     _unreadNotificationsSubscription?.cancel();
     _unreadNotificationsSubscription = null;
+    _userNotificationsSubscription?.cancel();
+    _userNotificationsSubscription = null;
   }
 
   void _initializeAuthListener() {
@@ -263,6 +304,20 @@ class AppState extends ChangeNotifier {
           },
           onError: (err) {
             debugPrint("Error in unread notifications stream: $err");
+          },
+        );
+
+    _userNotificationsSubscription?.cancel();
+    _userNotificationsSubscription = firebaseService
+        .subscribeToUserNotifications()
+        .listen(
+          (notifs) {
+            _userNotifications = notifs;
+            _unreadNotificationCount = notifs.where((n) => !n.isRead).length;
+            notifyListeners();
+          },
+          onError: (err) {
+            debugPrint("Error in user notifications stream: $err");
           },
         );
   }

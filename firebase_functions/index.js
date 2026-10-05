@@ -815,6 +815,42 @@ exports.respondToSubRequest = onCall({ region: 'europe-west1' }, async (request)
   const creatorId = val.CreatorUserId || val.creatorUserId || val.UserId || val.userId;
   if (creatorId) {
     updates[`users/${creatorId}/SubRequests/${subRequestId}/Responses/${userId}`] = true;
+
+    if (creatorId !== userId) {
+      let applicantName = 'A musician';
+      try {
+        const userSnap = await db.ref(`users/${userId}`).get();
+        if (userSnap.exists()) {
+          const uVal = userSnap.val() || {};
+          applicantName = uVal.displayName || uVal.nickname || uVal.DisplayName || 'A musician';
+        }
+      } catch (_) {}
+
+      const role = val.VoicePart || val.voicePart || val.Role || val.role || 'Substitute';
+      const bandName = val.BandName || val.bandName || 'Band';
+      const notifId = `notif_sub_resp_${subRequestId}_${userId}`;
+      const notifData = {
+        id: notifId,
+        type: 'sub_request_response',
+        category: 'requests',
+        title: 'New Sub Candidate',
+        body: `${applicantName} applied for ${role} in ${bandName}`,
+        createdAt: Date.now(),
+        isRead: false,
+        data: {
+          subRequestId: subRequestId,
+          applicantId: userId,
+          applicantName: applicantName,
+          bandId: val.BandId || val.bandId || '',
+          eventId: val.EventId || val.eventId || '',
+          voicePart: role,
+          bandName: bandName,
+        },
+      };
+
+      updates[`userNotifications/${creatorId}/${notifId}`] = notifData;
+      updates[`BandEvents/Notifications/${creatorId}/${notifId}`] = notifData;
+    }
   }
 
   await db.ref().update(updates);

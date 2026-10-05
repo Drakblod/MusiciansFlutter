@@ -46,6 +46,8 @@ class AppNotification {
         return 'events';
       case 'sub_request_invite':
       case 'sub_request':
+      case 'sub_request_response':
+      case 'sub_response':
       case 'grouped_sub_request':
       case 'gig_finalized':
       case 'session_application':
