@@ -1065,8 +1065,23 @@ class FirebaseService {
     String subRequestId,
     String userId,
   ) async {
+    // 1. Direct write to canonical SubRequests Responses
     await _dbRef('SubRequests/$subRequestId/Responses/$userId').set(true);
 
+    // 2. Also record in creator's personal SubRequests if found
+    try {
+      final snapshot = await _dbRef('SubRequests/$subRequestId').get();
+      if (snapshot.exists && snapshot.value is Map) {
+        final creatorId = (snapshot.value as Map)['CreatorUserId'] ?? (snapshot.value as Map)['creatorUserId'];
+        if (creatorId != null && creatorId.toString().isNotEmpty) {
+          try {
+            await _dbRef('users/$creatorId/SubRequests/$subRequestId/Responses/$userId').set(true);
+          } catch (_) {}
+        }
+      }
+    } catch (_) {}
+
+    // 3. Optional event invitee linking (non-blocking for permission boundaries)
     try {
       final snapshot = await _dbRef('SubRequests/$subRequestId').get();
       if (snapshot.exists && snapshot.value is Map) {
@@ -1092,18 +1107,20 @@ class FirebaseService {
             subRequestId: subRequestId,
             displayName: profile?.displayName ?? profile?.nickname,
           );
-          await _dbRef(
-            'Bands/$bandId/Events/$eventId/externalInvitees/$userId',
-          ).set(invitee.toJson());
-          await _dbRef(
-            'Bands/$bandId/Events/$eventId/updatedAt',
-          ).set(DateTime.now().millisecondsSinceEpoch);
+          try {
+            await _dbRef(
+              'Bands/$bandId/Events/$eventId/externalInvitees/$userId',
+            ).set(invitee.toJson());
+            await _dbRef(
+              'Bands/$bandId/Events/$eventId/updatedAt',
+            ).set(DateTime.now().millisecondsSinceEpoch);
+          } catch (e) {
+            debugPrint('[FirebaseService] External invitee linking skipped (normal for candidate): $e');
+          }
         }
       }
     } catch (e) {
-      print(
-        "[FirebaseService] Error in addResponseToSubRequestAsync linking event: $e",
-      );
+      debugPrint("[FirebaseService] Error in addResponseToSubRequestAsync linking event: $e");
     }
   }
 
