@@ -1572,19 +1572,73 @@ class FirebaseService {
         receiverId,
         agreement: agreement,
       );
-      if (conversationId.isNotEmpty &&
-          message.text != null &&
-          message.text!.isNotEmpty) {
-        try {
-          await sendConversationMessageAsync(
-            conversationId,
-            message.text!,
-            receiverId,
-            message.senderName ?? 'System',
-          );
-        } catch (msgErr) {
-          debugPrint('[FirebaseService] sendConversationMessageAsync notice: $msgErr');
-        }
+      if (conversationId.isEmpty) {
+        final uids = [senderId, receiverId]..sort();
+        conversationId = 'direct_${uids[0]}_${uids[1]}';
+      }
+
+      final agreementJson = agreement.toJson();
+      final now = DateTime.now().millisecondsSinceEpoch;
+
+      // 1. Save to BandEvents/Agreements/$conversationId (universally accessible)
+      try {
+        await _dbRef('BandEvents/Agreements/$conversationId').set(agreementJson);
+      } catch (e) {
+        debugPrint('[FirebaseService] Could not save BandEvents/Agreements: $e');
+      }
+
+      // 2. Save to users/$senderId/Agreements/$conversationId and users/$receiverId/Agreements/$conversationId
+      try {
+        await _dbRef('users/$senderId/Agreements/$conversationId').set(agreementJson);
+      } catch (_) {}
+      try {
+        await _dbRef('users/$receiverId/Agreements/$conversationId').set(agreementJson);
+      } catch (_) {}
+
+      // 3. Save into userConversations for both users with agreement data embedded
+      final senderProfile = await getUserProfileAsync(senderId);
+      final receiverProfile = await getUserProfileAsync(receiverId);
+
+      final msgText = (message.text != null && message.text!.isNotEmpty)
+          ? message.text!
+          : '${receiverProfile?.displayName ?? "Musician"} has been chosen to attend the rehearsal.';
+
+      try {
+        await _dbRef('userConversations/$senderId/$conversationId').update({
+          'conversationId': conversationId,
+          'conversationType': 'direct',
+          'otherUserId': receiverId,
+          'otherUserName': receiverProfile?.displayName ?? receiverProfile?.nickname ?? 'Musician',
+          'lastMessageText': msgText,
+          'lastMessageTimestamp': now,
+          'agreement': agreementJson,
+          'hasUnread': false,
+        });
+      } catch (_) {}
+
+      try {
+        await _dbRef('userConversations/$receiverId/$conversationId').update({
+          'conversationId': conversationId,
+          'conversationType': 'direct',
+          'otherUserId': senderId,
+          'otherUserName': senderProfile?.displayName ?? senderProfile?.nickname ?? 'Leader',
+          'lastMessageText': msgText,
+          'lastMessageTimestamp': now,
+          'agreement': agreementJson,
+          'hasUnread': true,
+        });
+      } catch (_) {}
+
+      // 4. Send the message if callable available
+      try {
+        await sendConversationMessageAsync(
+          conversationId,
+          msgText,
+          receiverId,
+          message.senderName ?? senderProfile?.displayName ?? 'System',
+        );
+      } catch (msgErr) {
+        debugPrint('[FirebaseService] sendConversationMessageAsync notice: $msgErr');
       }
     } catch (e) {
       debugPrint('[FirebaseService] Error creating agreement chat: $e');
@@ -1689,22 +1743,45 @@ class FirebaseService {
   Stream<Map<String, dynamic>?> subscribeToConversationMetadata(
     String conversationId,
   ) {
-    return _dbRef('conversations/$conversationId').onValue.map((event) {
+    return _dbRef('conversations/$conversationId').onValue.asyncMap((event) async {
+      Agreement? agreement;
+      List<dynamic>? participants;
+
       final data = event.snapshot.value;
       if (data is Map) {
         final agreementRaw = data['Agreement'] ?? data['agreement'];
-        Agreement? agreement;
         if (agreementRaw is Map) {
-          agreement = Agreement.fromJson(agreementRaw);
+          try {
+            agreement = Agreement.fromJson(agreementRaw);
+          } catch (_) {}
         }
-        return {
-          'participants': _parseList(
-            data['Participants'] ?? data['participants'],
-          ),
-          'agreement': agreement,
-        };
+        participants = _parseList(
+          data['Participants'] ?? data['participants'],
+        );
       }
-      return null;
+
+      if (agreement == null) {
+        try {
+          final snap = await _dbRef('BandEvents/Agreements/$conversationId').get();
+          if (snap.exists && snap.value is Map) {
+            agreement = Agreement.fromJson(snap.value as Map);
+          }
+        } catch (_) {}
+      }
+
+      if (agreement == null && currentUserId != null) {
+        try {
+          final snap = await _dbRef('users/$currentUserId/Agreements/$conversationId').get();
+          if (snap.exists && snap.value is Map) {
+            agreement = Agreement.fromJson(snap.value as Map);
+          }
+        } catch (_) {}
+      }
+
+      return {
+        'participants': participants ?? [],
+        'agreement': agreement,
+      };
     });
   }
 
@@ -1925,6 +2002,27 @@ class FirebaseService {
 
     final snapshot = await _dbRef('userConversations/$selfId').get();
     final List<Map<String, dynamic>> conversations = [];
+    final Set<String> processedConvIds = {};
+
+    // Also pre-fetch user's agreements and BandEvents agreements map
+    final Map<String, dynamic> agreementsMap = {};
+    try {
+      final userAgreementsSnap = await _dbRef('users/$selfId/Agreements').get();
+      if (userAgreementsSnap.exists && userAgreementsSnap.value is Map) {
+        (userAgreementsSnap.value as Map).forEach((k, v) {
+          if (v is Map) agreementsMap[k.toString()] = v;
+        });
+      }
+    } catch (_) {}
+
+    try {
+      final bandAgreementsSnap = await _dbRef('BandEvents/Agreements').get();
+      if (bandAgreementsSnap.exists && bandAgreementsSnap.value is Map) {
+        (bandAgreementsSnap.value as Map).forEach((k, v) {
+          if (v is Map) agreementsMap[k.toString()] ??= v;
+        });
+      }
+    } catch (_) {}
 
     if (snapshot.exists && snapshot.value is Map) {
       final data = snapshot.value as Map;
@@ -1932,6 +2030,7 @@ class FirebaseService {
         final convId = entry.key.toString();
         final item = entry.value;
         if (item is Map) {
+          processedConvIds.add(convId);
           final convType = item['conversationType']?.toString() ?? 'direct';
           final isGroup = convType == 'band_section';
 
@@ -1997,6 +2096,7 @@ class FirebaseService {
               'hasUnread': item['hasUnread'] == true,
               'conversationType': 'session_chat',
             });
+            continue;
           }
 
           final otherUserId = item['otherUserId']?.toString();
@@ -2018,6 +2118,29 @@ class FirebaseService {
               item['CreatedTimestamp'];
           final parsedDt = parseDateTime(rawTs);
 
+          // Parse agreement if attached or in agreements map
+          final agreementRaw = item['agreement'] ?? item['Agreement'] ?? agreementsMap[convId];
+          Agreement? agreement;
+          if (agreementRaw is Map) {
+            try {
+              agreement = Agreement.fromJson(agreementRaw);
+            } catch (_) {}
+          } else if (item['lastMessageText']?.toString().contains('chosen to attend') == true && agreementsMap.isNotEmpty) {
+            // Match with any agreement for this user pair
+            for (final agr in agreementsMap.values) {
+              if (agr is Map) {
+                final lId = agr['ChoirLeaderId']?.toString() ?? agr['choirLeaderId']?.toString();
+                final vId = agr['VocalistId']?.toString() ?? agr['vocalistId']?.toString();
+                if ((selfId == lId && otherUserId == vId) || (selfId == vId && otherUserId == lId)) {
+                  try {
+                    agreement = Agreement.fromJson(agr);
+                    break;
+                  } catch (_) {}
+                }
+              }
+            }
+          }
+
           conversations.add({
             'conversationId': convId,
             'isGroup': false,
@@ -2031,9 +2154,49 @@ class FirebaseService {
             'timestamp': parsedDt,
             'hasUnread': item['hasUnread'] == true,
             'conversationType': convType,
+            'agreement': agreement,
           });
         }
       }
+    }
+
+    // Also include any standalone agreements that might not yet be indexed in userConversations
+    for (final entry in agreementsMap.entries) {
+      final convId = entry.key;
+      if (processedConvIds.contains(convId)) continue;
+      final agreementRaw = entry.value;
+      if (agreementRaw is! Map) continue;
+      try {
+        final agreement = Agreement.fromJson(agreementRaw);
+        final leaderId = agreement.choirLeaderId;
+        final vocalistId = agreement.vocalistId;
+        if (selfId == leaderId || selfId == vocalistId) {
+          processedConvIds.add(convId);
+          final otherId = selfId == leaderId ? vocalistId : leaderId;
+          String otherName = 'Musician';
+          String? profilePic;
+          if (otherId != null && otherId.isNotEmpty) {
+            final profile = await getUserProfileAsync(otherId);
+            if (profile != null) {
+              otherName = profile.displayName ?? profile.nickname ?? 'Musician';
+              profilePic = profile.profilePictureUrl;
+            }
+          }
+          conversations.add({
+            'conversationId': convId,
+            'isGroup': false,
+            'otherUserId': otherId ?? '',
+            'otherUserName': otherName,
+            'otherUserProfilePicture': profilePic,
+            'lastMessageText': '$otherName has been chosen to attend the rehearsal.',
+            'lastMessageTimestamp': '',
+            'timestamp': DateTime.now(),
+            'hasUnread': false,
+            'conversationType': 'direct',
+            'agreement': agreement,
+          });
+        }
+      } catch (_) {}
     }
 
     conversations.sort((a, b) {
