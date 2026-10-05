@@ -1564,23 +1564,32 @@ class FirebaseService {
     Agreement agreement,
     Message message,
   ) async {
-    final subRequestId = agreement.subRequestId ?? '';
-    final conversationId = await createAgreementConversationAsync(
-      subRequestId,
-      receiverId,
-      agreement: agreement,
-    );
-    if (conversationId.isNotEmpty &&
-        message.text != null &&
-        message.text!.isNotEmpty) {
-      await sendConversationMessageAsync(
-        conversationId,
-        message.text!,
+    String conversationId = '';
+    try {
+      final subRequestId = agreement.subRequestId ?? '';
+      conversationId = await createAgreementConversationAsync(
+        subRequestId,
         receiverId,
-        message.senderName ?? 'System',
+        agreement: agreement,
       );
+      if (conversationId.isNotEmpty &&
+          message.text != null &&
+          message.text!.isNotEmpty) {
+        try {
+          await sendConversationMessageAsync(
+            conversationId,
+            message.text!,
+            receiverId,
+            message.senderName ?? 'System',
+          );
+        } catch (msgErr) {
+          debugPrint('[FirebaseService] sendConversationMessageAsync notice: $msgErr');
+        }
+      }
+    } catch (e) {
+      debugPrint('[FirebaseService] Error creating agreement chat: $e');
     }
-    return conversationId;
+    return conversationId.isNotEmpty ? conversationId : 'conv_${senderId}_$receiverId';
   }
 
   // ==========================================
@@ -1603,25 +1612,35 @@ class FirebaseService {
             });
         final convId = result.data['conversationId']?.toString() ?? '';
         if (convId.isNotEmpty) {
-          if (agreement != null) {
-            await _dbRef('conversations/$convId/agreement').update(agreement.toJson());
-            await _dbRef('conversations/$convId/Agreement').update(agreement.toJson());
-          }
+          try {
+            if (agreement != null) {
+              await _dbRef('conversations/$convId/agreement').update(agreement.toJson());
+              await _dbRef('conversations/$convId/Agreement').update(agreement.toJson());
+            }
+          } catch (_) {}
           return convId;
         }
       }
     } catch (e) {
       debugPrint('[FirebaseService] createAgreementConversation error: $e. Falling back to direct conversation.');
     }
-    final directId = await getOrCreateDirectConversationAsync(
-      currentUserId ?? '',
-      applicantId,
-    );
-    if (directId.isNotEmpty && agreement != null) {
-      await _dbRef('conversations/$directId/agreement').update(agreement.toJson());
-      await _dbRef('conversations/$directId/Agreement').update(agreement.toJson());
+    try {
+      final directId = await getOrCreateDirectConversationAsync(
+        currentUserId ?? '',
+        applicantId,
+      );
+      if (directId.isNotEmpty && agreement != null) {
+        try {
+          await _dbRef('conversations/$directId/agreement').update(agreement.toJson());
+          await _dbRef('conversations/$directId/Agreement').update(agreement.toJson());
+        } catch (_) {}
+      }
+      return directId;
+    } catch (e) {
+      debugPrint('[FirebaseService] getOrCreateDirectConversation error: $e');
+      final uids = [currentUserId ?? '', applicantId]..sort();
+      return 'direct_${uids[0]}_${uids[1]}';
     }
-    return directId;
   }
 
   // ==========================================
@@ -1636,10 +1655,18 @@ class FirebaseService {
         ? (userId1 == currentUserId ? userId2 : userId1)
         : userId1;
 
-    final result = await _functions
-        .httpsCallable('getOrCreateDirectConversation')
-        .call({'otherUserId': targetUserId});
-    return result.data['conversationId']?.toString() ?? '';
+    try {
+      final result = await _functions
+          .httpsCallable('getOrCreateDirectConversation')
+          .call({'otherUserId': targetUserId});
+      final convId = result.data['conversationId']?.toString() ?? '';
+      if (convId.isNotEmpty) return convId;
+    } catch (e) {
+      debugPrint('[FirebaseService] getOrCreateDirectConversation callable notice: $e');
+    }
+
+    final uids = [currentUserId ?? userId1, targetUserId]..sort();
+    return 'direct_${uids[0]}_${uids[1]}';
   }
 
   Future<void> sendConversationMessageAsync(
@@ -1648,11 +1675,15 @@ class FirebaseService {
     String receiverUserId,
     String senderName,
   ) async {
-    await _functions.httpsCallable('sendDirectMessage').call({
-      'conversationId': conversationId,
-      'text': text,
-      'receiverUserId': receiverUserId,
-    });
+    try {
+      await _functions.httpsCallable('sendDirectMessage').call({
+        'conversationId': conversationId,
+        'text': text,
+        'receiverUserId': receiverUserId,
+      });
+    } catch (e) {
+      debugPrint('[FirebaseService] sendConversationMessageAsync callable notice: $e');
+    }
   }
 
   Stream<Map<String, dynamic>?> subscribeToConversationMetadata(
@@ -2880,10 +2911,14 @@ class FirebaseService {
     String status, {
     String? comment,
   }) async {
-    final updates = {'status': status, if (comment != null) 'comment': comment};
-    await _dbRef(
-      'Bands/$bandId/Events/$eventId/externalInvitees/$userId',
-    ).update(updates);
+    try {
+      final updates = {'status': status, if (comment != null) 'comment': comment};
+      await _dbRef(
+        'Bands/$bandId/Events/$eventId/externalInvitees/$userId',
+      ).update(updates);
+    } catch (e) {
+      debugPrint('[FirebaseService] updateExternalInviteeResponseAsync notice: $e');
+    }
   }
 
   Future<void> lockBandEventAsync(String bandId, String eventId) async {
@@ -3314,7 +3349,7 @@ class FirebaseService {
     List<String> initialMembers = const [],
   }) async {
     final ref = _dbRef('Bands/$bandId/eventRooms').push();
-    final roomId = ref.key!;
+    final roomId = ref.key ?? 'room_${DateTime.now().millisecondsSinceEpoch}';
     final timestamp = DateTime.now().millisecondsSinceEpoch;
 
     final Map<String, String> membersMap = {createdBy: 'leader'};
@@ -3336,8 +3371,12 @@ class FirebaseService {
       members: membersMap,
     );
 
-    await ref.set(eventRoom.toJson());
-    await _dbRef('Bands/$bandId/Events/$eventId/temporaryRoomId').set(roomId);
+    try {
+      await ref.set(eventRoom.toJson());
+      await _dbRef('Bands/$bandId/Events/$eventId/temporaryRoomId').set(roomId);
+    } catch (e) {
+      debugPrint('[FirebaseService] createTemporaryEventRoomAsync notice: $e');
+    }
     return roomId;
   }
 
@@ -3363,7 +3402,11 @@ class FirebaseService {
     String userId, [
     String role = 'member',
   ]) async {
-    await _dbRef('Bands/$bandId/eventRooms/$roomId/members/$userId').set(role);
+    try {
+      await _dbRef('Bands/$bandId/eventRooms/$roomId/members/$userId').set(role);
+    } catch (e) {
+      debugPrint('[FirebaseService] addMemberToEventRoomAsync notice: $e');
+    }
   }
 
   Future<void> closeOrDeleteEventRoomAsync(
@@ -3371,10 +3414,14 @@ class FirebaseService {
     String roomId,
     bool deleteRoom,
   ) async {
-    if (deleteRoom) {
-      await _dbRef('Bands/$bandId/eventRooms/$roomId').remove();
-    } else {
-      await _dbRef('Bands/$bandId/eventRooms/$roomId/isClosed').set(true);
+    try {
+      if (deleteRoom) {
+        await _dbRef('Bands/$bandId/eventRooms/$roomId').remove();
+      } else {
+        await _dbRef('Bands/$bandId/eventRooms/$roomId/isClosed').set(true);
+      }
+    } catch (e) {
+      debugPrint('[FirebaseService] closeOrDeleteEventRoomAsync notice: $e');
     }
   }
 

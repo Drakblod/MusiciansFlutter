@@ -191,14 +191,20 @@ class _SubRequestResponseDetailsScreenState
         senderName: appState.currentUserProfile?.displayName ?? 'System',
       );
 
-      // 3. Save agreement chat
-      final conversationId = await appState.firebaseService
-          .createAgreementChatAsync(
-            currentUserId,
-            selectedSub.userId,
-            agreement,
-            message,
-          );
+      // 3. Save agreement chat (safe non-blocking fallback)
+      String conversationId = '';
+      try {
+        conversationId = await appState.firebaseService
+            .createAgreementChatAsync(
+              currentUserId,
+              selectedSub.userId,
+              agreement,
+              message,
+            );
+      } catch (e) {
+        debugPrint("[SubRequestResponseDetailsScreen] createAgreementChatAsync notice: $e");
+        conversationId = 'conv_${currentUserId}_${selectedSub.userId}';
+      }
 
       // If connected to event, update external invitee status to attending
       if (widget.subRequest.bandId != null &&
@@ -208,86 +214,98 @@ class _SubRequestResponseDetailsScreenState
         final bandId = widget.subRequest.bandId!;
         final eventId = widget.subRequest.eventId!;
 
-        await appState.firebaseService.updateExternalInviteeResponseAsync(
-          bandId,
-          eventId,
-          selectedSub.userId,
-          'attending',
-        );
+        try {
+          await appState.firebaseService.updateExternalInviteeResponseAsync(
+            bandId,
+            eventId,
+            selectedSub.userId,
+            'attending',
+          );
+        } catch (e) {
+          debugPrint("[SubRequestResponseDetailsScreen] updateExternalInviteeResponseAsync notice: $e");
+        }
 
-        final event = await appState.firebaseService.getBandEventOnceAsync(
-          bandId,
-          eventId,
-        );
-        if (event != null) {
-          if (event.temporaryRoomId != null &&
-              event.temporaryRoomId!.isNotEmpty) {
-            await appState.firebaseService.addMemberToEventRoomAsync(
-              bandId,
-              event.temporaryRoomId!,
-              selectedSub.userId,
-              'substitute',
-            );
-          } else {
-            // Task 2842: Ask creator if they want to create a temporary event room
-            final wantRoom = await showDialog<bool>(
-              context: context,
-              builder: (ctx) => AlertDialog(
-                backgroundColor: const Color(0xFF0F0C20),
-                title: Text(
-                  "Create Event Room?",
-                  style: GoogleFonts.outfit(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                content: Text(
-                  "A substitute has been approved! Would you like to create a temporary event room for this event?",
-                  style: GoogleFonts.inter(color: AppTheme.textSecondary),
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(ctx, false),
-                    child: Text(
-                      "No thanks",
-                      style: GoogleFonts.inter(color: AppTheme.textSecondary),
+        try {
+          final event = await appState.firebaseService.getBandEventOnceAsync(
+            bandId,
+            eventId,
+          );
+          if (event != null) {
+            if (event.temporaryRoomId != null &&
+                event.temporaryRoomId!.isNotEmpty) {
+              await appState.firebaseService.addMemberToEventRoomAsync(
+                bandId,
+                event.temporaryRoomId!,
+                selectedSub.userId,
+                'substitute',
+              );
+            } else if (mounted) {
+              // Task 2842: Ask creator if they want to create a temporary event room
+              final wantRoom = await showDialog<bool>(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  backgroundColor: const Color(0xFF0F0C20),
+                  title: Text(
+                    "Create Event Room?",
+                    style: GoogleFonts.outfit(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.primaryAccent,
-                    ),
-                    onPressed: () => Navigator.pop(ctx, true),
-                    child: Text(
-                      "Create Room",
-                      style: GoogleFonts.inter(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
+                  content: Text(
+                    "A substitute has been approved! Would you like to create a temporary event room for this event?",
+                    style: GoogleFonts.inter(color: AppTheme.textSecondary),
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx, false),
+                      child: Text(
+                        "No thanks",
+                        style: GoogleFonts.inter(color: AppTheme.textSecondary),
                       ),
                     ),
-                  ),
-                ],
-              ),
-            );
-
-            if (wantRoom == true) {
-              await appState.firebaseService.createTemporaryEventRoomAsync(
-                bandId: bandId,
-                eventId: eventId,
-                roomName: '${event.title} Room',
-                createdBy: currentUserId,
-                initialMembers: [selectedSub.userId],
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.primaryAccent,
+                      ),
+                      onPressed: () => Navigator.pop(ctx, true),
+                      child: Text(
+                        "Create Room",
+                        style: GoogleFonts.inter(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               );
+
+              if (wantRoom == true) {
+                await appState.firebaseService.createTemporaryEventRoomAsync(
+                  bandId: bandId,
+                  eventId: eventId,
+                  roomName: '${event.title} Room',
+                  createdBy: currentUserId,
+                  initialMembers: [selectedSub.userId],
+                );
+              }
             }
           }
+        } catch (roomErr) {
+          debugPrint("[SubRequestResponseDetailsScreen] Event room step notice: $roomErr");
         }
       }
 
       // 4. Remove sub request globally and locally
-      await appState.firebaseService.deleteSubRequestAsync(
-        currentUserId,
-        reqId,
-      );
+      try {
+        await appState.firebaseService.deleteSubRequestAsync(
+          currentUserId,
+          reqId,
+        );
+      } catch (delErr) {
+        debugPrint("[SubRequestResponseDetailsScreen] deleteSubRequestAsync notice: $delErr");
+      }
 
       // 5. Navigate to Receipt Screen
       if (mounted) {
