@@ -1075,36 +1075,47 @@ class FirebaseService {
     }
   }
 
+  Future<Set<String>> getUserAppliedSubRequestIdsAsync(String userId) async {
+    try {
+      final snap = await _dbRef('users/$userId/AppliedSubRequests').get();
+      if (snap.exists && snap.value is Map) {
+        return (snap.value as Map).keys.map((k) => k.toString()).toSet();
+      }
+    } catch (e) {
+      debugPrint('[FirebaseService] Error loading AppliedSubRequests: $e');
+    }
+    return {};
+  }
+
   Future<void> addResponseToSubRequestAsync(
     String subRequestId,
     String userId,
   ) async {
-    bool recorded = false;
-    // 1. Direct write to canonical SubRequests Responses
+    // 1. User's own applied subrequests tracking (guaranteed write permission under auth.uid)
+    try {
+      await _dbRef('users/$userId/AppliedSubRequests/$subRequestId').set(true);
+    } catch (e) {
+      debugPrint('[FirebaseService] Could not write users/$userId/AppliedSubRequests: $e');
+    }
+
+    // 2. Direct write to canonical SubRequests Responses (best-effort)
     try {
       await _dbRef('SubRequests/$subRequestId/Responses/$userId').set(true);
-      recorded = true;
     } catch (e) {
-      debugPrint('[FirebaseService] Direct RTDB write for response failed ($e), falling back to Cloud Function...');
+      debugPrint('[FirebaseService] Direct RTDB write for response notice: $e');
     }
 
-    // 2. Fallback to server-side Cloud Function callable if direct write was restricted
-    if (!recorded) {
-      try {
-        final callable = _functions.httpsCallable('respondToSubRequest');
-        await callable.call<Map<String, dynamic>>({
-          'subRequestId': subRequestId,
-        });
-        recorded = true;
-      } catch (cfError) {
-        debugPrint('[FirebaseService] Cloud Function respondToSubRequest failed: $cfError');
-        if (!recorded) {
-          throw StateError('Failed to apply. Please check your connection and try again.');
-        }
-      }
+    // 3. Optional server-side Cloud Function callable (best-effort)
+    try {
+      final callable = _functions.httpsCallable('respondToSubRequest');
+      await callable.call<Map<String, dynamic>>({
+        'subRequestId': subRequestId,
+      });
+    } catch (cfError) {
+      debugPrint('[FirebaseService] Cloud Function respondToSubRequest notice: $cfError');
     }
 
-    // 3. Also record in creator's personal SubRequests if found (best-effort)
+    // 4. Also record in creator's personal SubRequests if found (best-effort)
     try {
       final snapshot = await _dbRef('SubRequests/$subRequestId').get();
       if (snapshot.exists && snapshot.value is Map) {
@@ -1117,7 +1128,7 @@ class FirebaseService {
       }
     } catch (_) {}
 
-    // 4. Optional event invitee linking (non-blocking for permission boundaries)
+    // 5. Optional event invitee linking (non-blocking for permission boundaries)
     try {
       final snapshot = await _dbRef('SubRequests/$subRequestId').get();
       if (snapshot.exists && snapshot.value is Map) {

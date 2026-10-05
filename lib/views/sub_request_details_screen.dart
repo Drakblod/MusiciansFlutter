@@ -21,6 +21,23 @@ class SubRequestDetailsScreen extends StatefulWidget {
 
 class _SubRequestDetailsScreenState extends State<SubRequestDetailsScreen> {
   bool _isApplying = false;
+  bool _hasAppliedLocally = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final appState = Provider.of<AppState>(context, listen: false);
+      final uid = appState.currentUserId;
+      final reqId = widget.subRequest.subRequestId ?? widget.subRequest.id;
+      if (uid != null && reqId != null) {
+        final applied = await appState.firebaseService.getUserAppliedSubRequestIdsAsync(uid);
+        if (applied.contains(reqId) && mounted) {
+          setState(() => _hasAppliedLocally = true);
+        }
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -28,7 +45,7 @@ class _SubRequestDetailsScreenState extends State<SubRequestDetailsScreen> {
     final currentUserId = appState.currentUserId;
     final gig = widget.subRequest;
     final hasApplied =
-        currentUserId != null && gig.responses.containsKey(currentUserId);
+        _hasAppliedLocally || (currentUserId != null && gig.responses.containsKey(currentUserId));
 
     final date = gig.date != null
         ? DateTime.tryParse(gig.date!) ?? DateTime.now()

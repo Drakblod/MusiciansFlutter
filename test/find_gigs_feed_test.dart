@@ -25,6 +25,11 @@ class MockFindGigsFirebaseService extends FirebaseService {
   Future<List<SubRequest>> getAllSubRequestsAsync() async {
     return storedRequests;
   }
+
+  @override
+  Future<Set<String>> getUserAppliedSubRequestIdsAsync(String userId) async {
+    return {};
+  }
 }
 
 class MockFindGigsAppState extends AppState {

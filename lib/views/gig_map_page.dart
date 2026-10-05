@@ -24,6 +24,7 @@ class GigMapPage extends StatefulWidget {
 class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
   GoogleMapController? _mapController;
   List<SubRequest> _allGigs = [];
+  final Set<String> _appliedGigIds = {};
   bool _isLoading = true;
   String _selectedFilter = 'All';
   SubRequest? _selectedGig;
@@ -193,6 +194,11 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
     setState(() => _isLoading = true);
     try {
       final appState = Provider.of<AppState>(context, listen: false);
+      final currentUserId = appState.currentUserId;
+      if (currentUserId != null) {
+        final applied = await appState.firebaseService.getUserAppliedSubRequestIdsAsync(currentUserId);
+        _appliedGigIds.addAll(applied);
+      }
       final rawGigs = await appState.firebaseService.getAllSubRequestsAsync();
       
       // Filter out gigs that have coordinates
@@ -783,7 +789,8 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
     final date = gig.date != null ? DateTime.tryParse(gig.date!) ?? DateTime.now() : DateTime.now();
     final formattedDate = DateFormat('MMM dd, yyyy').format(date);
     final currentUserId = appState.currentUserId;
-    final hasApplied = currentUserId != null && gig.responses.containsKey(currentUserId);
+    final gigReqId = gig.subRequestId ?? gig.id;
+    final hasApplied = currentUserId != null && (gig.responses.containsKey(currentUserId) || (gigReqId != null && _appliedGigIds.contains(gigReqId)));
     
     return Positioned(
       bottom: 20,
@@ -970,6 +977,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                                     ),
                                   );
                                   setState(() {
+                                    if (gigReqId != null) _appliedGigIds.add(gigReqId);
                                     gig.responses[currentUserId] = true;
                                   });
                                 }

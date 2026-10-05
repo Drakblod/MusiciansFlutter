@@ -57,6 +57,7 @@ class _FindGigsScreenState extends State<FindGigsScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final Set<String> _savedGigIds = {};
+  final Set<String> _appliedGigIds = {};
   List<GigGroup> _liveGigGroups = [];
   List<GigGroup> _inviteGigGroups = [];
   bool _isLoading = true;
@@ -229,6 +230,11 @@ class _FindGigsScreenState extends State<FindGigsScreen>
       final appState = Provider.of<AppState>(context, listen: false);
       final list = await appState.firebaseService.getUserSubRequestFeedAsync();
       final currentUserId = appState.currentUserId;
+
+      if (currentUserId != null) {
+        final applied = await appState.firebaseService.getUserAppliedSubRequestIdsAsync(currentUserId);
+        _appliedGigIds.addAll(applied);
+      }
 
       final userProfile = appState.currentUserProfile;
       final List<String> userInstruments = [];
@@ -529,7 +535,7 @@ class _FindGigsScreenState extends State<FindGigsScreen>
 
                       ...group.requests.map((req) {
                         final reqId = req.subRequestId ?? req.id ?? '';
-                        final hasApplied = currentUserId != null && req.responses.containsKey(currentUserId);
+                        final hasApplied = currentUserId != null && (req.responses.containsKey(currentUserId) || _appliedGigIds.contains(reqId));
                         final isAssigned = req.status == 'assigned' || req.assignedUserId != null;
                         final dateStr = req.date != null
                             ? DateFormat('EEE, MMM d').format(DateTime.tryParse(req.date!) ?? DateTime.now())
@@ -626,7 +632,14 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                                         reqId,
                                         currentUserId,
                                       );
-                                      await _loadSubRequests();
+                                      setModalState(() {
+                                        _appliedGigIds.add(reqId);
+                                        req.responses[currentUserId] = true;
+                                      });
+                                      setState(() {
+                                        _appliedGigIds.add(reqId);
+                                        req.responses[currentUserId] = true;
+                                      });
                                       if (context.mounted) {
                                         ScaffoldMessenger.of(context).showSnackBar(
                                           const SnackBar(content: Text('Applied for position!'), backgroundColor: AppTheme.success),
