@@ -1399,14 +1399,16 @@ class FirebaseService {
 
     // 7. Insert real-time notification for the subrequest creator
     try {
-      SubRequest? subRequest;
-      final subSnap = await _dbRef('SubRequests/$subRequestId').get();
-      if (subSnap.exists && subSnap.value is Map) {
-        subRequest = SubRequest.fromJson(subSnap.value as Map, subRequestId);
-      } else {
-        final pubSnap = await _dbRef('BandEvents/PublishedSubRequests/$subRequestId').get();
-        if (pubSnap.exists && pubSnap.value is Map) {
-          subRequest = SubRequest.fromJson(pubSnap.value as Map, subRequestId);
+      SubRequest? subRequest = await getSubRequestAsync(subRequestId);
+      if (subRequest == null) {
+        final subSnap = await _dbRef('SubRequests/$subRequestId').get();
+        if (subSnap.exists && subSnap.value is Map) {
+          subRequest = SubRequest.fromJson(subSnap.value as Map, subRequestId);
+        } else {
+          final pubSnap = await _dbRef('BandEvents/PublishedSubRequests/$subRequestId').get();
+          if (pubSnap.exists && pubSnap.value is Map) {
+            subRequest = SubRequest.fromJson(pubSnap.value as Map, subRequestId);
+          }
         }
       }
 
@@ -1437,11 +1439,13 @@ class FirebaseService {
         };
 
         try {
-          await _dbRef('userNotifications/$creatorId/$notifId').set(notifMap);
-        } catch (_) {}
+          await _dbRef('BandEvents/Notifications/$creatorId/$notifId').set(notifMap);
+        } catch (e) {
+          debugPrint('[FirebaseService] Write BandEvents/Notifications error: $e');
+        }
 
         try {
-          await _dbRef('BandEvents/Notifications/$creatorId/$notifId').set(notifMap);
+          await _dbRef('userNotifications/$creatorId/$notifId').set(notifMap);
         } catch (_) {}
       }
     } catch (notifErr) {
@@ -2016,35 +2020,68 @@ class FirebaseService {
     final uid = userId ?? currentUserId;
     if (uid == null || uid.isEmpty) return Stream.value([]);
 
-    return _dbRef('userNotifications/$uid').onValue.asyncMap((event) async {
-      final List<AppNotification> list = [];
-      final Set<String> seenIds = {};
-      final data = event.snapshot.value;
-      if (data is Map) {
-        data.forEach((k, v) {
-          if (v is Map) {
-            seenIds.add(k.toString());
-            list.add(AppNotification.fromJson(v, k.toString()));
-          }
-        });
-      }
+    late StreamController<List<AppNotification>> controller;
+    StreamSubscription? sub1;
+    StreamSubscription? sub2;
 
-      // Check BandEvents fallback notifications
-      try {
-        final bandSnap = await _dbRef('BandEvents/Notifications/$uid').get();
-        if (bandSnap.exists && bandSnap.value is Map) {
-          (bandSnap.value as Map).forEach((k, v) {
-            if (v is Map && !seenIds.contains(k.toString())) {
-              seenIds.add(k.toString());
-              list.add(AppNotification.fromJson(v, k.toString()));
-            }
-          });
-        }
-      } catch (_) {}
+    Map<String, AppNotification> notifsUser = {};
+    Map<String, AppNotification> notifsBand = {};
 
+    void emitMerged() {
+      final Map<String, AppNotification> merged = {};
+      merged.addAll(notifsBand);
+      merged.addAll(notifsUser);
+
+      final list = merged.values.toList();
       list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-      return list;
-    });
+      if (!controller.isClosed) {
+        controller.add(list);
+      }
+    }
+
+    controller = StreamController<List<AppNotification>>.broadcast(
+      onListen: () {
+        sub1 = _dbRef('userNotifications/$uid').onValue.listen((event) {
+          notifsUser = {};
+          final data = event.snapshot.value;
+          if (data is Map) {
+            data.forEach((k, v) {
+              if (v is Map) {
+                try {
+                  notifsUser[k.toString()] = AppNotification.fromJson(v, k.toString());
+                } catch (_) {}
+              }
+            });
+          }
+          emitMerged();
+        }, onError: (err) {
+          debugPrint('[FirebaseService] userNotifications stream notice: $err');
+        });
+
+        sub2 = _dbRef('BandEvents/Notifications/$uid').onValue.listen((event) {
+          notifsBand = {};
+          final data = event.snapshot.value;
+          if (data is Map) {
+            data.forEach((k, v) {
+              if (v is Map) {
+                try {
+                  notifsBand[k.toString()] = AppNotification.fromJson(v, k.toString());
+                } catch (_) {}
+              }
+            });
+          }
+          emitMerged();
+        }, onError: (err) {
+          debugPrint('[FirebaseService] BandEvents/Notifications stream notice: $err');
+        });
+      },
+      onCancel: () {
+        sub1?.cancel();
+        sub2?.cancel();
+      },
+    );
+
+    return controller.stream;
   }
 
   Stream<int> subscribeToUnreadNotificationCount([String? userId]) {
