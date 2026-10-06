@@ -190,31 +190,30 @@ class _NotificationPanelContentState extends State<NotificationPanelContent> {
     AppState appState,
     AppNotification notification,
   ) async {
-    // 1. Close compact panel if present
+    // 1. Capture root navigator before dismissing
+    final navigator = Navigator.of(context, rootNavigator: true);
+
+    // 2. Close compact panel if present
     if (widget.onClose != null) {
       widget.onClose!();
     }
 
-    // 2. Invoke test hook if provided
+    // 3. Invoke test hook if provided
     if (widget.onNotificationTapForTest != null) {
       widget.onNotificationTapForTest!(notification);
       return;
     }
 
-    final navigator = Navigator.of(context, rootNavigator: true);
-
-    // 3. Attempt to mark as read asynchronously without blocking navigation on failure
+    // 4. Mark as read in background without blocking navigation
     if (!notification.isRead) {
-      try {
-        await appState.firebaseService.markNotificationReadAsync(notification.id);
-      } catch (e) {
+      appState.firebaseService
+          .markNotificationReadAsync(notification.id)
+          .catchError((e) {
         debugPrint('[NotificationCenter] Error marking notification read: $e');
-      }
+      });
     }
 
-    if (!mounted) return;
-
-    // 4. Deep-link routing based on payload & type
+    // 5. Deep-link routing based on payload & type
     final type = notification.type;
     final data = notification.data;
     final currentUserId = appState.currentUserId;
@@ -222,9 +221,9 @@ class _NotificationPanelContentState extends State<NotificationPanelContent> {
     try {
       switch (type) {
         case 'direct_message':
-          final convId = (data['conversationId'] ?? '').toString();
-          final senderId = (data['senderId'] ?? '').toString();
-          final receiverId = (data['receiverId'] ?? '').toString();
+          final convId = (data['conversationId'] ?? data['ConversationId'] ?? '').toString();
+          final senderId = (data['senderId'] ?? data['SenderId'] ?? '').toString();
+          final receiverId = (data['receiverId'] ?? data['ReceiverId'] ?? '').toString();
           final otherUserId = senderId == currentUserId ? receiverId : senderId;
           final otherUserName = notification.title.isNotEmpty ? notification.title : 'Chat';
 
@@ -242,7 +241,7 @@ class _NotificationPanelContentState extends State<NotificationPanelContent> {
           break;
 
         case 'session_message':
-          final convId = (data['conversationId'] ?? '').toString();
+          final convId = (data['conversationId'] ?? data['ConversationId'] ?? '').toString();
           final otherUserName = notification.title.isNotEmpty ? notification.title : 'Session Chat';
 
           if (convId.isNotEmpty) {
@@ -259,8 +258,8 @@ class _NotificationPanelContentState extends State<NotificationPanelContent> {
           break;
 
         case 'band_room_message':
-          final bandId = (data['bandId'] ?? '').toString();
-          final bandName = (data['bandName'] ?? 'Band Room').toString();
+          final bandId = (data['bandId'] ?? data['BandId'] ?? '').toString();
+          final bandName = (data['bandName'] ?? data['BandName'] ?? 'Band Room').toString();
           if (bandId.isNotEmpty) {
             appState.selectBand(bandId, bandName);
           }
@@ -268,10 +267,10 @@ class _NotificationPanelContentState extends State<NotificationPanelContent> {
           break;
 
         case 'band_section_chat':
-          final bandId = (data['bandId'] ?? '').toString();
-          final sectionId = (data['sectionId'] ?? '').toString();
-          final sectionName = (data['sectionName'] ?? 'Section Chat').toString();
-          final convId = (data['conversationId'] ?? '').toString();
+          final bandId = (data['bandId'] ?? data['BandId'] ?? '').toString();
+          final sectionId = (data['sectionId'] ?? data['SectionId'] ?? '').toString();
+          final sectionName = (data['sectionName'] ?? data['SectionName'] ?? 'Section Chat').toString();
+          final convId = (data['conversationId'] ?? data['ConversationId'] ?? '').toString();
 
           if (convId.isNotEmpty || (bandId.isNotEmpty && sectionId.isNotEmpty)) {
             navigator.push(
@@ -290,8 +289,8 @@ class _NotificationPanelContentState extends State<NotificationPanelContent> {
         case 'event_reminder':
         case 'event_threshold':
         case 'event_milestone':
-          final bandId = (data['bandId'] ?? '').toString();
-          final eventId = (data['eventId'] ?? '').toString();
+          final bandId = (data['bandId'] ?? data['BandId'] ?? '').toString();
+          final eventId = (data['eventId'] ?? data['EventId'] ?? '').toString();
 
           if (bandId.isNotEmpty && eventId.isNotEmpty) {
             navigator.push(
@@ -320,9 +319,15 @@ class _NotificationPanelContentState extends State<NotificationPanelContent> {
 
         case 'sub_request_response':
         case 'sub_response':
-          final subRequestId = (data['subRequestId'] ?? '').toString();
-          final bandId = (data['bandId'] ?? '').toString();
-          final eventId = (data['eventId'] ?? '').toString();
+          String subRequestId = (data['subRequestId'] ?? data['SubRequestId'] ?? '').toString();
+          if (subRequestId.isEmpty && notification.id.startsWith('notif_sub_resp_')) {
+            final parts = notification.id.replaceFirst('notif_sub_resp_', '').split('_');
+            if (parts.isNotEmpty) {
+              subRequestId = parts.first;
+            }
+          }
+          final bandId = (data['bandId'] ?? data['BandId'] ?? '').toString();
+          final eventId = (data['eventId'] ?? data['EventId'] ?? '').toString();
           if (subRequestId.isNotEmpty) {
             navigator.push(
               MaterialPageRoute(
@@ -343,9 +348,9 @@ class _NotificationPanelContentState extends State<NotificationPanelContent> {
 
         case 'sub_request_invite':
         case 'sub_request':
-          final subRequestId = (data['subRequestId'] ?? '').toString();
-          final bandId = (data['bandId'] ?? '').toString();
-          final eventId = (data['eventId'] ?? '').toString();
+          final subRequestId = (data['subRequestId'] ?? data['SubRequestId'] ?? '').toString();
+          final bandId = (data['bandId'] ?? data['BandId'] ?? '').toString();
+          final eventId = (data['eventId'] ?? data['EventId'] ?? '').toString();
           if (subRequestId.isNotEmpty) {
             navigator.push(
               MaterialPageRoute(
