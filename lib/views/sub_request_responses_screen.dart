@@ -76,7 +76,7 @@ class _SubRequestResponsesScreenState extends State<SubRequestResponsesScreen>
       for (final req in bandRequests) {
         if (req.role == 'Substitute') {
           subs.add(req);
-        } else if (req.role == 'Member') {
+        } else if (req.role == 'Member' || req.role == 'New Member') {
           members.add(req);
         } else {
           // Default fallback
@@ -264,97 +264,97 @@ class _SubRequestResponsesScreenState extends State<SubRequestResponsesScreen>
           final responseCount = _responseCounts[reqId] ?? 0;
           final date = _getGigDate(req);
 
-          return Container(
-            margin: const EdgeInsets.only(bottom: 16),
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: AppTheme.cardBackground,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFF231F45), width: 1),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Date badge
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: AppTheme.primaryAccent.withOpacity(0.12),
-                    borderRadius: BorderRadius.circular(10),
+          return AnimatedTapDetector(
+            onTap: () {
+              Navigator.pushNamed(
+                context,
+                '/sub-request-response-details',
+                arguments: {'subRequest': req},
+              ).then((_) => _loadRequests());
+            },
+            child: Container(
+              margin: const EdgeInsets.only(bottom: 16),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppTheme.cardBackground,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFF231F45), width: 1),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Date badge
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primaryAccent.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Column(
+                      children: [
+                        Text(
+                          DateFormat('MMM').format(date).toUpperCase(),
+                          style: GoogleFonts.inter(
+                            fontSize: 10,
+                            color: AppTheme.primaryAccent,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Text(
+                          DateFormat('dd').format(date),
+                          style: GoogleFonts.outfit(
+                            fontSize: 20,
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                  child: Column(
-                    children: [
-                      Text(
-                        DateFormat('MMM').format(date).toUpperCase(),
-                        style: GoogleFonts.inter(
-                          fontSize: 10,
-                          color: AppTheme.primaryAccent,
-                          fontWeight: FontWeight.bold,
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          req.role ?? req.voicePart ?? 'Substitute Request',
+                          style: GoogleFonts.outfit(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
                         ),
-                      ),
-                      Text(
-                        DateFormat('dd').format(date),
-                        style: GoogleFonts.outfit(
-                          fontSize: 20,
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
+                        const SizedBox(height: 4),
+                        Text(
+                          req.bandName ?? 'Unknown Band',
+                          style: GoogleFonts.inter(
+                            fontSize: 14,
+                            color: AppTheme.primaryAccent,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        req.role ?? req.voicePart ?? 'Substitute Request',
-                        style: GoogleFonts.outfit(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        req.bandName ?? 'Unknown Band',
-                        style: GoogleFonts.inter(
-                          fontSize: 14,
-                          color: AppTheme.primaryAccent,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'Location: ${req.location ?? "N/A"}',
-                        style: GoogleFonts.inter(
-                          fontSize: 12,
-                          color: AppTheme.textSecondary,
-                        ),
-                      ),
-                      if (req.startTime != null && req.endTime != null) ...[
                         const SizedBox(height: 2),
                         Text(
-                          'Time: ${req.startTime} - ${req.endTime}',
+                          'Location: ${req.location ?? "N/A"}',
                           style: GoogleFonts.inter(
                             fontSize: 12,
                             color: AppTheme.textSecondary,
                           ),
                         ),
-                      ],
-                      const SizedBox(height: 16),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: AnimatedTapDetector(
-                              onTap: () {
-                                Navigator.pushNamed(
-                                  context,
-                                  '/sub-request-response-details',
-                                  arguments: {'subRequest': req},
-                                ).then((_) => _loadRequests()); // reload when returning
-                              },
+                        if (req.startTime != null && req.endTime != null) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            'Time: ${req.startTime} - ${req.endTime}',
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              color: AppTheme.textSecondary,
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 16),
+                        Row(
+                          children: [
+                            Expanded(
                               child: Container(
                                 padding: const EdgeInsets.symmetric(vertical: 10),
                                 decoration: BoxDecoration(
@@ -373,35 +373,35 @@ class _SubRequestResponsesScreenState extends State<SubRequestResponsesScreen>
                                 ),
                               ),
                             ),
-                          ),
-                          const SizedBox(width: 10),
-                          AnimatedTapDetector(
-                            onTap: () => _deleteRequest(req),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                              decoration: BoxDecoration(
-                                color: AppTheme.danger.withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(color: AppTheme.danger.withOpacity(0.3)),
-                              ),
-                              child: Center(
-                                child: Text(
-                                  'DELETE',
-                                  style: GoogleFonts.inter(
-                                    color: AppTheme.danger,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 13,
+                            const SizedBox(width: 10),
+                            AnimatedTapDetector(
+                              onTap: () => _deleteRequest(req),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.danger.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: AppTheme.danger.withOpacity(0.3)),
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    'DELETE',
+                                    style: GoogleFonts.inter(
+                                      color: AppTheme.danger,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13,
+                                    ),
                                   ),
                                 ),
                               ),
                             ),
-                          ),
-                        ],
-                      ),
-                    ],
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           );
         },

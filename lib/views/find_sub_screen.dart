@@ -134,6 +134,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
   final _locationController = TextEditingController();
   final _amountController = TextEditingController(text: '1,500');
   final _payDetailsController = TextEditingController();
+  final _newMemberDescriptionController = TextEditingController();
   String? _existingRequestGroupId;
   String? _canonicalMultipleEventParentId;
 
@@ -218,6 +219,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
         _currentMode = 'new_member';
         _selectedNewMemberInstrument = (init.voicePart != null && init.voicePart!.isNotEmpty) ? init.voicePart! : 'Electric Guitar';
         _messageController.text = init.description ?? '';
+        _newMemberDescriptionController.text = init.description ?? '';
         _newMemberSource = init.searchSource ?? 'search_all';
         if (init.targetUserIds != null) {
           _selectedNewMemberFavorites = init.targetUserIds!.toSet();
@@ -243,6 +245,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
     _locationController.dispose();
     _amountController.dispose();
     _payDetailsController.dispose();
+    _newMemberDescriptionController.dispose();
     for (final section in _eventSections) {
       section.dispose();
     }
@@ -1150,7 +1153,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    '$_activeBandSubCount Active Sub Request${_activeBandSubCount == 1 ? '' : 's'}',
+                                    '$_activeBandSubCount Active Request${_activeBandSubCount == 1 ? '' : 's'}',
                                     style: GoogleFonts.outfit(
                                       fontSize: 14,
                                       fontWeight: FontWeight.bold,
@@ -1199,12 +1202,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
                       ),
                     ],
 
-                    // Event information block (rendered once per occurrence before mode selector)
-                    ..._eventSections.map((sec) => _buildEventInformationCard(sec, context)),
-
-                    const SizedBox(height: 8),
-
-                    // Global Mode Selector (rendered exactly once after all event info)
+                    // Global Mode Selector (rendered at the top of the interface)
                     Row(
                       children: [
                         Expanded(
@@ -1293,6 +1291,8 @@ class _FindSubScreenState extends State<FindSubScreen> {
                     if (_currentMode == 'new_member')
                       _buildNewMemberView(context, appState)
                     else ...[
+                      // Event information block (rendered only in substitute mode)
+                      ..._eventSections.map((sec) => _buildEventInformationCard(sec, context)),
                       ..._eventSections.map((sec) => _buildSubstituteSectionCard(sec)),
                       _buildPaidGigSection(),
                       const SizedBox(height: 24),
@@ -2691,12 +2691,12 @@ class _FindSubScreenState extends State<FindSubScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Permanent Band Recruitment',
+                'New Band Member Recruitment',
                 style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
               ),
               const SizedBox(height: 4),
               Text(
-                'Publish an open position to find a permanent band member.',
+                'Publish an open position to find a new band member.',
                 style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
               ),
               const SizedBox(height: 16),
@@ -2729,6 +2729,28 @@ class _FindSubScreenState extends State<FindSubScreen> {
                       const Icon(Icons.arrow_drop_down, color: AppTheme.primaryAccent),
                     ],
                   ),
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              Text(
+                'Description',
+                style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: AppTheme.textSecondary),
+              ),
+              const SizedBox(height: 6),
+              TextField(
+                controller: _newMemberDescriptionController,
+                maxLines: 3,
+                style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
+                decoration: InputDecoration(
+                  hintText: 'Add description (genres, rehearsals, goals, etc.)',
+                  hintStyle: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 14),
+                  filled: true,
+                  fillColor: const Color(0xFF1E1A3A),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF2E2A4E))),
+                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF2E2A4E))),
+                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppTheme.primaryAccent, width: 1.5)),
                 ),
               ),
               const SizedBox(height: 16),
@@ -2911,43 +2933,12 @@ class _FindSubScreenState extends State<FindSubScreen> {
     final profile = appState.currentUserProfile;
     final effectiveBandId = widget.bandId ?? appState.activeBandId;
 
-    final isStandalone = (widget.eventId == null || widget.eventId!.isEmpty);
-    if (isStandalone && _eventSections.isNotEmpty) {
-      final sec = _eventSections.first;
-      if (sec.titleController.text.trim().isEmpty || sec.selectedEventType == null || sec.selectedEventType!.trim().isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Please enter Name of Event and select an Event Type before publishing.'),
-            backgroundColor: AppTheme.danger,
-          ),
-        );
-        return;
-      }
-    }
-
     setState(() => _isSubmitting = true);
 
     try {
-      String newMemberDesc = '';
-      String newMemberLoc = profile?.location ?? 'Stockholm, Sweden';
-      String newMemberType = 'Gig';
-      String newMemberTitle = _bandName ?? appState.activeBandName ?? 'Freelance Band';
-
-      if (_eventSections.isNotEmpty) {
-        final sec = _eventSections.first;
-        if (sec.descriptionController.text.trim().isNotEmpty) {
-          newMemberDesc = sec.descriptionController.text.trim();
-        }
-        if (sec.locationController.text.trim().isNotEmpty) {
-          newMemberLoc = sec.locationController.text.trim();
-        }
-        if (sec.selectedEventType != null && sec.selectedEventType!.trim().isNotEmpty) {
-          newMemberType = sec.selectedEventType!.trim();
-        }
-        if (sec.titleController.text.trim().isNotEmpty) {
-          newMemberTitle = sec.titleController.text.trim();
-        }
-      }
+      final newMemberDesc = _newMemberDescriptionController.text.trim();
+      final newMemberLoc = profile?.location ?? 'Stockholm, Sweden';
+      final newMemberTitle = _bandName ?? appState.activeBandName ?? 'Band Recruitment';
 
       final req = SubRequest(
         role: 'New Member',
@@ -2960,7 +2951,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
         targetUserIds: _newMemberSource == 'favorites' ? _selectedNewMemberFavorites.toList() : null,
         status: 'published',
         eventTitle: newMemberTitle,
-        extraFields: {'eventType': newMemberType},
+        extraFields: {'eventType': 'Recruitment'},
       );
 
       await appState.firebaseService.saveSubRequestsBatchAsync([req]);

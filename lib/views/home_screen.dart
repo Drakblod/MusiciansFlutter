@@ -186,7 +186,7 @@ class HomeScreen extends StatelessWidget {
               ),
               const SizedBox(height: 6),
               Text(
-                'You have $activeCount active substitute request${activeCount == 1 ? '' : 's'} for $bandName.',
+                'You have $activeCount active request${activeCount == 1 ? '' : 's'} for $bandName.',
                 style: GoogleFonts.inter(
                   fontSize: 13,
                   color: AppTheme.textSecondary,
@@ -708,7 +708,7 @@ class HomeScreen extends StatelessWidget {
                   child: Padding(
                     padding: const EdgeInsets.only(bottom: 10, right: 10),
                     child: Text(
-                      '2.66.14',
+                      '2.66.15',
                       style: GoogleFonts.inter(
                         color: AppTheme.textSecondary.withOpacity(0.5),
                         fontSize: 12,
@@ -1073,7 +1073,7 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
               ),
               const SizedBox(height: 6),
               Text(
-                'You have $activeCount active substitute request${activeCount == 1 ? '' : 's'} for $bandName.',
+                'You have $activeCount active request${activeCount == 1 ? '' : 's'} for $bandName.',
                 style: GoogleFonts.inter(
                   fontSize: 13,
                   color: AppTheme.textSecondary,

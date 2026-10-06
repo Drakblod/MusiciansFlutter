@@ -113,14 +113,103 @@ class _SubRequestResponseDetailsScreenState
 
     setState(() => _isLoading = true);
 
-    try {
-      final appState = Provider.of<AppState>(context, listen: false);
-      final currentUserId = appState.currentUserId;
-      final reqId = widget.subRequest.subRequestId ?? widget.subRequest.id;
+    final appState = Provider.of<AppState>(context, listen: false);
+    final currentUserId = appState.currentUserId;
+    final reqId = widget.subRequest.subRequestId ?? widget.subRequest.id;
 
-      if (currentUserId == null || reqId == null) {
-        throw Exception("Missing user ID or request ID");
+    if (currentUserId == null || reqId == null) {
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Missing user ID or request ID"), backgroundColor: AppTheme.danger),
+      );
+      return;
+    }
+
+    final bool isMemberRequest =
+        widget.subRequest.role == 'New Member' ||
+        widget.subRequest.role == 'Member';
+
+    if (isMemberRequest) {
+      // For Member Recruitment: no formal agreement is created.
+      try {
+        final conversationId = await appState.firebaseService.getOrCreateDirectConversationAsync(
+          currentUserId,
+          selectedSub.userId,
+        );
+
+        final introMessage = Message(
+          id: '',
+          senderId: currentUserId,
+          receiverId: selectedSub.userId,
+          text: "Hi ${selectedSub.name}, thank you for your application to join ${widget.subRequest.bandName ?? 'our band'}! Let's connect here to discuss details and arrange an audition.",
+          timestamp: DateTime.now(),
+          isRead: false,
+          senderName: appState.currentUserProfile?.displayName ?? 'Band Leader',
+        );
+
+        try {
+          await appState.firebaseService.sendConversationMessageAsync(
+            conversationId,
+            introMessage.text ?? '',
+            selectedSub.userId,
+            introMessage.senderName ?? 'Band Leader',
+          );
+        } catch (e) {
+          debugPrint("[SubRequestResponseDetailsScreen] sendConversationMessageAsync notice: $e");
+        }
+
+        if (mounted) {
+          setState(() => _isLoading = false);
+          await showDialog(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              backgroundColor: const Color(0xFF0F0C20),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: const BorderSide(color: Color(0xFF2E2A4E)),
+              ),
+              title: Text(
+                'Message Candidate',
+                style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold),
+              ),
+              content: Text(
+                'You may communicate with several prospective members, arrange a time for an audition, and ultimately make your selection through messaging. MUSICIANS will not create a formal Agreement.',
+                style: GoogleFonts.inter(color: Colors.white70, fontSize: 13, height: 1.4),
+              ),
+              actions: [
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryAccent),
+                  child: Text(
+                    'Open Messages',
+                    style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+          );
+
+          if (mounted) {
+            Navigator.pushNamed(
+              context,
+              '/chat',
+              arguments: {
+                'conversationId': conversationId,
+                'otherUserId': selectedSub.userId,
+                'otherUserName': selectedSub.name,
+              },
+            );
+          }
+        }
+        return;
+      } catch (e) {
+        debugPrint("[SubRequestResponseDetailsScreen] member message error: $e");
+        setState(() => _isLoading = false);
+        return;
       }
+    }
+
+    try {
 
       SubRequest effectiveReq = widget.subRequest;
       try {
@@ -357,6 +446,33 @@ class _SubRequestResponseDetailsScreenState
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 12),
+              if (widget.subRequest.role == 'New Member' || widget.subRequest.role == 'Member')
+                Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primaryAccent.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.3)),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.info_outline, color: AppTheme.primaryAccent, size: 18),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'You may communicate with several prospective members, arrange a time for an audition, and ultimately make your selection through messaging. MUSICIANS will not create a formal Agreement.',
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            color: Colors.white.withOpacity(0.9),
+                            height: 1.4,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               Expanded(
                 child: _isLoading
                     ? const Center(
@@ -554,7 +670,9 @@ class _SubRequestResponseDetailsScreenState
                     ),
                     child: Center(
                       child: Text(
-                        'CONFIRM SELECTION',
+                        (widget.subRequest.role == 'New Member' || widget.subRequest.role == 'Member')
+                            ? 'MESSAGE CANDIDATE'
+                            : 'CONFIRM SELECTION',
                         style: GoogleFonts.inter(
                           color: _selectedUserId != null
                               ? Colors.white

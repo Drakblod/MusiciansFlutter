@@ -575,7 +575,7 @@ void main() {
       await tester.tap(find.text('Find New Band Member(s)'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Permanent Band Recruitment'), findsOneWidget);
+      expect(find.text('New Band Member Recruitment'), findsOneWidget);
 
       // Switch back to Substitute mode
       await tester.tap(find.text('Find Substitute(s)'));

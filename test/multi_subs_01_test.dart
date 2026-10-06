@@ -1742,7 +1742,7 @@ void main() {
       expect(find.textContaining('PUBLISH SUBSTITUTE REQUESTS'), findsNothing);
 
       // New Band Member UI elements must be present
-      expect(find.text('Permanent Band Recruitment'), findsOneWidget);
+      expect(find.text('New Band Member Recruitment'), findsOneWidget);
       expect(find.text('PUBLISH NEW MEMBER SEARCH'), findsOneWidget);
     });
 
@@ -1868,7 +1868,7 @@ void main() {
       ));
       await tester.pumpAndSettle();
 
-      expect(find.text('Permanent Band Recruitment'), findsOneWidget);
+      expect(find.text('New Band Member Recruitment'), findsOneWidget);
       expect(find.text('PUBLISH NEW MEMBER SEARCH'), findsOneWidget);
       expect(find.text('Bass'), findsOneWidget);
     });
@@ -1893,7 +1893,7 @@ void main() {
       // Switch to New Band Member(s) mode
       await tester.tap(find.text('Find New Band Member(s)'));
       await tester.pumpAndSettle();
-      expect(find.text('Permanent Band Recruitment'), findsOneWidget);
+      expect(find.text('New Band Member Recruitment'), findsOneWidget);
       expect(find.textContaining('SUBSTITUTE 2 - "'), findsNothing);
 
       // Switch back to Substitute mode
@@ -1938,7 +1938,7 @@ void main() {
       // Switch to New Member at 320 px
       await tester.tap(find.text('Find New Band Member(s)'));
       await tester.pumpAndSettle();
-      expect(find.text('Permanent Band Recruitment'), findsOneWidget);
+      expect(find.text('New Band Member Recruitment'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 
