@@ -440,19 +440,6 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                       Row(
                         children: [
                           if (group.isMultiple) ...[
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                              decoration: BoxDecoration(
-                                color: AppTheme.secondaryAccent.withOpacity(0.2),
-                                borderRadius: BorderRadius.circular(6),
-                                border: Border.all(color: AppTheme.secondaryAccent.withOpacity(0.5)),
-                              ),
-                              child: Text(
-                                'Multiple Request',
-                                style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.secondaryAccent),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
                             Expanded(
                               child: Text(
                                 '${group.eventCount} events · ${group.totalPositions} positions (${group.filledPositions} filled)',
@@ -884,25 +871,6 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  if (group.isMultiple) ...[
-                                    Container(
-                                      margin: const EdgeInsets.only(bottom: 4),
-                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                      decoration: BoxDecoration(
-                                        color: AppTheme.secondaryAccent.withOpacity(0.2),
-                                        borderRadius: BorderRadius.circular(4),
-                                        border: Border.all(color: AppTheme.secondaryAccent.withOpacity(0.6)),
-                                      ),
-                                      child: Text(
-                                        'Multiple Request',
-                                        style: GoogleFonts.inter(
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.bold,
-                                          color: AppTheme.secondaryAccent,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
                                   Text(
                                     group.title,
                                     style: GoogleFonts.outfit(

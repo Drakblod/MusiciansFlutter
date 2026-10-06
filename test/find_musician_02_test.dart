@@ -813,7 +813,7 @@ void main() {
       appState.mockService.allSubRequests.addAll([multi1, multi2]);
     });
 
-    testWidgets('24. Renders one grouped card with Multiple Request badge and payment amount', (tester) async {
+    testWidgets('24. Renders one grouped card with payment amount and positions summary', (tester) async {
       await tester.pumpWidget(
         ChangeNotifierProvider<AppState>.value(
           value: appState,
@@ -825,7 +825,6 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Nordic Stars'), findsOneWidget);
-      expect(find.text('Multiple Request'), findsOneWidget);
       expect(find.text('Paid · SEK 1,500'), findsOneWidget);
       expect(find.text('2 events · 2 positions'), findsOneWidget);
     });
@@ -1056,7 +1055,6 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Group Band'), findsOneWidget);
-      expect(find.text('Multiple Request'), findsOneWidget);
     });
 
     testWidgets('30. Two distinct bands with identical event/slot names generate isolated RequestGroupIds without collision', (tester) async {
