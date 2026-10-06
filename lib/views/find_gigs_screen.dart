@@ -40,6 +40,8 @@ class GigGroup {
     return eventIds.length;
   }
 
+  bool get isPaid => requests.any((r) => r.isPaid);
+
   String get formattedPayment {
     final paidReq = requests.firstWhere((r) => r.isPaid, orElse: () => requests.first);
     return paidReq.formattedPayAmount;
@@ -524,7 +526,7 @@ class _FindGigsScreenState extends State<FindGigsScreen>
 
                       // Positions List
                       Text(
-                        'Substitute Positions (${group.requests.length})',
+                        'Positions (${group.requests.length})',
                         style: GoogleFonts.outfit(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
@@ -945,7 +947,7 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                         if (group.isMultiple) ...[
                           const SizedBox(height: 4),
                           Text(
-                            '${group.eventCount} event${group.eventCount == 1 ? "" : "s"} · ${group.totalPositions} substitute position${group.totalPositions == 1 ? "" : "s"}',
+                            '${group.eventCount} event${group.eventCount == 1 ? "" : "s"} · ${group.totalPositions} position${group.totalPositions == 1 ? "" : "s"}',
                             style: GoogleFonts.inter(
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
@@ -966,22 +968,24 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                         Row(
                           children: [
                             // Paid / Payment tag
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: AppTheme.primaryAccent.withOpacity(0.15),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Text(
-                                group.formattedPayment,
-                                style: GoogleFonts.inter(
-                                  fontSize: 10,
-                                  color: AppTheme.primaryAccent,
-                                  fontWeight: FontWeight.bold,
+                            if (group.isPaid && group.formattedPayment.isNotEmpty) ...[
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.primaryAccent.withOpacity(0.15),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  group.formattedPayment,
+                                  style: GoogleFonts.inter(
+                                    fontSize: 10,
+                                    color: AppTheme.primaryAccent,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 ),
                               ),
-                            ),
-                            const SizedBox(width: 8),
+                              const SizedBox(width: 8),
+                            ],
 
                             // Roles tag summary
                             if (!group.isMultiple && group.requests.isNotEmpty)

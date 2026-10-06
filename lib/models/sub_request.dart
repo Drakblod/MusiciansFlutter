@@ -260,8 +260,8 @@ class SubRequest {
   }
 
   String get formattedPayAmount {
-    if (!isPaid) return 'Unpaid';
-    if (payAmount == null || payAmount! <= 0) return 'Paid · Amount not specified';
+    if (!isPaid) return '';
+    if (payAmount == null || payAmount! <= 0) return 'Paid';
     final curr = currency ?? 'SEK';
     final formatted = NumberFormat('#,##0').format(payAmount);
     return 'Paid · $curr $formatted';

@@ -35,6 +35,12 @@ class MockFirebaseService extends Fake implements FirebaseService {
   Stream<bool> subscribeToUnreadNotifications() => const Stream.empty();
 
   @override
+  Stream<int> subscribeToUnreadNotificationCount([String? userId]) => Stream.value(0);
+
+  @override
+  Future<Set<String>> getUserAppliedSubRequestIdsAsync(String userId) async => <String>{};
+
+  @override
   Future<void> initializePushNotifications() async {}
 
   @override
@@ -182,17 +188,17 @@ void main() {
   });
 
   group('FIND-MUSICIAN-02: SubRequest Model & Formatted Pay Amount', () {
-    test('1. Formats unpaid sub requests as Unpaid', () {
+    test('1. Formats unpaid sub requests as empty string', () {
       final req = SubRequest(isPaid: false);
-      expect(req.formattedPayAmount, 'Unpaid');
+      expect(req.formattedPayAmount, '');
     });
 
-    test('2. Formats paid sub request without amount as Paid · Amount not specified', () {
+    test('2. Formats paid sub request without amount as Paid', () {
       final req = SubRequest(isPaid: true, payAmount: null);
-      expect(req.formattedPayAmount, 'Paid · Amount not specified');
+      expect(req.formattedPayAmount, 'Paid');
 
       final reqZero = SubRequest(isPaid: true, payAmount: 0);
-      expect(reqZero.formattedPayAmount, 'Paid · Amount not specified');
+      expect(reqZero.formattedPayAmount, 'Paid');
     });
 
     test('3. Formats exact Swedish Kronor amount (SEK 1,500)', () {
@@ -821,7 +827,7 @@ void main() {
       expect(find.text('Nordic Stars'), findsOneWidget);
       expect(find.text('Multiple Request'), findsOneWidget);
       expect(find.text('Paid · SEK 1,500'), findsOneWidget);
-      expect(find.text('2 events · 2 substitute positions'), findsOneWidget);
+      expect(find.text('2 events · 2 positions'), findsOneWidget);
     });
 
     testWidgets('25. Tapping grouped card opens bottom sheet showing each event occurrence and position', (tester) async {
@@ -838,7 +844,7 @@ void main() {
       await tester.tap(find.text('Nordic Stars'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Substitute Positions (2)'), findsOneWidget);
+      expect(find.text('Positions (2)'), findsOneWidget);
       expect(find.text('Event #1'), findsOneWidget);
       expect(find.text('Event #2'), findsOneWidget);
       expect(find.text('Electric Guitar'), findsOneWidget);
@@ -862,21 +868,21 @@ void main() {
         isPaid: false,
         payAmount: 1500,
       );
-      expect(reqUnpaid.formattedPayAmount, equals('Unpaid'));
+      expect(reqUnpaid.formattedPayAmount, equals(''));
 
       final reqLegacyPaid = SubRequest(
         subRequestId: 'sub_pay_legacy',
         isPaid: true,
         payAmount: null,
       );
-      expect(reqLegacyPaid.formattedPayAmount, equals('Paid · Amount not specified'));
+      expect(reqLegacyPaid.formattedPayAmount, equals('Paid'));
 
       final reqZero = SubRequest(
         subRequestId: 'sub_pay_zero',
         isPaid: true,
         payAmount: 0,
       );
-      expect(reqZero.formattedPayAmount, equals('Paid · Amount not specified'));
+      expect(reqZero.formattedPayAmount, equals('Paid'));
 
       final jsonMap = {
         'SubRequestId': 'sub_json_1',

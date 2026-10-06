@@ -86,28 +86,27 @@ class _SubRequestDetailsScreenState extends State<SubRequestDetailsScreen> {
                           ),
                         ),
                       ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: gig.isPaid
-                              ? AppTheme.primaryAccent.withOpacity(0.15)
-                              : Colors.grey.withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          gig.isPaid ? 'Paid' : 'Unpaid',
-                          style: GoogleFonts.inter(
-                            fontSize: 10,
-                            color: gig.isPaid
-                                ? AppTheme.primaryAccent
-                                : AppTheme.textSecondary,
-                            fontWeight: FontWeight.bold,
+                      if (gig.isPaid)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppTheme.primaryAccent.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            gig.formattedPayAmount.isNotEmpty
+                                ? gig.formattedPayAmount
+                                : 'Paid',
+                            style: GoogleFonts.inter(
+                              fontSize: 10,
+                              color: AppTheme.primaryAccent,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
-                      ),
                     ],
                   ),
                   const SizedBox(height: 8),

@@ -887,21 +887,22 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                   ),
                 ),
                 // Paid indicator
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: gig.isPaid ? AppTheme.primaryAccent.withOpacity(0.2) : Colors.white10,
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    gig.isPaid ? 'Paid' : 'Unpaid',
-                    style: GoogleFonts.inter(
-                      fontSize: 10,
-                      color: gig.isPaid ? AppTheme.primaryAccent : AppTheme.textSecondary,
-                      fontWeight: FontWeight.bold,
+                if (gig.isPaid)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primaryAccent.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      'Paid',
+                      style: GoogleFonts.inter(
+                        fontSize: 10,
+                        color: AppTheme.primaryAccent,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
-                ),
               ],
             ),
             const SizedBox(height: 12),
