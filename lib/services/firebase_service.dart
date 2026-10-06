@@ -935,9 +935,11 @@ class FirebaseService {
 
       final key = (req.subRequestId != null &&
               req.subRequestId!.isNotEmpty &&
-              !req.subRequestId!.startsWith('slot_'))
+              !req.subRequestId!.startsWith('slot_') &&
+              !req.subRequestId!.startsWith('initial_') &&
+              !req.subRequestId!.startsWith('draft_'))
           ? req.subRequestId!
-          : 'sub_${cleanBandId}_${cleanEventId}_$cleanSlotId';
+          : 'sub_${cleanBandId}_${cleanEventId}_${cleanSlotId}_$now';
 
       createdIds.add(key);
 
@@ -1291,6 +1293,19 @@ class FirebaseService {
     String subRequestId,
     String userId,
   ) async {
+    // 0. Prevent replying to own subrequest
+    try {
+      final sub = await getSubRequestAsync(subRequestId);
+      final creatorId = sub?.creatorUserId ?? sub?.userId;
+      if (creatorId != null && creatorId.isNotEmpty && creatorId == userId) {
+        throw Exception('You cannot respond to your own substitute request.');
+      }
+    } catch (e) {
+      if (e.toString().contains('cannot respond to your own substitute request')) {
+        rethrow;
+      }
+    }
+
     final now = DateTime.now().millisecondsSinceEpoch;
 
     // 1. User's own applied subrequests tracking (guaranteed write permission under auth.uid)
@@ -1511,7 +1526,12 @@ class FirebaseService {
         debugPrint("[FirebaseService] Error recording BandEvents/CancelledSubRequests: $e");
       }
 
-      // 2. Update status and remove from BandEvents/PublishedSubRequests
+      // 2. Remove responses from BandEvents/SubRequestResponses
+      try {
+        await _dbRef('BandEvents/SubRequestResponses/$subRequestId').remove();
+      } catch (_) {}
+
+      // 3. Update status and remove from BandEvents/PublishedSubRequests
       try {
         await _dbRef('BandEvents/PublishedSubRequests/$subRequestId/status').set('cancelled');
         await _dbRef('BandEvents/PublishedSubRequests/$subRequestId/Status').set('cancelled');

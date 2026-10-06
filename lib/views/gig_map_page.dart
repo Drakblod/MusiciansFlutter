@@ -790,7 +790,8 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
     final formattedDate = DateFormat('MMM dd, yyyy').format(date);
     final currentUserId = appState.currentUserId;
     final gigReqId = gig.subRequestId ?? gig.id;
-    final hasApplied = currentUserId != null && (gig.responses.containsKey(currentUserId) || (gigReqId != null && _appliedGigIds.contains(gigReqId)));
+    final isCreator = currentUserId != null && (gig.creatorUserId == currentUserId || gig.userId == currentUserId);
+    final hasApplied = currentUserId != null && !isCreator && (gig.responses.containsKey(currentUserId) || (gigReqId != null && _appliedGigIds.contains(gigReqId)));
     
     return Positioned(
       bottom: 20,
@@ -932,7 +933,26 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: hasApplied
+                  child: isCreator
+                      ? Container(
+                          height: 42,
+                          decoration: BoxDecoration(
+                            color: AppTheme.primaryAccent.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.4)),
+                          ),
+                          child: Center(
+                            child: Text(
+                              'Your Request',
+                              style: GoogleFonts.inter(
+                                color: AppTheme.primaryAccent,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
+                        )
+                      : hasApplied
                       ? Container(
                           height: 42,
                           decoration: BoxDecoration(

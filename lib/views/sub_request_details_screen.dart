@@ -44,8 +44,10 @@ class _SubRequestDetailsScreenState extends State<SubRequestDetailsScreen> {
     final appState = Provider.of<AppState>(context);
     final currentUserId = appState.currentUserId;
     final gig = widget.subRequest;
+    final isCreator = currentUserId != null &&
+        (gig.creatorUserId == currentUserId || gig.userId == currentUserId);
     final hasApplied =
-        _hasAppliedLocally || (currentUserId != null && gig.responses.containsKey(currentUserId));
+        !isCreator && (_hasAppliedLocally || (currentUserId != null && gig.responses.containsKey(currentUserId)));
 
     final date = gig.date != null
         ? DateTime.tryParse(gig.date!) ?? DateTime.now()
@@ -335,6 +337,26 @@ class _SubRequestDetailsScreenState extends State<SubRequestDetailsScreen> {
                 ? const Center(
                     child: CircularProgressIndicator(
                       color: AppTheme.primaryAccent,
+                    ),
+                  )
+                : isCreator
+                ? Container(
+                    width: double.infinity,
+                    height: 55,
+                    decoration: BoxDecoration(
+                      color: AppTheme.primaryAccent.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.4)),
+                    ),
+                    child: Center(
+                      child: Text(
+                        'Your Request',
+                        style: GoogleFonts.inter(
+                          color: AppTheme.primaryAccent,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
                     ),
                   )
                 : hasApplied

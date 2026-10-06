@@ -535,7 +535,8 @@ class _FindGigsScreenState extends State<FindGigsScreen>
 
                       ...group.requests.map((req) {
                         final reqId = req.subRequestId ?? req.id ?? '';
-                        final hasApplied = currentUserId != null && (req.responses.containsKey(currentUserId) || _appliedGigIds.contains(reqId));
+                        final isCreator = currentUserId != null && (req.creatorUserId == currentUserId || req.userId == currentUserId);
+                        final hasApplied = currentUserId != null && !isCreator && (req.responses.containsKey(currentUserId) || _appliedGigIds.contains(reqId));
                         final isAssigned = req.status == 'assigned' || req.assignedUserId != null;
                         final dateStr = req.date != null
                             ? DateFormat('EEE, MMM d').format(DateTime.tryParse(req.date!) ?? DateTime.now())
@@ -609,6 +610,16 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                                     borderRadius: BorderRadius.circular(6),
                                   ),
                                   child: Text('Filled', style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.success)),
+                                )
+                              else if (isCreator)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.primaryAccent.withOpacity(0.15),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.4)),
+                                  ),
+                                  child: Text('Your Request', style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.primaryAccent)),
                                 )
                               else if (hasApplied)
                                 Container(
