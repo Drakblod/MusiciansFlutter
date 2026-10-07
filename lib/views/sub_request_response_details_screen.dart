@@ -10,6 +10,7 @@ import '../models/message.dart';
 import '../widgets/custom_top_bar.dart';
 import '../widgets/gradient_scaffold.dart';
 import '../widgets/animated_tap_detector.dart';
+import 'chat_detail_screen.dart';
 
 class SubRequestResponseDetailsScreen extends StatefulWidget {
   final SubRequest subRequest;
@@ -59,11 +60,17 @@ class _SubRequestResponseDetailsScreenState
       for (final uid in responderIds) {
         final profile = await appState.firebaseService.getUserProfileAsync(uid);
         if (profile != null) {
+          final primarySkill = profile.mainSkills.isNotEmpty
+              ? profile.mainSkills.first
+              : (profile.mainInstrument != null && profile.mainInstrument!.trim().isNotEmpty
+                  ? profile.mainInstrument!.split(',').first.trim()
+                  : (profile.instruments.isNotEmpty ? profile.instruments.first : 'Musician'));
+
           items.add(
             ResponderItem(
               userId: uid,
               name: profile.displayName ?? profile.nickname ?? 'Unknown',
-              instruments: profile.instruments.isNotEmpty ? profile.instruments.join(', ') : 'Musician',
+              instruments: primarySkill,
               location: profile.location ?? 'Stockholm, Sweden',
               level: profile.level ?? 'Intermediate',
               about: profile.about ?? 'No description provided.',
@@ -174,7 +181,7 @@ class _SubRequestResponseDetailsScreenState
 
         if (mounted) {
           setState(() => _isLoading = false);
-          await showDialog(
+          final shouldOpen = await showDialog<bool>(
             context: context,
             builder: (ctx) => AlertDialog(
               backgroundColor: const Color(0xFF0F0C20),
@@ -191,8 +198,12 @@ class _SubRequestResponseDetailsScreenState
                 style: GoogleFonts.inter(color: Colors.white70, fontSize: 13, height: 1.4),
               ),
               actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: Text('Close', style: GoogleFonts.inter(color: Colors.white60)),
+                ),
                 ElevatedButton(
-                  onPressed: () => Navigator.pop(ctx),
+                  onPressed: () => Navigator.pop(ctx, true),
                   style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryAccent),
                   child: Text(
                     'Open Messages',
@@ -203,15 +214,17 @@ class _SubRequestResponseDetailsScreenState
             ),
           );
 
-          if (mounted) {
-            Navigator.pushNamed(
+          if ((shouldOpen == true || shouldOpen == null) && mounted) {
+            Navigator.push(
               context,
-              '/chat-detail',
-              arguments: {
-                'conversationId': conversationId,
-                'receiverId': selectedSub.userId,
-                'receiverName': selectedSub.name,
-              },
+              MaterialPageRoute(
+                builder: (context) => ChatDetailScreen(
+                  conversationId: conversationId,
+                  receiverId: selectedSub.userId,
+                  receiverName: selectedSub.name,
+                ),
+                settings: const RouteSettings(name: '/chat-detail'),
+              ),
             );
           }
         }
@@ -440,6 +453,21 @@ class _SubRequestResponseDetailsScreenState
     }
   }
 
+  String get _headerTitle {
+    final band = widget.subRequest.bandName ?? 'Band';
+    final roleOrInst = widget.subRequest.voicePart ?? widget.subRequest.role ?? '';
+    final isMember = widget.subRequest.role == 'New Member' || widget.subRequest.role == 'Member';
+    if (isMember) {
+      return roleOrInst.isNotEmpty
+          ? '$band: New Member request for $roleOrInst'
+          : '$band: New Member request';
+    } else {
+      return roleOrInst.isNotEmpty
+          ? '$band: Substitute request for $roleOrInst'
+          : '$band: Substitute request';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return GradientScaffold(
@@ -451,9 +479,9 @@ class _SubRequestResponseDetailsScreenState
             children: [
               const SizedBox(height: 8),
               Text(
-                'Responses for ${widget.subRequest.bandName ?? "Rehearsal"}',
+                _headerTitle,
                 style: GoogleFonts.outfit(
-                  fontSize: 22,
+                  fontSize: 20,
                   fontWeight: FontWeight.bold,
                   color: Colors.white,
                 ),

@@ -180,7 +180,7 @@ class UserProfile {
           .toList();
       final valid = parsed
           .where((item) => instruments.contains(item))
-          .take(3)
+          .take(1)
           .toList();
       if (valid.isNotEmpty) result = valid;
     }
