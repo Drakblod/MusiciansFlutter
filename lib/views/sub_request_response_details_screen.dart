@@ -86,8 +86,22 @@ class _SubRequestResponseDetailsScreenState
       if (mounted) {
         setState(() {
           _responders = items;
+          if (items.length == 1) {
+            _selectedUserId = items.first.userId;
+          }
         });
       }
+
+      // Mark matching response notifications as read so badges clear
+      try {
+        for (final notif in appState.userNotifications) {
+          if (!notif.isRead &&
+              (notif.type == 'sub_request_response' || notif.type == 'sub_response') &&
+              (notif.data['subRequestId'] == reqId || notif.id.contains(reqId))) {
+            appState.firebaseService.markNotificationReadAsync(notif.id);
+          }
+        }
+      } catch (_) {}
     } catch (e) {
       debugPrint("Error loading responses: $e");
       if (mounted) {
@@ -192,11 +206,11 @@ class _SubRequestResponseDetailsScreenState
           if (mounted) {
             Navigator.pushNamed(
               context,
-              '/chat',
+              '/chat-detail',
               arguments: {
                 'conversationId': conversationId,
-                'otherUserId': selectedSub.userId,
-                'otherUserName': selectedSub.name,
+                'receiverId': selectedSub.userId,
+                'receiverName': selectedSub.name,
               },
             );
           }
@@ -496,8 +510,14 @@ class _SubRequestResponseDetailsScreenState
                           final item = _responders[index];
                           final isSelected = _selectedUserId == item.userId;
 
-                          return Container(
-                            margin: const EdgeInsets.only(bottom: 16),
+                          return AnimatedTapDetector(
+                            onTap: () {
+                              setState(() {
+                                _selectedUserId = isSelected ? null : item.userId;
+                              });
+                            },
+                            child: Container(
+                              margin: const EdgeInsets.only(bottom: 16),
                             decoration: BoxDecoration(
                               color: AppTheme.cardBackground,
                               borderRadius: BorderRadius.circular(16),
@@ -635,8 +655,9 @@ class _SubRequestResponseDetailsScreenState
                                 ],
                               ),
                             ),
-                          );
-                        },
+                          ),
+                        );
+                      },
                       ),
               ),
               if (_responders.isNotEmpty) ...[

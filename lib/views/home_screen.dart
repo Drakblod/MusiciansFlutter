@@ -229,7 +229,7 @@ class HomeScreen extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Create New Sub Request',
+                              'Create New Request',
                               style: GoogleFonts.outfit(
                                 fontSize: 15,
                                 fontWeight: FontWeight.bold,
@@ -238,7 +238,7 @@ class HomeScreen extends StatelessWidget {
                             ),
                             const SizedBox(height: 3),
                             Text(
-                              'Select an event or rehearsal and find a new sub',
+                              'Find a substitute or new band member',
                               style: GoogleFonts.inter(
                                 fontSize: 12,
                                 color: AppTheme.textSecondary,
@@ -708,7 +708,7 @@ class HomeScreen extends StatelessWidget {
                   child: Padding(
                     padding: const EdgeInsets.only(bottom: 10, right: 10),
                     child: Text(
-                      '2.66.15',
+                      '2.66.16',
                       style: GoogleFonts.inter(
                         color: AppTheme.textSecondary.withOpacity(0.5),
                         fontSize: 12,
@@ -1116,7 +1116,7 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Create New Sub Request',
+                              'Create New Request',
                               style: GoogleFonts.outfit(
                                 fontSize: 15,
                                 fontWeight: FontWeight.bold,
@@ -1125,7 +1125,7 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
                             ),
                             const SizedBox(height: 3),
                             Text(
-                              'Select an event or rehearsal and find a new sub',
+                              'Find a substitute or new band member',
                               style: GoogleFonts.inter(
                                 fontSize: 12,
                                 color: AppTheme.textSecondary,

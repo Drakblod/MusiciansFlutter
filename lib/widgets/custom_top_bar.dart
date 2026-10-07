@@ -59,9 +59,9 @@ class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
                   Expanded(
                     child: _buildProfileOrBack(context, appState, canPop),
                   ),
-                  // Column 1: Favorites Icon
+                  // Column 1: Notifications Bell (moved to Favorites position)
                   Expanded(
-                    child: _buildFavorites(context, appState),
+                    child: _buildNotificationBell(context, appState),
                   ),
                   if (FeatureToggles.showMapInTopBar)
                     Expanded(
@@ -75,9 +75,9 @@ class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
                   Expanded(
                     child: _buildInbox(context, appState),
                   ),
-                  // Column 4: Notifications Bell
+                  // Column 4: Favorites Icon
                   Expanded(
-                    child: _buildNotificationBell(context, appState),
+                    child: _buildFavorites(context, appState),
                   ),
                   // Column 5: Settings Menu
                   Expanded(

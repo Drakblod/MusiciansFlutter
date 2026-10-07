@@ -2939,6 +2939,10 @@ class _FindSubScreenState extends State<FindSubScreen> {
       final newMemberDesc = _newMemberDescriptionController.text.trim();
       final newMemberLoc = profile?.location ?? 'Stockholm, Sweden';
       final newMemberTitle = _bandName ?? appState.activeBandName ?? 'Band Recruitment';
+      final now = DateTime.now();
+      final effectiveBandName = _bandName ?? appState.activeBandName ?? 'Freelance Band';
+      final groupId = 'req_group_member_${now.millisecondsSinceEpoch}';
+      final pubId = 'pub_member_${now.millisecondsSinceEpoch}';
 
       final req = SubRequest(
         role: 'New Member',
@@ -2946,15 +2950,22 @@ class _FindSubScreenState extends State<FindSubScreen> {
         description: newMemberDesc,
         location: newMemberLoc,
         bandId: effectiveBandId,
-        bandName: _bandName ?? appState.activeBandName ?? 'Freelance Band',
+        bandName: effectiveBandName,
         searchSource: _newMemberSource,
         targetUserIds: _newMemberSource == 'favorites' ? _selectedNewMemberFavorites.toList() : null,
         status: 'published',
         eventTitle: newMemberTitle,
-        extraFields: {'eventType': 'Recruitment'},
+        requestGroupId: groupId,
+        createdAt: now.millisecondsSinceEpoch,
+        extraFields: {'eventType': 'Recruitment', 'PublicationId': pubId},
       );
 
-      await appState.firebaseService.saveSubRequestsBatchAsync([req]);
+      await appState.firebaseService.publishSubRequestGroupAsync(
+        bandId: effectiveBandId,
+        requestGroupId: groupId,
+        requests: [req],
+        bandName: effectiveBandName,
+      );
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

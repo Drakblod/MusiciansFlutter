@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../providers/app_state.dart';
 import '../theme/app_theme.dart';
 import '../models/sub_request.dart';
@@ -27,6 +28,7 @@ class _SubRequestResponsesScreenState extends State<SubRequestResponsesScreen>
   List<SubRequest> _substituteRequests = [];
   List<SubRequest> _memberRequests = [];
   Map<String, int> _responseCounts = {};
+  Map<String, int> _viewedResponseCounts = {};
   bool _isLoading = true;
 
   @override
@@ -84,10 +86,20 @@ class _SubRequestResponsesScreenState extends State<SubRequestResponsesScreen>
         }
       }
 
+      final prefs = await SharedPreferences.getInstance();
+      final Map<String, int> viewedMap = {};
+      for (final req in bandRequests) {
+        final reqId = req.subRequestId ?? req.id;
+        if (reqId != null) {
+          viewedMap[reqId] = prefs.getInt('viewed_resp_$reqId') ?? 0;
+        }
+      }
+
       setState(() {
         _substituteRequests = subs;
         _memberRequests = members;
         _responseCounts = counts;
+        _viewedResponseCounts = viewedMap;
       });
     } catch (e) {
       debugPrint("Error loading sub requests: $e");
@@ -180,6 +192,50 @@ class _SubRequestResponsesScreenState extends State<SubRequestResponsesScreen>
     return DateTime.tryParse(req.date!) ?? DateTime.now();
   }
 
+  bool _requestHasActivity(SubRequest req) {
+    final reqId = req.subRequestId ?? req.id ?? '';
+    final count = _responseCounts[reqId] ?? 0;
+    final viewed = _viewedResponseCounts[reqId] ?? 0;
+    return count > 0 && count > viewed;
+  }
+
+  bool get _hasSubstituteActivity => _substituteRequests.any(_requestHasActivity);
+  bool get _hasMemberActivity => _memberRequests.any(_requestHasActivity);
+
+  Future<void> _openRequestDetails(SubRequest req) async {
+    final reqId = req.subRequestId ?? req.id;
+    if (reqId != null) {
+      final currentCount = _responseCounts[reqId] ?? 0;
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt('viewed_resp_$reqId', currentCount);
+      if (mounted) {
+        setState(() {
+          _viewedResponseCounts[reqId] = currentCount;
+        });
+      }
+
+      // Mark matching unread response notifications as read
+      try {
+        final appState = Provider.of<AppState>(context, listen: false);
+        for (final notif in appState.userNotifications) {
+          if (!notif.isRead &&
+              (notif.type == 'sub_request_response' || notif.type == 'sub_response') &&
+              (notif.data['subRequestId'] == reqId || notif.id.contains(reqId))) {
+            appState.firebaseService.markNotificationReadAsync(notif.id);
+          }
+        }
+      } catch (_) {}
+    }
+
+    if (!mounted) return;
+    await Navigator.pushNamed(
+      context,
+      '/sub-request-response-details',
+      arguments: {'subRequest': req},
+    );
+    await _loadRequests();
+  }
+
   @override
   Widget build(BuildContext context) {
     return GradientScaffold(
@@ -218,9 +274,45 @@ class _SubRequestResponsesScreenState extends State<SubRequestResponsesScreen>
                 labelColor: Colors.white,
                 unselectedLabelColor: AppTheme.textSecondary,
                 labelStyle: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 14),
-                tabs: const [
-                  Tab(text: 'Substitutes'),
-                  Tab(text: 'Members'),
+                tabs: [
+                  Tab(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text('Substitutes'),
+                        if (_hasSubstituteActivity) ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            width: 8,
+                            height: 8,
+                            decoration: const BoxDecoration(
+                              color: Color(0xFFE11D48),
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  Tab(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text('Members'),
+                        if (_hasMemberActivity) ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            width: 8,
+                            height: 8,
+                            decoration: const BoxDecoration(
+                              color: Color(0xFFE11D48),
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 16),
@@ -265,13 +357,7 @@ class _SubRequestResponsesScreenState extends State<SubRequestResponsesScreen>
           final date = _getGigDate(req);
 
           return AnimatedTapDetector(
-            onTap: () {
-              Navigator.pushNamed(
-                context,
-                '/sub-request-response-details',
-                arguments: {'subRequest': req},
-              ).then((_) => _loadRequests());
-            },
+            onTap: () => _openRequestDetails(req),
             child: Container(
               margin: const EdgeInsets.only(bottom: 16),
               padding: const EdgeInsets.all(16),
@@ -362,13 +448,29 @@ class _SubRequestResponsesScreenState extends State<SubRequestResponsesScreen>
                                   borderRadius: BorderRadius.circular(10),
                                 ),
                                 child: Center(
-                                  child: Text(
-                                    'View Responses ($responseCount)',
-                                    style: GoogleFonts.inter(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 13,
-                                    ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        'View Responses ($responseCount)',
+                                        style: GoogleFonts.inter(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                      if (_requestHasActivity(req)) ...[
+                                        const SizedBox(width: 8),
+                                        Container(
+                                          width: 8,
+                                          height: 8,
+                                          decoration: const BoxDecoration(
+                                            color: Color(0xFFE11D48),
+                                            shape: BoxShape.circle,
+                                          ),
+                                        ),
+                                      ],
+                                    ],
                                   ),
                                 ),
                               ),
