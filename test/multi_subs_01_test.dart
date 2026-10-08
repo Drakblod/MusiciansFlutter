@@ -413,7 +413,7 @@ void main() {
       expect(find.text('FIND MUSICIAN/VOCALIST'), findsOneWidget);
       // Under 03B, single-slot events omit SUBSTITUTE 1
       expect(find.text('SUBSTITUTE 1'), findsNothing);
-      expect(find.text('Instrument/Skill'), findsOneWidget);
+      expect(find.text('Role / Instrument'), findsOneWidget);
       expect(find.text('Electric Guitar'), findsOneWidget);
     });
 
@@ -462,7 +462,7 @@ void main() {
       expect(find.text('Drums'), findsWidgets);
       // Under 03B, single slot proceeds directly to slot content without slot header
       expect(find.text('SUBSTITUTE 1'), findsNothing);
-      expect(find.text('Instrument/Skill'), findsOneWidget);
+      expect(find.text('Role / Instrument'), findsOneWidget);
     });
 
     testWidgets('3. Opening the workflow performs zero writes', (tester) async {
@@ -1715,7 +1715,7 @@ void main() {
 
       // Under 03B, single-slot events omit SUBSTITUTE 1
       expect(find.text('SUBSTITUTE 1'), findsNothing);
-      expect(find.text('Instrument/Skill'), findsOneWidget);
+      expect(find.text('Role / Instrument'), findsOneWidget);
       expect(find.text('+ Add Substitute'), findsOneWidget);
       expect(find.textContaining('PUBLISH SUBSTITUTE REQUESTS'), findsOneWidget);
     });
@@ -1848,7 +1848,7 @@ void main() {
 
       // Under 03B, single-slot events omit SUBSTITUTE 1
       expect(find.text('SUBSTITUTE 1'), findsNothing);
-      expect(find.text('Instrument/Skill'), findsOneWidget);
+      expect(find.text('Role / Instrument'), findsOneWidget);
       expect(find.text('Find Substitute(s)'), findsOneWidget);
     });
 

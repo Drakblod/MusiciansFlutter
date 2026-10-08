@@ -852,7 +852,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
-      final instrumentCard = find.text('Instrument/Skill');
+      final instrumentCard = find.text('Role / Instrument');
       expect(instrumentCard, findsOneWidget);
       await tester.tap(instrumentCard);
       await tester.pump();

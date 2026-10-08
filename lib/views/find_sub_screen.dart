@@ -695,7 +695,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
   Future<void> _openInstrumentPicker(SubstituteSlotDraft slot) async {
     final selectedList = await SearchableCategoryMultiSelectSheet.show(
       context: context,
-      title: 'Select Instrument / Role',
+      title: 'Select Role / Instrument',
       categoryMap: _allSkillsCategoryMap,
       initialSelected: [slot.instrument],
       isSingleSelect: true,
@@ -1503,9 +1503,9 @@ class _FindSubScreenState extends State<FindSubScreen> {
                 ),
                 const SizedBox(height: 14),
 
-                // 3. Description
+                // 3. Description (optional)
                 Text(
-                  'Description',
+                  'Description (optional)',
                   style: GoogleFonts.inter(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
@@ -1858,7 +1858,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
             const SizedBox(height: 12),
           ],
 
-          // 3. Instrument/Skill (Singular)
+          // 3. Role / Instrument (Singular)
           InkWell(
             onTap: isDraft ? () => _openInstrumentPicker(slot) : null,
             borderRadius: BorderRadius.circular(8),
@@ -1866,7 +1866,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Instrument/Skill',
+                  'Role / Instrument',
                   style: GoogleFonts.inter(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
@@ -2702,7 +2702,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
               const SizedBox(height: 16),
 
               Text(
-                'Instrument / Role',
+                'Role / Instrument',
                 style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: AppTheme.textSecondary),
               ),
               const SizedBox(height: 6),
@@ -2734,7 +2734,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
               const SizedBox(height: 16),
 
               Text(
-                'Description',
+                'Description (optional)',
                 style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: AppTheme.textSecondary),
               ),
               const SizedBox(height: 6),
@@ -2910,7 +2910,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
   Future<void> _openNewMemberInstrumentPicker() async {
     final selectedList = await SearchableCategoryMultiSelectSheet.show(
       context: context,
-      title: 'Select Instrument / Role',
+      title: 'Select Role / Instrument',
       categoryMap: _allSkillsCategoryMap,
       initialSelected: [_selectedNewMemberInstrument],
       isSingleSelect: true,

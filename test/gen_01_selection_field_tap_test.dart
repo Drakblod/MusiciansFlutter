@@ -214,7 +214,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
-      final instrumentTitle = find.text('Instrument/Skill');
+      final instrumentTitle = find.text('Role / Instrument');
       expect(instrumentTitle, findsOneWidget);
       expect(find.text('+ Select'), findsNothing);
 

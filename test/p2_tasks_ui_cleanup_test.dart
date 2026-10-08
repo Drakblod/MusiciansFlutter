@@ -35,6 +35,16 @@ class MockFirebaseService extends FirebaseService {
   }
 
   @override
+  Future<List<SubRequest>> getUserSubRequestFeedAsync() async {
+    return [];
+  }
+
+  @override
+  Future<Set<String>> getUserAppliedSubRequestIdsAsync(String userId) async {
+    return {};
+  }
+
+  @override
   Future<Map<String, String>> getUserBandsAsync(String userId) async {
     return {};
   }
@@ -191,7 +201,7 @@ void main() {
     });
 
     testWidgets(
-      'GIG-03: Gigs list tab label is Available gigs and Direct Invitations without false booked claim',
+      'GIG-03: Gigs list tab labels are Substitute Requests, New Member Requests, and Saved without false booked claim',
       (tester) async {
         await tester.pumpWidget(
           ChangeNotifierProvider<AppState>(
@@ -201,8 +211,9 @@ void main() {
         );
         await tester.pumpAndSettle();
 
-        expect(find.text('Available gigs'), findsOneWidget);
-        expect(find.text('Direct Invitations (Favorites List)'), findsOneWidget);
+        expect(find.text('Substitute Requests'), findsOneWidget);
+        expect(find.text('New Member Requests'), findsOneWidget);
+        expect(find.text('Saved'), findsOneWidget);
         expect(find.text('Upcoming'), findsNothing);
         expect(find.text('Upcoming (booked)'), findsNothing);
       },

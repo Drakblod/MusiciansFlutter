@@ -5,7 +5,6 @@ import 'package:intl/intl.dart';
 import '../providers/app_state.dart';
 import '../theme/app_theme.dart';
 import '../models/sub_request.dart';
-import '../widgets/animated_tap_detector.dart';
 import '../widgets/custom_top_bar.dart';
 import '../widgets/gradient_scaffold.dart';
 import '../config/feature_toggles.dart';
@@ -17,7 +16,7 @@ class GigGroup {
   final String? location;
   final String? description;
   final String? payDetails;
-  final bool isMultiple;
+  final bool? _isMultiple;
   final List<SubRequest> requests;
   final DateTime earliestDate;
 
@@ -28,17 +27,19 @@ class GigGroup {
     this.location,
     this.description,
     this.payDetails,
-    required this.isMultiple,
+    bool? isMultiple,
     required this.requests,
     required this.earliestDate,
-  });
+  }) : _isMultiple = isMultiple;
 
   int get totalPositions => requests.length;
   int get filledPositions => requests.where((r) => r.status == 'assigned' || r.assignedUserId != null).length;
   int get eventCount {
-    final eventIds = requests.map((r) => r.eventId ?? r.date ?? '').toSet();
-    return eventIds.length;
+    final eventIds = requests.map((r) => r.eventId ?? r.date ?? '').where((s) => s.isNotEmpty).toSet();
+    return eventIds.isEmpty ? 1 : eventIds.length;
   }
+
+  bool get isMultiple => _isMultiple ?? (requests.length > 1 || eventCount > 1);
 
   bool get isPaid => requests.any((r) => r.isPaid);
 
@@ -46,6 +47,32 @@ class GigGroup {
     final paidReq = requests.firstWhere((r) => r.isPaid, orElse: () => requests.first);
     return paidReq.formattedPayAmount;
   }
+
+  bool get isNewMember => requests.any((r) => r.role?.trim().toLowerCase() == 'new member');
+
+  String get requestTypeLabel => isNewMember ? 'New Member Request' : 'Substitute Request';
+
+  List<String> get distinctRoles {
+    final roles = <String>{};
+    for (final r in requests) {
+      if (r.voicePart != null && r.voicePart!.trim().isNotEmpty) {
+        roles.add(r.voicePart!.trim());
+      } else {
+        final roleLower = r.role?.trim().toLowerCase();
+        if (roleLower != null &&
+            roleLower.isNotEmpty &&
+            roleLower != 'substitute' &&
+            roleLower != 'new member') {
+          roles.add(r.role!.trim());
+        } else {
+          roles.add('Musician');
+        }
+      }
+    }
+    return roles.toList();
+  }
+
+  String get roleInstrumentDisplay => distinctRoles.join(', ');
 }
 
 class FindGigsScreen extends StatefulWidget {
@@ -60,8 +87,8 @@ class _FindGigsScreenState extends State<FindGigsScreen>
   late TabController _tabController;
   final Set<String> _savedGigIds = {};
   final Set<String> _appliedGigIds = {};
-  List<GigGroup> _liveGigGroups = [];
-  List<GigGroup> _inviteGigGroups = [];
+  List<GigGroup> _substituteGigGroups = [];
+  List<GigGroup> _newMemberGigGroups = [];
   bool _isLoading = true;
 
   @override
@@ -99,16 +126,20 @@ class _FindGigsScreenState extends State<FindGigsScreen>
       });
 
       final first = reqs.first;
-      final isMulti = reqs.length > 1 || (first.requestGroupId != null && first.requestGroupId!.isNotEmpty);
+      final isFirstNewMember = first.role?.trim().toLowerCase() == 'new member';
+      final defaultFallback = isFirstNewMember ? 'New Member Request' : 'Substitute Request';
       final groupTitle = (first.bandName != null && first.bandName!.trim().isNotEmpty)
           ? first.bandName!
           : ((first.eventTitle != null && first.eventTitle!.trim().isNotEmpty)
               ? first.eventTitle!
-              : (first.role != null && first.role!.trim().isNotEmpty && first.role != 'Substitute'
+              : (first.role != null &&
+                      first.role!.trim().isNotEmpty &&
+                      first.role!.trim().toLowerCase() != 'substitute' &&
+                      first.role!.trim().toLowerCase() != 'new member'
                   ? first.role!
                   : (first.voicePart != null && first.voicePart!.trim().isNotEmpty
                       ? '${first.voicePart} Needed'
-                      : 'Substitute Request')));
+                      : defaultFallback)));
 
       DateTime earliest = DateTime(3000);
       for (final r in reqs) {
@@ -132,7 +163,6 @@ class _FindGigsScreenState extends State<FindGigsScreen>
           location: first.location,
           description: first.description,
           payDetails: firstWithPayDetails.payDetails,
-          isMultiple: isMulti,
           requests: reqs,
           earliestDate: earliest,
         ),
@@ -234,8 +264,12 @@ class _FindGigsScreenState extends State<FindGigsScreen>
       final currentUserId = appState.currentUserId;
 
       if (currentUserId != null) {
-        final applied = await appState.firebaseService.getUserAppliedSubRequestIdsAsync(currentUserId);
-        _appliedGigIds.addAll(applied);
+        try {
+          final applied = await appState.firebaseService.getUserAppliedSubRequestIdsAsync(currentUserId);
+          _appliedGigIds.addAll(applied);
+        } catch (e) {
+          debugPrint("Error fetching applied gig IDs: $e");
+        }
       }
 
       final userProfile = appState.currentUserProfile;
@@ -253,50 +287,45 @@ class _FindGigsScreenState extends State<FindGigsScreen>
       final now = DateTime.now();
       final today = DateTime(now.year, now.month, now.day);
 
-      final filteredUpcoming = list.where((gig) {
+      final List<SubRequest> upcomingSubstituteRequests = [];
+      final List<SubRequest> upcomingNewMemberRequests = [];
+
+      for (final gig in list) {
         final st = gig.status.toLowerCase();
-        if (st == 'cancelled' || st == 'deleted' || st == 'closed') return false;
+        if (st == 'cancelled' || st == 'deleted' || st == 'closed') continue;
 
         if (gig.date != null && gig.date!.trim().isNotEmpty) {
           final gigDate = _parseGigDate(gig.date);
           if (gigDate != null) {
             final gigDay = DateTime(gigDate.year, gigDate.month, gigDate.day);
-            if (gigDay.isBefore(today)) return false;
+            if (gigDay.isBefore(today)) continue;
           }
         }
 
+        final roleLower = gig.role?.trim().toLowerCase();
         final instToCheck = (gig.voicePart != null && gig.voicePart!.trim().isNotEmpty)
             ? gig.voicePart
-            : ((gig.role != null && gig.role!.trim().isNotEmpty && gig.role != 'Substitute')
+            : ((gig.role != null &&
+                    gig.role!.trim().isNotEmpty &&
+                    roleLower != 'substitute' &&
+                    roleLower != 'new member')
                 ? gig.role
                 : gig.extraFields['instrument']?.toString());
 
         if (instToCheck != null && instToCheck.trim().isNotEmpty) {
-          if (!_isInstrumentMatch(instToCheck, userInstruments)) return false;
+          if (!_isInstrumentMatch(instToCheck, userInstruments)) continue;
         }
 
-        return true;
-      }).toList();
-
-      final filteredInvites = list.where((gig) {
-        final st = gig.status.toLowerCase();
-        if (st == 'cancelled' || st == 'deleted' || st == 'closed') return false;
-
-        if (gig.date != null && gig.date!.trim().isNotEmpty) {
-          final gigDate = _parseGigDate(gig.date);
-          if (gigDate != null) {
-            final gigDay = DateTime(gigDate.year, gigDate.month, gigDate.day);
-            if (gigDay.isBefore(today)) return false;
-          }
+        if (roleLower == 'new member') {
+          upcomingNewMemberRequests.add(gig);
+        } else {
+          upcomingSubstituteRequests.add(gig);
         }
-
-        final targets = gig.targetUserIds;
-        return targets != null && currentUserId != null && targets.contains(currentUserId);
-      }).toList();
+      }
 
       setState(() {
-        _liveGigGroups = _groupSubRequests(filteredUpcoming);
-        _inviteGigGroups = _groupSubRequests(filteredInvites);
+        _substituteGigGroups = _groupSubRequests(upcomingSubstituteRequests);
+        _newMemberGigGroups = _groupSubRequests(upcomingNewMemberRequests);
       });
     } catch (e) {
       debugPrint("Error fetching sub requests: $e");
@@ -332,12 +361,19 @@ class _FindGigsScreenState extends State<FindGigsScreen>
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setModalState) {
+            final distinctSequences = group.requests.map((r) => r.eventSequence).whereType<int>().toSet();
+            final distinctDates = group.requests.map((r) => r.date).where((d) => d != null && d.trim().isNotEmpty).toSet();
+            final distinctEventIds = group.requests.map((r) => r.eventId).where((e) => e != null && e.trim().isNotEmpty).toSet();
             final distinctEventTitles = group.requests
                 .map((r) => r.eventTitle?.trim())
                 .where((t) => t != null && t.isNotEmpty)
                 .cast<String>()
                 .toSet();
-            final bool hasMultipleDistinctEvents = distinctEventTitles.length > 1;
+            final bool hasMultipleDistinctEvents = group.eventCount > 1 ||
+                distinctSequences.length > 1 ||
+                distinctDates.length > 1 ||
+                distinctEventIds.length > 1 ||
+                distinctEventTitles.length > 1;
             final String? singleEventTitle = distinctEventTitles.length == 1
                 ? distinctEventTitles.first
                 : (distinctEventTitles.isEmpty
@@ -384,21 +420,22 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                               ),
                             ),
                           ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: AppTheme.primaryAccent.withOpacity(0.15),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              group.formattedPayment,
-                              style: GoogleFonts.inter(
-                                fontSize: 11,
-                                color: AppTheme.primaryAccent,
-                                fontWeight: FontWeight.bold,
+                          if (group.isPaid && group.formattedPayment.isNotEmpty)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: AppTheme.primaryAccent.withOpacity(0.15),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                group.formattedPayment,
+                                style: GoogleFonts.inter(
+                                  fontSize: 11,
+                                  color: AppTheme.primaryAccent,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                             ),
-                          ),
                         ],
                       ),
                       const SizedBox(height: 6),
@@ -511,9 +548,9 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                         const SizedBox(height: 20),
                       ],
 
-                      // Positions List
+                      // Role / Instrument List
                       Text(
-                        'Positions (${group.requests.length})',
+                        'Role / Instrument (${group.requests.length})',
                         style: GoogleFonts.outfit(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
@@ -548,7 +585,7 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                                   children: [
                                     Row(
                                       children: [
-                                        if (req.eventSequence != null)
+                                        if (hasMultipleDistinctEvents && req.eventSequence != null)
                                           Container(
                                             margin: const EdgeInsets.only(right: 6),
                                             padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
@@ -562,7 +599,12 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                                             ),
                                           ),
                                         Text(
-                                          req.voicePart ?? 'Musician',
+                                          req.voicePart ??
+                                              ((req.role != null &&
+                                                      req.role!.trim().toLowerCase() != 'substitute' &&
+                                                      req.role!.trim().toLowerCase() != 'new member')
+                                                  ? req.role!
+                                                  : 'Musician'),
                                           style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
                                         ),
                                       ],
@@ -690,32 +732,37 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      'Find Gigs',
-                      style: GoogleFonts.outfit(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
+                    Expanded(
+                      child: Text(
+                        'Find Gigs',
+                        style: GoogleFonts.outfit(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
+                    const SizedBox(width: 8),
                     Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         if (!FeatureToggles.showMapInTopBar) ...[
                           TextButton.icon(
                             onPressed: () {
                               Navigator.pushNamed(context, '/gig-map');
                             },
-                            icon: const Icon(Icons.map_rounded, color: AppTheme.primaryAccent, size: 18),
+                            icon: const Icon(Icons.map_rounded, color: AppTheme.primaryAccent, size: 16),
                             label: Text(
                               'Map View',
                               style: GoogleFonts.inter(
                                 color: AppTheme.primaryAccent,
                                 fontWeight: FontWeight.bold,
-                                fontSize: 13,
+                                fontSize: 12,
                               ),
                             ),
                             style: TextButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                               backgroundColor: AppTheme.primaryAccent.withOpacity(0.12),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(10),
@@ -723,9 +770,9 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                               ),
                             ),
                           ),
-                          const SizedBox(width: 12),
+                          const SizedBox(width: 8),
                         ],
-                        const Icon(Icons.filter_list_rounded, color: Colors.white, size: 24),
+                        const Icon(Icons.filter_list_rounded, color: Colors.white, size: 22),
                       ],
                     ),
                   ],
@@ -737,30 +784,27 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                 indicatorColor: AppTheme.primaryAccent,
                 labelColor: Colors.white,
                 unselectedLabelColor: AppTheme.textSecondary,
-                labelStyle: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 14),
+                labelPadding: const EdgeInsets.symmetric(horizontal: 4),
+                labelStyle: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 13),
                 tabs: const [
-                  Tab(text: 'Available gigs'),
                   Tab(
                     child: FittedBox(
                       fit: BoxFit.scaleDown,
-                      child: Text.rich(
-                        TextSpan(
-                          text: 'Direct Invitations',
-                          children: [
-                            TextSpan(
-                              text: ' (Favorites List)',
-                              style: TextStyle(
-                                fontSize: 10.5,
-                                fontWeight: FontWeight.normal,
-                              ),
-                            ),
-                          ],
-                        ),
-                        maxLines: 1,
-                      ),
+                      child: Text('Substitute Requests', maxLines: 1),
                     ),
                   ),
-                  Tab(text: 'Saved'),
+                  Tab(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text('New Member Requests', maxLines: 1),
+                    ),
+                  ),
+                  Tab(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text('Saved', maxLines: 1),
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 16),
@@ -771,10 +815,12 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                     : TabBarView(
                         controller: _tabController,
                         children: [
-                          _buildGigsList(_liveGigGroups),
-                          _buildGigsList(_inviteGigGroups),
+                          _buildGigsList(_substituteGigGroups),
+                          _buildGigsList(_newMemberGigGroups),
                           _buildGigsList(
-                            _liveGigGroups.where((g) => _savedGigIds.contains(g.groupId)).toList(),
+                            [..._substituteGigGroups, ..._newMemberGigGroups]
+                                .where((g) => _savedGigIds.contains(g.groupId))
+                                .toList(),
                           ),
                         ],
                       ),
@@ -894,11 +940,20 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                           ],
                         ),
                         const SizedBox(height: 4),
+                        Text(
+                          group.requestTypeLabel,
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: group.isNewMember ? AppTheme.primaryAccent : const Color(0xFF90CAF9),
+                          ),
+                        ),
+                        const SizedBox(height: 2),
                         if (group.bandName != null && group.bandName != group.title) ...[
                           Text(
                             group.bandName!,
                             style: GoogleFonts.inter(
-                              fontSize: 14,
+                              fontSize: 13,
                               color: AppTheme.primaryAccent,
                               fontWeight: FontWeight.w500,
                             ),
@@ -933,10 +988,12 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                         const SizedBox(height: 10),
 
                         // Tags row
-                        Row(
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 6,
                           children: [
                             // Paid / Payment tag
-                            if (group.isPaid && group.formattedPayment.isNotEmpty) ...[
+                            if (group.isPaid && group.formattedPayment.isNotEmpty)
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                                 decoration: BoxDecoration(
@@ -952,19 +1009,18 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                                   ),
                                 ),
                               ),
-                              const SizedBox(width: 8),
-                            ],
 
                             // Roles tag summary
-                            if (!group.isMultiple && group.requests.isNotEmpty)
+                            if (group.roleInstrumentDisplay.isNotEmpty)
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                                 decoration: BoxDecoration(
                                   color: const Color(0xFF1E1A3A),
                                   borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: const Color(0xFF2E2A4E)),
                                 ),
                                 child: Text(
-                                  group.requests.first.voicePart ?? 'Musician',
+                                  group.roleInstrumentDisplay,
                                   style: GoogleFonts.inter(
                                     fontSize: 10,
                                     color: AppTheme.secondaryAccent,
@@ -974,8 +1030,7 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                               ),
 
                             // Direct Invite Tag
-                            if (hasDirectInvite) ...[
-                              const SizedBox(width: 8),
+                            if (hasDirectInvite)
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                                 decoration: BoxDecoration(
@@ -1000,7 +1055,6 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                                   ],
                                 ),
                               ),
-                            ],
                           ],
                         ),
                       ],

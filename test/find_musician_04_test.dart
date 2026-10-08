@@ -443,7 +443,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Change instrument of Slot 1 from Electric Guitar to Bass
-      final instrumentPicker = find.widgetWithText(InkWell, 'Instrument/Skill');
+      final instrumentPicker = find.widgetWithText(InkWell, 'Role / Instrument');
       await tester.tap(instrumentPicker);
       await tester.pumpAndSettle();
 
@@ -474,7 +474,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Change instrument of Slot 1 to Drums
-      final instrumentPicker = find.widgetWithText(InkWell, 'Instrument/Skill');
+      final instrumentPicker = find.widgetWithText(InkWell, 'Role / Instrument');
       await tester.tap(instrumentPicker);
       await tester.pumpAndSettle();
 
@@ -517,7 +517,7 @@ void main() {
       expect(find.textContaining('Gurra Guitar, Alice Bass'), findsOneWidget);
 
       // Now change instrument to Bass (which Gurra Guitar does not play)
-      final instrumentPicker = find.widgetWithText(InkWell, 'Instrument/Skill');
+      final instrumentPicker = find.widgetWithText(InkWell, 'Role / Instrument');
       await tester.tap(instrumentPicker);
       await tester.pumpAndSettle();
 

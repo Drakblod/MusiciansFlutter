@@ -519,7 +519,7 @@ void main() {
 
       // Under 03B, single-slot events omit SUBSTITUTE 1
       expect(find.text('SUBSTITUTE 1'), findsNothing);
-      expect(find.text('Instrument/Skill'), findsNWidgets(2));
+      expect(find.text('Role / Instrument'), findsNWidgets(2));
     });
 
     testWidgets('16. Adds substitute slot to specific event occurrence when + ADD SUBSTITUTE is tapped', (tester) async {
@@ -562,7 +562,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Description'), findsWidgets);
+      expect(find.text('Description (optional)'), findsWidgets);
       expect(find.textContaining('Describe what the substitute will do...'), findsNothing);
     });
 
@@ -843,7 +843,7 @@ void main() {
       await tester.tap(find.text('Nordic Stars'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Positions (2)'), findsOneWidget);
+      expect(find.text('Role / Instrument (2)'), findsOneWidget);
       expect(find.text('Event #1'), findsOneWidget);
       expect(find.text('Event #2'), findsOneWidget);
       expect(find.text('Electric Guitar'), findsOneWidget);

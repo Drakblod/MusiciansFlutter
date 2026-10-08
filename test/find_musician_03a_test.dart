@@ -355,7 +355,7 @@ void main() {
       await tester.pumpWidget(createWidgetUnderTest(eventId: null));
       await tester.pumpAndSettle();
 
-      expect(find.text('Description'), findsOneWidget);
+      expect(find.text('Description (optional)'), findsOneWidget);
       expect(find.text('Location'), findsOneWidget);
       expect(find.text('Date & Time'), findsOneWidget);
 

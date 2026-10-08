@@ -127,8 +127,8 @@ void main() {
     await tester.pump();
     await tester.pumpAndSettle();
 
-    // Check that active sub requests banner is present
-    expect(find.text('1 Active Sub Request'), findsOneWidget);
+    // Check that active requests banner is present
+    expect(find.text('1 Active Request'), findsOneWidget);
     expect(find.text('Manage'), findsOneWidget);
   });
 

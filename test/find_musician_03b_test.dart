@@ -42,6 +42,12 @@ class Mock03bFirebaseService extends Fake implements FirebaseService {
   Stream<bool> subscribeToUnreadNotifications() => const Stream.empty();
 
   @override
+  Stream<int> subscribeToUnreadNotificationCount([String? userId]) => const Stream.empty();
+
+  @override
+  Future<Set<String>> getUserAppliedSubRequestIdsAsync(String userId) async => {};
+
+  @override
   Future<void> initializePushNotifications() async {}
 
   @override
@@ -438,7 +444,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('SUBSTITUTE 1'), findsNothing);
-      expect(find.text('Instrument/Skill'), findsOneWidget);
+      expect(find.text('Role / Instrument'), findsOneWidget);
     });
 
     // 6. Adding Substitute 2 causes both substitute numbers to appear.
@@ -627,8 +633,8 @@ void main() {
       expect(find.text('Chosen Substitute'), findsOneWidget);
       expect(find.text('Gurra'), findsOneWidget);
 
-      // Verify Chosen Substitute appears below Instrument/Skill
-      final instPos = tester.getTopLeft(find.text('Instrument/Skill'));
+      // Verify Chosen Substitute appears below Role / Instrument
+      final instPos = tester.getTopLeft(find.text('Role / Instrument'));
       final chosenPos = tester.getTopLeft(find.text('Chosen Substitute'));
       expect(chosenPos.dy, greaterThan(instPos.dy));
     });
