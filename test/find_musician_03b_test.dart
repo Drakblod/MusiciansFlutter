@@ -389,7 +389,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.textContaining('EVENT 1'), findsNothing);
-      expect(find.text('Name of Event'), findsOneWidget);
+      expect(find.text('Name of Event'), findsNothing);
+      expect(find.text('Event Type'), findsOneWidget);
     });
 
     // 2. Adding Event 2 causes both Event 1 and Event 2 headings to appear.
@@ -462,8 +463,8 @@ void main() {
       await tester.tap(find.text('+ Add Substitute'));
       await tester.pumpAndSettle();
 
-      expect(find.textContaining('SUBSTITUTE 1 - "'), findsOneWidget);
-      expect(find.textContaining('SUBSTITUTE 2 - "'), findsOneWidget);
+      expect(find.text('SUBSTITUTE 1'), findsOneWidget);
+      expect(find.text('SUBSTITUTE 2'), findsOneWidget);
     });
 
     // 7. Removing Substitute 2 hides SUBSTITUTE 1 again.
@@ -478,8 +479,8 @@ void main() {
       await tester.tap(find.text('+ Add Substitute'));
       await tester.pumpAndSettle();
 
-      expect(find.textContaining('SUBSTITUTE 1 - "'), findsOneWidget);
-      expect(find.textContaining('SUBSTITUTE 2 - "'), findsOneWidget);
+      expect(find.text('SUBSTITUTE 1'), findsOneWidget);
+      expect(find.text('SUBSTITUTE 2'), findsOneWidget);
 
       // Find Remove Substitute button for the second slot
       final removeButtons = find.text('Remove Substitute');
@@ -865,7 +866,9 @@ void main() {
       await tester.pumpWidget(createWidgetUnderTest(eventId: null));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Find New Band Member(s)'));
+      await tester.tap(find.text('Substitute').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('New Member').last);
       await tester.pumpAndSettle();
 
       final favFinder = find.text('Favorites List');
@@ -889,7 +892,9 @@ void main() {
       await tester.pumpWidget(createWidgetUnderTest(eventId: null));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Find New Band Member(s)'));
+      await tester.tap(find.text('Substitute').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('New Member').last);
       await tester.pumpAndSettle();
 
       await tester.tap(find.text('Favorites List'));
@@ -915,7 +920,9 @@ void main() {
       await tester.pumpWidget(createWidgetUnderTest(eventId: null));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Find New Band Member(s)'));
+      await tester.tap(find.text('Substitute').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('New Member').last);
       await tester.pumpAndSettle();
 
       await tester.tap(find.text('Favorites List'));
@@ -951,12 +958,16 @@ void main() {
       expect(find.byType(CheckboxListTile), findsNWidgets(2));
 
       // Switch to New Member mode
-      await tester.tap(find.text('Find New Band Member(s)'));
+      await tester.tap(find.text('Substitute').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('New Member').last);
       await tester.pumpAndSettle();
       expect(find.byType(CheckboxListTile), findsNothing);
 
       // Switch back to Substitute mode
-      await tester.tap(find.text('Find Substitute(s)'));
+      await tester.tap(find.text('New Member').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Substitute').last);
       await tester.pumpAndSettle();
       expect(find.byType(CheckboxListTile), findsNWidgets(2));
     });
@@ -970,16 +981,16 @@ void main() {
       await tester.pumpWidget(createWidgetUnderTest(eventId: null));
       await tester.pumpAndSettle();
 
-      // Enter event details
-      final textFields = find.byType(TextFormField);
-      await tester.enterText(textFields.first, 'Auditions 2026');
+      // Select Event Type
       await tester.tap(find.text('Select Event Type'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Rehearsal').last);
       await tester.pumpAndSettle();
 
       // Switch to New Member mode
-      await tester.tap(find.text('Find New Band Member(s)'));
+      await tester.tap(find.text('Substitute').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('New Member').last);
       await tester.pumpAndSettle();
 
       await tester.tap(find.text('PUBLISH NEW MEMBER SEARCH'));
@@ -999,9 +1010,7 @@ void main() {
       await tester.pumpWidget(createWidgetUnderTest(eventId: null));
       await tester.pumpAndSettle();
 
-      // Fill Name and Type
-      final textFields = find.byType(TextFormField);
-      await tester.enterText(textFields.first, 'Tour Rehearsal');
+      // Select Event Type
       await tester.tap(find.text('Select Event Type'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Rehearsal').last);
@@ -1114,13 +1123,12 @@ void main() {
       await tester.pumpWidget(createWidgetUnderTest(eventId: 'event_standalone'));
       await tester.pumpAndSettle();
 
-      // Edit Name of Event
-      final textFields = find.byType(TextFormField);
-      await tester.enterText(textFields.first, 'Altered Title For Sub');
+      // Edit Location
+      await tester.enterText(find.widgetWithText(TextField, 'Enter location'), 'Altered Location For Sub');
       await tester.pumpAndSettle();
 
       // Original event in mockService must NOT be modified
-      expect(mockService.events['event_standalone']!.title, equals('Original Event Title'));
+      expect(mockService.events['event_standalone']!.location, equals('Stockholm'));
       expect(mockService.eventWriteCalls, equals(0));
     });
 
@@ -1273,7 +1281,9 @@ void main() {
       expect(find.text('Chosen Substitute'), findsNothing);
 
       // --- NEW MEMBER MODE ---
-      await tester.tap(find.text('Find New Band Member(s)'));
+      await tester.tap(find.text('Substitute').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('New Member').last);
       await tester.pumpAndSettle();
 
       // Favorites List on left, Search All on right
@@ -1360,9 +1370,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // Fill Name and Type
-      final textFields = find.byType(TextFormField);
-      await tester.enterText(textFields.first, 'Tour Rehearsal');
+      // Select Event Type
       await tester.tap(find.text('Select Event Type'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Rehearsal').last);
@@ -1442,16 +1450,12 @@ void main() {
 
       // Verifies:
       // 1. Description label, NOT About this event or About this Request
-      expect(find.text('Description'), findsOneWidget);
+      expect(find.text('Description (optional)'), findsOneWidget);
       expect(find.text('About this event'), findsNothing);
       expect(find.text('About this Request'), findsNothing);
       expect(find.text('Need a shredder for weekend show'), findsOneWidget);
 
-      // 2. Event name label and value
-      expect(find.text('Event name'), findsOneWidget);
-      expect(find.text('Rock Fest 2026'), findsOneWidget);
-
-      // 3. Paid Gig Details
+      // 2. Paid Gig Details
       expect(find.text('Details'), findsOneWidget);
       expect(find.text('Hotel included, invoice payment'), findsOneWidget);
     });
@@ -1538,16 +1542,12 @@ void main() {
       await tester.pumpWidget(createWidgetUnderTest(eventId: null));
       await tester.pumpAndSettle();
 
-      // Set event name
-      await tester.enterText(find.widgetWithText(TextField, 'Enter event name'), 'Sommarturné Gig');
-      await tester.pumpAndSettle();
-
       // Add second slot
       await tester.tap(find.text('+ Add Substitute'));
       await tester.pumpAndSettle();
 
-      expect(find.text('SUBSTITUTE 1 - "Sommarturné Gig"'), findsOneWidget);
-      expect(find.text('SUBSTITUTE 2 - "Sommarturné Gig"'), findsOneWidget);
+      expect(find.text('SUBSTITUTE 1'), findsOneWidget);
+      expect(find.text('SUBSTITUTE 2'), findsOneWidget);
       expect(find.textContaining('·'), findsNothing);
     });
 

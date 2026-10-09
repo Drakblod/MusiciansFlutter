@@ -13,6 +13,7 @@ class SubRequest {
   final String? description;
   final String? date;
   final String? role;
+  final String? requestType;
   final bool isPaid;
   final String? bandName;
   final String? rehearsalDayOfWeek;
@@ -58,6 +59,7 @@ class SubRequest {
     this.description,
     this.date,
     this.role,
+    this.requestType,
     this.isPaid = false,
     this.bandName,
     this.rehearsalDayOfWeek,
@@ -176,6 +178,8 @@ class SubRequest {
       'currency',
       'PayDetails',
       'payDetails',
+      'RequestType',
+      'requestType',
     };
 
     final Map<String, dynamic> extra = {};
@@ -199,6 +203,28 @@ class SubRequest {
     // Canonical PayAmountMinor wins if both exist; fallback to legacy PayAmount * 100
     final effectiveMinor = parsedPayAmountMinor ?? (parsedLegacyPayAmount != null ? parsedLegacyPayAmount * 100 : null);
 
+    final rawRequestType = json['RequestType']?.toString() ?? json['requestType']?.toString();
+    final rawRole = json['Role']?.toString() ?? json['role']?.toString();
+    final String derivedRequestType;
+    if (rawRequestType != null && rawRequestType.trim().isNotEmpty) {
+      final norm = rawRequestType.trim().toLowerCase();
+      if (norm == 'new member') {
+        derivedRequestType = 'New Member';
+      } else if (norm == 'other') {
+        derivedRequestType = 'Other';
+      } else {
+        derivedRequestType = 'Substitute';
+      }
+    } else {
+      // Legacy compatibility:
+      // If RequestType is missing and normalized legacy role equals new member, derive New Member. Otherwise derive Substitute.
+      if (rawRole?.trim().toLowerCase() == 'new member') {
+        derivedRequestType = 'New Member';
+      } else {
+        derivedRequestType = 'Substitute';
+      }
+    }
+
     return SubRequest(
       id: keyId,
       subRequestId: json['SubRequestId']?.toString() ?? json['subRequestId']?.toString() ?? keyId,
@@ -212,6 +238,7 @@ class SubRequest {
       description: json['Description']?.toString() ?? json['description']?.toString(),
       date: json['Date']?.toString() ?? json['date']?.toString(),
       role: json['Role']?.toString() ?? json['role']?.toString(),
+      requestType: derivedRequestType,
       isPaid: json['IsPaid'] == true || json['isPaid'] == true,
       bandName: json['BandName']?.toString() ?? json['bandName']?.toString(),
       rehearsalDayOfWeek: json['RehearsalDayOfWeek']?.toString() ?? json['rehearsalDayOfWeek']?.toString(),
@@ -267,6 +294,10 @@ class SubRequest {
     return 'Paid · $curr $formatted';
   }
 
+  String? get resolvedEventType =>
+      extraFields['eventType']?.toString() ??
+      extraFields['EventType']?.toString();
+
   Map<String, dynamic> toJson() {
     final map = <String, dynamic>{...extraFields};
     map.addAll({
@@ -281,6 +312,7 @@ class SubRequest {
       'Description': description,
       'Date': date,
       'Role': role,
+      if (requestType != null) 'RequestType': requestType,
       'IsPaid': isPaid,
       if (payAmountMinor != null) 'PayAmountMinor': payAmountMinor,
       if (currency != null) 'Currency': currency,
@@ -329,6 +361,7 @@ class SubRequest {
     String? description,
     String? date,
     String? role,
+    String? requestType,
     bool? isPaid,
     String? bandName,
     String? rehearsalDayOfWeek,
@@ -373,6 +406,7 @@ class SubRequest {
       description: description ?? this.description,
       date: date ?? this.date,
       role: role ?? this.role,
+      requestType: requestType ?? this.requestType,
       isPaid: isPaid ?? this.isPaid,
       bandName: bandName ?? this.bandName,
       rehearsalDayOfWeek: rehearsalDayOfWeek ?? this.rehearsalDayOfWeek,

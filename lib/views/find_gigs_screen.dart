@@ -48,9 +48,27 @@ class GigGroup {
     return paidReq.formattedPayAmount;
   }
 
-  bool get isNewMember => requests.any((r) => r.role?.trim().toLowerCase() == 'new member');
+  bool get isNewMember => requests.any((r) {
+    final type = r.requestType?.trim().toLowerCase();
+    if (type != null && type.isNotEmpty) {
+      return type == 'new member';
+    }
+    return r.role?.trim().toLowerCase() == 'new member';
+  });
 
-  String get requestTypeLabel => isNewMember ? 'New Member Request' : 'Substitute Request';
+  bool get isOther => requests.any((r) {
+    final type = r.requestType?.trim().toLowerCase();
+    if (type != null && type.isNotEmpty) {
+      return type == 'other';
+    }
+    return r.role?.trim().toLowerCase() == 'other';
+  });
+
+  String get requestTypeLabel {
+    if (isNewMember) return 'New Member Request';
+    if (isOther) return 'Other Request';
+    return 'Substitute Request';
+  }
 
   List<String> get distinctRoles {
     final roles = <String>{};
@@ -62,7 +80,8 @@ class GigGroup {
         if (roleLower != null &&
             roleLower.isNotEmpty &&
             roleLower != 'substitute' &&
-            roleLower != 'new member') {
+            roleLower != 'new member' &&
+            roleLower != 'other') {
           roles.add(r.role!.trim());
         } else {
           roles.add('Musician');
@@ -127,18 +146,28 @@ class _FindGigsScreenState extends State<FindGigsScreen>
 
       final first = reqs.first;
       final isFirstNewMember = first.role?.trim().toLowerCase() == 'new member';
-      final defaultFallback = isFirstNewMember ? 'New Member Request' : 'Substitute Request';
+      final defaultFallback = (first.requestType == 'New Member' || isFirstNewMember)
+          ? 'New Member Request'
+          : (first.requestType == 'Other' ? 'Other Request' : 'Substitute Request');
+
+      final titleCandidate = first.eventTitle?.trim();
+      final hasMeaningfulEventTitle = titleCandidate != null &&
+          titleCandidate.isNotEmpty &&
+          titleCandidate.toLowerCase() != 'event' &&
+          titleCandidate.toLowerCase() != 'name of event';
+
       final groupTitle = (first.bandName != null && first.bandName!.trim().isNotEmpty)
-          ? first.bandName!
-          : ((first.eventTitle != null && first.eventTitle!.trim().isNotEmpty)
-              ? first.eventTitle!
+          ? first.bandName!.trim()
+          : (hasMeaningfulEventTitle
+              ? titleCandidate
               : (first.role != null &&
                       first.role!.trim().isNotEmpty &&
                       first.role!.trim().toLowerCase() != 'substitute' &&
-                      first.role!.trim().toLowerCase() != 'new member'
-                  ? first.role!
+                      first.role!.trim().toLowerCase() != 'new member' &&
+                      first.role!.trim().toLowerCase() != 'other'
+                  ? first.role!.trim()
                   : (first.voicePart != null && first.voicePart!.trim().isNotEmpty
-                      ? '${first.voicePart} Needed'
+                      ? '${first.voicePart!.trim()} Needed'
                       : defaultFallback)));
 
       DateTime earliest = DateTime(3000);
@@ -256,6 +285,38 @@ class _FindGigsScreenState extends State<FindGigsScreen>
     return false;
   }
 
+  String _formatReqDateTime(SubRequest r) {
+    String dStr = '';
+    if (r.date != null && r.date!.trim().isNotEmpty) {
+      final parsed = DateTime.tryParse(r.date!.trim());
+      if (parsed != null) {
+        dStr = DateFormat('EEE, MMM d').format(parsed);
+      } else {
+        dStr = r.date!.trim();
+      }
+    }
+    final hasStart = r.startTime != null && r.startTime!.trim().isNotEmpty;
+    final hasEnd = r.endTime != null && r.endTime!.trim().isNotEmpty;
+    String tStr = '';
+    if (hasStart && hasEnd) {
+      tStr = '${r.startTime!.trim()} - ${r.endTime!.trim()}';
+    } else if (hasStart) {
+      tStr = r.startTime!.trim();
+    } else if (hasEnd) {
+      tStr = r.endTime!.trim();
+    }
+
+    if (dStr.isNotEmpty && tStr.isNotEmpty) {
+      return '$dStr · $tStr';
+    } else if (dStr.isNotEmpty) {
+      return dStr;
+    } else if (tStr.isNotEmpty) {
+      return tStr;
+    } else {
+      return 'Not provided';
+    }
+  }
+
   Future<void> _loadSubRequests() async {
     setState(() => _isLoading = true);
     try {
@@ -302,13 +363,17 @@ class _FindGigsScreenState extends State<FindGigsScreen>
           }
         }
 
+        final reqTypeLower = gig.requestType?.trim().toLowerCase();
         final roleLower = gig.role?.trim().toLowerCase();
+        final isNewMember = reqTypeLower == 'new member' || (reqTypeLower == null && roleLower == 'new member');
+
         final instToCheck = (gig.voicePart != null && gig.voicePart!.trim().isNotEmpty)
             ? gig.voicePart
             : ((gig.role != null &&
                     gig.role!.trim().isNotEmpty &&
                     roleLower != 'substitute' &&
-                    roleLower != 'new member')
+                    roleLower != 'new member' &&
+                    roleLower != 'other')
                 ? gig.role
                 : gig.extraFields['instrument']?.toString());
 
@@ -316,9 +381,10 @@ class _FindGigsScreenState extends State<FindGigsScreen>
           if (!_isInstrumentMatch(instToCheck, userInstruments)) continue;
         }
 
-        if (roleLower == 'new member') {
+        if (isNewMember) {
           upcomingNewMemberRequests.add(gig);
         } else {
+          // Substitute and Other belong under Substitute Requests tab
           upcomingSubstituteRequests.add(gig);
         }
       }
@@ -374,13 +440,19 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                 distinctDates.length > 1 ||
                 distinctEventIds.length > 1 ||
                 distinctEventTitles.length > 1;
-            final String? singleEventTitle = distinctEventTitles.length == 1
-                ? distinctEventTitles.first
-                : (distinctEventTitles.isEmpty
-                    ? (group.requests.isNotEmpty && group.requests.first.eventTitle?.trim().isNotEmpty == true
-                        ? group.requests.first.eventTitle!.trim()
-                        : null)
-                    : null);
+
+            String? resolvedEventType;
+            for (final r in group.requests) {
+              final ev = r.resolvedEventType;
+              if (ev != null && ev.trim().isNotEmpty) {
+                resolvedEventType = ev.trim();
+                break;
+              }
+            }
+
+            final groupDateTimeDisplay = group.requests.isNotEmpty
+                ? _formatReqDateTime(group.requests.first)
+                : 'Not provided';
 
             return ConstrainedBox(
               constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.85),
@@ -439,7 +511,7 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                         ],
                       ),
                       const SizedBox(height: 6),
-                      if (group.bandName != null) ...[
+                      if (group.bandName != null && group.bandName != group.title) ...[
                         Text(
                           group.bandName!,
                           style: GoogleFonts.inter(
@@ -451,106 +523,125 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                         const SizedBox(height: 12),
                       ],
 
-                      // Event name (for single event requests or groups where all slots share one event)
-                      if (!hasMultipleDistinctEvents && singleEventTitle != null && singleEventTitle.isNotEmpty) ...[
+                      if (group.isMultiple) ...[
                         Text(
-                          'Event name',
-                          style: GoogleFonts.inter(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: AppTheme.textSecondary,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          singleEventTitle,
-                          style: GoogleFonts.inter(
-                            fontSize: 15,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
+                          '${group.eventCount} events · ${group.totalPositions} positions (${group.filledPositions} filled)',
+                          style: GoogleFonts.inter(color: Colors.white70, fontSize: 12),
+                          overflow: TextOverflow.ellipsis,
                         ),
                         const SizedBox(height: 12),
                       ],
 
-                      // Summary info
-                      Row(
-                        children: [
-                          if (group.isMultiple) ...[
-                            Expanded(
-                              child: Text(
-                                '${group.eventCount} events · ${group.totalPositions} positions (${group.filledPositions} filled)',
-                                style: GoogleFonts.inter(color: Colors.white70, fontSize: 12),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ],
+                      const SizedBox(height: 8),
+
+                      // 1. Event Type
+                      Text(
+                        'Event Type',
+                        style: GoogleFonts.outfit(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        resolvedEventType ?? 'Not provided',
+                        style: GoogleFonts.inter(
+                          fontSize: 14,
+                          color: AppTheme.textSecondary,
+                        ),
                       ),
                       const SizedBox(height: 16),
 
-                      // Location details
+                      // 2. Request Type
+                      Text(
+                        'Request Type',
+                        style: GoogleFonts.outfit(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        group.requestTypeLabel,
+                        style: GoogleFonts.inter(
+                          fontSize: 14,
+                          color: AppTheme.textSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // 3. Location
+                      Text(
+                        'Location',
+                        style: GoogleFonts.outfit(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
                       Row(
                         children: [
-                          const Icon(Icons.location_on_outlined, color: AppTheme.textSecondary, size: 20),
-                          const SizedBox(width: 8),
+                          const Icon(Icons.location_on_outlined, color: AppTheme.textSecondary, size: 18),
+                          const SizedBox(width: 6),
                           Expanded(
                             child: Text(
-                              group.location ?? 'Stockholm, Sweden',
-                              style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
+                              (group.location != null && group.location!.trim().isNotEmpty)
+                                  ? group.location!.trim()
+                                  : 'Stockholm, Sweden',
+                              style: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 14),
                             ),
                           ),
                         ],
                       ),
                       const SizedBox(height: 16),
 
-                      // Paid Gig Details
-                      if (group.payDetails != null && group.payDetails!.trim().isNotEmpty) ...[
-                        Text(
-                          'Details',
-                          style: GoogleFonts.outfit(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          group.payDetails!,
-                          style: GoogleFonts.inter(
-                            fontSize: 14,
-                            color: AppTheme.textSecondary,
-                            height: 1.4,
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-                      ],
-
-                      // Description
-                      if (group.description != null && group.description!.isNotEmpty) ...[
-                        Text(
-                          'Description',
-                          style: GoogleFonts.outfit(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          group.description!,
-                          style: GoogleFonts.inter(
-                            fontSize: 14,
-                            color: AppTheme.textSecondary,
-                            height: 1.4,
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-                      ],
-
-                      // Role / Instrument List
+                      // 4. Date & Time
                       Text(
-                        'Role / Instrument (${group.requests.length})',
+                        'Date & Time',
+                        style: GoogleFonts.outfit(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        groupDateTimeDisplay,
+                        style: GoogleFonts.inter(
+                          fontSize: 14,
+                          color: AppTheme.textSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // 5. Description (optional)
+                      Text(
+                        'Description (optional)',
+                        style: GoogleFonts.outfit(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        (group.description != null && group.description!.trim().isNotEmpty)
+                            ? group.description!.trim()
+                            : 'Not provided',
+                        style: GoogleFonts.inter(
+                          fontSize: 14,
+                          color: AppTheme.textSecondary,
+                          height: 1.4,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // 6. Role / Instrument
+                      Text(
+                        'Role / Instrument',
                         style: GoogleFonts.outfit(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
@@ -564,9 +655,6 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                         final isCreator = currentUserId != null && (req.creatorUserId == currentUserId || req.userId == currentUserId);
                         final hasApplied = currentUserId != null && !isCreator && (req.responses.containsKey(currentUserId) || _appliedGigIds.contains(reqId));
                         final isAssigned = req.status == 'assigned' || req.assignedUserId != null;
-                        final dateStr = req.date != null
-                            ? DateFormat('EEE, MMM d').format(DateTime.tryParse(req.date!) ?? DateTime.now())
-                            : '';
 
                         return Container(
                           margin: const EdgeInsets.only(bottom: 10),
@@ -602,7 +690,8 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                                           req.voicePart ??
                                               ((req.role != null &&
                                                       req.role!.trim().toLowerCase() != 'substitute' &&
-                                                      req.role!.trim().toLowerCase() != 'new member')
+                                                      req.role!.trim().toLowerCase() != 'new member' &&
+                                                      req.role!.trim().toLowerCase() != 'other')
                                                   ? req.role!
                                                   : 'Musician'),
                                           style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
@@ -611,7 +700,7 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                                     ),
                                     const SizedBox(height: 2),
                                     Text(
-                                      '$dateStr · ${req.startTime ?? "18:00"} - ${req.endTime ?? "21:00"}',
+                                      _formatReqDateTime(req),
                                       style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
                                     ),
                                     if (req.replacedMemberName != null)
@@ -702,6 +791,51 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                           ),
                         );
                       }),
+
+                      // Paid amount & Details placed after the six requested fields
+                      if (group.isPaid || (group.payDetails != null && group.payDetails!.trim().isNotEmpty)) ...[
+                        const SizedBox(height: 10),
+                        if (group.formattedPayment.isNotEmpty) ...[
+                          Text(
+                            'Payment',
+                            style: GoogleFonts.outfit(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            group.formattedPayment,
+                            style: GoogleFonts.inter(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              color: AppTheme.primaryAccent,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                        ],
+                        if (group.payDetails != null && group.payDetails!.trim().isNotEmpty) ...[
+                          Text(
+                            'Details',
+                            style: GoogleFonts.outfit(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            group.payDetails!.trim(),
+                            style: GoogleFonts.inter(
+                              fontSize: 14,
+                              color: AppTheme.textSecondary,
+                              height: 1.4,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                        ],
+                      ],
 
                       const SizedBox(height: 20),
                     ],

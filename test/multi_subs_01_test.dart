@@ -511,8 +511,8 @@ void main() {
       await tester.tap(find.text('+ Add Substitute'));
       await tester.pumpAndSettle();
 
-      expect(find.textContaining('SUBSTITUTE 1 - "'), findsOneWidget);
-      expect(find.textContaining('SUBSTITUTE 2 - "'), findsOneWidget);
+      expect(find.textContaining('SUBSTITUTE 1'), findsOneWidget);
+      expect(find.textContaining('SUBSTITUTE 2'), findsOneWidget);
     });
 
     testWidgets('5. Slot 1 can independently choose Favorites source', (tester) async {
@@ -666,8 +666,8 @@ void main() {
       await tester.tap(find.text('+ Add Substitute'));
       await tester.pumpAndSettle();
 
-      expect(find.textContaining('SUBSTITUTE 1 - "'), findsOneWidget);
-      expect(find.textContaining('SUBSTITUTE 2 - "'), findsOneWidget);
+      expect(find.textContaining('SUBSTITUTE 1'), findsOneWidget);
+      expect(find.textContaining('SUBSTITUTE 2'), findsOneWidget);
     });
 
     testWidgets('10. Missing-participant prepopulation does not create duplicates', (tester) async {
@@ -734,7 +734,7 @@ void main() {
       await tester.tap(find.text('+ Add Substitute'));
       await tester.pumpAndSettle();
 
-      expect(find.textContaining('SUBSTITUTE 2 - "'), findsOneWidget);
+      expect(find.textContaining('SUBSTITUTE 2'), findsOneWidget);
       expect(find.text('Replacing'), findsNothing);
     });
 
@@ -1689,7 +1689,7 @@ void main() {
       expect(find.text('FIND MUSICIAN/VOCALIST'), findsOneWidget);
     });
 
-    testWidgets('34. Regression: Both mode controls (Find Substitute(s) and Find New Band Member(s)) are visible before interaction', (tester) async {
+    testWidgets('34. Regression: Request Type control is visible before interaction', (tester) async {
       final mock = MockMultiSubsFirebaseService();
       await tester.pumpWidget(createMultiSubsTestApp(
         mockService: mock,
@@ -1697,8 +1697,8 @@ void main() {
       ));
       await tester.pumpAndSettle();
 
-      expect(find.text('Find Substitute(s)'), findsOneWidget);
-      expect(find.text('Find New Band Member(s)'), findsOneWidget);
+      expect(find.text('Request Type'), findsOneWidget);
+      expect(find.text('Substitute'), findsWidgets);
     });
 
     testWidgets('35. Regression: Substitute mode opens the unified multi-slot workflow', (tester) async {
@@ -1732,8 +1732,10 @@ void main() {
       ));
       await tester.pumpAndSettle();
 
-      // Switch to Find New Band Member(s)
-      await tester.tap(find.text('Find New Band Member(s)'));
+      // Switch to New Member via Request Type dropdown
+      await tester.tap(find.text('Substitute').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('New Member').last);
       await tester.pumpAndSettle();
 
       // Substitute slot UI elements must not be present
@@ -1775,7 +1777,9 @@ void main() {
       await tester.pumpAndSettle();
 
       // Switch to Find New Band Member(s) and submit
-      await tester.tap(find.text('Find New Band Member(s)'));
+      await tester.tap(find.text('Substitute').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('New Member').last);
       await tester.pumpAndSettle();
 
       await tester.tap(find.text('PUBLISH NEW MEMBER SEARCH'));
@@ -1814,7 +1818,9 @@ void main() {
       await tester.pumpAndSettle();
 
       // Switch to Find New Band Member(s)
-      await tester.tap(find.text('Find New Band Member(s)'));
+      await tester.tap(find.text('Substitute').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('New Member').last);
       await tester.pumpAndSettle();
 
       await tester.tap(find.text('PUBLISH NEW MEMBER SEARCH'));
@@ -1849,7 +1855,8 @@ void main() {
       // Under 03B, single-slot events omit SUBSTITUTE 1
       expect(find.text('SUBSTITUTE 1'), findsNothing);
       expect(find.text('Role / Instrument'), findsOneWidget);
-      expect(find.text('Find Substitute(s)'), findsOneWidget);
+      expect(find.text('Request Type'), findsOneWidget);
+      expect(find.text('Substitute'), findsWidgets);
     });
 
     testWidgets('40. Regression: Legacy New Member request resolves to New Band Member mode', (tester) async {
@@ -1888,18 +1895,22 @@ void main() {
       // Add second slot in Substitute mode
       await tester.tap(find.text('+ Add Substitute'));
       await tester.pumpAndSettle();
-      expect(find.textContaining('SUBSTITUTE 2 - "'), findsOneWidget);
+      expect(find.textContaining('SUBSTITUTE 2'), findsOneWidget);
 
       // Switch to New Band Member(s) mode
-      await tester.tap(find.text('Find New Band Member(s)'));
+      await tester.tap(find.text('Substitute').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('New Member').last);
       await tester.pumpAndSettle();
       expect(find.text('New Band Member Recruitment'), findsOneWidget);
-      expect(find.textContaining('SUBSTITUTE 2 - "'), findsNothing);
+      expect(find.textContaining('SUBSTITUTE 2'), findsNothing);
 
       // Switch back to Substitute mode
-      await tester.tap(find.text('Find Substitute(s)'));
+      await tester.tap(find.text('New Member').last);
       await tester.pumpAndSettle();
-      expect(find.textContaining('SUBSTITUTE 2 - "'), findsOneWidget);
+      await tester.tap(find.text('Substitute').last);
+      await tester.pumpAndSettle();
+      expect(find.textContaining('SUBSTITUTE 2'), findsOneWidget);
     });
 
     testWidgets('42. Regression: New Member eligibility and notification behavior remains unchanged from pre-b7e40b2', (tester) async {
@@ -1932,11 +1943,13 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('FIND MUSICIAN/VOCALIST'), findsOneWidget);
-      expect(find.text('Find Substitute(s)'), findsOneWidget);
-      expect(find.text('Find New Band Member(s)'), findsOneWidget);
+      expect(find.text('Request Type'), findsOneWidget);
+      expect(find.text('Substitute'), findsWidgets);
 
       // Switch to New Member at 320 px
-      await tester.tap(find.text('Find New Band Member(s)'));
+      await tester.tap(find.text('Substitute').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('New Member').last);
       await tester.pumpAndSettle();
       expect(find.text('New Band Member Recruitment'), findsOneWidget);
       expect(tester.takeException(), isNull);
