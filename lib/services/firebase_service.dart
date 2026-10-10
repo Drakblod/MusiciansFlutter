@@ -2865,14 +2865,21 @@ class FirebaseService {
     'rsvpDeadline',
     'reminderIntervalHours',
     'rehearsals',
+    'externalInvitees',
+    'substituteAssignments',
+    'excludedMemberIds',
     'updatedAt',
   };
 
-  Future<String> createBandEventAsync(String bandId, BandEvent event) async {
-    final eventId =
-        event.id ??
-        _dbRef('Bands/$bandId/Events').push().key ??
+  String generateEventId(String bandId) {
+    return _dbRef('Bands/$bandId/Events').push().key ??
         DateTime.now().millisecondsSinceEpoch.toString();
+  }
+
+  Future<String> createBandEventAsync(String bandId, BandEvent event) async {
+    final eventId = (event.id != null && event.id!.isNotEmpty)
+        ? event.id!
+        : generateEventId(bandId);
     final timestamp = DateTime.now().millisecondsSinceEpoch;
     final created = BandEvent(
       id: eventId,
@@ -2897,6 +2904,9 @@ class FirebaseService {
       subEventSequence: event.subEventSequence,
       rehearsals: event.rehearsals,
       scheduleResponses: event.scheduleResponses,
+      externalInvitees: event.externalInvitees,
+      substituteAssignments: event.substituteAssignments,
+      excludedMemberIds: event.excludedMemberIds,
     );
     await _dbRef('Bands/$bandId/Events/$eventId').set(created.toJson());
     return eventId;
@@ -2908,30 +2918,14 @@ class FirebaseService {
     Map<String, dynamic> editableFields,
   ) async {
     final eventRef = _dbRef('Bands/$bandId/Events/$eventId');
-    final result = await eventRef.runTransaction((currentData) {
-      if (currentData == null) {
-        return Transaction.abort(); // Abort if event was deleted
+    final Map<String, dynamic> updateMap = {};
+    for (final key in _eventEditableWhitelist) {
+      if (editableFields.containsKey(key)) {
+        updateMap[key] = editableFields[key];
       }
-      if (currentData is Map) {
-        final Map<String, dynamic> updatedMap = Map<String, dynamic>.from(
-          currentData,
-        );
-        for (final key in _eventEditableWhitelist) {
-          if (editableFields.containsKey(key)) {
-            updatedMap[key] = editableFields[key];
-          }
-        }
-        updatedMap['updatedAt'] = DateTime.now().millisecondsSinceEpoch;
-        return Transaction.success(updatedMap);
-      }
-      return Transaction.abort();
-    });
-
-    if (!result.committed) {
-      throw Exception(
-        "Failed to update event: Event $eventId does not exist or transaction aborted.",
-      );
     }
+    updateMap['updatedAt'] = DateTime.now().millisecondsSinceEpoch;
+    await eventRef.update(updateMap);
   }
 
   Future<String> saveBandEventAsync(String bandId, BandEvent event) async {
@@ -2950,6 +2944,9 @@ class FirebaseService {
         'rsvpDeadline': event.rsvpDeadline,
         'reminderIntervalHours': event.reminderIntervalHours,
         'rehearsals': event.rehearsals.map((r) => r.toJson()).toList(),
+        'externalInvitees': event.externalInvitees.map((k, v) => MapEntry(k, v.toJson())),
+        'substituteAssignments': event.substituteAssignments.map((k, v) => MapEntry(k, v.toJson())),
+        'excludedMemberIds': event.excludedMemberIds,
       });
       return event.id!;
     }

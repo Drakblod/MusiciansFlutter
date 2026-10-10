@@ -27,6 +27,7 @@ import 'manage_events_screen.dart';
 import '../utils/band_section_utils.dart';
 import '../utils/date_parser.dart';
 import '../widgets/create_band_section_sheet.dart';
+import '../widgets/secondary_skills_badge.dart';
 
 class BandRoomChatScreen extends StatefulWidget {
   const BandRoomChatScreen({super.key});
@@ -271,13 +272,23 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
     if (userId == null) return '';
     final profile = _memberProfiles[userId];
     if (profile == null) return '';
+    if (profile.primarySkill.isNotEmpty) {
+      return profile.primarySkill;
+    }
     if (profile.mainInstrument != null && profile.mainInstrument!.isNotEmpty) {
-      return profile.mainInstrument!;
+      return profile.mainInstrument!.split(',').first.trim();
     }
     if (profile.instruments.isNotEmpty) {
       return profile.instruments.first;
     }
     return '';
+  }
+
+  List<String> _getMemberSecondarySkills(String? userId) {
+    if (userId == null) return [];
+    final profile = _memberProfiles[userId];
+    if (profile == null) return [];
+    return profile.secondarySkills;
   }
 
   void _scrollToBottom() {
@@ -924,6 +935,16 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  Text(
+                    'BAND ROOM',
+                    style: GoogleFonts.outfit(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.primaryAccent,
+                      letterSpacing: 1.5,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
                   GestureDetector(
                     onTap: () async {
                       final userId = appState.currentUserId;
@@ -1975,13 +1996,37 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                                 member.role ?? 'Member',
                                 style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
                               ),
-                              if (_getMemberInstrument(member.userId).isNotEmpty) ...[
-                                const SizedBox(height: 2),
-                                Text(
-                                  _getMemberInstrument(member.userId),
-                                  style: GoogleFonts.inter(fontSize: 11, color: AppTheme.primaryAccent, fontWeight: FontWeight.w500),
-                                ),
-                              ],
+                              Builder(
+                                builder: (context) {
+                                  final instrument = _getMemberInstrument(member.userId);
+                                  final secondary = _getMemberSecondarySkills(member.userId);
+                                  if (instrument.isEmpty && secondary.isEmpty) return const SizedBox.shrink();
+                                  return Padding(
+                                    padding: const EdgeInsets.only(top: 3),
+                                    child: Wrap(
+                                      spacing: 8,
+                                      runSpacing: 4,
+                                      crossAxisAlignment: WrapCrossAlignment.center,
+                                      children: [
+                                        if (instrument.isNotEmpty)
+                                          Text(
+                                            instrument,
+                                            style: GoogleFonts.inter(
+                                              fontSize: 11,
+                                              color: AppTheme.primaryAccent,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                        if (secondary.isNotEmpty)
+                                          SecondarySkillsBadge(
+                                            memberName: _getMemberName(member),
+                                            secondarySkills: secondary,
+                                          ),
+                                      ],
+                                    ),
+                                  );
+                                },
+                              ),
                             ],
                           ),
                         ),
@@ -2466,7 +2511,7 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
         ),
         const SizedBox(height: 10),
         SizedBox(
-          height: 100,
+          height: 114,
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
             physics: const BouncingScrollPhysics(),
@@ -2474,6 +2519,7 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
             itemBuilder: (context, index) {
               final member = _members[index];
               final instrument = _getMemberInstrument(member.userId);
+              final secondarySkills = _getMemberSecondarySkills(member.userId);
               final isOnHold = member.isOnHold;
               return GestureDetector(
                 onTap: () {
@@ -2484,9 +2530,9 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                 child: Opacity(
                   opacity: isOnHold ? 0.6 : 1.0,
                   child: Container(
-                    width: 85,
+                    width: 96,
                     margin: const EdgeInsets.only(right: 12),
-                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                    padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
                     decoration: BoxDecoration(
                       color: AppTheme.cardBackground,
                       borderRadius: BorderRadius.circular(16),
@@ -2496,7 +2542,7 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         CircleAvatar(
-                          radius: 18,
+                          radius: 17,
                           backgroundColor: isOnHold ? Colors.amber.withOpacity(0.2) : AppTheme.primaryAccent.withOpacity(0.2),
                           child: Text(
                             _getMemberInitial(member),
@@ -2507,7 +2553,7 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                             ),
                           ),
                         ),
-                        const SizedBox(height: 6),
+                        const SizedBox(height: 5),
                         Text(
                           _getMemberName(member),
                           maxLines: 1,
@@ -2536,19 +2582,29 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                               ),
                             ),
                           ),
-                        ] else if (instrument.isNotEmpty) ...[
-                          const SizedBox(height: 2),
-                          Text(
-                            instrument,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            textAlign: TextAlign.center,
-                            style: GoogleFonts.inter(
-                              fontSize: 9,
-                              color: AppTheme.primaryAccent,
-                              fontWeight: FontWeight.w500,
+                        ] else ...[
+                          if (instrument.isNotEmpty) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              instrument,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.inter(
+                                fontSize: 9,
+                                color: AppTheme.primaryAccent,
+                                fontWeight: FontWeight.w500,
+                              ),
                             ),
-                          ),
+                          ],
+                          if (secondarySkills.isNotEmpty) ...[
+                            const SizedBox(height: 3),
+                            SecondarySkillsBadge(
+                              memberName: _getMemberName(member),
+                              secondarySkills: secondarySkills,
+                              isCompact: true,
+                            ),
+                          ],
                         ],
                       ],
                     ),
@@ -2583,6 +2639,7 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
           itemBuilder: (context, index) {
             final member = _members[index];
             final instrument = _getMemberInstrument(member.userId);
+            final secondarySkills = _getMemberSecondarySkills(member.userId);
             final isOnHold = member.isOnHold;
             return Opacity(
               opacity: isOnHold ? 0.6 : 1.0,
@@ -2652,15 +2709,28 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                               ],
                             ],
                           ),
-                          if (instrument.isNotEmpty) ...[
+                          if (instrument.isNotEmpty || secondarySkills.isNotEmpty) ...[
                             const SizedBox(height: 4),
-                            Text(
-                              instrument,
-                              style: GoogleFonts.inter(
-                                fontSize: 11,
-                                color: AppTheme.primaryAccent,
-                                fontWeight: FontWeight.w500,
-                              ),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 4,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              children: [
+                                if (instrument.isNotEmpty)
+                                  Text(
+                                    instrument,
+                                    style: GoogleFonts.inter(
+                                      fontSize: 11,
+                                      color: AppTheme.primaryAccent,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                if (secondarySkills.isNotEmpty)
+                                  SecondarySkillsBadge(
+                                    memberName: _getMemberName(member),
+                                    secondarySkills: secondarySkills,
+                                  ),
+                              ],
                             ),
                           ],
                         ],

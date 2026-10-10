@@ -297,6 +297,18 @@ class _SessionDetailsScreenState extends State<SessionDetailsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Text(
+                  'SESSION DETAILS',
+                  style: GoogleFonts.outfit(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    letterSpacing: 1.5,
+                  ),
+                ),
+              ),
               // Header Category Tag
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),

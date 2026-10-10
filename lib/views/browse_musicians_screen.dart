@@ -10,6 +10,7 @@ import '../widgets/gradient_scaffold.dart';
 import '../widgets/animated_tap_detector.dart';
 import '../widgets/searchable_category_multi_select_sheet.dart';
 import '../data/skills_taxonomy.dart';
+import '../widgets/secondary_skills_badge.dart';
 
 class BrowseMusiciansScreen extends StatefulWidget {
   final bool favoritesOnly;
@@ -829,15 +830,28 @@ class _BrowseMusiciansScreenState extends State<BrowseMusiciansScreen> {
                         ],
                       ),
                       const SizedBox(height: 2),
-                      Text(
-                        user.mainSkillsSubtitle,
-                        style: GoogleFonts.inter(
-                          fontSize: 13,
-                          color: AppTheme.primaryAccent,
-                          fontWeight: FontWeight.w500,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                      Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 6,
+                        runSpacing: 4,
+                        children: [
+                          Text(
+                            user.primarySkill.isNotEmpty
+                                ? user.primarySkill
+                                : user.mainSkillsSubtitle,
+                            style: GoogleFonts.inter(
+                              fontSize: 13,
+                              color: AppTheme.primaryAccent,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          if (user.hasSecondarySkills)
+                            SecondarySkillsBadge(
+                              memberName: user.displayName ?? '',
+                              secondarySkills: user.secondarySkills,
+                              isCompact: true,
+                            ),
+                        ],
                       ),
                       const SizedBox(height: 6),
                       Row(

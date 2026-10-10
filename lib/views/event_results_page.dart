@@ -578,6 +578,18 @@ class _EventResultsPageState extends State<EventResultsPage> {
       child: ListView(
         padding: const EdgeInsets.all(20),
         children: [
+          Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: Text(
+              'EVENT RESULTS',
+              style: GoogleFonts.outfit(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+                letterSpacing: 1.5,
+              ),
+            ),
+          ),
           // Linked Occurrences Switcher if multiple parts exist
           if (_linkedSubEvents.length > 1)
             Container(

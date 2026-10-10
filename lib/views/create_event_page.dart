@@ -7,6 +7,7 @@ import '../theme/app_theme.dart';
 import '../models/band_event.dart';
 import '../models/band.dart';
 import '../models/user_profile.dart';
+import '../models/sub_request.dart';
 import '../widgets/gradient_scaffold.dart';
 import '../widgets/custom_top_bar.dart';
 import '../widgets/animated_tap_detector.dart';
@@ -830,7 +831,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                           children: [
                             Flexible(
                               child: Text(
-                                'EDIT BAND MEMBERS',
+                                'EDIT BAND MEMBERS (& SUBS)',
                                 style: GoogleFonts.outfit(
                                   fontSize: 13,
                                   fontWeight: FontWeight.bold,
@@ -1293,8 +1294,93 @@ class _CreateEventPageState extends State<CreateEventPage> {
           ? publishedAt + (_reminderIntervalHours * 3600 * 1000)
           : null;
 
+      final nowMs = DateTime.now().millisecondsSinceEpoch;
+      final creatorId = appState.currentUserId ?? '';
+      final eventId = (_existingEventId != null && _existingEventId!.isNotEmpty)
+          ? _existingEventId!
+          : appState.firebaseService.generateEventId(widget.bandId);
+
+      // Pre-process any new subs in _externalInvitees so subRequestId is linked immediately
+      final Map<String, ExternalInvitee> updatedInvitees = Map.from(_externalInvitees);
+      final List<SubRequest> newSubRequests = [];
+
+      if (_externalInvitees.isNotEmpty) {
+        final bandInfo = await appState.firebaseService.getBandInfoAsync(widget.bandId);
+        final effectiveBandName = bandInfo?.name ?? appState.activeBandName ?? 'Band';
+
+        for (final entry in _externalInvitees.entries) {
+          final uid = entry.key;
+          final invitee = entry.value;
+
+          // Skip if a subRequestId is already linked
+          if (invitee.subRequestId != null && invitee.subRequestId!.isNotEmpty) {
+            continue;
+          }
+
+          final profile = _memberProfiles[uid];
+          final subReqId = 'sub_${widget.bandId}_${eventId}_${uid}_$nowMs';
+          final instrument = (invitee.instrument != null && invitee.instrument!.trim().isNotEmpty && invitee.instrument != 'Sub')
+              ? invitee.instrument!.trim()
+              : (profile?.primarySkill.isNotEmpty == true
+                  ? profile!.primarySkill
+                  : (profile?.mainInstrument != null && profile!.mainInstrument!.trim().isNotEmpty
+                      ? profile.mainInstrument!.split(',').first.trim()
+                      : (profile?.instruments.isNotEmpty == true
+                          ? profile!.instruments.first
+                          : (profile?.userType != null && profile!.userType!.trim().isNotEmpty
+                              ? profile.userType!.trim()
+                              : (invitee.instrument ?? 'Musician')))));
+
+          final startTimeStr = '${_startTime.hour.toString().padLeft(2, '0')}:${_startTime.minute.toString().padLeft(2, '0')}';
+          final endTimeStr = '${_endTime.hour.toString().padLeft(2, '0')}:${_endTime.minute.toString().padLeft(2, '0')}';
+          final eventTitleStr = _titleController.text.trim().isNotEmpty ? _titleController.text.trim() : effectiveBandName;
+
+          final subReq = SubRequest(
+            id: subReqId,
+            subRequestId: subReqId,
+            slotId: subReqId,
+            eventId: eventId,
+            eventTitle: eventTitleStr,
+            bandId: widget.bandId,
+            bandName: effectiveBandName,
+            creatorUserId: creatorId,
+            userId: creatorId,
+            role: 'Substitute',
+            requestType: 'Substitute',
+            voicePart: instrument,
+            description: _descriptionController.text.trim().isNotEmpty
+                ? _descriptionController.text.trim()
+                : eventTitleStr,
+            date: start.toIso8601String(),
+            startTime: startTimeStr,
+            endTime: endTimeStr,
+            location: _locationController.text.trim(),
+            status: 'published',
+            searchSource: 'favorites',
+            targetUserIds: [uid],
+            createdAt: nowMs,
+            extraFields: {
+              'eventType': _eventType,
+            },
+          );
+
+          newSubRequests.add(subReq);
+
+          updatedInvitees[uid] = ExternalInvitee(
+            userId: uid,
+            displayName: invitee.displayName,
+            instrument: instrument,
+            status: invitee.status,
+            invitedAt: invitee.invitedAt,
+            source: 'subRequest',
+            subRequestId: subReqId,
+            comment: invitee.comment,
+          );
+        }
+      }
+
       final newEvent = BandEvent(
-        id: _existingEventId,
+        id: eventId,
         title: _titleController.text.trim(),
         description: _descriptionController.text.trim(),
         eventType: _eventType,
@@ -1314,20 +1400,53 @@ class _CreateEventPageState extends State<CreateEventPage> {
                 : {}),
         rehearsals: _rehearsals,
         excludedMemberIds: _excludedMemberIds.toList(),
-        externalInvitees: _externalInvitees,
+        externalInvitees: updatedInvitees,
         substituteAssignments: widget.existingEvent?.substituteAssignments ?? {},
       );
 
-      final eventId = await appState.firebaseService.saveBandEventAsync(widget.bandId, newEvent);
+      final savedEventId = await appState.firebaseService.saveBandEventAsync(widget.bandId, newEvent);
 
       if (_createEventRoom && (_existingEventId == null || _existingEventId!.isEmpty)) {
-        final creatorId = appState.currentUserId ?? '';
         await appState.firebaseService.createTemporaryEventRoomAsync(
           bandId: widget.bandId,
-          eventId: eventId,
+          eventId: savedEventId,
           roomName: '${newEvent.title} Chat',
           createdBy: creatorId,
         );
+      }
+
+      // Publish targeted subrequests via publishSubRequestGroupAsync
+      if (newSubRequests.isNotEmpty) {
+        final bandInfo = await appState.firebaseService.getBandInfoAsync(widget.bandId);
+        final effectiveBandName = bandInfo?.name ?? appState.activeBandName ?? 'Band';
+        final requestGroupId = 'reqgrp_${widget.bandId}_${savedEventId}_$nowMs';
+        try {
+          await appState.firebaseService.publishSubRequestGroupAsync(
+            bandId: widget.bandId,
+            requestGroupId: requestGroupId,
+            requests: newSubRequests,
+            bandName: effectiveBandName,
+          );
+        } catch (e) {
+          debugPrint('[CreateEventPage] Error publishing subrequests: $e');
+        }
+      }
+
+      // Cleanup subrequests if existing event had subs removed
+      if (widget.existingEvent != null) {
+        final creatorId = appState.currentUserId ?? '';
+        for (final entry in widget.existingEvent!.externalInvitees.entries) {
+          if (!_externalInvitees.containsKey(entry.key)) {
+            final oldSubReqId = entry.value.subRequestId;
+            if (oldSubReqId != null && oldSubReqId.isNotEmpty) {
+              try {
+                await appState.firebaseService.deleteSubRequestAsync(creatorId, oldSubReqId);
+              } catch (e) {
+                debugPrint('[CreateEventPage] Error deleting removed subrequest $oldSubReqId: $e');
+              }
+            }
+          }
+        }
       }
 
       if (mounted) {
@@ -1953,83 +2072,6 @@ class _AddEventGuestSheetState extends State<_AddEventGuestSheet> {
     super.dispose();
   }
 
-  void _showAddCustomGuestDialog() {
-    final nameController = TextEditingController();
-    final instrumentController = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (ctx) {
-        return AlertDialog(
-          backgroundColor: const Color(0xFF16132D),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-            side: const BorderSide(color: Color(0xFF2E2A4E)),
-          ),
-          title: Text(
-            'Add External Sub',
-            style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold),
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'Add a substitute musician who is not registered in the app.',
-                style: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 12),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: nameController,
-                style: GoogleFonts.inter(color: Colors.white),
-                decoration: const InputDecoration(
-                  labelText: 'Name',
-                  hintText: 'e.g. Maria Svensson',
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: instrumentController,
-                style: GoogleFonts.inter(color: Colors.white),
-                decoration: const InputDecoration(
-                  labelText: 'Instrument / Role',
-                  hintText: 'e.g. Saxophone, Guest Vocalist',
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: Text('Cancel', style: GoogleFonts.inter(color: AppTheme.textSecondary)),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryAccent),
-              onPressed: () {
-                final name = nameController.text.trim();
-                final inst = instrumentController.text.trim();
-                if (name.isEmpty) return;
-
-                final customId = 'guest_${DateTime.now().millisecondsSinceEpoch}';
-                final invitee = ExternalInvitee(
-                  userId: customId,
-                  displayName: name,
-                  instrument: inst.isNotEmpty ? inst : 'Sub',
-                  status: 'pending',
-                  invitedAt: DateTime.now().millisecondsSinceEpoch,
-                  source: 'eventCustomInvitee',
-                );
-
-                widget.onGuestAdded(invitee, null);
-                Navigator.pop(ctx); // Close dialog
-                Navigator.pop(context); // Close sheet
-              },
-              child: Text('Add Sub', style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold)),
-            ),
-          ],
-        );
-      },
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -2116,38 +2158,7 @@ class _AddEventGuestSheetState extends State<_AddEventGuestSheet> {
               ),
               onChanged: (val) => setState(() => _searchQuery = val),
             ),
-            const SizedBox(height: 12),
-
-            // Button to add non-registered guest
-            InkWell(
-              onTap: _showAddCustomGuestDialog,
-              borderRadius: BorderRadius.circular(8),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.purple.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.purple.withOpacity(0.3)),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.person_add_alt_1, color: Colors.purpleAccent, size: 16),
-                    const SizedBox(width: 8),
-                    Text(
-                      '+ Add External / Non-registered Sub',
-                      style: GoogleFonts.inter(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.purpleAccent,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
             const SizedBox(height: 14),
-
             Text(
               'REGISTERED MUSICIANS (${filteredUsers.length})',
               style: GoogleFonts.outfit(
@@ -2276,13 +2287,22 @@ class _AddEventGuestSheetState extends State<_AddEventGuestSheet> {
                                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                   ),
                                   onPressed: () {
+                                    final resolvedInst = user.primarySkill.isNotEmpty
+                                        ? user.primarySkill
+                                        : (user.mainInstrument != null && user.mainInstrument!.trim().isNotEmpty
+                                            ? user.mainInstrument!.split(',').first.trim()
+                                            : (user.instruments.isNotEmpty
+                                                ? user.instruments.first.trim()
+                                                : (user.userType != null && user.userType!.trim().isNotEmpty
+                                                    ? user.userType!.trim()
+                                                    : (inst.isNotEmpty ? inst : 'Musician'))));
                                     final invitee = ExternalInvitee(
                                       userId: uid,
                                       displayName: name,
-                                      instrument: inst,
+                                      instrument: resolvedInst,
                                       status: 'pending',
                                       invitedAt: DateTime.now().millisecondsSinceEpoch,
-                                      source: 'eventCustomInvitee',
+                                      source: 'subRequest',
                                     );
                                     setState(() {
                                       _addedUserIds.add(uid);

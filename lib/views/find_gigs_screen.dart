@@ -686,15 +686,18 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                                               style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.bold, color: AppTheme.primaryAccent),
                                             ),
                                           ),
-                                        Text(
-                                          req.voicePart ??
-                                              ((req.role != null &&
-                                                      req.role!.trim().toLowerCase() != 'substitute' &&
-                                                      req.role!.trim().toLowerCase() != 'new member' &&
-                                                      req.role!.trim().toLowerCase() != 'other')
-                                                  ? req.role!
-                                                  : 'Musician'),
-                                          style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
+                                        Expanded(
+                                          child: Text(
+                                            req.voicePart ??
+                                                ((req.role != null &&
+                                                        req.role!.trim().toLowerCase() != 'substitute' &&
+                                                        req.role!.trim().toLowerCase() != 'new member' &&
+                                                        req.role!.trim().toLowerCase() != 'other')
+                                                    ? req.role!
+                                                    : 'Musician'),
+                                            style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
                                         ),
                                       ],
                                     ),

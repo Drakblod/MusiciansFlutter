@@ -92,10 +92,11 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> with SingleTick
         setState(() {
           _userBands = bands;
           _userRoles = roles;
-          if (_selectedBandId != null && !bands.containsKey(_selectedBandId)) {
+          if (widget.initialBandId != null && bands.containsKey(widget.initialBandId)) {
+            _selectedBandId = widget.initialBandId;
+          } else {
+            // Standalone Events view always defaults to All Bands (null) so no events or requests are hidden
             _selectedBandId = null;
-          } else if (_selectedBandId == null && appState.activeBandId != null && bands.containsKey(appState.activeBandId)) {
-            _selectedBandId = appState.activeBandId;
           }
         });
       }

@@ -61,6 +61,18 @@ class _SubRequestDetailsScreenState extends State<SubRequestDetailsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: Text(
+                'GIG DETAILS',
+                style: GoogleFonts.outfit(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                  letterSpacing: 1.5,
+                ),
+              ),
+            ),
             // Band name & Instrument/Role Title Card
             Container(
               width: double.infinity,

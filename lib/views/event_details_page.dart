@@ -525,6 +525,18 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
           controller: _scrollController,
           padding: const EdgeInsets.all(20),
           children: [
+            Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: Text(
+                'EVENT DETAILS',
+                style: GoogleFonts.outfit(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                  letterSpacing: 1.5,
+                ),
+              ),
+            ),
             // Finalized / Locked Banner
             if (event.isLocked) ...[
               Container(

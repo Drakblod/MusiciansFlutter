@@ -10,6 +10,7 @@ import '../widgets/custom_top_bar.dart';
 import '../widgets/animated_tap_detector.dart';
 import '../widgets/searchable_category_multi_select_sheet.dart';
 import '../data/genres_taxonomy.dart';
+import '../widgets/secondary_skills_badge.dart';
 import 'band_room_chat_screen.dart';
 
 class EditBandInfoScreen extends StatefulWidget {
@@ -308,10 +309,24 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
   String _getMemberInstrument(String? userId) {
     if (userId == null) return '';
     final profile = _memberProfiles[userId];
-    if (profile != null && profile.instruments.isNotEmpty) {
-      return profile.instruments.join(', ');
+    if (profile == null) return '';
+    if (profile.primarySkill.isNotEmpty) {
+      return profile.primarySkill;
+    }
+    if (profile.mainInstrument != null && profile.mainInstrument!.isNotEmpty) {
+      return profile.mainInstrument!.split(',').first.trim();
+    }
+    if (profile.instruments.isNotEmpty) {
+      return profile.instruments.first;
     }
     return '';
+  }
+
+  List<String> _getMemberSecondarySkills(String? userId) {
+    if (userId == null) return [];
+    final profile = _memberProfiles[userId];
+    if (profile == null) return [];
+    return profile.secondarySkills;
   }
 
   String _getMemberInitial(BandMember member) {
@@ -533,6 +548,7 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
               itemBuilder: (context, index) {
                 final member = _members[index];
                 final instrument = _getMemberInstrument(member.userId);
+                final secondarySkills = _getMemberSecondarySkills(member.userId);
                 final isSelf = member.userId == currentUserId;
                 final isOnHold = member.isOnHold;
 
@@ -631,18 +647,27 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
                                       ),
                                     ),
                                   ],
-                                  if (instrument.isNotEmpty) ...[
+                                  if (instrument.isNotEmpty || secondarySkills.isNotEmpty) ...[
                                     const SizedBox(width: 8),
-                                    Expanded(
-                                      child: Text(
-                                        instrument,
-                                        style: GoogleFonts.inter(
-                                          fontSize: 11,
-                                          color: AppTheme.textSecondary,
+                                    if (instrument.isNotEmpty)
+                                      Flexible(
+                                        child: Text(
+                                          instrument,
+                                          style: GoogleFonts.inter(
+                                            fontSize: 11,
+                                            color: AppTheme.textSecondary,
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
                                         ),
-                                        overflow: TextOverflow.ellipsis,
                                       ),
-                                    ),
+                                    if (secondarySkills.isNotEmpty) ...[
+                                      const SizedBox(width: 6),
+                                      SecondarySkillsBadge(
+                                        memberName: _getMemberName(member),
+                                        secondarySkills: secondarySkills,
+                                        isCompact: true,
+                                      ),
+                                    ],
                                   ],
                                 ],
                               ),

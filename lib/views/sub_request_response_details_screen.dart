@@ -479,6 +479,16 @@ class _SubRequestResponseDetailsScreenState
             children: [
               const SizedBox(height: 8),
               Text(
+                'CANDIDATES & RESPONSES',
+                style: GoogleFonts.outfit(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: AppTheme.primaryAccent,
+                  letterSpacing: 1.5,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
                 _headerTitle,
                 style: GoogleFonts.outfit(
                   fontSize: 20,

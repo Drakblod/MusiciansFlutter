@@ -505,6 +505,16 @@ class _BandSectionChatScreenState extends State<BandSectionChatScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
+                                'SECTION CHAT',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppTheme.primaryAccent,
+                                  letterSpacing: 1.2,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
                                 groupName,
                                 style: GoogleFonts.outfit(
                                   fontSize: 16,

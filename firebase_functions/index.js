@@ -431,8 +431,10 @@ exports.onSubRequestGroupPublished = onValueCreated({
         const targetUserIds = slot.targetUserIds || [];
 
         let isEligible = false;
-        if (searchSource === 'favorites') {
-          isEligible = Array.isArray(targetUserIds) && targetUserIds.includes(userId);
+        if (Array.isArray(targetUserIds) && targetUserIds.length > 0) {
+          isEligible = targetUserIds.includes(userId);
+        } else if (searchSource === 'favorites') {
+          isEligible = false;
         } else {
           isEligible = userType === voicePart || instruments.includes(voicePart);
         }
@@ -754,10 +756,12 @@ exports.publishSubRequestGroup = onCall({ region: 'europe-west1' }, async (reque
       const rawTargetUserIds = slot.targetUserIds || slot.TargetUserIds || [];
 
       let isEligible = false;
-      if (searchSource === 'favorites') {
+      if (Array.isArray(rawTargetUserIds) && rawTargetUserIds.length > 0) {
+        isEligible = rawTargetUserIds.includes(userId);
+      } else if (searchSource === 'favorites') {
         // Enforce that target user is genuinely in the caller's favorites list
         const isVerifiedFavorite = callerFavorites[userId] === true || callerFavorites[userId] === 'true';
-        isEligible = isVerifiedFavorite && Array.isArray(rawTargetUserIds) && rawTargetUserIds.includes(userId);
+        isEligible = isVerifiedFavorite;
       } else {
         isEligible = matchesInstrument(voicePart, userSkills);
       }

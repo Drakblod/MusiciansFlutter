@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:musicians_flutter/models/band.dart';
 import 'package:musicians_flutter/models/band_event.dart';
 import 'package:musicians_flutter/models/user_profile.dart';
+import 'package:musicians_flutter/models/sub_request.dart';
 import 'package:musicians_flutter/providers/app_state.dart';
 import 'package:musicians_flutter/services/firebase_service.dart';
 import 'package:musicians_flutter/views/create_event_page.dart';
@@ -23,6 +24,36 @@ class MockFirebaseService extends Fake implements FirebaseService {
   ];
 
   BandEvent? lastSavedEvent;
+  final List<SubRequest> savedSubRequests = [];
+
+  @override
+  Future<Band?> getBandInfoAsync(String bandId) async => Band(id: bandId, name: 'Test Band');
+
+  @override
+  String generateEventId(String bandId) => 'event_123';
+
+  @override
+  Future<List<String>> publishSubRequestGroupAsync({
+    required String? bandId,
+    required String requestGroupId,
+    required List<SubRequest> requests,
+    String? bandName,
+  }) async {
+    savedSubRequests.addAll(requests);
+    return requests.map((r) => r.id ?? 'sub_id').toList();
+  }
+
+  @override
+  Future<List<String>> saveSubRequestsBatchAsync(List<SubRequest> requests) async {
+    savedSubRequests.addAll(requests);
+    return requests.map((r) => r.id ?? 'sub_id').toList();
+  }
+
+  @override
+  Future<void> updateBandEventAsync(String bandId, String eventId, Map<String, dynamic> editableFields) async {}
+
+  @override
+  Future<bool> deleteSubRequestAsync(String creatorId, String subRequestId) async => true;
 
   @override
   Future<String?> getUserBandRoleAsync(String bandId, String userId) async => 'leader';
@@ -48,10 +79,7 @@ class MockFirebaseService extends Fake implements FirebaseService {
   Stream<List<BandEvent>> subscribeToBandEvents(String bandId) => const Stream.empty();
 
   @override
-  Stream<BandEvent?> subscribeToEvent(String bandId, String eventId) => const Stream.empty();
-
-  @override
-  Stream<List<BandMember>> subscribeToBandMembers(String bandId) => Stream.value(mockMembers);
+  Stream<BandEvent?> subscribeToBandEvent(String bandId, String eventId) => const Stream.empty();
 
   @override
   Future<String> saveBandEventAsync(String bandId, BandEvent event) async {
@@ -155,11 +183,11 @@ void main() {
       await tester.pumpAndSettle();
 
       // Check for expandable Edit Band Members card
-      expect(find.text('EDIT BAND MEMBERS'), findsOneWidget);
+      expect(find.text('EDIT BAND MEMBERS (& SUBS)'), findsOneWidget);
       expect(find.text('3/3 Included'), findsOneWidget);
 
       // Tap on the header to expand
-      await tester.tap(find.text('EDIT BAND MEMBERS'));
+      await tester.tap(find.text('EDIT BAND MEMBERS (& SUBS)'));
       await tester.pumpAndSettle();
 
       // Now sub-sections should be visible
@@ -189,7 +217,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Expand card
-      await tester.tap(find.text('EDIT BAND MEMBERS'));
+      await tester.tap(find.text('EDIT BAND MEMBERS (& SUBS)'));
       await tester.pumpAndSettle();
 
       // Find switches - first 3 are members (Alice, Bob, Charlie), 4th is Create Event Chat
@@ -236,7 +264,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Expand card
-      await tester.tap(find.text('EDIT BAND MEMBERS'));
+      await tester.tap(find.text('EDIT BAND MEMBERS (& SUBS)'));
       await tester.pumpAndSettle();
 
       // Tap + Add Sub
@@ -245,7 +273,7 @@ void main() {
 
       // Check sheet opened with Dave Bass (u4)
       expect(find.text('Add Sub for this Event'), findsOneWidget);
-      expect(find.text('+ Add External / Non-registered Sub'), findsOneWidget);
+      expect(find.text('+ Add External / Non-registered Sub'), findsNothing);
       expect(find.text('Dave Bass'), findsOneWidget);
       expect(find.text('+ Add'), findsOneWidget);
 
@@ -276,6 +304,15 @@ void main() {
       expect(appState.mockFirebase.lastSavedEvent, isNotNull);
       expect(appState.mockFirebase.lastSavedEvent!.externalInvitees.containsKey('u4'), true);
       expect(appState.mockFirebase.lastSavedEvent!.externalInvitees['u4']?.displayName, 'Dave Bass');
+      expect(appState.mockFirebase.lastSavedEvent!.externalInvitees['u4']?.subRequestId, isNotNull);
+      expect(appState.mockFirebase.lastSavedEvent!.externalInvitees['u4']?.source, 'subRequest');
+      expect(appState.mockFirebase.savedSubRequests, isNotEmpty);
+      final sub = appState.mockFirebase.savedSubRequests.first;
+      expect(sub.targetUserIds, contains('u4'));
+      expect(sub.role, 'Substitute');
+      expect(sub.requestType, 'Substitute');
+      expect(sub.voicePart, 'Bass');
+      expect(sub.eventId, 'event_123');
     });
 
     testWidgets('Date range is automatically derived from sub-events/rehearsals', (tester) async {

@@ -9,6 +9,7 @@ import '../widgets/animated_tap_detector.dart';
 import '../widgets/custom_top_bar.dart';
 import '../widgets/gradient_scaffold.dart';
 import '../widgets/audio_snippet_player.dart';
+import '../widgets/secondary_skills_badge.dart';
 import 'edit_band_info_screen.dart';
 
 class ProfileTabScreen extends StatefulWidget {
@@ -169,9 +170,11 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                           ),
                           const SizedBox(height: 4),
 
-                          // Role / Main Skills
+                          // Role / Primary Skill
                           Text(
-                            user.mainSkillsSubtitle,
+                            user.primarySkill.isNotEmpty
+                                ? user.primarySkill
+                                : user.mainSkillsSubtitle,
                             textAlign: TextAlign.center,
                             style: GoogleFonts.inter(
                               fontSize: 14,
@@ -179,6 +182,13 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                               fontWeight: FontWeight.w600,
                             ),
                           ),
+                          if (user.hasSecondarySkills) ...[
+                            const SizedBox(height: 6),
+                            SecondarySkillsBadge(
+                              memberName: user.displayName ?? '',
+                              secondarySkills: user.secondarySkills,
+                            ),
+                          ],
                           const SizedBox(height: 8),
 
                           // Location
@@ -444,26 +454,9 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
           ),
           const SizedBox(height: 8),
           if (user.secondarySkills.isNotEmpty)
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: user.secondarySkills.map((skill) {
-                return Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1E1A3A),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
-                  ),
-                  child: Text(
-                    skill,
-                    style: GoogleFonts.inter(
-                      fontSize: 12,
-                      color: Colors.white70,
-                    ),
-                  ),
-                );
-              }).toList(),
+            SecondarySkillsBadge(
+              memberName: user.displayName ?? '',
+              secondarySkills: user.secondarySkills,
             )
           else
             Text(

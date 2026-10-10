@@ -9,6 +9,7 @@ import '../widgets/gradient_scaffold.dart';
 import '../widgets/custom_top_bar.dart';
 import '../widgets/animated_tap_detector.dart';
 import '../widgets/audio_snippet_player.dart';
+import '../widgets/secondary_skills_badge.dart';
 
 class MusicianProfileScreen extends StatefulWidget {
   final UserProfile musician;
@@ -142,6 +143,18 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
               ),
               child: Column(
                 children: [
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: Text(
+                      isMe ? 'MY PROFILE' : 'MUSICIAN PROFILE',
+                      style: GoogleFonts.outfit(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.primaryAccent,
+                        letterSpacing: 1.5,
+                      ),
+                    ),
+                  ),
                   // Profile Photo / Visual Hero
                   Container(
                     width: 110,
@@ -205,9 +218,11 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
                   ),
                   const SizedBox(height: 4),
 
-                  // Role / Primary Skills
+                  // Role / Primary Skill
                   Text(
-                    widget.musician.mainSkillsSubtitle,
+                    widget.musician.primarySkill.isNotEmpty
+                        ? widget.musician.primarySkill
+                        : widget.musician.mainSkillsSubtitle,
                     textAlign: TextAlign.center,
                     style: GoogleFonts.inter(
                       fontSize: 15,
@@ -215,6 +230,13 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
                       fontWeight: FontWeight.w600,
                     ),
                   ),
+                  if (widget.musician.hasSecondarySkills) ...[
+                    const SizedBox(height: 6),
+                    SecondarySkillsBadge(
+                      memberName: widget.musician.displayName ?? '',
+                      secondarySkills: widget.musician.secondarySkills,
+                    ),
+                  ],
                   const SizedBox(height: 6),
 
                   // Location
@@ -401,32 +423,9 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
                   ),
                   const SizedBox(height: 8),
                   if (widget.musician.secondarySkills.isNotEmpty)
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: widget.musician.secondarySkills.map((skill) {
-                        return Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF1E1A3A),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: const Color(0xFF2E2A4E),
-                              width: 1,
-                            ),
-                          ),
-                          child: Text(
-                            skill,
-                            style: GoogleFonts.inter(
-                              fontSize: 12,
-                              color: Colors.white70,
-                            ),
-                          ),
-                        );
-                      }).toList(),
+                    SecondarySkillsBadge(
+                      memberName: widget.musician.displayName ?? '',
+                      secondarySkills: widget.musician.secondarySkills,
                     )
                   else
                     Text(

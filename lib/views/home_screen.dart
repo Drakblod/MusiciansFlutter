@@ -545,7 +545,7 @@ class HomeScreen extends StatelessWidget {
       HomeActionItem(
         id: 'create_event',
         icon: Icons.event_available_rounded,
-        title: 'Create Event',
+        title: 'Events',
         subtitle: 'Create a band event or collaboration session',
         onTap: () {
           appState.trackButtonClick('create_event');
@@ -708,7 +708,7 @@ class HomeScreen extends StatelessWidget {
                   child: Padding(
                     padding: const EdgeInsets.only(bottom: 10, right: 10),
                     child: Text(
-                      '2.68',
+                      '2.69',
                       style: GoogleFonts.inter(
                         color: AppTheme.textSecondary.withOpacity(0.5),
                         fontSize: 12,
@@ -1386,7 +1386,7 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
       case 'band_room':
         return 'Band Room';
       case 'create_event':
-        return 'Create Event';
+        return 'Events';
       case 'marketplace':
         return 'Market';
       case 'collabs':
@@ -1723,7 +1723,7 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
       HomeActionItem(
         id: 'create_event',
         icon: Icons.event_available_rounded,
-        title: 'Create Event',
+        title: 'Events',
         subtitle: 'Create a band event or collaboration session',
         onTap: () async {
           await HomeUsageTracker.incrementClick('create_event');
@@ -1962,7 +1962,7 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
                                 }
                               },
                               child: Text(
-                                '2.68',
+                                '2.69',
                                 style: GoogleFonts.inter(
                                   color: AppTheme.textSecondary.withOpacity(0.5),
                                   fontSize: 12,

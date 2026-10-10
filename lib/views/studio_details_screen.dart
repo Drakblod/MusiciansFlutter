@@ -80,6 +80,18 @@ class _StudioDetailsScreenState extends State<StudioDetailsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Text(
+                  'STUDIO DETAILS',
+                  style: GoogleFonts.outfit(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    letterSpacing: 1.5,
+                  ),
+                ),
+              ),
               // Header Category Label
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),

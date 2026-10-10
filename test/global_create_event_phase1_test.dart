@@ -113,7 +113,7 @@ void main() {
       expect(resetClicks['create_event'], equals(0));
     });
 
-    testWidgets('3. Create Event action is visible on Home View and opens two-choice launcher', (WidgetTester tester) async {
+    testWidgets('3. Events action is visible on Home View and opens two-choice launcher', (WidgetTester tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() => tester.view.resetPhysicalSize());
@@ -123,13 +123,13 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
-      expect(find.text('Create Event'), findsWidgets);
+      expect(find.text('Events'), findsWidgets);
 
-      final createEventCard = find.widgetWithText(GestureDetector, 'Create Event').first;
-      if (createEventCard.evaluate().isNotEmpty) {
-        await tester.tap(createEventCard);
+      final eventsCard = find.widgetWithText(GestureDetector, 'Events').first;
+      if (eventsCard.evaluate().isNotEmpty) {
+        await tester.tap(eventsCard);
       } else {
-        await tester.tap(find.text('Create Event').first);
+        await tester.tap(find.text('Events').first);
       }
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));

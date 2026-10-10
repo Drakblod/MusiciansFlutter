@@ -169,7 +169,7 @@ class UserProfile {
   bool get canMixMaster =>
       styles.contains('Mixing') || styles.contains('Mastering');
 
-  /// Returns top 3 main skills parsed from mainInstrument or fallback to first instrument
+  /// Returns primary main skill parsed from mainInstrument or fallback to first instrument
   List<String> get mainSkills {
     List<String> result = [];
     if (mainInstrument != null && mainInstrument!.isNotEmpty) {
@@ -179,7 +179,7 @@ class UserProfile {
           .where((e) => e.isNotEmpty)
           .toList();
       final valid = parsed
-          .where((item) => instruments.contains(item))
+          .where((item) => instruments.isEmpty || instruments.contains(item))
           .take(1)
           .toList();
       if (valid.isNotEmpty) result = valid;
@@ -203,7 +203,16 @@ class UserProfile {
   /// Returns remaining selected instruments/skills excluding mainSkills
   List<String> get secondarySkills {
     final mains = mainSkills.toSet();
-    return instruments
+    final all = <String>{};
+    if (mainInstrument != null && mainInstrument!.isNotEmpty) {
+      final parsed = mainInstrument!
+          .split(',')
+          .map((e) => e.trim())
+          .where((e) => e.isNotEmpty);
+      all.addAll(parsed);
+    }
+    all.addAll(instruments);
+    return all
         .where(
           (item) =>
               !mains.contains(item) &&
@@ -213,6 +222,11 @@ class UserProfile {
         )
         .toList();
   }
+
+  String get primarySkill =>
+      mainSkills.isNotEmpty ? mainSkills.first : (mainInstrument?.split(',').first.trim() ?? userType ?? '');
+
+  bool get hasSecondarySkills => secondarySkills.isNotEmpty;
 
   /// Single formatted string of main skills for headers and subtitles
   String get mainSkillsSubtitle {
