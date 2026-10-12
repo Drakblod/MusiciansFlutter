@@ -533,7 +533,7 @@ class NotificationCenterView extends StatefulWidget {
 }
 
 class _NotificationCenterViewState extends State<NotificationCenterView> {
-  String _selectedFilter = 'all'; // 'all' | 'messages' | 'events' | 'requests' | 'system'
+  String _selectedFilter = 'all';
 
   final List<Map<String, String>> _filterOptions = const [
     {'id': 'all', 'label': 'All'},
@@ -542,6 +542,24 @@ class _NotificationCenterViewState extends State<NotificationCenterView> {
     {'id': 'requests', 'label': 'Requests'},
     {'id': 'system', 'label': 'System'},
   ];
+
+  void _handleShortcutTap(String id) {
+    final navigator = Navigator.of(context, rootNavigator: true);
+    if (widget.onClose != null) {
+      widget.onClose!();
+    }
+    switch (id) {
+      case 'messages':
+        navigator.pushNamed('/inbox');
+        break;
+      case 'events':
+        navigator.pushNamed('/manage-events');
+        break;
+      case 'requests':
+        navigator.pushNamed('/find-gigs');
+        break;
+    }
+  }
 
   IconData _getCategoryIcon(String category) {
     switch (category.toLowerCase()) {
@@ -699,19 +717,21 @@ class _NotificationCenterViewState extends State<NotificationCenterView> {
           ),
         ),
 
-        // Category Filter Pills
+        // Category Filter / Shortcut Pills
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           physics: const BouncingScrollPhysics(),
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
           child: Row(
             children: _filterOptions.map((opt) {
-              final isSelected = _selectedFilter == opt['id'];
+              final isSelected = opt['id'] == _selectedFilter;
               return Padding(
                 padding: const EdgeInsets.only(right: 8),
                 child: AnimatedTapDetector(
                   onTap: () {
-                    setState(() => _selectedFilter = opt['id']!);
+                    setState(() {
+                      _selectedFilter = opt['id']!;
+                    });
                   },
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -722,8 +742,8 @@ class _NotificationCenterViewState extends State<NotificationCenterView> {
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(
                         color: isSelected
-                            ? AppTheme.primaryAccent
-                            : const Color(0xFF2E2A4E),
+                          ? AppTheme.primaryAccent
+                          : const Color(0xFF2E2A4E),
                         width: 1,
                       ),
                     ),

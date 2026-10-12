@@ -59,14 +59,10 @@ class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
                   Expanded(
                     child: _buildProfileOrBack(context, appState, canPop),
                   ),
-                  // Column 1: Notifications Bell (moved to Favorites position)
+                  // Column 1: Map View (Globe Icon, taking previous Notification position)
                   Expanded(
-                    child: _buildNotificationBell(context, appState),
+                    child: _buildMapGlobe(context, appState),
                   ),
-                  if (FeatureToggles.showMapInTopBar)
-                    Expanded(
-                      child: _buildMapIcon(context, appState),
-                    ),
                   // Column 2: Home Logo
                   Expanded(
                     child: _buildHomeLogo(context, appState),
@@ -75,9 +71,9 @@ class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
                   Expanded(
                     child: _buildInbox(context, appState),
                   ),
-                  // Column 4: Favorites Icon
+                  // Column 4: Notifications Bell (moved to previous Favorites position)
                   Expanded(
-                    child: _buildFavorites(context, appState),
+                    child: _buildNotificationBell(context, appState),
                   ),
                   // Column 5: Settings Menu
                   Expanded(
@@ -92,16 +88,16 @@ class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
     );
   }
 
-  Widget _buildMapIcon(BuildContext context, AppState appState) {
+  Widget _buildMapGlobe(BuildContext context, AppState appState) {
     return AnimatedTapDetector(
       onTap: () {
         Navigator.pushNamed(context, '/gig-map');
       },
       child: const Center(
         child: Icon(
-          Icons.map_outlined,
+          Icons.public_rounded,
           color: Colors.white,
-          size: 22,
+          size: 24,
         ),
       ),
     );
@@ -153,20 +149,6 @@ class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
     }
   }
 
-  Widget _buildFavorites(BuildContext context, AppState appState) {
-    return AnimatedTapDetector(
-      onTap: () {
-        Navigator.pushNamed(context, '/favorites');
-      },
-      child: const Center(
-        child: Icon(
-          Icons.star_border_rounded,
-          color: Colors.white,
-          size: 24,
-        ),
-      ),
-    );
-  }
 
   Widget _buildHomeLogo(BuildContext context, AppState appState) {
     return AnimatedTapDetector(

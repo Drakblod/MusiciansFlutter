@@ -75,6 +75,51 @@ async function recordUserNotificationsBatch(recipientUserIds, notificationDataBu
 }
 
 /**
+ * Helper to format date and time string cleanly for notifications.
+ */
+function formatDateTimeLabel(dateVal, startTimeVal, endTimeVal) {
+  let datePart = '';
+  let timePart = '';
+
+  if (dateVal) {
+    if (typeof dateVal === 'string' && dateVal.includes('T')) {
+      const d = new Date(dateVal);
+      if (!isNaN(d.getTime())) {
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        datePart = `${yyyy}-${mm}-${dd}`;
+        const hh = String(d.getHours()).padStart(2, '0');
+        const min = String(d.getMinutes()).padStart(2, '0');
+        if (hh !== '00' || min !== '00') {
+          timePart = `${hh}:${min}`;
+        }
+      }
+    } else {
+      datePart = String(dateVal).trim();
+    }
+  }
+
+  if (startTimeVal) {
+    const s = String(startTimeVal).trim();
+    if (s && s !== 'TBD') {
+      timePart = endTimeVal && String(endTimeVal).trim() && String(endTimeVal).trim() !== 'TBD'
+        ? `${s} - ${String(endTimeVal).trim()}`
+        : s;
+    }
+  }
+
+  if (datePart && timePart) {
+    return `${datePart} ${timePart}`;
+  } else if (datePart) {
+    return datePart;
+  } else if (timePart) {
+    return timePart;
+  }
+  return 'Date & Time TBD';
+}
+
+/**
  * Triggered when a new event is created under /Bands/{bandId}/Events/{eventId}.
  * Sends a push notification to all band members except the event creator.
  */
@@ -98,23 +143,32 @@ exports.onBandEventCreated = functions.region(databaseTriggerRegion).database
         return null;
       }
 
+      // Fetch band name
+      let bandName = 'Band';
+      try {
+        const bandSnap = await admin.database().ref(`/Bands/${bandId}/Name`).once('value');
+        if (bandSnap.exists() && bandSnap.val()) {
+          bandName = String(bandSnap.val()).trim();
+        }
+      } catch (_) {}
+
       const memberIds = Object.keys(members);
       const otherMemberIds = memberIds.filter(userId => userId !== creatorId);
 
       // 1. Format Date/Time, Event Type, and Notification content safely
       const rawEventType = eventData.eventType || eventData.EventType;
-      const normalizedEventType = (typeof rawEventType === 'string' && rawEventType.trim().length > 0)
-        ? rawEventType.trim().toLowerCase()
-        : 'event';
+      const eventType = (typeof rawEventType === 'string' && rawEventType.trim().length > 0)
+        ? rawEventType.trim()
+        : 'Event';
 
-      const startLocal = eventData.startDateTime
-        ? new Date(eventData.startDateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        : 'TBD';
+      const dateTimeStr = formatDateTimeLabel(
+        eventData.startDateTime || eventData.date || eventData.Date,
+        eventData.startTime || eventData.StartTime,
+        eventData.endTime || eventData.EndTime
+      );
 
-      const eventTitle = eventData.title || 'Band Event';
-      const eventLocation = eventData.location || 'TBD';
-      const notificationTitle = `🎼 New Event: ${eventTitle}`;
-      const notificationBody = `New ${normalizedEventType} at ${eventLocation} starting at ${startLocal}. Please RSVP!`;
+      const notificationTitle = 'Event Request';
+      const notificationBody = `${bandName}\n${eventType}\n${dateTimeStr}`;
 
       // Record Notification Center entries for all other band members independently of push tokens
       await recordUserNotificationsBatch(otherMemberIds, (uid) => ({
@@ -128,6 +182,9 @@ exports.onBandEventCreated = functions.region(databaseTriggerRegion).database
           bandId,
           eventId,
           type: 'event_invite',
+          bandName,
+          eventType,
+          dateTime: dateTimeStr,
         },
       }));
 
@@ -288,19 +345,36 @@ exports.sendSubRequestNotification = onValueCreated({
       }
     });
 
+    const rawEventType = subRequestData.eventType || subRequestData.EventType || subRequestData.role || subRequestData.Role || 'Gig';
+    const gigEventType = (typeof rawEventType === 'string' && rawEventType.trim().length > 0)
+      ? rawEventType.trim()
+      : 'Gig';
+
+    const gigDateTimeStr = formatDateTimeLabel(
+      subRequestData.date || subRequestData.Date || subRequestData.startDateTime,
+      subRequestData.startTime || subRequestData.StartTime,
+      subRequestData.endTime || subRequestData.EndTime
+    );
+
+    const notificationTitle = 'Gig Request';
+    const notificationBody = `${bandName}\n${gigEventType}\n${gigDateTimeStr}`;
+
     // Record Notification Center entries for all matching users
     await recordUserNotificationsBatch(matchingUserIds, (uid) => ({
       id: `notif_sub_${subRequestId}_${uid}`,
       type: 'sub_request_invite',
       category: 'requests',
-      title: `🎼 Musician Request`,
-      body: `${voicePart} needed for ${bandName} in ${location}!`,
+      title: notificationTitle,
+      body: notificationBody,
       createdAt: Date.now(),
       data: {
         subRequestId: subRequestId,
         type: 'sub_request_invite',
         bandId: subRequestData.bandId || subRequestData.BandId || '',
         eventId: subRequestData.eventId || subRequestData.EventId || '',
+        bandName,
+        eventType: gigEventType,
+        dateTime: gigDateTimeStr,
       },
     }));
 
@@ -313,8 +387,8 @@ exports.sendSubRequestNotification = onValueCreated({
     const messages = recipients.map(r => ({
       token: r.token,
       notification: {
-        title: `🎼 Musician Request`,
-        body: `${voicePart} needed for ${bandName} in ${location}!`,
+        title: notificationTitle,
+        body: notificationBody,
       },
       data: {
         click_action: 'FLUTTER_NOTIFICATION_CLICK',
@@ -464,10 +538,14 @@ exports.onSubRequestGroupPublished = onValueCreated({
         // Record Notification Center entry
         const matchCount = userMatchingSlots.length;
         const firstSlot = userMatchingSlots[0];
-        const title = `🎼 Musician Request`;
-        const body = matchCount === 1
-          ? `${firstSlot.voicePart} needed for ${bandName}!`
-          : `Multiple substitute positions (${matchCount}) open for ${bandName}!`;
+        const groupEventType = firstSlot.eventType || firstSlot.EventType || firstSlot.role || firstSlot.Role || 'Gig';
+        const groupDateTimeStr = formatDateTimeLabel(
+          firstSlot.date || firstSlot.Date || firstSlot.startDateTime,
+          firstSlot.startTime || firstSlot.StartTime,
+          firstSlot.endTime || firstSlot.EndTime
+        );
+        const title = 'Gig Request';
+        const body = `${bandName}\n${groupEventType}\n${groupDateTimeStr}`;
         indexUpdates[`/userNotifications/${userId}/notif_sub_grp_${publicationId}_${userId}`] = {
           id: `notif_sub_grp_${publicationId}_${userId}`,
           type: 'grouped_sub_request',
@@ -481,6 +559,9 @@ exports.onSubRequestGroupPublished = onValueCreated({
             requestGroupId,
             publicationId,
             type: 'grouped_sub_request',
+            bandName,
+            eventType: groupEventType,
+            dateTime: groupDateTimeStr,
           },
         };
       }
@@ -522,10 +603,14 @@ exports.onSubRequestGroupPublished = onValueCreated({
     claimedRecipients.forEach(({ userId, entry }) => {
       const matchCount = entry.matchingSlots.length;
       const firstSlot = entry.matchingSlots[0];
-      const title = `🎼 Musician Request`;
-      const body = matchCount === 1
-        ? `${firstSlot.voicePart} needed for ${bandName}!`
-        : `Multiple substitute positions (${matchCount}) open for ${bandName}!`;
+      const groupEventType = firstSlot.eventType || firstSlot.EventType || firstSlot.role || firstSlot.Role || 'Gig';
+      const groupDateTimeStr = formatDateTimeLabel(
+        firstSlot.date || firstSlot.Date || firstSlot.startDateTime,
+        firstSlot.startTime || firstSlot.StartTime,
+        firstSlot.endTime || firstSlot.EndTime
+      );
+      const title = 'Gig Request';
+      const body = `${bandName}\n${groupEventType}\n${groupDateTimeStr}`;
 
       messages.push({
         token: entry.token,
@@ -821,10 +906,6 @@ exports.respondToSubRequest = onCall({ region: 'europe-west1' }, async (request)
     throw new HttpsError('permission-denied', 'You cannot respond to your own substitute request.');
   }
 
-  const updates = {};
-  updates[`SubRequests/${subRequestId}/Responses/${userId}`] = true;
-  updates[`subRequestAudience/${subRequestId}/${userId}`] = true;
-
   if (creatorId) {
     updates[`users/${creatorId}/SubRequests/${subRequestId}/Responses/${userId}`] = true;
 
@@ -837,15 +918,29 @@ exports.respondToSubRequest = onCall({ region: 'europe-west1' }, async (request)
       }
     } catch (_) {}
 
-    const role = val.VoicePart || val.voicePart || val.Role || val.role || 'Substitute';
+    const rawEventType = val.eventType || val.EventType || val.Role || val.role || 'Gig';
+    const gigEventType = (typeof rawEventType === 'string' && rawEventType.trim().length > 0)
+      ? rawEventType.trim()
+      : 'Gig';
+
+    const gigDateTimeStr = formatDateTimeLabel(
+      val.date || val.Date || val.startDateTime,
+      val.startTime || val.StartTime,
+      val.endTime || val.EndTime
+    );
+
     const bandName = val.BandName || val.bandName || 'Band';
+    const role = val.VoicePart || val.voicePart || val.Role || val.role || 'Substitute';
     const notifId = `notif_sub_resp_${subRequestId}_${userId}`;
+    const notificationTitle = 'Gig Request Response';
+    const notificationBody = `${bandName}\n${gigEventType}\n${gigDateTimeStr}`;
+
     const notifData = {
       id: notifId,
       type: 'sub_request_response',
       category: 'requests',
-      title: 'New Sub Candidate',
-      body: `${applicantName} applied for ${role} in ${bandName}`,
+      title: notificationTitle,
+      body: notificationBody,
       createdAt: Date.now(),
       isRead: false,
       data: {
@@ -856,11 +951,49 @@ exports.respondToSubRequest = onCall({ region: 'europe-west1' }, async (request)
         eventId: val.EventId || val.eventId || '',
         voicePart: role,
         bandName: bandName,
+        eventType: gigEventType,
+        dateTime: gigDateTimeStr,
       },
     };
 
     updates[`userNotifications/${creatorId}/${notifId}`] = notifData;
     updates[`BandEvents/Notifications/${creatorId}/${notifId}`] = notifData;
+
+    // Dispatch push notification to creator
+    try {
+      const creatorTokenSnap = await db.ref(`/users/${creatorId}/info/PushToken`).once('value');
+      const creatorToken = creatorTokenSnap.val();
+      if (creatorToken && typeof creatorToken === 'string' && creatorToken.trim()) {
+        await admin.messaging().send({
+          token: creatorToken.trim(),
+          notification: {
+            title: notificationTitle,
+            body: notificationBody,
+          },
+          data: {
+            click_action: 'FLUTTER_NOTIFICATION_CLICK',
+            subRequestId: subRequestId,
+            type: 'sub_request_response',
+          },
+          android: {
+            notification: {
+              sound: 'gig_rquest_response',
+              channelId: 'gig_response_channel',
+            },
+          },
+          apns: {
+            payload: {
+              aps: {
+                sound: 'gig_rquest_response.wav',
+              },
+            },
+          },
+        });
+        console.log(`Sent gig request response push notification to creator ${creatorId}`);
+      }
+    } catch (pushErr) {
+      console.warn(`Failed to send gig request response push to creator: ${pushErr.message}`);
+    }
   }
 
   await db.ref().update(updates);

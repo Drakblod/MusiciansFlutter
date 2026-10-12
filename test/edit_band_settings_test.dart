@@ -448,7 +448,7 @@ void main() {
 
       final labelFinder = find.text('Map view location (if other than Rehearsal Location)');
       final helperFinder = find.text(expectedHelperText);
-      final inputFinder = find.widgetWithText(TextFormField, 'Tap to input location for Map View Pin');
+      final inputFinder = find.widgetWithText(TextFormField, 'Enter address or city for Map View pin');
 
       expect(labelFinder, findsOneWidget);
       expect(helperFinder, findsOneWidget);
@@ -476,7 +476,7 @@ void main() {
 
       final labelFinder = find.text('Map view location (if other than Rehearsal Location)');
       final helperFinder = find.text(expectedHelperText);
-      final inputFinder = find.widgetWithText(TextFormField, 'Tap to input location for Map View Pin');
+      final inputFinder = find.widgetWithText(TextFormField, 'Enter address or city for Map View pin');
 
       expect(labelFinder, findsOneWidget);
       expect(helperFinder, findsOneWidget);
@@ -522,10 +522,9 @@ void main() {
 
       expect(find.text('BAND MEMBERS'), findsOneWidget);
       expect(find.text('Boss Leader'), findsOneWidget);
-      expect(find.text('(You)'), findsOneWidget);
       expect(find.text('Gary Guitar'), findsOneWidget);
       expect(find.text('Electric Guitar'), findsOneWidget);
-      expect(find.text('+ Add Member'), findsWidgets);
+      expect(find.text('Add Band Member'), findsWidgets);
     });
 
     testWidgets('EditBandInfoScreen allows removing a member with confirmation dialog', (tester) async {
@@ -602,12 +601,12 @@ void main() {
       await tester.pumpWidget(createSettingsTestWidget(EditBandInfoScreen(band: band), appState));
       await tester.pumpAndSettle();
 
-      // Tap '+ Add Member'
-      await tester.tap(find.text('+ Add Member').first);
+      // Tap 'Add Band Member'
+      await tester.tap(find.text('Add Band Member').first);
       await tester.pumpAndSettle();
 
       // Verify dialog is open
-      expect(find.text('Add Band Member'), findsOneWidget);
+      expect(find.text('Add Band Member'), findsNWidgets(2));
       expect(find.text('Dan Drummer'), findsOneWidget);
 
       // Tap Dan Drummer to add

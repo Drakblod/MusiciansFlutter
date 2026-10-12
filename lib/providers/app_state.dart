@@ -38,7 +38,7 @@ class AppState extends ChangeNotifier {
   ];
 
   static List<String> validateAndSanitizeBubbles(List<String>? raw) {
-    const defaultBubbles = ['find_musicians', 'band_room', 'create_event'];
+    const defaultBubbles = ['find_musicians', 'band_room', 'find_gigs'];
     if (raw == null) return List.from(defaultBubbles);
 
     final sanitized = <String>[];
@@ -57,7 +57,7 @@ class AppState extends ChangeNotifier {
   List<String> _selectedBubbles = [
     'find_musicians',
     'band_room',
-    'create_event',
+    'find_gigs',
   ];
   List<String> get selectedBubbles => _selectedBubbles;
 

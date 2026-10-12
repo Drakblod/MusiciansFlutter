@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../providers/app_state.dart';
 import '../theme/app_theme.dart';
 import '../models/band.dart';
+import '../models/user_profile.dart';
 import '../widgets/gradient_scaffold.dart';
 import '../widgets/custom_top_bar.dart';
 import '../widgets/animated_tap_detector.dart';
@@ -24,6 +25,8 @@ class _CreateBandScreenState extends State<CreateBandScreen> {
   final _rehearsalLocationController = TextEditingController();
   final _mapViewLocationController = TextEditingController();
   final _aboutController = TextEditingController();
+
+  final List<UserProfile> _selectedMembers = [];
 
   String _level = 'C = INTERMEDIATE';
   String _rehearsalDay = 'Monday';
@@ -159,6 +162,23 @@ class _CreateBandScreenState extends State<CreateBandScreen> {
       );
 
       await appState.firebaseService.createBandAsync(userId, band);
+
+      final bandId = (band.name ?? 'My Band').replaceAll(' ', '_');
+      for (final member in _selectedMembers) {
+        if (member.userId != null && member.userId != userId) {
+          try {
+            await appState.firebaseService.addBandMemberAsync(
+              bandId,
+              member.userId!,
+              'Member',
+              member.nickname ?? member.displayName ?? 'Member',
+            );
+          } catch (mErr) {
+            debugPrint("Error adding initial band member ${member.userId}: $mErr");
+          }
+        }
+      }
+
       await appState.refreshProfile(); // refresh local active bands
 
       if (mounted) {
@@ -184,6 +204,223 @@ class _CreateBandScreenState extends State<CreateBandScreen> {
         setState(() => _isSaving = false);
       }
     }
+  }
+
+  Future<void> _showAddMemberDialog() async {
+    final appState = Provider.of<AppState>(context, listen: false);
+    final currentUserId = appState.currentUserId;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(color: AppTheme.primaryAccent),
+      ),
+    );
+
+    List<UserProfile> allUsers = [];
+    try {
+      allUsers = await appState.firebaseService.getAllUsersAsync();
+    } catch (e) {
+      debugPrint("Error fetching users: $e");
+    } finally {
+      if (mounted) {
+        Navigator.pop(context); // Dismiss loader
+      }
+    }
+
+    if (!mounted) return;
+
+    final existingUserIds = {
+      if (currentUserId != null) currentUserId,
+      ..._selectedMembers.map((m) => m.userId).whereType<String>(),
+    };
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          child: Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFF0F0C20).withValues(alpha: 0.95),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: const Color(0xFF2E2A4E), width: 1.5),
+            ),
+            padding: const EdgeInsets.all(20),
+            width: MediaQuery.of(ctx).size.width * 0.9,
+            height: MediaQuery.of(ctx).size.height * 0.65,
+            child: _SelectBandMemberDialog(
+              allUsers: allUsers,
+              existingUserIds: existingUserIds,
+              onUserSelected: (user) {
+                setState(() {
+                  _selectedMembers.add(user);
+                });
+              },
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildBandMembersSection() {
+    final appState = Provider.of<AppState>(context, listen: false);
+    final userProfile = appState.currentUserProfile;
+    final leaderName = userProfile?.displayName ?? userProfile?.nickname ?? 'You';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Band Members',
+              style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+            ),
+            TextButton.icon(
+              onPressed: _showAddMemberDialog,
+              icon: const Icon(Icons.person_add_rounded, color: AppTheme.primaryAccent, size: 16),
+              label: Text(
+                'Add Member',
+                style: GoogleFonts.inter(
+                  color: AppTheme.primaryAccent,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
+                ),
+              ),
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                backgroundColor: AppTheme.primaryAccent.withValues(alpha: 0.15),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  side: BorderSide(color: AppTheme.primaryAccent.withValues(alpha: 0.4)),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Add members to your band. They will be added to the band room and chat automatically.',
+          style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary, height: 1.3),
+        ),
+        const SizedBox(height: 12),
+
+        // Leader card (Creator)
+        Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: AppTheme.cardBackground,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
+          ),
+          child: Row(
+            children: [
+              CircleAvatar(
+                radius: 16,
+                backgroundColor: AppTheme.primaryAccent.withValues(alpha: 0.25),
+                child: Text(
+                  leaderName.isNotEmpty ? leaderName.substring(0, 1).toUpperCase() : 'L',
+                  style: GoogleFonts.inter(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '$leaderName (You)',
+                      style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
+                    ),
+                    Text(
+                      'Leader',
+                      style: GoogleFonts.inter(color: AppTheme.primaryAccent, fontSize: 11, fontWeight: FontWeight.w500),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: AppTheme.primaryAccent.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: AppTheme.primaryAccent.withValues(alpha: 0.4)),
+                ),
+                child: Text(
+                  'Leader',
+                  style: GoogleFonts.inter(color: AppTheme.primaryAccent, fontSize: 10, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        // Added members
+        if (_selectedMembers.isNotEmpty)
+          ..._selectedMembers.map((member) {
+            final name = member.displayName ?? member.nickname ?? 'Unknown';
+            final instrumentsStr = member.instruments.isNotEmpty
+                ? member.instruments.join(', ')
+                : (member.mainInstrument ?? 'Member');
+
+            return Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: AppTheme.cardBackground,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
+              ),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 16,
+                    backgroundColor: const Color(0xFF64B5F6).withValues(alpha: 0.2),
+                    child: Text(
+                      name.isNotEmpty ? name.substring(0, 1).toUpperCase() : 'M',
+                      style: GoogleFonts.inter(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          name,
+                          style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
+                        ),
+                        Text(
+                          instrumentsStr,
+                          style: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 11),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.remove_circle_outline, color: Color(0xFFEF4444), size: 20),
+                    tooltip: 'Remove',
+                    onPressed: () {
+                      setState(() {
+                        _selectedMembers.removeWhere((m) => m.userId == member.userId);
+                      });
+                    },
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                  ),
+                ],
+              ),
+            );
+          }),
+      ],
+    );
   }
 
   @override
@@ -593,7 +830,7 @@ class _CreateBandScreenState extends State<CreateBandScreen> {
                 controller: _mapViewLocationController,
                 style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
                 decoration: const InputDecoration(
-                  hintText: 'Tap to input location for Map View Pin',
+                  hintText: 'Enter address or city for Map View pin',
                 ),
               ),
               const SizedBox(height: 12),
@@ -648,6 +885,10 @@ class _CreateBandScreenState extends State<CreateBandScreen> {
                   ],
                 ),
               ),
+              const SizedBox(height: 24),
+
+              // Band Members Section
+              _buildBandMembersSection(),
               const SizedBox(height: 30),
 
               // Save Button
@@ -681,3 +922,181 @@ class _CreateBandScreenState extends State<CreateBandScreen> {
     );
   }
 }
+
+class _SelectBandMemberDialog extends StatefulWidget {
+  final List<UserProfile> allUsers;
+  final Set<String> existingUserIds;
+  final Function(UserProfile) onUserSelected;
+
+  const _SelectBandMemberDialog({
+    required this.allUsers,
+    required this.existingUserIds,
+    required this.onUserSelected,
+  });
+
+  @override
+  State<_SelectBandMemberDialog> createState() => _SelectBandMemberDialogState();
+}
+
+class _SelectBandMemberDialogState extends State<_SelectBandMemberDialog> {
+  final _searchController = TextEditingController();
+  String _searchQuery = '';
+  late final Set<String> _addedIds;
+
+  @override
+  void initState() {
+    super.initState();
+    _addedIds = Set<String>.from(widget.existingUserIds);
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final filteredUsers = widget.allUsers.where((user) {
+      if (user.userId == null) return false;
+      final name = (user.displayName ?? user.nickname ?? '').toLowerCase();
+      final instruments = user.instruments.join(' ').toLowerCase();
+      final q = _searchQuery.toLowerCase();
+      return name.contains(q) || instruments.contains(q);
+    }).toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              "Add Band Member",
+              style: GoogleFonts.outfit(
+                fontSize: 18,
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            IconButton(
+              icon: const Icon(Icons.close_rounded, color: Colors.white70),
+              onPressed: () => Navigator.pop(context),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _searchController,
+          style: GoogleFonts.inter(color: Colors.white),
+          decoration: InputDecoration(
+            hintText: "Search name or instrument...",
+            hintStyle: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 13),
+            prefixIcon: const Icon(Icons.search, color: AppTheme.textSecondary),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            fillColor: const Color(0xFF141029),
+            filled: true,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
+          ),
+          onChanged: (val) {
+            setState(() {
+              _searchQuery = val;
+            });
+          },
+        ),
+        const SizedBox(height: 16),
+        Expanded(
+          child: filteredUsers.isEmpty
+              ? Center(
+                  child: Text(
+                    _searchQuery.isEmpty ? "No users available." : "No matching users found.",
+                    style: GoogleFonts.inter(color: AppTheme.textSecondary),
+                  ),
+                )
+              : ListView.builder(
+                  itemCount: filteredUsers.length,
+                  itemBuilder: (context, index) {
+                    final user = filteredUsers[index];
+                    final name = user.displayName ?? user.nickname ?? 'Unknown';
+                    final isAlreadyAdded = _addedIds.contains(user.userId);
+
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      decoration: BoxDecoration(
+                        color: AppTheme.cardBackground,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        child: Row(
+                          children: [
+                            CircleAvatar(
+                              radius: 16,
+                              backgroundColor: AppTheme.primaryAccent.withValues(alpha: 0.2),
+                              child: Text(
+                                name.isNotEmpty ? name.substring(0, 1).toUpperCase() : '?',
+                                style: GoogleFonts.inter(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    name,
+                                    style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
+                                  ),
+                                  if (user.instruments.isNotEmpty)
+                                    Text(
+                                      user.instruments.join(', '),
+                                      style: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 11),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                ],
+                              ),
+                            ),
+                            if (isAlreadyAdded)
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.success.withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  'Added',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 11,
+                                    color: AppTheme.success,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              )
+                            else
+                              IconButton(
+                                icon: const Icon(Icons.add_circle, color: AppTheme.primaryAccent, size: 24),
+                                onPressed: () {
+                                  setState(() {
+                                    _addedIds.add(user.userId!);
+                                  });
+                                  widget.onUserSelected(user);
+                                },
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(),
+                              ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+}
+

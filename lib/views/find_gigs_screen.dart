@@ -108,11 +108,12 @@ class _FindGigsScreenState extends State<FindGigsScreen>
   final Set<String> _appliedGigIds = {};
   List<GigGroup> _substituteGigGroups = [];
   List<GigGroup> _newMemberGigGroups = [];
+  List<GigGroup> _appliedGigGroups = [];
   bool _isLoading = true;
 
   @override
   void initState() {
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
     super.initState();
     _loadSubRequests();
   }
@@ -350,10 +351,20 @@ class _FindGigsScreenState extends State<FindGigsScreen>
 
       final List<SubRequest> upcomingSubstituteRequests = [];
       final List<SubRequest> upcomingNewMemberRequests = [];
+      final List<SubRequest> appliedRequests = [];
 
       for (final gig in list) {
         final st = gig.status.toLowerCase();
-        if (st == 'cancelled' || st == 'deleted' || st == 'closed') continue;
+        if (st == 'cancelled' || st == 'deleted') continue;
+
+        final reqId = gig.subRequestId ?? gig.id ?? '';
+        final hasApplied = (currentUserId != null && gig.responses.containsKey(currentUserId)) ||
+            _appliedGigIds.contains(reqId);
+        if (hasApplied) {
+          appliedRequests.add(gig);
+        }
+
+        if (st == 'closed') continue;
 
         if (gig.date != null && gig.date!.trim().isNotEmpty) {
           final gigDate = _parseGigDate(gig.date);
@@ -392,6 +403,7 @@ class _FindGigsScreenState extends State<FindGigsScreen>
       setState(() {
         _substituteGigGroups = _groupSubRequests(upcomingSubstituteRequests);
         _newMemberGigGroups = _groupSubRequests(upcomingNewMemberRequests);
+        _appliedGigGroups = _groupSubRequests(appliedRequests);
       });
     } catch (e) {
       debugPrint("Error fetching sub requests: $e");
@@ -854,6 +866,8 @@ class _FindGigsScreenState extends State<FindGigsScreen>
 
   @override
   Widget build(BuildContext context) {
+    final appState = Provider.of<AppState>(context);
+    final currentUserId = appState.currentUserId;
     return GradientScaffold(
       appBar: const CustomTopBar(
         title: 'Find Gigs',
@@ -939,6 +953,12 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                   Tab(
                     child: FittedBox(
                       fit: BoxFit.scaleDown,
+                      child: Text('Applied', maxLines: 1),
+                    ),
+                  ),
+                  Tab(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
                       child: Text('Saved', maxLines: 1),
                     ),
                   ),
@@ -954,6 +974,20 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                         children: [
                           _buildGigsList(_substituteGigGroups),
                           _buildGigsList(_newMemberGigGroups),
+                          _buildGigsList(
+                            () {
+                              final Map<String, GigGroup> map = {};
+                              for (final g in _appliedGigGroups) {
+                                map[g.groupId] = g;
+                              }
+                              for (final g in [..._substituteGigGroups, ..._newMemberGigGroups]) {
+                                if (g.requests.any((r) => _appliedGigIds.contains(r.subRequestId) || _appliedGigIds.contains(r.id) || (currentUserId != null && r.responses.containsKey(currentUserId)))) {
+                                  map[g.groupId] = g;
+                                }
+                              }
+                              return map.values.toList();
+                            }(),
+                          ),
                           _buildGigsList(
                             [..._substituteGigGroups, ..._newMemberGigGroups]
                                 .where((g) => _savedGigIds.contains(g.groupId))
@@ -1129,6 +1163,51 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                           spacing: 8,
                           runSpacing: 6,
                           children: [
+                            // Sub / New Member Tag
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: group.isNewMember
+                                    ? AppTheme.primaryAccent.withValues(alpha: 0.18)
+                                    : const Color(0xFF64B5F6).withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: group.isNewMember
+                                      ? AppTheme.primaryAccent.withValues(alpha: 0.45)
+                                      : const Color(0xFF64B5F6).withValues(alpha: 0.4),
+                                ),
+                              ),
+                              child: Text(
+                                group.isNewMember ? 'New Member' : 'Sub',
+                                style: GoogleFonts.inter(
+                                  fontSize: 10,
+                                  color: group.isNewMember ? AppTheme.primaryAccent : const Color(0xFF90CAF9),
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+
+                            // Applied Tag
+                            if (group.requests.any((r) => _appliedGigIds.contains(r.subRequestId) || _appliedGigIds.contains(r.id) || (currentUserId != null && r.responses.containsKey(currentUserId))))
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.success.withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: AppTheme.success.withValues(alpha: 0.45),
+                                  ),
+                                ),
+                                child: Text(
+                                  'Applied',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 10,
+                                    color: AppTheme.success,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+
                             // Paid / Payment tag
                             if (group.isPaid && group.formattedPayment.isNotEmpty)
                               Container(

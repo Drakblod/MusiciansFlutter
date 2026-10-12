@@ -11,6 +11,8 @@ import '../widgets/animated_tap_detector.dart';
 import '../widgets/searchable_category_multi_select_sheet.dart';
 import '../data/genres_taxonomy.dart';
 import '../widgets/secondary_skills_badge.dart';
+import '../utils/band_section_utils.dart';
+import '../widgets/create_band_section_sheet.dart';
 import 'band_room_chat_screen.dart';
 
 class EditBandInfoScreen extends StatefulWidget {
@@ -456,259 +458,681 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
     );
   }
 
+  Future<void> _navigateTo1on1Chat(String otherUserId, String otherUserName) async {
+    final appState = Provider.of<AppState>(context, listen: false);
+    final selfId = appState.currentUserId;
+    if (selfId == null || otherUserId == selfId) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(color: AppTheme.primaryAccent),
+      ),
+    );
+
+    try {
+      final convId = await appState.firebaseService.getOrCreateDirectConversationAsync(selfId, otherUserId);
+      if (mounted) {
+        Navigator.pop(context); // Dismiss loader
+        Navigator.pushNamed(
+          context,
+          '/chat-detail',
+          arguments: {
+            'conversationId': convId,
+            'receiverId': otherUserId,
+            'receiverName': otherUserName,
+          },
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context); // Dismiss loader
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to open chat: $e'), backgroundColor: AppTheme.danger),
+        );
+      }
+    }
+  }
+
+  Future<void> _showMemberChatActions(BandMember member, String bandId) async {
+    final appState = Provider.of<AppState>(context, listen: false);
+    final memberId = member.userId;
+    if (memberId == null) return;
+    final memberName = _getMemberName(member);
+
+    UserProfile? profile;
+    try {
+      profile = await appState.firebaseService.getUserProfileAsync(memberId);
+    } catch (_) {}
+
+    final instrument = BandSectionUtils.resolveEffectiveInstrument(profile);
+    int matchingCount = 0;
+
+    if (instrument != null && instrument.isNotEmpty) {
+      final key = BandSectionUtils.normalizeInstrumentKey(instrument);
+      for (final m in _members) {
+        if (m.userId != null) {
+          try {
+            final p = await appState.firebaseService.getUserProfileAsync(m.userId!);
+            final inst = BandSectionUtils.resolveEffectiveInstrument(p);
+            if (inst != null && BandSectionUtils.normalizeInstrumentKey(inst) == key) {
+              matchingCount++;
+            }
+          } catch (_) {}
+        }
+      }
+    }
+
+    if (!mounted) return;
+
+    final canCreateSectionChat = instrument != null && instrument.isNotEmpty && matchingCount >= 2;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF16132D),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        side: BorderSide(color: Color(0xFF2E2452), width: 1.2),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.white24,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              ListTile(
+                leading: const Icon(Icons.chat_bubble_outline_rounded, color: AppTheme.primaryAccent),
+                title: Text('Message $memberName', style: GoogleFonts.inter(color: Colors.white)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _navigateTo1on1Chat(memberId, memberName);
+                },
+              ),
+              if (canCreateSectionChat)
+                ListTile(
+                  leading: const Icon(Icons.group_add_outlined, color: Colors.greenAccent),
+                  title: Text('Create section chat: $instrument', style: GoogleFonts.inter(color: Colors.white)),
+                  subtitle: Text('$matchingCount band members match this instrument', style: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 11)),
+                  onTap: () async {
+                    Navigator.pop(ctx);
+                    final result = await CreateBandSectionSheet.show(
+                      context,
+                      initialBandId: bandId,
+                      initialInstrument: instrument,
+                      initialMemberId: memberId,
+                    );
+                    if (result != null && mounted) {
+                      Navigator.pushNamed(context, '/band-section-chat', arguments: result);
+                    }
+                  },
+                ),
+              ListTile(
+                leading: const Icon(Icons.groups_rounded, color: Colors.purpleAccent),
+                title: const Text('Create custom group', style: TextStyle(color: Colors.white)),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  final result = await CreateBandSectionSheet.show(
+                    context,
+                    initialBandId: bandId,
+                    initialMemberId: memberId,
+                  );
+                  if (result != null && mounted) {
+                    Navigator.pushNamed(context, '/band-section-chat', arguments: result);
+                  }
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _viewMemberProfile(String userId) async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(color: AppTheme.primaryAccent),
+      ),
+    );
+
+    try {
+      final appState = Provider.of<AppState>(context, listen: false);
+      final profile = await appState.firebaseService.getUserProfileAsync(userId);
+      if (mounted) {
+        Navigator.pop(context); // Dismiss loader
+        if (profile != null) {
+          Navigator.pushNamed(context, '/profile-detail', arguments: profile);
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Could not load user profile.'),
+              backgroundColor: AppTheme.danger,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context); // Dismiss loader
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error loading profile: $e'),
+            backgroundColor: AppTheme.danger,
+          ),
+        );
+      }
+    }
+  }
+
+  void _toggleMemberHoldStatus(BandMember member, bool putOnHold) async {
+    final memberUserId = member.userId;
+    final bandId = widget.band.id;
+    if (memberUserId == null || bandId == null) return;
+
+    final name = _getMemberName(member);
+
+    if (putOnHold) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          backgroundColor: const Color(0xFF0F0C20),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: [
+              const Icon(Icons.pause_circle_outline_rounded, color: Colors.amber, size: 22),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  "Put Member On Hold",
+                  style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+          content: Text(
+            "Are you sure you want to put $name on hold?\n\nThey will be greyed out in the roster and won't be required for event RSVPs until reactivated.",
+            style: GoogleFonts.inter(color: AppTheme.textSecondary, height: 1.4),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text("Cancel", style: GoogleFonts.inter(color: AppTheme.textSecondary)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.amber.shade700,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              onPressed: () => Navigator.pop(context, true),
+              child: Text("Put On Hold", style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      );
+
+      if (confirmed != true || !mounted) return;
+    }
+
+    final appState = Provider.of<AppState>(context, listen: false);
+    try {
+      final newStatus = putOnHold ? 'on_hold' : 'active';
+      await appState.firebaseService.updateBandMemberStatusAsync(bandId, memberUserId, newStatus);
+      if (mounted) {
+        setState(() {
+          final idx = _members.indexWhere((m) => m.userId == memberUserId);
+          if (idx != -1) {
+            _members[idx] = BandMember(
+              userId: _members[idx].userId,
+              nickname: _members[idx].nickname,
+              role: _members[idx].role,
+              status: newStatus,
+            );
+          }
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(putOnHold ? "$name is now on hold" : "$name is now active"),
+            backgroundColor: putOnHold ? Colors.amber.shade800 : AppTheme.success,
+          ),
+        );
+        _loadMembers();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Failed to update status: $e"),
+            backgroundColor: AppTheme.danger,
+          ),
+        );
+      }
+    }
+  }
+
   Widget _buildBandMembersSection() {
     final appState = Provider.of<AppState>(context, listen: false);
     final currentUserId = appState.currentUserId;
-    final isLeaderOrAdmin = widget.band.canUserEdit(currentUserId);
+    final bandId = widget.band.id;
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppTheme.cardBackground,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF2E2A4E), width: 1.2),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                children: [
-                  const Icon(Icons.people_alt_rounded, color: AppTheme.primaryAccent, size: 20),
-                  const SizedBox(width: 8),
-                  Text(
-                    'BAND MEMBERS',
-                    style: GoogleFonts.outfit(
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                      letterSpacing: 1.2,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  if (_members.isNotEmpty)
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: AppTheme.primaryAccent.withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        '${_members.length}',
-                        style: GoogleFonts.inter(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          color: AppTheme.primaryAccent,
-                        ),
-                      ),
-                    ),
-                ],
+    final currentMember = _members.firstWhere(
+      (m) => m.userId == currentUserId,
+      orElse: () => BandMember(role: 'Member'),
+    );
+    final roleStr = (currentMember.role ?? widget.band.userRole ?? '').toLowerCase();
+    final isLeaderOrAdmin = roleStr.contains('leader') || roleStr.contains('admin') || widget.band.canUserEdit(currentUserId);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (isLeaderOrAdmin && bandId != null) ...[
+          AnimatedTapDetector(
+            onTap: _showAddMemberDialog,
+            child: Container(
+              height: 50,
+              decoration: BoxDecoration(
+                gradient: AppTheme.primaryGradient,
+                borderRadius: BorderRadius.circular(12),
               ),
-              if (isLeaderOrAdmin)
-                TextButton.icon(
-                  onPressed: _showAddMemberDialog,
-                  icon: const Icon(Icons.person_add_alt_1_rounded, size: 16, color: AppTheme.primaryAccent),
-                  label: Text(
-                    '+ Add Member',
-                    style: GoogleFonts.inter(
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                      color: AppTheme.primaryAccent,
+              child: Center(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.person_add_alt_1_outlined, color: Colors.white),
+                    const SizedBox(width: 8),
+                    Text(
+                      "Add Band Member",
+                      style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold),
                     ),
-                  ),
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    minimumSize: Size.zero,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
+                  ],
                 ),
-            ],
+              ),
+            ),
           ),
           const SizedBox(height: 12),
-          if (_isLoadingMembers && _members.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 16),
-              child: Center(child: CircularProgressIndicator(color: AppTheme.primaryAccent)),
-            )
-          else if (_members.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Text(
-                'No band members found. Tap "+ Add Member" to add musicians to your band.',
-                style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary, fontStyle: FontStyle.italic),
-              ),
-            )
-          else
-            ListView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: _members.length,
-              itemBuilder: (context, index) {
-                final member = _members[index];
-                final instrument = _getMemberInstrument(member.userId);
-                final secondarySkills = _getMemberSecondarySkills(member.userId);
-                final isSelf = member.userId == currentUserId;
-                final isOnHold = member.isOnHold;
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      'BAND MEMBERS',
+                      style: GoogleFonts.outfit(
+                        fontSize: 13,
+                        color: AppTheme.textSecondary,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                    if (_members.isNotEmpty) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: AppTheme.primaryAccent.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          '${_members.length}',
+                          style: GoogleFonts.inter(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: AppTheme.primaryAccent,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                Row(
+                  children: [
+                    const Icon(Icons.shield_outlined, size: 14, color: AppTheme.primaryAccent),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Set Admin Roles',
+                      style: GoogleFonts.inter(fontSize: 12, color: AppTheme.primaryAccent, fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+        ] else ...[
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Row(
+              children: [
+                Text(
+                  'BAND MEMBERS',
+                  style: GoogleFonts.outfit(
+                    fontSize: 13,
+                    color: AppTheme.textSecondary,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+                if (_members.isNotEmpty) ...[
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primaryAccent.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      '${_members.length}',
+                      style: GoogleFonts.inter(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.primaryAccent,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+        ],
+        if (_isLoadingMembers && _members.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 16),
+            child: Center(child: CircularProgressIndicator(color: AppTheme.primaryAccent)),
+          )
+        else if (_members.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Text(
+              'No band members found. Tap "Add Band Member" to add musicians to your band.',
+              style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary, fontStyle: FontStyle.italic),
+            ),
+          )
+        else
+          ListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: _members.length,
+            itemBuilder: (itemCtx, index) {
+              final member = _members[index];
+              final mRoleStr = (member.role ?? '').toLowerCase();
+              final isLeaderRole = mRoleStr.contains('leader');
+              final isAdminRole = mRoleStr.contains('admin');
+              final isMODRole = mRoleStr.contains('mod');
+              final isOnHold = member.isOnHold;
 
-                return Opacity(
+              return AnimatedTapDetector(
+                onTap: () {
+                  if (member.userId != null) {
+                    _viewMemberProfile(member.userId!);
+                  }
+                },
+                child: Opacity(
                   opacity: isOnHold ? 0.6 : 1.0,
                   child: Container(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF141029),
+                      color: AppTheme.cardBackground,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: isOnHold ? Colors.amber.withValues(alpha: 0.3) : const Color(0xFF2E2A4E).withValues(alpha: 0.6)),
+                      border: Border.all(color: isOnHold ? Colors.amber.withValues(alpha: 0.3) : const Color(0xFF231F45), width: 1),
                     ),
                     child: Row(
                       children: [
                         CircleAvatar(
-                          radius: 18,
-                          backgroundColor: isOnHold ? Colors.amber.withValues(alpha: 0.2) : AppTheme.primaryAccent.withValues(alpha: 0.2),
+                          radius: 20,
+                          backgroundColor: isOnHold ? Colors.amber.withValues(alpha: 0.2) : AppTheme.primaryAccent.withValues(alpha: 0.3),
                           child: Text(
                             _getMemberInitial(member),
-                            style: GoogleFonts.outfit(
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
+                            style: GoogleFonts.inter(color: Colors.white),
                           ),
                         ),
-                        const SizedBox(width: 12),
+                        const SizedBox(width: 16),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Row(
-                                children: [
-                                  Flexible(
-                                    child: Text(
-                                      _getMemberName(member),
-                                      style: GoogleFonts.outfit(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.white,
-                                      ),
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                  if (isSelf) ...[
-                                    const SizedBox(width: 6),
-                                    Text(
-                                      '(You)',
-                                      style: GoogleFonts.inter(
-                                        fontSize: 11,
-                                        color: AppTheme.textSecondary,
-                                      ),
-                                    ),
-                                  ],
-                                ],
+                              Text(
+                                _getMemberName(member),
+                                style: GoogleFonts.outfit(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold),
                               ),
                               const SizedBox(height: 2),
-                              Row(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                                    decoration: BoxDecoration(
-                                      color: (member.role == 'Leader' || member.role == 'Admin')
-                                          ? AppTheme.primaryAccent.withValues(alpha: 0.2)
-                                          : Colors.white10,
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    child: Text(
-                                      member.role ?? 'Member',
-                                      style: GoogleFonts.inter(
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w600,
-                                        color: (member.role == 'Leader' || member.role == 'Admin')
-                                            ? AppTheme.primaryAccent
-                                            : AppTheme.textSecondary,
-                                      ),
-                                    ),
-                                  ),
-                                  if (isOnHold) ...[
-                                    const SizedBox(width: 6),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                                      decoration: BoxDecoration(
-                                        color: Colors.amber.withValues(alpha: 0.2),
-                                        borderRadius: BorderRadius.circular(6),
-                                        border: Border.all(color: Colors.amber.withValues(alpha: 0.4)),
-                                      ),
-                                      child: Text(
-                                        'ON HOLD',
-                                        style: GoogleFonts.inter(
-                                          fontSize: 9,
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.amber,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                  if (instrument.isNotEmpty || secondarySkills.isNotEmpty) ...[
-                                    const SizedBox(width: 8),
-                                    if (instrument.isNotEmpty)
-                                      Flexible(
-                                        child: Text(
-                                          instrument,
-                                          style: GoogleFonts.inter(
-                                            fontSize: 11,
-                                            color: AppTheme.textSecondary,
+                              Text(
+                                member.role ?? 'Member',
+                                style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
+                              ),
+                              Builder(
+                                builder: (context) {
+                                  final instrument = _getMemberInstrument(member.userId);
+                                  final secondary = _getMemberSecondarySkills(member.userId);
+                                  if (instrument.isEmpty && secondary.isEmpty) return const SizedBox.shrink();
+                                  return Padding(
+                                    padding: const EdgeInsets.only(top: 3),
+                                    child: Wrap(
+                                      spacing: 8,
+                                      runSpacing: 4,
+                                      crossAxisAlignment: WrapCrossAlignment.center,
+                                      children: [
+                                        if (instrument.isNotEmpty)
+                                          Text(
+                                            instrument,
+                                            style: GoogleFonts.inter(
+                                              fontSize: 11,
+                                              color: AppTheme.primaryAccent,
+                                              fontWeight: FontWeight.w500,
+                                            ),
                                           ),
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ),
-                                    if (secondarySkills.isNotEmpty) ...[
-                                      const SizedBox(width: 6),
-                                      SecondarySkillsBadge(
-                                        memberName: _getMemberName(member),
-                                        secondarySkills: secondarySkills,
-                                        isCompact: true,
-                                      ),
-                                    ],
-                                  ],
-                                ],
+                                        if (secondary.isNotEmpty)
+                                          SecondarySkillsBadge(
+                                            memberName: _getMemberName(member),
+                                            secondarySkills: secondary,
+                                          ),
+                                      ],
+                                    ),
+                                  );
+                                },
                               ),
                             ],
                           ),
                         ),
-                        if (isLeaderOrAdmin && !isSelf)
-                          IconButton(
-                            icon: const Icon(Icons.person_remove_outlined, color: AppTheme.danger, size: 20),
-                            tooltip: 'Remove Member',
-                            onPressed: () => _confirmRemoveMember(member),
+                        if (isOnHold)
+                          Container(
+                            margin: const EdgeInsets.only(right: 8),
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.amber.withValues(alpha: 0.2),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.amber.withValues(alpha: 0.5)),
+                            ),
+                            child: Text(
+                              'ON HOLD',
+                              style: GoogleFonts.inter(
+                                fontSize: 10,
+                                color: Colors.amber,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
                           ),
+                        if (isLeaderRole || isAdminRole || isMODRole)
+                          Container(
+                            margin: const EdgeInsets.only(right: 8),
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: isMODRole
+                                  ? Colors.purple.withValues(alpha: 0.2)
+                                  : isAdminRole
+                                      ? Colors.amber.withValues(alpha: 0.2)
+                                      : AppTheme.primaryAccent.withValues(alpha: 0.2),
+                              borderRadius: BorderRadius.circular(8),
+                              border: isMODRole
+                                  ? Border.all(color: Colors.purple.withValues(alpha: 0.4))
+                                  : isAdminRole
+                                      ? Border.all(color: Colors.amber.withValues(alpha: 0.4))
+                                      : null,
+                            ),
+                            child: Text(
+                              isLeaderRole ? 'Leader' : isAdminRole ? 'Admin' : 'MOD',
+                              style: GoogleFonts.inter(
+                                fontSize: 10,
+                                color: isMODRole
+                                    ? Colors.purpleAccent
+                                    : isAdminRole
+                                        ? Colors.amber
+                                        : AppTheme.primaryAccent,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        if (member.userId != null && member.userId != currentUserId) ...[
+                          GestureDetector(
+                            onTap: () {
+                              if (bandId != null) {
+                                _showMemberChatActions(member, bandId);
+                              } else {
+                                _navigateTo1on1Chat(member.userId!, _getMemberName(member));
+                              }
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: AppTheme.primaryAccent.withValues(alpha: 0.12),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.chat_bubble_outline_rounded,
+                                color: AppTheme.primaryAccent,
+                                size: 18,
+                              ),
+                            ),
+                          ),
+                          if (isLeaderOrAdmin) ...[
+                            const SizedBox(width: 4),
+                            GestureDetector(
+                              onTap: () => _toggleMemberHoldStatus(member, !isOnHold),
+                              child: Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: (isOnHold ? Colors.green : Colors.amber).withValues(alpha: 0.15),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  isOnHold ? Icons.play_arrow_rounded : Icons.pause_rounded,
+                                  color: isOnHold ? Colors.greenAccent : Colors.amber,
+                                  size: 18,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            PopupMenuButton<String>(
+                              icon: const Icon(Icons.shield_outlined, color: AppTheme.primaryAccent, size: 20),
+                              tooltip: 'Set Admin Roles',
+                              color: const Color(0xFF16132D),
+                              onSelected: (newRole) async {
+                                if (bandId != null && member.userId != null) {
+                                  if (newRole == 'Leader') {
+                                    // Enforce 1 Leader limit: Demote previous leader to Admin
+                                    for (var m in _members) {
+                                      if (m.userId != null && (m.role ?? '').toLowerCase().contains('leader') && m.userId != member.userId) {
+                                        await appState.firebaseService.updateBandMemberRoleAsync(bandId, m.userId!, 'Admin');
+                                      }
+                                    }
+                                  }
+                                  await appState.firebaseService.updateBandMemberRoleAsync(bandId, member.userId!, newRole);
+                                  await _loadMembers();
+                                  if (!mounted) return;
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('${_getMemberName(member)}\'s role updated to $newRole'),
+                                      backgroundColor: AppTheme.success,
+                                    ),
+                                  );
+                                }
+                              },
+                              itemBuilder: (menuContext) => [
+                                PopupMenuItem(
+                                  value: 'Member',
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.person_outline, color: Colors.white, size: 16),
+                                      SizedBox(width: 8),
+                                      Text('Set as Member', style: GoogleFonts.inter(color: Colors.white)),
+                                    ],
+                                  ),
+                                ),
+                                PopupMenuItem(
+                                  value: 'MOD',
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.security_rounded, color: Colors.purpleAccent, size: 16),
+                                      SizedBox(width: 8),
+                                      Text('Set as MOD', style: GoogleFonts.inter(color: Colors.purpleAccent)),
+                                    ],
+                                  ),
+                                ),
+                                PopupMenuItem(
+                                  value: 'Admin',
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.admin_panel_settings_outlined, color: Colors.amber, size: 16),
+                                      SizedBox(width: 8),
+                                      Text('Set as Admin', style: GoogleFonts.inter(color: Colors.amber)),
+                                    ],
+                                  ),
+                                ),
+                                PopupMenuItem(
+                                  value: 'Leader',
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.star_outline_rounded, color: AppTheme.primaryAccent, size: 16),
+                                      SizedBox(width: 8),
+                                      Text('Transfer Leadership', style: GoogleFonts.inter(color: AppTheme.primaryAccent)),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(width: 4),
+                            GestureDetector(
+                              onTap: () => _confirmRemoveMember(member),
+                              child: Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.danger.withValues(alpha: 0.15),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.person_remove_outlined,
+                                  color: AppTheme.danger,
+                                  size: 18,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
                       ],
                     ),
                   ),
-                );
-              },
-            ),
-          if (isLeaderOrAdmin && _members.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            OutlinedButton.icon(
-              onPressed: _showAddMemberDialog,
-              icon: const Icon(Icons.person_add_alt_1_rounded, size: 16, color: AppTheme.primaryAccent),
-              label: Text(
-                '+ Add Member',
-                style: GoogleFonts.inter(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: AppTheme.primaryAccent,
                 ),
-              ),
-              style: OutlinedButton.styleFrom(
-                side: const BorderSide(color: Color(0xFF2E2A4E)),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                minimumSize: const Size(double.infinity, 38),
-              ),
-            ),
-          ],
-        ],
-      ),
+              );
+            },
+          ),
+      ],
     );
   }
 
@@ -1116,7 +1540,7 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
                 controller: _mapViewLocationController,
                 style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
                 decoration: const InputDecoration(
-                  hintText: 'Tap to input location for Map View Pin',
+                  hintText: 'Enter address or city for Map View pin',
                 ),
               ),
               const SizedBox(height: 12),

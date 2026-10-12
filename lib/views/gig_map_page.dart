@@ -430,6 +430,42 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
     return {...gigMarkers, ...rehearsalMarkers};
   }
 
+  void _showMapInfoDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF0F0C20),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: Color(0xFF2E2A4E)),
+        ),
+        title: Row(
+          children: [
+            const Icon(Icons.info_outline_rounded, color: AppTheme.primaryAccent, size: 22),
+            const SizedBox(width: 8),
+            Text(
+              'Map View Guide',
+              style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        content: Text(
+          'Move pins towards the centre of the screen (telescopic sight) to hear different bands and their recordings, band info, gig promo, etc.',
+          style: GoogleFonts.inter(color: Colors.white70, fontSize: 14, height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              'Got it',
+              style: GoogleFonts.inter(color: AppTheme.primaryAccent, fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final appState = Provider.of<AppState>(context);
@@ -453,6 +489,11 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
           onPressed: () => Navigator.pop(context),
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.info_outline_rounded, color: Colors.white),
+            tooltip: 'Map View Guide',
+            onPressed: _showMapInfoDialog,
+          ),
           IconButton(
             icon: const Icon(Icons.refresh_rounded, color: Colors.white),
             onPressed: _fetchGigs,

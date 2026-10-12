@@ -1418,13 +1418,19 @@ class FirebaseService {
         final applicantName = applicantProfile?.displayName ?? applicantProfile?.nickname ?? 'A musician';
         final role = subRequest?.role ?? subRequest?.voicePart ?? 'Musician';
         final bandName = subRequest?.bandName ?? 'Band';
+        final eventType = subRequest?.role ?? subRequest?.requestType ?? 'Gig';
+        final dateStr = subRequest?.date ?? '';
+        final timeStr = subRequest?.formattedTimeRange ?? subRequest?.startTime ?? '';
+        final dateTimeStr = (dateStr.isNotEmpty && timeStr.isNotEmpty)
+            ? '$dateStr $timeStr'
+            : (dateStr.isNotEmpty ? dateStr : (timeStr.isNotEmpty ? timeStr : 'Date & Time TBD'));
         final notifId = 'notif_sub_resp_${subRequestId}_$userId';
         final notifMap = {
           'id': notifId,
           'type': 'sub_request_response',
           'category': 'requests',
-          'title': 'New Sub Candidate',
-          'body': '$applicantName applied for $role in $bandName',
+          'title': 'Gig Request Response',
+          'body': '$bandName\n$eventType\n$dateTimeStr',
           'createdAt': DateTime.now().millisecondsSinceEpoch,
           'isRead': false,
           'data': {
@@ -1435,6 +1441,8 @@ class FirebaseService {
             'eventId': subRequest?.eventId ?? '',
             'voicePart': role,
             'bandName': bandName,
+            'eventType': eventType,
+            'dateTime': dateTimeStr,
           },
         };
 

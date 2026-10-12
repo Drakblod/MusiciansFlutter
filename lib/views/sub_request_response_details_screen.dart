@@ -355,57 +355,6 @@ class _SubRequestResponseDetailsScreenState
                 selectedSub.userId,
                 'substitute',
               );
-            } else if (mounted) {
-              // Task 2842: Ask creator if they want to create a temporary event room
-              final wantRoom = await showDialog<bool>(
-                context: context,
-                builder: (ctx) => AlertDialog(
-                  backgroundColor: const Color(0xFF0F0C20),
-                  title: Text(
-                    "Create Event Room?",
-                    style: GoogleFonts.outfit(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  content: Text(
-                    "A substitute has been approved! Would you like to create a temporary event room for this event?",
-                    style: GoogleFonts.inter(color: AppTheme.textSecondary),
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(ctx, false),
-                      child: Text(
-                        "No thanks",
-                        style: GoogleFonts.inter(color: AppTheme.textSecondary),
-                      ),
-                    ),
-                    ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppTheme.primaryAccent,
-                      ),
-                      onPressed: () => Navigator.pop(ctx, true),
-                      child: Text(
-                        "Create Room",
-                        style: GoogleFonts.inter(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              );
-
-              if (wantRoom == true) {
-                await appState.firebaseService.createTemporaryEventRoomAsync(
-                  bandId: bandId,
-                  eventId: eventId,
-                  roomName: '${event.title} Room',
-                  createdBy: currentUserId,
-                  initialMembers: [selectedSub.userId],
-                );
-              }
             }
           }
         } catch (roomErr) {

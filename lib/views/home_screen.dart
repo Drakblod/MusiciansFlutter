@@ -591,9 +591,9 @@ class HomeScreen extends StatelessWidget {
     final Map<String, int> defaultOrder = {
       'find_musicians': 0,
       'band_room': 1,
-      'create_event': 2,
-      'browse_musicians': 3,
-      'find_gigs': 4,
+      'find_gigs': 2,
+      'create_event': 3,
+      'browse_musicians': 4,
       'collabs': 5,
       'event_calendar': 6,
       'marketplace': 7,
@@ -708,7 +708,7 @@ class HomeScreen extends StatelessWidget {
                   child: Padding(
                     padding: const EdgeInsets.only(bottom: 10, right: 10),
                     child: Text(
-                      '2.69',
+                      '2.70',
                       style: GoogleFonts.inter(
                         color: AppTheme.textSecondary.withOpacity(0.5),
                         fontSize: 12,
@@ -1749,9 +1749,9 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
     final Map<String, int> defaultOrder = {
       'find_musicians': 0,
       'band_room': 1,
-      'create_event': 2,
-      'browse_musicians': 3,
-      'find_gigs': 4,
+      'find_gigs': 2,
+      'create_event': 3,
+      'browse_musicians': 4,
       'collabs': 5,
       'event_calendar': 6,
       'marketplace': 7,
@@ -1962,7 +1962,7 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
                                 }
                               },
                               child: Text(
-                                '2.69',
+                                '2.70',
                                 style: GoogleFonts.inter(
                                   color: AppTheme.textSecondary.withOpacity(0.5),
                                   fontSize: 12,

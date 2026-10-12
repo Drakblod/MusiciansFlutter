@@ -12,6 +12,8 @@ import 'event_results_page.dart';
 import 'create_event_page.dart';
 import '../utils/date_parser.dart';
 import '../controllers/global_create_event_launcher.dart';
+import '../widgets/animated_tap_detector.dart';
+import '../widgets/rsvp_reminder_dialog.dart';
 
 enum EventTabType { newEvents, upcoming, past }
 
@@ -42,6 +44,7 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> with SingleTick
   // All loaded events: bandId -> List<BandEvent>
   final Map<String, List<BandEvent>> _bandEventsMap = {};
   final List<StreamSubscription<List<BandEvent>>> _subscriptions = [];
+  final Set<String> _savingRsvpEventIds = {};
 
   @override
   void initState() {
@@ -197,6 +200,120 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> with SingleTick
     });
 
     return result;
+  }
+
+  Future<void> _handleQuickRsvp(String bandId, BandEvent event, String status) async {
+    final appState = Provider.of<AppState>(context, listen: false);
+    final userId = appState.currentUserId;
+    if (userId == null || event.id == null) return;
+
+    final eventId = event.id!;
+    if (_savingRsvpEventIds.contains(eventId)) return;
+
+    setState(() {
+      _savingRsvpEventIds.add(eventId);
+    });
+
+    try {
+      await appState.firebaseService.updateEventResponseAsync(
+        bandId,
+        eventId,
+        userId,
+        status,
+      );
+
+      if (status == 'Yes' && event.temporaryRoomId != null && event.temporaryRoomId!.isNotEmpty) {
+        await appState.firebaseService.addMemberToEventRoomAsync(
+          bandId,
+          event.temporaryRoomId!,
+          userId,
+          'attending',
+        );
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(status == 'Yes' ? 'RSVP: Attending!' : 'RSVP: Declined'),
+            backgroundColor: status == 'Yes' ? AppTheme.success : AppTheme.danger,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to save RSVP: $e'),
+            backgroundColor: AppTheme.danger,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _savingRsvpEventIds.remove(eventId);
+        });
+      }
+    }
+  }
+
+  void _handleUncertainRsvp(String bandId, BandEvent event) {
+    final appState = Provider.of<AppState>(context, listen: false);
+    final userId = appState.currentUserId;
+    if (userId == null || event.id == null) return;
+
+    RsvpReminderDialog.show(
+      context: context,
+      event: event,
+      bandId: bandId,
+      currentUserId: userId,
+      onResponded: () {
+        if (mounted) setState(() {});
+      },
+    );
+  }
+
+  Widget _buildRsvpButton({
+    required String label,
+    required IconData icon,
+    required Color color,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return AnimatedTapDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? color.withValues(alpha: 0.22) : const Color(0xFF1B163B),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: isSelected ? color : const Color(0xFF2C2454),
+            width: isSelected ? 1.5 : 1.0,
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 14,
+              color: isSelected ? color : AppTheme.textSecondary,
+            ),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                color: isSelected ? Colors.white : AppTheme.textSecondary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _confirmDeleteEvent(String bandId, BandEvent event) async {
@@ -890,6 +1007,136 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> with SingleTick
               ),
             ),
           ),
+
+          if (event.requireResponse &&
+              !event.isLocked &&
+              (currentUserId == null || !event.excludedMemberIds.contains(currentUserId))) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF130F2B),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: (currentUserId != null ? event.responses[currentUserId]?.status : null) == null
+                        ? AppTheme.primaryAccent.withValues(alpha: 0.5)
+                        : const Color(0xFF28224B),
+                    width: 1.2,
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              (currentUserId != null ? event.responses[currentUserId]?.status : null) == null
+                                  ? Icons.notification_important_rounded
+                                  : (((event.responses[currentUserId]?.status ?? '').toLowerCase() == 'yes' ||
+                                          (event.responses[currentUserId]?.status ?? '').toLowerCase() == 'attending')
+                                      ? Icons.check_circle_rounded
+                                      : (((event.responses[currentUserId]?.status ?? '').toLowerCase() == 'no' ||
+                                              (event.responses[currentUserId]?.status ?? '').toLowerCase() == 'declined')
+                                          ? Icons.cancel_rounded
+                                          : Icons.help_rounded)),
+                              size: 15,
+                              color: (currentUserId != null ? event.responses[currentUserId]?.status : null) == null
+                                  ? const Color(0xFFFFB74D)
+                                  : (((event.responses[currentUserId]?.status ?? '').toLowerCase() == 'yes' ||
+                                          (event.responses[currentUserId]?.status ?? '').toLowerCase() == 'attending')
+                                      ? AppTheme.success
+                                      : (((event.responses[currentUserId]?.status ?? '').toLowerCase() == 'no' ||
+                                              (event.responses[currentUserId]?.status ?? '').toLowerCase() == 'declined')
+                                          ? AppTheme.danger
+                                          : AppTheme.warning)),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              (currentUserId != null ? event.responses[currentUserId]?.status : null) == null
+                                  ? 'RSVP Required'
+                                  : 'Your RSVP: ${event.responses[currentUserId]?.status}',
+                              style: GoogleFonts.inter(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: (currentUserId != null ? event.responses[currentUserId]?.status : null) == null
+                                    ? const Color(0xFFFFB74D)
+                                    : Colors.white,
+                              ),
+                            ),
+                          ],
+                        ),
+                        Text(
+                          (currentUserId != null ? event.responses[currentUserId]?.status : null) == null
+                              ? 'Please respond'
+                              : 'Tap to change',
+                          style: GoogleFonts.inter(
+                            fontSize: 11,
+                            color: AppTheme.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    if (event.id != null && _savingRsvpEventIds.contains(event.id))
+                      const Center(
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(vertical: 6),
+                          child: SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: AppTheme.primaryAccent,
+                            ),
+                          ),
+                        ),
+                      )
+                    else
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildRsvpButton(
+                              label: 'Yes',
+                              icon: Icons.check_rounded,
+                              color: AppTheme.success,
+                              isSelected: ((event.responses[currentUserId]?.status ?? '').toLowerCase() == 'yes' ||
+                                  (event.responses[currentUserId]?.status ?? '').toLowerCase() == 'attending'),
+                              onTap: () => _handleQuickRsvp(bandId, event, 'Yes'),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: _buildRsvpButton(
+                              label: 'No',
+                              icon: Icons.close_rounded,
+                              color: AppTheme.danger,
+                              isSelected: ((event.responses[currentUserId]?.status ?? '').toLowerCase() == 'no' ||
+                                  (event.responses[currentUserId]?.status ?? '').toLowerCase() == 'declined'),
+                              onTap: () => _handleQuickRsvp(bandId, event, 'No'),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: _buildRsvpButton(
+                              label: 'Maybe',
+                              icon: Icons.help_outline_rounded,
+                              color: AppTheme.warning,
+                              isSelected: ((event.responses[currentUserId]?.status ?? '').toLowerCase() == 'uncertain' ||
+                                  (event.responses[currentUserId]?.status ?? '').toLowerCase() == 'maybe'),
+                              onTap: () => _handleUncertainRsvp(bandId, event),
+                            ),
+                          ),
+                        ],
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ],
 
           const SizedBox(height: 12),
           const Divider(height: 1, color: Color(0xFF231F45)),

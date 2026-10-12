@@ -147,7 +147,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 30),
+                const SizedBox(height: 24),
 
                 // 1. Profile Name field
                 TextFormField(
@@ -155,8 +155,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
                   decoration: const InputDecoration(
                     labelText: 'Profile Name',
-                    hintText:
-                        'Preferably use your real name to make it easier for users to find you',
+                    hintText: 'Enter your real name',
                     prefixIcon: Icon(
                       Icons.person_outline_rounded,
                       color: AppTheme.textSecondary,
@@ -171,6 +170,29 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     }
                     return null;
                   },
+                ),
+                const SizedBox(height: 6),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.info_outline_rounded,
+                        size: 14,
+                        color: AppTheme.secondaryAccent,
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          'Please register your real name to help others find you.',
+                          style: GoogleFonts.inter(
+                            color: AppTheme.textSecondary,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 16),
 
