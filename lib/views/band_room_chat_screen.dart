@@ -3408,7 +3408,7 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                                 ),
                                 child: Center(
                                   child: Text(
-                                    'Gig / Booking',
+                                    'Gig / Event',
                                     style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
                                   ),
                                 ),
@@ -3427,7 +3427,7 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                         controller: titleController,
                         style: GoogleFonts.inter(color: Colors.white),
                         decoration: const InputDecoration(
-                          hintText: 'e.g. Rehearsal Update or Gig Booking',
+                          hintText: 'e.g. Rehearsal Update or Gig Event',
                         ),
                       ),
                       const SizedBox(height: 16),

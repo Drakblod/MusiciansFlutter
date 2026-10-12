@@ -201,19 +201,19 @@ void main() {
       expect(reqZero.formattedPayAmount, 'Paid');
     });
 
-    test('3. Formats exact Swedish Kronor amount (SEK 1,500)', () {
+    test('3. Formats exact Swedish Kronor amount (1.500,00 SEK)', () {
       final req = SubRequest(isPaid: true, payAmount: 1500, currency: 'SEK');
-      expect(req.formattedPayAmount, 'Paid · SEK 1,500');
+      expect(req.formattedPayAmount, 'Paid · 1.500,00 SEK');
     });
 
     test('4. Formats large amount with thousands separator', () {
       final req = SubRequest(isPaid: true, payAmount: 25000, currency: 'SEK');
-      expect(req.formattedPayAmount, 'Paid · SEK 25,000');
+      expect(req.formattedPayAmount, 'Paid · 25.000,00 SEK');
     });
 
     test('5. Formats other currencies when specified', () {
       final req = SubRequest(isPaid: true, payAmount: 300, currency: 'EUR');
-      expect(req.formattedPayAmount, 'Paid · EUR 300');
+      expect(req.formattedPayAmount, 'Paid · 300,00 EUR');
     });
 
     test('6. Serializes and deserializes multiple request group fields', () {
@@ -313,7 +313,7 @@ void main() {
       expect(group.eventCount, 2);
       expect(group.filledPositions, 0);
       expect(group.isMultiple, isTrue);
-      expect(group.formattedPayment, 'Paid · SEK 1,500');
+      expect(group.formattedPayment, 'Paid · 1.500,00 SEK');
     });
 
     test('9. Tracks filled positions correctly in GigGroup', () {
@@ -825,7 +825,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Nordic Stars'), findsOneWidget);
-      expect(find.text('Paid · SEK 1,500'), findsOneWidget);
+      expect(find.text('Paid · 1.500,00 SEK'), findsOneWidget);
       expect(find.text('2 events · 2 positions'), findsOneWidget);
     });
 
@@ -858,7 +858,7 @@ void main() {
         payAmount: 1500,
         currency: 'SEK',
       );
-      expect(reqValid.formattedPayAmount, equals('Paid · SEK 1,500'));
+      expect(reqValid.formattedPayAmount, equals('Paid · 1.500,00 SEK'));
       expect(reqValid.payAmount, isA<int>());
       expect(reqValid.payAmount, equals(1500));
 
@@ -892,7 +892,7 @@ void main() {
       final fromJsonReq = SubRequest.fromJson(jsonMap, 'sub_json_1');
       expect(fromJsonReq.payAmount, equals(2500));
       expect(fromJsonReq.currency, equals('SEK'));
-      expect(fromJsonReq.formattedPayAmount, equals('Paid · SEK 2,500'));
+      expect(fromJsonReq.formattedPayAmount, equals('Paid · 2.500,00 SEK'));
     });
 
     testWidgets('27. Resolves same occurrences in correct order when opened from parent event, event 1, or event 2', (tester) async {
@@ -1264,7 +1264,7 @@ void main() {
 
       expect(sub.payAmount, equals(1500));
       expect(sub.payAmountMinor, equals(150000));
-      expect(sub.formattedPayAmount, equals('Paid · SEK 1,500'));
+      expect(sub.formattedPayAmount, equals('Paid · 1.500,00 SEK'));
 
       final json = sub.toJson();
       expect(json['PayAmount'], equals(1500));
@@ -1273,7 +1273,7 @@ void main() {
       final roundTrip = SubRequest.fromJson(json, 'sub_minor_test');
       expect(roundTrip.payAmount, equals(1500));
       expect(roundTrip.payAmountMinor, equals(150000));
-      expect(roundTrip.formattedPayAmount, equals('Paid · SEK 1,500'));
+      expect(roundTrip.formattedPayAmount, equals('Paid · 1.500,00 SEK'));
     });
 
     testWidgets('35. Favorites persistence: reloading profiles retains starred favorite and populates in Find Musician Favorites list', (tester) async {

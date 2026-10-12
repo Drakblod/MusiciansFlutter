@@ -183,6 +183,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Band Members'), findsOneWidget);
+      expect(find.text('Set Admin Roles'), findsOneWidget);
       expect(find.text('Captain Leader (You)'), findsOneWidget);
       expect(find.text('Add Member'), findsWidgets);
     });

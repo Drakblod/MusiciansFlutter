@@ -27,6 +27,7 @@ class _CreateBandScreenState extends State<CreateBandScreen> {
   final _aboutController = TextEditingController();
 
   final List<UserProfile> _selectedMembers = [];
+  final Map<String, String> _memberRoles = {};
 
   String _level = 'C = INTERMEDIATE';
   String _rehearsalDay = 'Monday';
@@ -166,12 +167,13 @@ class _CreateBandScreenState extends State<CreateBandScreen> {
       final bandId = (band.name ?? 'My Band').replaceAll(' ', '_');
       for (final member in _selectedMembers) {
         if (member.userId != null && member.userId != userId) {
+          final role = _memberRoles[member.userId] ?? 'Member';
           try {
             await appState.firebaseService.addBandMemberAsync(
               bandId,
               member.userId!,
-              'Member',
-              member.nickname ?? member.displayName ?? 'Member',
+              role,
+              member.nickname ?? member.displayName ?? role,
             );
           } catch (mErr) {
             debugPrint("Error adding initial band member ${member.userId}: $mErr");
@@ -276,9 +278,31 @@ class _CreateBandScreenState extends State<CreateBandScreen> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              'Band Members',
-              style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+            Row(
+              children: [
+                Text(
+                  'Band Members',
+                  style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                ),
+                if (_selectedMembers.isNotEmpty) ...[
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primaryAccent.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      '${_selectedMembers.length + 1}',
+                      style: GoogleFonts.inter(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.primaryAccent,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
             ),
             TextButton.icon(
               onPressed: _showAddMemberDialog,
@@ -306,6 +330,17 @@ class _CreateBandScreenState extends State<CreateBandScreen> {
         Text(
           'Add members to your band. They will be added to the band room and chat automatically.',
           style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary, height: 1.3),
+        ),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            const Icon(Icons.shield_outlined, size: 14, color: AppTheme.primaryAccent),
+            const SizedBox(width: 4),
+            Text(
+              'Set Admin Roles',
+              style: GoogleFonts.inter(fontSize: 12, color: AppTheme.primaryAccent, fontWeight: FontWeight.bold),
+            ),
+          ],
         ),
         const SizedBox(height: 12),
 
@@ -367,6 +402,10 @@ class _CreateBandScreenState extends State<CreateBandScreen> {
             final instrumentsStr = member.instruments.isNotEmpty
                 ? member.instruments.join(', ')
                 : (member.mainInstrument ?? 'Member');
+            final role = _memberRoles[member.userId] ?? 'Member';
+            final isLeaderRole = role.toLowerCase() == 'leader';
+            final isAdminRole = role.toLowerCase() == 'admin';
+            final isMODRole = role.toLowerCase() == 'mod';
 
             return Container(
               margin: const EdgeInsets.only(bottom: 8),
@@ -396,20 +435,118 @@ class _CreateBandScreenState extends State<CreateBandScreen> {
                           style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
                         ),
                         Text(
-                          instrumentsStr,
-                          style: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 11),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                          role,
+                          style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
                         ),
+                        if (instrumentsStr.isNotEmpty && instrumentsStr != 'Member')
+                          Text(
+                            instrumentsStr,
+                            style: GoogleFonts.inter(color: AppTheme.textSecondary.withValues(alpha: 0.7), fontSize: 11),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                       ],
                     ),
                   ),
+                  if (isLeaderRole || isAdminRole || isMODRole)
+                    Container(
+                      margin: const EdgeInsets.only(right: 6),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: isMODRole
+                            ? Colors.purple.withValues(alpha: 0.2)
+                            : isAdminRole
+                                ? Colors.amber.withValues(alpha: 0.2)
+                                : AppTheme.primaryAccent.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(8),
+                        border: isMODRole
+                            ? Border.all(color: Colors.purple.withValues(alpha: 0.4))
+                            : isAdminRole
+                                ? Border.all(color: Colors.amber.withValues(alpha: 0.4))
+                                : Border.all(color: AppTheme.primaryAccent.withValues(alpha: 0.4)),
+                      ),
+                      child: Text(
+                        isLeaderRole ? 'Leader' : isAdminRole ? 'Admin' : 'MOD',
+                        style: GoogleFonts.inter(
+                          fontSize: 10,
+                          color: isMODRole
+                              ? Colors.purpleAccent
+                              : isAdminRole
+                                  ? Colors.amber
+                                  : AppTheme.primaryAccent,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  PopupMenuButton<String>(
+                    icon: const Icon(Icons.shield_outlined, color: AppTheme.primaryAccent, size: 20),
+                    tooltip: 'Set Admin Roles',
+                    color: const Color(0xFF16132D),
+                    onSelected: (newRole) {
+                      if (member.userId != null) {
+                        setState(() {
+                          _memberRoles[member.userId!] = newRole;
+                        });
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('$name\'s role set to $newRole'),
+                            backgroundColor: AppTheme.success,
+                            duration: const Duration(seconds: 2),
+                          ),
+                        );
+                      }
+                    },
+                    itemBuilder: (menuContext) => [
+                      PopupMenuItem(
+                        value: 'Member',
+                        child: Row(
+                          children: [
+                            const Icon(Icons.person_outline, color: Colors.white, size: 16),
+                            const SizedBox(width: 8),
+                            Text('Set as Member', style: GoogleFonts.inter(color: Colors.white)),
+                          ],
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: 'MOD',
+                        child: Row(
+                          children: [
+                            const Icon(Icons.security_rounded, color: Colors.purpleAccent, size: 16),
+                            const SizedBox(width: 8),
+                            Text('Set as MOD', style: GoogleFonts.inter(color: Colors.purpleAccent)),
+                          ],
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: 'Admin',
+                        child: Row(
+                          children: [
+                            const Icon(Icons.admin_panel_settings_outlined, color: Colors.amber, size: 16),
+                            const SizedBox(width: 8),
+                            Text('Set as Admin', style: GoogleFonts.inter(color: Colors.amber)),
+                          ],
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: 'Leader',
+                        child: Row(
+                          children: [
+                            const Icon(Icons.star_outline_rounded, color: AppTheme.primaryAccent, size: 16),
+                            const SizedBox(width: 8),
+                            Text('Set as Leader', style: GoogleFonts.inter(color: AppTheme.primaryAccent)),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(width: 4),
                   IconButton(
                     icon: const Icon(Icons.remove_circle_outline, color: Color(0xFFEF4444), size: 20),
                     tooltip: 'Remove',
                     onPressed: () {
                       setState(() {
                         _selectedMembers.removeWhere((m) => m.userId == member.userId);
+                        _memberRoles.remove(member.userId);
                       });
                     },
                     padding: EdgeInsets.zero,

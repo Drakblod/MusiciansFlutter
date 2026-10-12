@@ -595,7 +595,7 @@ void main() {
       expect(find.textContaining('Unpaid'), findsNothing);
 
       // Paid badge appears with formatted currency
-      expect(find.text('Paid · SEK 3,500'), findsOneWidget);
+      expect(find.text('Paid · 3.500,00 SEK'), findsOneWidget);
 
       // Open paid gig details
       await tester.tap(find.text('Paid Band'));

@@ -284,9 +284,9 @@ void main() {
 
       // Verify Category / Shortcut Tabs
       expect(find.text('All'), findsOneWidget);
-      expect(find.text('Messages'), findsOneWidget);
-      expect(find.text('Events'), findsOneWidget);
       expect(find.text('Requests'), findsOneWidget);
+      expect(find.text('Events'), findsOneWidget);
+      expect(find.text('Message'), findsOneWidget);
       expect(find.text('System'), findsNothing);
 
       // Both notifications should be visible in 'All' tab
@@ -341,8 +341,8 @@ void main() {
       // Verify System is absent
       expect(find.text('System'), findsNothing);
 
-      // Tap 'Messages' shortcut
-      await tester.tap(find.text('Messages'));
+      // Tap 'Message' shortcut
+      await tester.tap(find.text('Message'));
       await tester.pumpAndSettle();
       expect(pushedRoute, '/inbox');
     });

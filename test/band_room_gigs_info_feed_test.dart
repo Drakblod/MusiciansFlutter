@@ -313,5 +313,14 @@ void main() {
 
     expect(find.text('Create Post / Update'), findsOneWidget);
     expect(find.text('No posts or updates found.'), findsOneWidget);
+
+    // Tap Create Post / Update to open dialog
+    await tester.tap(find.text('Create Post / Update'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('POST GIG / NEWS'), findsOneWidget);
+    expect(find.text('News Update'), findsOneWidget);
+    expect(find.text('Gig / Event'), findsOneWidget);
+    expect(find.text('Gig / Booking'), findsNothing);
   });
 }

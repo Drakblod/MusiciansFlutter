@@ -716,7 +716,7 @@ void main() {
       await pumpTestApp(tester, mockService: mock, child: const FindGigsScreen());
 
       // Paid gig shows payment badge on card
-      expect(find.textContaining('2,500'), findsOneWidget);
+      expect(find.textContaining('2.500,00 SEK'), findsOneWidget);
 
       // Open paid gig details sheet
       await tester.tap(find.text('Paid Band'));

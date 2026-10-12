@@ -28,6 +28,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
   bool _isLoading = true;
   String _selectedFilter = 'All';
   SubRequest? _selectedGig;
+  bool _showGuideBanner = true;
 
   // Prototype Mock Live Rehearsal Audio State
   MockRehearsalAudioController? _audioController;
@@ -575,6 +576,72 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
               ),
             ),
 
+            // Prominent Map View Guide Banner
+            if (_showGuideBanner)
+              Positioned(
+                top: 64,
+                left: 16,
+                right: 16,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0F0C20).withOpacity(0.94),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.4), width: 1.2),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.4),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: AppTheme.primaryAccent.withOpacity(0.18),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.center_focus_strong_rounded,
+                          color: AppTheme.primaryAccent,
+                          size: 18,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: _showMapInfoDialog,
+                          child: Text(
+                            'Move pins towards the centre (telescopic sight) to hear bands & recordings.',
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              color: Colors.white,
+                              fontWeight: FontWeight.w500,
+                              height: 1.3,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      IconButton(
+                        icon: const Icon(Icons.close_rounded, color: Colors.white70, size: 18),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        tooltip: 'Dismiss',
+                        onPressed: () {
+                          setState(() {
+                            _showGuideBanner = false;
+                          });
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
             // Audio Controls Overlay
             _buildAudioControlsOverlay(),
 
@@ -595,7 +662,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
     }
 
     return Positioned(
-      top: 68,
+      top: _showGuideBanner ? 132 : 68,
       right: 16,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.end,

@@ -37,7 +37,6 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> with SingleTick
 
   Map<String, String> _userBands = {};
   Map<String, String> _userRoles = {}; // bandId -> role
-  String? _selectedBandId; // null means 'All Bands'
   bool _isLoading = true;
   String _searchQuery = '';
 
@@ -50,7 +49,6 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> with SingleTick
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
-    _selectedBandId = widget.initialBandId;
     _loadBandsAndEvents();
   }
 
@@ -95,12 +93,6 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> with SingleTick
         setState(() {
           _userBands = bands;
           _userRoles = roles;
-          if (widget.initialBandId != null && bands.containsKey(widget.initialBandId)) {
-            _selectedBandId = widget.initialBandId;
-          } else {
-            // Standalone Events view always defaults to All Bands (null) so no events or requests are hidden
-            _selectedBandId = null;
-          }
         });
       }
 
@@ -147,11 +139,7 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> with SingleTick
     final now = DateTime.now();
     final List<MapEntry<String, BandEvent>> result = [];
 
-    final targetBands = _selectedBandId != null
-        ? {_selectedBandId!: _userBands[_selectedBandId] ?? ''}
-        : _userBands;
-
-    for (final bandId in targetBands.keys) {
+    for (final bandId in _userBands.keys) {
       final events = _bandEventsMap[bandId] ?? [];
       for (final event in events) {
         final start = DateTime.tryParse(event.startDateTime)?.toLocal();
@@ -433,68 +421,6 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> with SingleTick
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Band Selector Chips (if user has bands)
-                  if (_userBands.isNotEmpty) ...[
-                    SizedBox(
-                      height: 38,
-                      child: ListView(
-                        scrollDirection: Axis.horizontal,
-                        children: [
-                          ChoiceChip(
-                            label: Text(
-                              'All Bands (${_userBands.length})',
-                              style: GoogleFonts.inter(
-                                fontSize: 12,
-                                fontWeight: _selectedBandId == null ? FontWeight.bold : FontWeight.normal,
-                                color: _selectedBandId == null ? Colors.white : AppTheme.textSecondary,
-                              ),
-                            ),
-                            selected: _selectedBandId == null,
-                            selectedColor: AppTheme.primaryAccent,
-                            backgroundColor: const Color(0xFF16132D),
-                            side: BorderSide(
-                              color: _selectedBandId == null ? AppTheme.primaryAccent : const Color(0xFF2E2A4E),
-                            ),
-                            onSelected: (selected) {
-                              if (selected) {
-                                setState(() => _selectedBandId = null);
-                              }
-                            },
-                          ),
-                          const SizedBox(width: 8),
-                          ..._userBands.entries.map((entry) {
-                            final isSelected = _selectedBandId == entry.key;
-                            return Padding(
-                              padding: const EdgeInsets.only(right: 8),
-                              child: ChoiceChip(
-                                label: Text(
-                                  entry.value,
-                                  style: GoogleFonts.inter(
-                                    fontSize: 12,
-                                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                                    color: isSelected ? Colors.white : AppTheme.textSecondary,
-                                  ),
-                                ),
-                                selected: isSelected,
-                                selectedColor: AppTheme.primaryAccent,
-                                backgroundColor: const Color(0xFF16132D),
-                                side: BorderSide(
-                                  color: isSelected ? AppTheme.primaryAccent : const Color(0xFF2E2A4E),
-                                ),
-                                onSelected: (selected) {
-                                  setState(() {
-                                    _selectedBandId = selected ? entry.key : null;
-                                  });
-                                },
-                              ),
-                            );
-                          }),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                  ],
-
                   // Search Bar
                   TextField(
                     controller: _searchController,

@@ -584,7 +584,7 @@ void main() {
 
       expect(find.text('Detail Test Guitar'), findsOneWidget);
       expect(find.text('Instruments/Gear'), findsOneWidget);
-      expect(find.text('5000 kr'), findsOneWidget);
+      expect(find.text('5.000,00 SEK'), findsOneWidget);
     });
 
     testWidgets('22. MARKETPLACE-02: Action standardization & Create Listing form order', (tester) async {
@@ -612,7 +612,7 @@ void main() {
       final offeringTypeFinder = find.text('OFFERING TYPE');
       final titleFinder = find.text('TITLE');
       final descFinder = find.text('DESCRIPTION');
-      final priceFinder = find.text('PRICE (KR) (0 FOR FREE)');
+      final priceFinder = find.text('PRICE (SEK) (0 FOR FREE)');
       final cityFinder = find.text('CITY / LOCATION');
       final photosFinder = find.text('PHOTOS (OPTIONAL, UP TO 5)');
 

@@ -9,6 +9,7 @@ import '../models/marketplace_taxonomy.dart';
 import '../widgets/custom_top_bar.dart';
 import '../widgets/gradient_scaffold.dart';
 import '../widgets/animated_tap_detector.dart';
+import '../utils/currency_formatter.dart';
 
 class ListingDetailsPage extends StatefulWidget {
   final Listing listing;
@@ -251,7 +252,9 @@ class _ListingDetailsPageState extends State<ListingDetailsPage> {
     final appState = Provider.of<AppState>(context);
     final isOwner = widget.listing.userId == appState.currentUserId;
     final hasImages = widget.listing.imageUrls.isNotEmpty;
-    final priceStr = widget.listing.price == 0 ? 'Free' : '${widget.listing.price.toInt()} kr';
+    final priceStr = widget.listing.price == 0
+        ? 'Free'
+        : CurrencyFormatter.format(widget.listing.price);
     final dateStr = DateFormat('yMMMd').format(DateTime.fromMillisecondsSinceEpoch(widget.listing.createdAt));
 
     return GradientScaffold(

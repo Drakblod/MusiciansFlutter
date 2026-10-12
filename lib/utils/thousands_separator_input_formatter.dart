@@ -1,15 +1,13 @@
 import 'package:flutter/services.dart';
-import 'package:intl/intl.dart';
 
-/// Formats numeric input with comma thousands separators (e.g. 1500 -> 1,500)
+import 'currency_formatter.dart';
+
+/// Formats numeric input with Swedish thousands separators (e.g. 1500 -> 1.500)
 /// while maintaining a stable cursor position and returning integer values.
 class ThousandsSeparatorInputFormatter extends TextInputFormatter {
-  static final NumberFormat _formatter = NumberFormat('#,###', 'en_US');
-
   static String format(int? value) {
     if (value == null) return '';
-    if (value == 0) return '0';
-    return _formatter.format(value);
+    return CurrencyFormatter.formatWholeUnits(value);
   }
 
   static int? parse(String? text) {
@@ -41,7 +39,7 @@ class ThousandsSeparatorInputFormatter extends TextInputFormatter {
       return oldValue;
     }
 
-    final newFormatted = _formatter.format(intVal);
+    final newFormatted = CurrencyFormatter.formatWholeUnits(intVal);
 
     // Calculate number of digits to the left of the cursor in newValue
     final int baseOffset = newValue.selection.baseOffset;

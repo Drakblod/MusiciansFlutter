@@ -1,4 +1,4 @@
-import 'package:intl/intl.dart';
+import '../utils/currency_formatter.dart';
 
 class SubRequest {
   final String? id;
@@ -40,7 +40,7 @@ class SubRequest {
   final String? requestGroupId;
   final int? eventSequence;
   final String? eventTitle;
-  final int? payAmount; // Exact integer whole currency units (e.g. 1500 for SEK 1,500)
+  final int? payAmount; // Exact integer whole currency units (e.g. 1500 SEK)
   final int? payAmountMinor; // Exact integer minor currency units (e.g. 150000 öre)
   final String? currency; // ISO currency code, e.g. 'SEK'
   final String? payDetails; // Payment-related information/details
@@ -288,10 +288,14 @@ class SubRequest {
 
   String get formattedPayAmount {
     if (!isPaid) return '';
-    if (payAmount == null || payAmount! <= 0) return 'Paid';
+    final minorUnits = payAmountMinor ?? ((payAmount ?? 0) * 100);
+    if (minorUnits <= 0) return 'Paid';
     final curr = currency ?? 'SEK';
-    final formatted = NumberFormat('#,##0').format(payAmount);
-    return 'Paid · $curr $formatted';
+    final formatted = CurrencyFormatter.formatMinorUnits(
+      minorUnits,
+      currencyCode: curr,
+    );
+    return 'Paid · $formatted';
   }
 
   String? get resolvedEventType =>

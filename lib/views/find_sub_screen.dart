@@ -132,7 +132,7 @@ class FindSubScreen extends StatefulWidget {
 class _FindSubScreenState extends State<FindSubScreen> {
   final _messageController = TextEditingController();
   final _locationController = TextEditingController();
-  final _amountController = TextEditingController(text: '1,500');
+  final _amountController = TextEditingController(text: '1.500');
   final _payDetailsController = TextEditingController();
   final _newMemberDescriptionController = TextEditingController();
   String? _existingRequestGroupId;
@@ -2588,7 +2588,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
                   fontWeight: FontWeight.bold,
                   fontSize: 16,
                 ),
-                hintText: '1,500',
+                hintText: '1.500',
                 hintStyle: GoogleFonts.inter(color: Colors.white30),
                 filled: true,
                 fillColor: const Color(0xFF1E1A3A),

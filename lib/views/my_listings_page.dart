@@ -7,6 +7,7 @@ import '../models/listing.dart';
 import '../models/marketplace_taxonomy.dart';
 import '../widgets/custom_top_bar.dart';
 import '../widgets/gradient_scaffold.dart';
+import '../utils/currency_formatter.dart';
 
 
 class MyListingsPage extends StatefulWidget {
@@ -285,7 +286,9 @@ class _MyListingsPageState extends State<MyListingsPage> {
 
   Widget _buildListingItem(Listing listing) {
     final hasImages = listing.imageUrls.isNotEmpty;
-    final priceStr = listing.price == 0 ? 'Free' : '${listing.price.toInt()} kr';
+    final priceStr = listing.price == 0
+        ? 'Free'
+        : CurrencyFormatter.format(listing.price);
     final statusColor = _getStatusColor(listing.status);
 
     return Container(

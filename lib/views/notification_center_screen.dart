@@ -537,9 +537,9 @@ class _NotificationCenterViewState extends State<NotificationCenterView> {
 
   final List<Map<String, String>> _filterOptions = const [
     {'id': 'all', 'label': 'All'},
-    {'id': 'messages', 'label': 'Messages'},
-    {'id': 'events', 'label': 'Events'},
     {'id': 'requests', 'label': 'Requests'},
+    {'id': 'events', 'label': 'Events'},
+    {'id': 'messages', 'label': 'Message'},
   ];
 
   void _handleShortcutTap(String id) {
@@ -548,14 +548,15 @@ class _NotificationCenterViewState extends State<NotificationCenterView> {
       widget.onClose!();
     }
     switch (id) {
-      case 'messages':
-        navigator.pushNamed('/inbox');
+      case 'requests':
+        navigator.pushNamed('/find-gigs');
         break;
       case 'events':
         navigator.pushNamed('/manage-events');
         break;
-      case 'requests':
-        navigator.pushNamed('/find-gigs');
+      case 'messages':
+      case 'message':
+        navigator.pushNamed('/inbox');
         break;
     }
   }
@@ -563,6 +564,7 @@ class _NotificationCenterViewState extends State<NotificationCenterView> {
   IconData _getCategoryIcon(String category) {
     switch (category.toLowerCase()) {
       case 'messages':
+      case 'message':
         return Icons.chat_bubble_outline_rounded;
       case 'events':
         return Icons.event_available_rounded;
@@ -577,6 +579,7 @@ class _NotificationCenterViewState extends State<NotificationCenterView> {
   Color _getCategoryColor(String category) {
     switch (category.toLowerCase()) {
       case 'messages':
+      case 'message':
         return const Color(0xFF8B5CF6); // Violet
       case 'events':
         return const Color(0xFFF59E0B); // Amber/Orange

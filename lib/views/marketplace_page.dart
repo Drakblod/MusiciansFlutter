@@ -9,6 +9,7 @@ import '../widgets/custom_top_bar.dart';
 import '../widgets/gradient_scaffold.dart';
 import '../widgets/animated_tap_detector.dart';
 import '../widgets/marketplace_filter_selector.dart';
+import '../utils/currency_formatter.dart';
 
 class MarketplacePage extends StatefulWidget {
   const MarketplacePage({super.key});
@@ -350,7 +351,9 @@ class _MarketplacePageState extends State<MarketplacePage> {
 
   Widget _buildListingCard(Listing listing) {
     final hasImages = listing.imageUrls.isNotEmpty;
-    final priceStr = listing.price == 0 ? 'Free' : '${listing.price.toInt()} kr';
+    final priceStr = listing.price == 0
+        ? 'Free'
+        : CurrencyFormatter.format(listing.price);
     final badgeLabel = _getBadgeLabel(listing);
     final badgeColor = _getBadgeColor(listing);
 

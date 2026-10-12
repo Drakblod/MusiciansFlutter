@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
@@ -11,6 +12,7 @@ import '../models/marketplace_taxonomy.dart';
 import '../widgets/custom_top_bar.dart';
 import '../widgets/gradient_scaffold.dart';
 import '../widgets/animated_tap_detector.dart';
+import '../utils/currency_formatter.dart';
 
 class CreateListingPage extends StatefulWidget {
   final String? initialIntent;
@@ -219,7 +221,7 @@ class _CreateListingPageState extends State<CreateListingPage> {
         listingType: legacyListingType,
         marketplaceIntent: _selectedIntent,
         marketplaceCategory: _selectedCategory,
-        price: double.tryParse(_priceController.text) ?? 0.0,
+        price: CurrencyFormatter.parse(_priceController.text) ?? 0.0,
         city: _cityController.text.trim(),
         imageUrls: imageUrls,
         status: 'active',
@@ -481,7 +483,7 @@ class _CreateListingPageState extends State<CreateListingPage> {
 
                       // Price
                       Text(
-                        'PRICE (KR) (0 FOR FREE)',
+                        'PRICE (SEK) (0 FOR FREE)',
                         style: GoogleFonts.outfit(
                           fontSize: 12,
                           fontWeight: FontWeight.bold,
@@ -493,15 +495,18 @@ class _CreateListingPageState extends State<CreateListingPage> {
                       TextFormField(
                         controller: _priceController,
                         keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        inputFormatters: [
+                          FilteringTextInputFormatter.allow(RegExp(r'[0-9.,\s]')),
+                        ],
                         style: GoogleFonts.inter(color: Colors.white),
                         decoration: const InputDecoration(
-                          hintText: 'e.g., 4500',
+                          hintText: 'e.g., 4.500,00',
                         ),
                         validator: (value) {
                           if (value == null || value.trim().isEmpty) {
                             return 'Please enter a price';
                           }
-                          final parsed = double.tryParse(value);
+                          final parsed = CurrencyFormatter.parse(value);
                           if (parsed == null || parsed < 0) {
                             return 'Must be >= 0';
                           }

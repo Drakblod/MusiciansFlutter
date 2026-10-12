@@ -20,50 +20,52 @@ void main() {
   });
 
   group('FIND-MUSICIAN-UI-04: ThousandsSeparatorInputFormatter Unit Tests', () {
-    test('1. format handles null, empty, 0, and integers with commas', () {
+    test('1. format handles null, empty, 0, and Swedish thousands separators', () {
       expect(ThousandsSeparatorInputFormatter.format(null), isEmpty);
       expect(ThousandsSeparatorInputFormatter.format(0), equals('0'));
-      expect(ThousandsSeparatorInputFormatter.format(1500), equals('1,500'));
-      expect(ThousandsSeparatorInputFormatter.format(25000), equals('25,000'));
-      expect(ThousandsSeparatorInputFormatter.format(1000000), equals('1,000,000'));
+      expect(ThousandsSeparatorInputFormatter.format(1500), equals('1.500'));
+      expect(ThousandsSeparatorInputFormatter.format(25000), equals('25.000'));
+      expect(ThousandsSeparatorInputFormatter.format(1000000), equals('1.000.000'));
     });
 
-    test('2. parse handles null, empty, malformed, and comma formatted strings', () {
+    test('2. parse handles null, empty, malformed, and formatted strings', () {
       expect(ThousandsSeparatorInputFormatter.parse(null), isNull);
       expect(ThousandsSeparatorInputFormatter.parse(''), isNull);
       expect(ThousandsSeparatorInputFormatter.parse('   '), isNull);
       expect(ThousandsSeparatorInputFormatter.parse('1,500'), equals(1500));
       expect(ThousandsSeparatorInputFormatter.parse('25,000'), equals(25000));
       expect(ThousandsSeparatorInputFormatter.parse('1,000,000'), equals(1000000));
+      expect(ThousandsSeparatorInputFormatter.parse('1.500'), equals(1500));
+      expect(ThousandsSeparatorInputFormatter.parse('1.000.000'), equals(1000000));
       expect(ThousandsSeparatorInputFormatter.parse('abc'), isNull);
       expect(ThousandsSeparatorInputFormatter.parse('1,234abc'), equals(1234));
     });
 
-    test('3. formatEditUpdate correctly inserts commas and maintains cursor', () {
+    test('3. formatEditUpdate correctly inserts dots and maintains cursor', () {
       final formatter = ThousandsSeparatorInputFormatter();
 
-      // Type 1500 -> 1,500
+      // Type 1500 -> 1.500
       final result1 = formatter.formatEditUpdate(
         const TextEditingValue(text: '150', selection: TextSelection.collapsed(offset: 3)),
         const TextEditingValue(text: '1500', selection: TextSelection.collapsed(offset: 4)),
       );
-      expect(result1.text, equals('1,500'));
+      expect(result1.text, equals('1.500'));
       expect(result1.selection.baseOffset, equals(5));
 
-      // Type 25000 -> 25,000
+      // Type 25000 -> 25.000
       final result2 = formatter.formatEditUpdate(
         const TextEditingValue(text: '2500', selection: TextSelection.collapsed(offset: 4)),
         const TextEditingValue(text: '25000', selection: TextSelection.collapsed(offset: 5)),
       );
-      expect(result2.text, equals('25,000'));
+      expect(result2.text, equals('25.000'));
       expect(result2.selection.baseOffset, equals(6));
 
-      // Type 1000000 -> 1,000,000
+      // Type 1000000 -> 1.000.000
       final result3 = formatter.formatEditUpdate(
         const TextEditingValue(text: '100000', selection: TextSelection.collapsed(offset: 6)),
         const TextEditingValue(text: '1000000', selection: TextSelection.collapsed(offset: 7)),
       );
-      expect(result3.text, equals('1,000,000'));
+      expect(result3.text, equals('1.000.000'));
       expect(result3.selection.baseOffset, equals(9));
     });
   });
@@ -297,7 +299,7 @@ void main() {
       expect(find.text('Remove Substitute'), findsNothing);
     });
 
-    testWidgets('12. Paid Gig input formats with thousands separators (1,500, 25,000, 1,000,000)', (tester) async {
+    testWidgets('12. Paid Gig input formats with Swedish thousands separators', (tester) async {
       tester.view.physicalSize = const Size(800, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -305,7 +307,7 @@ void main() {
       await tester.pumpWidget(createWidgetUnderTest());
       await tester.pumpAndSettle();
 
-      // Default is Paid Gig = true with 1,500
+      // Default is Paid Gig = true with 1.500
       expect(find.text('Paid Gig'), findsOneWidget);
       expect(find.text('Amount'), findsOneWidget);
 
@@ -314,17 +316,17 @@ void main() {
       await tester.ensureVisible(amountField);
 
       // Verify initial formatted value
-      expect(tester.widget<TextField>(amountField).controller!.text, equals('1,500'));
+      expect(tester.widget<TextField>(amountField).controller!.text, equals('1.500'));
 
       // Enter 25000
       await tester.enterText(amountField, '25000');
       await tester.pumpAndSettle();
-      expect(tester.widget<TextField>(amountField).controller!.text, equals('25,000'));
+      expect(tester.widget<TextField>(amountField).controller!.text, equals('25.000'));
 
       // Enter 1000000
       await tester.enterText(amountField, '1000000');
       await tester.pumpAndSettle();
-      expect(tester.widget<TextField>(amountField).controller!.text, equals('1,000,000'));
+      expect(tester.widget<TextField>(amountField).controller!.text, equals('1.000.000'));
     });
 
     testWidgets('13. Publishing saves correct integer payAmount (1500) and payAmountMinor (150000)', (tester) async {
@@ -351,7 +353,7 @@ void main() {
       await tester.pumpWidget(createWidgetUnderTest(eventId: 'event_test_pay'));
       await tester.pumpAndSettle();
 
-      // Publish with default Paid Gig (1,500)
+      // Publish with default Paid Gig (1.500)
       final publishBtn = find.textContaining('PUBLISH');
       await tester.ensureVisible(publishBtn);
       await tester.tap(publishBtn);
