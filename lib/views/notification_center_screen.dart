@@ -540,7 +540,6 @@ class _NotificationCenterViewState extends State<NotificationCenterView> {
     {'id': 'messages', 'label': 'Messages'},
     {'id': 'events', 'label': 'Events'},
     {'id': 'requests', 'label': 'Requests'},
-    {'id': 'system', 'label': 'System'},
   ];
 
   void _handleShortcutTap(String id) {
@@ -729,9 +728,13 @@ class _NotificationCenterViewState extends State<NotificationCenterView> {
                 padding: const EdgeInsets.only(right: 8),
                 child: AnimatedTapDetector(
                   onTap: () {
-                    setState(() {
-                      _selectedFilter = opt['id']!;
-                    });
+                    if (opt['id'] == 'all') {
+                      setState(() {
+                        _selectedFilter = 'all';
+                      });
+                    } else {
+                      _handleShortcutTap(opt['id']!);
+                    }
                   },
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),

@@ -282,19 +282,20 @@ void main() {
       expect(find.text('1'), findsOneWidget);
       expect(find.text('Mark all as read'), findsOneWidget);
 
-      // Verify Category Filter Tabs
+      // Verify Category / Shortcut Tabs
       expect(find.text('All'), findsOneWidget);
       expect(find.text('Messages'), findsOneWidget);
       expect(find.text('Events'), findsOneWidget);
       expect(find.text('Requests'), findsOneWidget);
-      expect(find.text('System'), findsOneWidget);
+      expect(find.text('System'), findsNothing);
 
       // Both notifications should be visible in 'All' tab
       expect(find.text('Gig Invitation'), findsOneWidget);
       expect(find.text('Message from Alex'), findsOneWidget);
     });
 
-    testWidgets('2. Category filtering switches views properly', (tester) async {
+    testWidgets('2. Shortcut buttons trigger navigation and System is removed', (tester) async {
+      String? pushedRoute;
       final now = DateTime.now().millisecondsSinceEpoch;
       final notifications = [
         AppNotification(
@@ -306,25 +307,30 @@ void main() {
           createdAt: now - 600000,
           isRead: false,
         ),
-        AppNotification(
-          id: 'n_msg',
-          type: 'direct_message',
-          category: 'messages',
-          title: 'Direct Note',
-          body: 'Direct body',
-          createdAt: now - 1200000,
-          isRead: false,
-        ),
       ];
 
       await tester.pumpWidget(
         MaterialApp(
           theme: ThemeData.dark(),
+          routes: {
+            '/inbox': (context) {
+              pushedRoute = '/inbox';
+              return const Scaffold(body: Text('Inbox View'));
+            },
+            '/manage-events': (context) {
+              pushedRoute = '/manage-events';
+              return const Scaffold(body: Text('Manage Events View'));
+            },
+            '/find-gigs': (context) {
+              pushedRoute = '/find-gigs';
+              return const Scaffold(body: Text('Find Gigs View'));
+            },
+          },
           home: Scaffold(
             body: NotificationCenterView(
               notifications: notifications,
               isLoading: false,
-              unreadCount: 2,
+              unreadCount: 1,
               onMarkAllRead: () {},
               onNotificationTap: (_) {},
             ),
@@ -332,29 +338,13 @@ void main() {
         ),
       );
 
-      // Both visible initially
-      expect(find.text('Event Note'), findsOneWidget);
-      expect(find.text('Direct Note'), findsOneWidget);
+      // Verify System is absent
+      expect(find.text('System'), findsNothing);
 
-      // Tap 'Messages' tab
+      // Tap 'Messages' shortcut
       await tester.tap(find.text('Messages'));
       await tester.pumpAndSettle();
-
-      expect(find.text('Direct Note'), findsOneWidget);
-      expect(find.text('Event Note'), findsNothing);
-
-      // Tap 'Events' tab
-      await tester.tap(find.text('Events'));
-      await tester.pumpAndSettle();
-
-      expect(find.text('Event Note'), findsOneWidget);
-      expect(find.text('Direct Note'), findsNothing);
-
-      // Tap 'Requests' tab (empty)
-      await tester.tap(find.text('Requests'));
-      await tester.pumpAndSettle();
-
-      expect(find.text('No notifications in this category.'), findsOneWidget);
+      expect(pushedRoute, '/inbox');
     });
 
     testWidgets('3. Tap on notification triggers callback with correct item', (tester) async {
