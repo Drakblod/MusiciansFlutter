@@ -59,9 +59,9 @@ class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
                   Expanded(
                     child: _buildProfileOrBack(context, appState, canPop),
                   ),
-                  // Column 1: Map View (Globe Icon, taking previous Notification position)
+                  // Column 1: Notifications Bell
                   Expanded(
-                    child: _buildMapGlobe(context, appState),
+                    child: _buildNotificationBell(context, appState),
                   ),
                   // Column 2: Home Logo
                   Expanded(
@@ -71,9 +71,9 @@ class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
                   Expanded(
                     child: _buildInbox(context, appState),
                   ),
-                  // Column 4: Notifications Bell (moved to previous Favorites position)
+                  // Column 4: Map View (Globe Icon)
                   Expanded(
-                    child: _buildNotificationBell(context, appState),
+                    child: _buildMapGlobe(context, appState),
                   ),
                   // Column 5: Settings Menu
                   Expanded(
@@ -91,13 +91,37 @@ class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
   Widget _buildMapGlobe(BuildContext context, AppState appState) {
     return AnimatedTapDetector(
       onTap: () {
+        if (ModalRoute.of(context)?.settings.name == '/gig-map') {
+          return;
+        }
         Navigator.pushNamed(context, '/gig-map');
       },
-      child: const Center(
-        child: Icon(
-          Icons.public_rounded,
-          color: Colors.white,
-          size: 24,
+      child: Center(
+        child: SizedBox(
+          width: 26,
+          height: 26,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Container(
+                width: 20,
+                height: 20,
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    colors: [Color(0xFF38BDF8), Color(0xFF0284C7)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                ),
+              ),
+              const Icon(
+                Icons.public_rounded,
+                color: Color(0xFF4ADE80),
+                size: 24,
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -210,53 +234,9 @@ class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
   }
 
   Widget _buildNotificationBell(BuildContext context, AppState appState) {
-    final unreadCount = appState.unreadNotificationCount;
-    final hasUnread = unreadCount > 0;
-    final badgeText = unreadCount > 99 ? '99+' : '$unreadCount';
-
-    return AnimatedTapDetector(
+    return PulsingNotificationBell(
+      unreadCount: appState.unreadNotificationCount,
       onTap: () => showNotificationPanel(context),
-      child: Center(
-        child: Stack(
-          clipBehavior: Clip.none,
-          alignment: Alignment.center,
-          children: [
-            const Icon(
-              Icons.notifications_outlined,
-              color: Colors.white,
-              size: 24,
-            ),
-            if (hasUnread)
-              Positioned(
-                right: -4,
-                top: -2,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1.5),
-                  constraints: const BoxConstraints(
-                    minWidth: 16,
-                    minHeight: 16,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFE11D48),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: const Color(0xFF0F0C22), width: 1.5),
-                  ),
-                  child: Center(
-                    child: Text(
-                      badgeText,
-                      style: GoogleFonts.inter(
-                        color: Colors.white,
-                        fontSize: 9,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ),
     );
   }
 
@@ -395,6 +375,19 @@ class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
                   onTap: () {
                     Navigator.pop(dialogContext); // Close dialog
                     _showLogoutConfirmation(context, appState);
+                  },
+                ),
+                const SizedBox(height: 12),
+                _buildMenuItem(
+                  context,
+                  icon: Icons.notifications_active_outlined,
+                  title: appState.unreadNotificationCount > 0
+                      ? 'Test: Slå av notis-puls'
+                      : 'Test: Pulsera notis-ikon',
+                  color: const Color(0xFFF43F5E),
+                  onTap: () {
+                    Navigator.pop(dialogContext);
+                    appState.toggleTestUnreadNotification();
                   },
                 ),
                 const SizedBox(height: 12),
@@ -1026,4 +1019,182 @@ class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
       },
     );
   }
+}
+
+class PulsingNotificationBell extends StatefulWidget {
+  final int unreadCount;
+  final VoidCallback onTap;
+
+  const PulsingNotificationBell({
+    super.key,
+    required this.unreadCount,
+    required this.onTap,
+  });
+
+  @override
+  State<PulsingNotificationBell> createState() => _PulsingNotificationBellState();
+}
+
+class _PulsingNotificationBellState extends State<PulsingNotificationBell>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _pulseAnimation;
+  late Animation<double> _glowAnimation;
+
+  bool get _isTestEnvironment =>
+      WidgetsBinding.instance.runtimeType.toString().contains('Test');
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    );
+
+    _pulseAnimation = CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeInOut,
+    );
+
+    _glowAnimation = Tween<double>(begin: 0.35, end: 0.95).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: Curves.easeInOut,
+      ),
+    );
+
+    if (widget.unreadCount > 0) {
+      _startPulse();
+    }
+  }
+
+  void _startPulse() {
+    if (_isTestEnvironment) {
+      _controller.forward();
+    } else {
+      _controller.repeat(reverse: true);
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant PulsingNotificationBell oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.unreadCount > 0 && !_controller.isAnimating) {
+      _startPulse();
+    } else if (widget.unreadCount == 0 && _controller.isAnimating) {
+      _controller.stop();
+      _controller.reset();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hasUnread = widget.unreadCount > 0;
+    final badgeText = widget.unreadCount > 99 ? '99+' : '${widget.unreadCount}';
+
+    return GestureDetector(
+      onLongPress: () {
+        Provider.of<AppState>(context, listen: false).toggleTestUnreadNotification();
+      },
+      child: AnimatedTapDetector(
+        onTap: widget.onTap,
+        child: Center(
+        child: AnimatedBuilder(
+          animation: _controller,
+          builder: (context, child) {
+            final t = hasUnread ? _pulseAnimation.value : 0.0;
+            final glow = hasUnread ? _glowAnimation.value : 0.0;
+
+            return Stack(
+              clipBehavior: Clip.none,
+              alignment: Alignment.center,
+              children: [
+                // Pulsing colored halo/aura behind bell when there are unread notifications
+                if (hasUnread)
+                  Positioned.fill(
+                    child: Center(
+                      child: Container(
+                        width: 26 + (7 * t),
+                        height: 26 + (7 * t),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: const Color(0xFFE11D48).withOpacity(0.18 * glow),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFFFF2E63).withOpacity(0.45 * glow),
+                              blurRadius: 10 + (8 * t),
+                              spreadRadius: 1 + (3 * t),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+
+                // Bell icon with subtle breathing scale
+                Transform.scale(
+                  scale: hasUnread ? 1.0 + (0.06 * t) : 1.0,
+                  child: Icon(
+                    Icons.notifications_outlined,
+                    color: hasUnread
+                        ? Color.lerp(Colors.white, const Color(0xFFFFD1DC), t)!
+                        : Colors.white,
+                    size: 24,
+                  ),
+                ),
+
+                // Pulsing Badge
+                if (hasUnread)
+                  Positioned(
+                    right: -4,
+                    top: -2,
+                    child: Transform.scale(
+                      scale: 1.0 + (0.09 * t),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1.5),
+                        constraints: const BoxConstraints(
+                          minWidth: 16,
+                          minHeight: 16,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE11D48),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: const Color(0xFF0F0C22), width: 1.5),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFFFF2E63).withOpacity(0.6 * glow),
+                              blurRadius: 6 + (4 * t),
+                              spreadRadius: 0.5 + (1.5 * t),
+                            ),
+                          ],
+                        ),
+                        child: Center(
+                          child: Text(
+                            badgeText,
+                            style: GoogleFonts.inter(
+                              color: Colors.white,
+                              fontSize: 9,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            );
+          },
+        ),
+      ),
+    ),
+  );
+}
 }

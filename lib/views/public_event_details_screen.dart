@@ -10,7 +10,9 @@ import '../widgets/animated_tap_detector.dart';
 import '../widgets/custom_top_bar.dart';
 import '../widgets/gradient_scaffold.dart';
 
-class PublicEventDetailsScreen extends StatelessWidget {
+import 'create_public_event_screen.dart';
+
+class PublicEventDetailsScreen extends StatefulWidget {
   final PublicCalendarEvent? event;
   final PublicEventRepository? repository;
 
@@ -19,6 +21,52 @@ class PublicEventDetailsScreen extends StatelessWidget {
     this.event,
     this.repository,
   });
+
+  @override
+  State<PublicEventDetailsScreen> createState() => _PublicEventDetailsScreenState();
+}
+
+class _PublicEventDetailsScreenState extends State<PublicEventDetailsScreen> {
+  PublicCalendarEvent? _activeEvent;
+  bool _hasChanges = false;
+  bool _initialized = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_initialized) {
+      _initialized = true;
+      final routeArg = ModalRoute.of(context)?.settings.arguments;
+      _activeEvent = widget.event ?? (routeArg is PublicCalendarEvent ? routeArg : null);
+    }
+  }
+
+  Future<void> _editEvent(
+    BuildContext context,
+    PublicCalendarEvent activeEvent,
+    PublicEventRepository repo,
+  ) async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => CreatePublicEventScreen(
+          eventToEdit: activeEvent,
+          repository: repo,
+        ),
+      ),
+    );
+
+    if (result is PublicCalendarEvent && mounted) {
+      setState(() {
+        _activeEvent = result;
+        _hasChanges = true;
+      });
+    } else if (result == true && mounted) {
+      setState(() {
+        _hasChanges = true;
+      });
+    }
+  }
 
   Future<void> _deleteEvent(
     BuildContext context,
@@ -101,11 +149,12 @@ class PublicEventDetailsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     // Safe argument extraction to prevent unchecked cast crashes
     final routeArg = ModalRoute.of(context)?.settings.arguments;
-    final activeEvent = event ?? (routeArg is PublicCalendarEvent ? routeArg : null);
+    final activeEvent = _activeEvent ??
+        (widget.event ?? (routeArg is PublicCalendarEvent ? routeArg : null));
 
     PublicEventRepository effectiveRepo;
-    if (repository != null) {
-      effectiveRepo = repository!;
+    if (widget.repository != null) {
+      effectiveRepo = widget.repository!;
     } else {
       try {
         final appState = Provider.of<AppState>(context, listen: false);
@@ -143,7 +192,7 @@ class PublicEventDetailsScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 24),
                 ElevatedButton(
-                  onPressed: () => Navigator.pop(context),
+                  onPressed: () => Navigator.pop(context, _hasChanges),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppTheme.primaryAccent,
                     foregroundColor: Colors.white,
@@ -161,85 +210,125 @@ class PublicEventDetailsScreen extends StatelessWidget {
     final timeStr =
         '${DateFormat('HH:mm').format(activeEvent.startDateTime)} – ${DateFormat('HH:mm').format(activeEvent.endDateTime)}';
 
-    return GradientScaffold(
-      appBar: const CustomTopBar(showBack: true),
-      body: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Hero Banner Header
-            Container(
-              padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Color(0xFF2E1756),
-                    Color(0xFF161033),
-                  ],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                ),
-                border: Border(
-                  bottom: BorderSide(color: Color(0xFF2E2452), width: 1.5),
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'EVENT DETAILS',
-                    style: GoogleFonts.outfit(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                      letterSpacing: 1.5,
-                    ),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        Navigator.pop(context, _hasChanges);
+      },
+      child: GradientScaffold(
+        appBar: const CustomTopBar(showBack: true),
+        body: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Hero Banner Header
+              Container(
+                padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      Color(0xFF2E1756),
+                      Color(0xFF161033),
+                    ],
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
                   ),
-                  const SizedBox(height: 12),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      // Event Type Badge
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: AppTheme.primaryAccent.withValues(alpha: 0.2),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                            color: AppTheme.primaryAccent.withValues(alpha: 0.5),
-                            width: 1.0,
-                          ),
-                        ),
-                        child: Text(
-                          activeEvent.eventTypeDisplayLabel,
-                          style: GoogleFonts.inter(
-                            color: AppTheme.primaryAccent,
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
+                  border: Border(
+                    bottom: BorderSide(color: Color(0xFF2E2452), width: 1.5),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'EVENT DETAILS',
+                      style: GoogleFonts.outfit(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        letterSpacing: 1.5,
                       ),
-                      // Demo indicator
-                      if (activeEvent.isMock)
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: Colors.amber.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(6),
-                            border: Border.all(color: Colors.amber.withValues(alpha: 0.4)),
-                          ),
-                          child: Text(
-                            'DEMO EVENT',
-                            style: GoogleFonts.inter(
-                              color: Colors.amber,
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 0.8,
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // Event Type Badge
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: AppTheme.primaryAccent.withValues(alpha: 0.2),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: AppTheme.primaryAccent.withValues(alpha: 0.5),
+                                  width: 1.0,
+                                ),
+                              ),
+                              child: Text(
+                                activeEvent.eventTypeDisplayLabel,
+                                style: GoogleFonts.inter(
+                                  color: AppTheme.primaryAccent,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                            // Demo indicator
+                            if (activeEvent.isMock) ...[
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: Colors.amber.withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: Colors.amber.withValues(alpha: 0.4)),
+                                ),
+                                child: Text(
+                                  'DEMO EVENT',
+                                  style: GoogleFonts.inter(
+                                    color: Colors.amber,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                    letterSpacing: 0.8,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                        // Quick Edit Button in Header
+                        AnimatedTapDetector(
+                          onTap: () => _editEvent(context, activeEvent, effectiveRepo),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: AppTheme.primaryAccent.withValues(alpha: 0.2),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: AppTheme.primaryAccent.withValues(alpha: 0.6)),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.edit_rounded, color: Colors.white, size: 14),
+                                const SizedBox(width: 5),
+                                Text(
+                                  'Edit Event',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ),
-                    ],
-                  ),
+                      ],
+                    ),
                   const SizedBox(height: 14),
                   Text(
                     activeEvent.title,
@@ -544,12 +633,12 @@ class PublicEventDetailsScreen extends StatelessWidget {
 
                   const SizedBox(height: 32),
 
-                  // Actions Row: Back to Calendar & Delete Event
+                  // Actions Row: Back to Calendar, Edit Event & Delete Event
                   Row(
                     children: [
                       Expanded(
                         child: AnimatedTapDetector(
-                          onTap: () => Navigator.pop(context),
+                          onTap: () => Navigator.pop(context, _hasChanges),
                           child: Container(
                             height: 48,
                             decoration: BoxDecoration(
@@ -577,12 +666,40 @@ class PublicEventDetailsScreen extends StatelessWidget {
                           ),
                         ),
                       ),
-                      const SizedBox(width: 12),
+                      const SizedBox(width: 10),
+                      AnimatedTapDetector(
+                        onTap: () => _editEvent(context, activeEvent, effectiveRepo),
+                        child: Container(
+                          height: 48,
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          decoration: BoxDecoration(
+                            color: AppTheme.primaryAccent.withValues(alpha: 0.18),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: AppTheme.primaryAccent.withValues(alpha: 0.6)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.edit_outlined, color: AppTheme.primaryAccent, size: 18),
+                              const SizedBox(width: 6),
+                              Text(
+                                'Edit',
+                                style: GoogleFonts.inter(
+                                  color: AppTheme.primaryAccent,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
                       AnimatedTapDetector(
                         onTap: () => _deleteEvent(context, activeEvent, effectiveRepo),
                         child: Container(
                           height: 48,
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          padding: const EdgeInsets.symmetric(horizontal: 14),
                           decoration: BoxDecoration(
                             color: AppTheme.danger.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(12),
@@ -614,6 +731,7 @@ class PublicEventDetailsScreen extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }

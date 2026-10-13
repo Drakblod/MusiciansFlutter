@@ -698,14 +698,15 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
     final List<Widget> items = [];
     String? currentMonthHeader;
 
-    for (final event in events) {
+    for (int i = 0; i < events.length; i++) {
+      final event = events[i];
       final monthHeader = DateFormat('MMMM yyyy').format(event.startDateTime).toUpperCase();
 
       if (currentMonthHeader != monthHeader) {
         currentMonthHeader = monthHeader;
         items.add(
           Padding(
-            padding: const EdgeInsets.only(top: 16, bottom: 12),
+            padding: EdgeInsets.only(top: items.isEmpty ? 8 : 24, bottom: 14),
             child: Row(
               children: [
                 Text(
@@ -732,10 +733,88 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
 
       items.add(
         Padding(
-          padding: const EdgeInsets.only(bottom: 14),
+          padding: const EdgeInsets.only(bottom: 12),
           child: _buildEventCard(event),
         ),
       );
+
+      // Distinct visual boundary ("avgränsning") against the event below if within same month
+      if (i < events.length - 1) {
+        final nextEvent = events[i + 1];
+        final nextMonthHeader = DateFormat('MMMM yyyy').format(nextEvent.startDateTime).toUpperCase();
+        if (nextMonthHeader == monthHeader) {
+          items.add(
+            Padding(
+              padding: const EdgeInsets.only(top: 4, bottom: 16),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Container(
+                      height: 1,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            Colors.transparent,
+                            const Color(0xFF4A3B7A).withValues(alpha: 0.7),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 12),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1C1738),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: const Color(0xFF3E326E),
+                        width: 1.0,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 5,
+                          height: 5,
+                          decoration: const BoxDecoration(
+                            color: AppTheme.primaryAccent,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          'NEXT EVENT',
+                          style: GoogleFonts.inter(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 1.0,
+                            color: const Color(0xFFA899E6),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: Container(
+                      height: 1,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            const Color(0xFF4A3B7A).withValues(alpha: 0.7),
+                            Colors.transparent,
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+      }
     }
 
     return items;
@@ -785,9 +864,24 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
           },
           child: Container(
             decoration: BoxDecoration(
-              color: AppTheme.cardBackground,
+              color: const Color(0xFF161230),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFF2E2452)),
+              border: Border.all(
+                color: const Color(0xFF382F63),
+                width: 1.2,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.45),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+                BoxShadow(
+                  color: AppTheme.primaryAccent.withValues(alpha: 0.05),
+                  blurRadius: 2,
+                  offset: const Offset(0, 1),
+                ),
+              ],
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

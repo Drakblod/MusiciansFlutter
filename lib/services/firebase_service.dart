@@ -506,9 +506,18 @@ class FirebaseService {
     final snapshot = await _dbRef('Bands/$bandId/Members_band').get();
     final List<BandMember> members = [];
     if (snapshot.exists && snapshot.value is Map) {
+      final seenUserIds = <String>{};
       (snapshot.value as Map).forEach((k, v) {
         if (v is Map) {
-          members.add(BandMember.fromJson(v, k.toString()));
+          final member = BandMember.fromJson(v, k.toString());
+          final uid = member.userId;
+          if (uid != null && uid.isNotEmpty) {
+            if (seenUserIds.add(uid)) {
+              members.add(member);
+            }
+          } else {
+            members.add(member);
+          }
         }
       });
     }

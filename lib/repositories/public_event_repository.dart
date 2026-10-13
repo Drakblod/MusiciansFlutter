@@ -6,6 +6,7 @@ import '../services/firebase_service.dart';
 abstract class PublicEventRepository {
   Future<List<PublicCalendarEvent>> getUpcomingEvents();
   Future<String> createEvent(PublicCalendarEvent event) async => event.id;
+  Future<void> updateEvent(PublicCalendarEvent event) async {}
   Future<void> deleteEvent(String eventId) async {}
 }
 
@@ -115,6 +116,16 @@ class MockPublicEventRepository implements PublicEventRepository {
   }
 
   @override
+  Future<void> updateEvent(PublicCalendarEvent event) async {
+    final idx = _createdEvents.indexWhere((e) => e.id == event.id);
+    if (idx != -1) {
+      _createdEvents[idx] = event;
+    } else {
+      _createdEvents.add(event);
+    }
+  }
+
+  @override
   Future<void> deleteEvent(String eventId) async {
     _createdEvents.removeWhere((e) => e.id == eventId);
   }
@@ -137,6 +148,16 @@ class EmptyPublicEventRepository implements PublicEventRepository {
     final created = event.copyWith(id: id);
     _createdEvents.add(created);
     return id;
+  }
+
+  @override
+  Future<void> updateEvent(PublicCalendarEvent event) async {
+    final idx = _createdEvents.indexWhere((e) => e.id == event.id);
+    if (idx != -1) {
+      _createdEvents[idx] = event;
+    } else {
+      _createdEvents.add(event);
+    }
   }
 
   @override
@@ -189,6 +210,11 @@ class FirebasePublicEventRepository implements PublicEventRepository {
   @override
   Future<String> createEvent(PublicCalendarEvent event) async {
     return await firebaseService.savePublicCalendarEventAsync(event);
+  }
+
+  @override
+  Future<void> updateEvent(PublicCalendarEvent event) async {
+    await firebaseService.savePublicCalendarEventAsync(event);
   }
 
   @override

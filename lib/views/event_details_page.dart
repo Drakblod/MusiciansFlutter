@@ -321,10 +321,17 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
     final userId = appState.currentUserId;
     if (userId == null || _event == null) return;
 
-    if (_event!.isLocked) {
+    final startLocal = DateTime.tryParse(_event!.startDateTime)?.toLocal();
+    final endLocal = DateTime.tryParse(_event!.endDateTime)?.toLocal() ?? startLocal;
+    final now = DateTime.now();
+    final isEventPast = endLocal != null ? endLocal.isBefore(now) : (startLocal != null && startLocal.isBefore(now));
+
+    if (_event!.isLocked || isEventPast) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("This event is locked and responses can no longer be changed."),
+        SnackBar(
+          content: Text(_event!.isLocked
+              ? "This event is locked and responses can no longer be changed."
+              : "This event has already passed. Responses can no longer be submitted."),
           backgroundColor: AppTheme.danger,
         ),
       );
@@ -505,6 +512,11 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
     }
 
     final event = _event!;
+    final startLocal = DateTime.tryParse(event.startDateTime)?.toLocal();
+    final endLocal = DateTime.tryParse(event.endDateTime)?.toLocal() ?? startLocal;
+    final isEventPast = endLocal != null ? endLocal.isBefore(DateTime.now()) : (startLocal != null && startLocal.isBefore(DateTime.now()));
+    final isRsvpDisabled = event.isLocked || isEventPast;
+
     final appState = Provider.of<AppState>(context);
     final currentUserId = appState.currentUserId;
 
@@ -568,6 +580,45 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                             event.lockedAt != null
                                 ? 'Finalized by ${_cachedProfiles[event.lockedBy]?.displayName ?? _cachedProfiles[event.lockedBy]?.nickname ?? "Organizer"} on ${DateFormat('MMM d, yyyy HH:mm').format(DateTime.fromMillisecondsSinceEpoch(event.lockedAt!))}'
                                 : 'All subs and members confirmed. RSVPs locked.',
+                            style: GoogleFonts.inter(
+                              fontSize: 11,
+                              color: AppTheme.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ] else if (isEventPast) ...[
+              Container(
+                margin: const EdgeInsets.only(bottom: 20),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: AppTheme.textSecondary.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFF2E2A4E), width: 1.5),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.history_rounded, color: AppTheme.textSecondary, size: 22),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Past Event',
+                            style: GoogleFonts.inter(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'This event has already ended. RSVPs are closed.',
                             style: GoogleFonts.inter(
                               fontSize: 11,
                               color: AppTheme.textSecondary,
@@ -715,7 +766,7 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                           // YES
                           Expanded(
                             child: GestureDetector(
-                              onTap: event.isLocked
+                              onTap: isRsvpDisabled
                                   ? null
                                   : () {
                                       setState(() {
@@ -761,7 +812,7 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                           // NO
                           Expanded(
                             child: GestureDetector(
-                              onTap: event.isLocked
+                              onTap: isRsvpDisabled
                                   ? null
                                   : () {
                                       setState(() {
@@ -807,7 +858,7 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                           // UNCERTAIN
                           Expanded(
                             child: GestureDetector(
-                              onTap: event.isLocked
+                              onTap: isRsvpDisabled
                                   ? null
                                   : () {
                                       setState(() {
@@ -874,7 +925,7 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                           ),
                         ),
                       ],
-                      if (!event.isLocked) ...[
+                      if (!isRsvpDisabled) ...[
                         const SizedBox(height: 20),
                         isSaving
                             ? const Center(
@@ -984,7 +1035,7 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                         // Card Header (Always visible, tap to toggle when unlocked)
                         InkWell(
                           borderRadius: BorderRadius.circular(14),
-                          onTap: event.isLocked
+                          onTap: isRsvpDisabled
                               ? null
                               : () {
                                   setState(() {
@@ -1077,7 +1128,7 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                                   crossAxisAlignment: CrossAxisAlignment.end,
                                   children: [
                                     _buildSavedStatusBadge(savedStatusEnum),
-                                    if (!event.isLocked) ...[
+                                    if (!isRsvpDisabled) ...[
                                       const SizedBox(height: 6),
                                       Icon(
                                         isExpanded ? Icons.expand_less_rounded : Icons.expand_more_rounded,
@@ -1093,7 +1144,7 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                         ),
 
                         // Expanded RSVP Controls Area
-                        if (isExpanded && !event.isLocked) ...[
+                        if (isExpanded && !isRsvpDisabled) ...[
                           const Divider(height: 1, color: Color(0xFF2E2A4E)),
                           Padding(
                             padding: const EdgeInsets.all(14),

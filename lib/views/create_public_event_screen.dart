@@ -18,10 +18,12 @@ import '../widgets/searchable_category_multi_select_sheet.dart';
 
 class CreatePublicEventScreen extends StatefulWidget {
   final PublicEventRepository? repository;
+  final PublicCalendarEvent? eventToEdit;
 
   const CreatePublicEventScreen({
     super.key,
     this.repository,
+    this.eventToEdit,
   });
 
   @override
@@ -54,14 +56,41 @@ class _CreatePublicEventScreenState extends State<CreatePublicEventScreen> {
   XFile? _selectedCoverImage;
   Uint8List? _coverImageBytes;
 
+  bool get isEditing => widget.eventToEdit != null;
+
   @override
   void initState() {
     super.initState();
-    final appState = Provider.of<AppState>(context, listen: false);
-    final userProfile = appState.currentUserProfile;
-    final name = userProfile?.displayName?.trim();
-    if (name != null && name.isNotEmpty) {
-      _organizerController.text = name;
+    if (widget.eventToEdit != null) {
+      final e = widget.eventToEdit!;
+      _titleController.text = e.title;
+      _organizerController.text = e.organizerName;
+      _venueController.text = e.venueName;
+      _cityController.text = e.city;
+      _addressController.text = e.address;
+      if (e.priceAmount != null && !e.isFree) {
+        _priceController.text = e.priceAmount! % 1 == 0
+            ? e.priceAmount!.toInt().toString()
+            : e.priceAmount!.toString();
+      }
+      _shortDescController.text = e.shortDescription;
+      _descController.text = e.description;
+      if (e.imageUrl != null && e.imageUrl!.isNotEmpty) {
+        _imageUrlController.text = e.imageUrl!;
+      }
+      _selectedType = e.eventType;
+      _selectedDate = e.startDateTime;
+      _startTime = TimeOfDay(hour: e.startDateTime.hour, minute: e.startDateTime.minute);
+      _endTime = TimeOfDay(hour: e.endDateTime.hour, minute: e.endDateTime.minute);
+      _isFree = e.isFree;
+      _selectedGenres = List<String>.from(e.genres);
+    } else {
+      final appState = Provider.of<AppState>(context, listen: false);
+      final userProfile = appState.currentUserProfile;
+      final name = userProfile?.displayName?.trim();
+      if (name != null && name.isNotEmpty) {
+        _organizerController.text = name;
+      }
     }
   }
 
@@ -341,48 +370,83 @@ class _CreatePublicEventScreenState extends State<CreatePublicEventScreen> {
         resolvedImageUrl = _imageUrlController.text.trim();
       }
 
-      final newEvent = PublicCalendarEvent(
-        id: '',
-        title: _titleController.text.trim(),
-        shortDescription: shortDesc,
-        description: _descController.text.trim(),
-        eventType: _selectedType,
-        organizerName: _organizerController.text.trim(),
-        venueName: _venueController.text.trim(),
-        city: _cityController.text.trim(),
-        address: _addressController.text.trim(),
-        startDateTime: startDateTime,
-        endDateTime: endDateTime,
-        genres: _selectedGenres,
-        priceAmount: price,
-        currency: 'SEK',
-        isFree: _isFree,
-        status: PublicEventStatus.published,
-        isMock: false,
-        imageUrl: resolvedImageUrl,
-        createdBy: currentUid,
-        createdAt: DateTime.now().millisecondsSinceEpoch,
-      );
-
       final repo = widget.repository ??
           FirebasePublicEventRepository(
             firebaseService: appState.firebaseService,
           );
 
-      await repo.createEvent(newEvent);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Event "${newEvent.title}" published successfully!',
-              style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold),
-            ),
-            backgroundColor: AppTheme.primaryAccent,
-            behavior: SnackBarBehavior.floating,
-          ),
+      if (isEditing) {
+        final updatedEvent = widget.eventToEdit!.copyWith(
+          title: _titleController.text.trim(),
+          shortDescription: shortDesc,
+          description: _descController.text.trim(),
+          eventType: _selectedType,
+          organizerName: _organizerController.text.trim(),
+          venueName: _venueController.text.trim(),
+          city: _cityController.text.trim(),
+          address: _addressController.text.trim(),
+          startDateTime: startDateTime,
+          endDateTime: endDateTime,
+          genres: _selectedGenres,
+          priceAmount: price,
+          isFree: _isFree,
+          imageUrl: resolvedImageUrl ?? widget.eventToEdit!.imageUrl,
         );
-        Navigator.pop(context, true);
+
+        await repo.updateEvent(updatedEvent);
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Event "${updatedEvent.title}" updated successfully!',
+                style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold),
+              ),
+              backgroundColor: AppTheme.primaryAccent,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+          Navigator.pop(context, updatedEvent);
+        }
+      } else {
+        final newEvent = PublicCalendarEvent(
+          id: '',
+          title: _titleController.text.trim(),
+          shortDescription: shortDesc,
+          description: _descController.text.trim(),
+          eventType: _selectedType,
+          organizerName: _organizerController.text.trim(),
+          venueName: _venueController.text.trim(),
+          city: _cityController.text.trim(),
+          address: _addressController.text.trim(),
+          startDateTime: startDateTime,
+          endDateTime: endDateTime,
+          genres: _selectedGenres,
+          priceAmount: price,
+          currency: 'SEK',
+          isFree: _isFree,
+          status: PublicEventStatus.published,
+          isMock: false,
+          imageUrl: resolvedImageUrl,
+          createdBy: currentUid,
+          createdAt: DateTime.now().millisecondsSinceEpoch,
+        );
+
+        await repo.createEvent(newEvent);
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Event "${newEvent.title}" published successfully!',
+                style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold),
+              ),
+              backgroundColor: AppTheme.primaryAccent,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+          Navigator.pop(context, true);
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -405,8 +469,8 @@ class _CreatePublicEventScreenState extends State<CreatePublicEventScreen> {
   @override
   Widget build(BuildContext context) {
     return GradientScaffold(
-      appBar: const CustomTopBar(
-        title: 'Add Event',
+      appBar: CustomTopBar(
+        title: isEditing ? 'Edit Event' : 'Add Event',
         showBack: true,
       ),
       body: SafeArea(
@@ -423,7 +487,7 @@ class _CreatePublicEventScreenState extends State<CreatePublicEventScreen> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Text(
-                      'ADD TO EVENT CALENDAR',
+                      isEditing ? 'EDIT EVENT' : 'ADD TO EVENT CALENDAR',
                       style: GoogleFonts.outfit(
                         fontSize: 22,
                         fontWeight: FontWeight.bold,
@@ -433,7 +497,9 @@ class _CreatePublicEventScreenState extends State<CreatePublicEventScreen> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Publish a gig, jam session, workshop or public music event.',
+                      isEditing
+                          ? 'Update event details, location and schedule.'
+                          : 'Publish a gig, jam session, workshop or public music event.',
                       style: GoogleFonts.inter(
                         fontSize: 13,
                         color: AppTheme.textSecondary,
@@ -567,10 +633,10 @@ class _CreatePublicEventScreenState extends State<CreatePublicEventScreen> {
                     ),
                     const SizedBox(height: 32),
 
-                    // Publish Button
+                    // Publish / Save Button
                     Semantics(
                       button: true,
-                      label: 'Publish Event',
+                      label: isEditing ? 'Save Changes' : 'Publish Event',
                       child: AnimatedTapDetector(
                         onTap: _isSaving ? () {} : _saveEvent,
                         child: Container(
@@ -601,10 +667,14 @@ class _CreatePublicEventScreenState extends State<CreatePublicEventScreen> {
                                 : Row(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
-                                      const Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
+                                      Icon(
+                                        isEditing ? Icons.check_rounded : Icons.check_circle_rounded,
+                                        color: Colors.white,
+                                        size: 20,
+                                      ),
                                       const SizedBox(width: 8),
                                       Text(
-                                        'Publish Event',
+                                        isEditing ? 'Save Changes' : 'Publish Event',
                                         style: GoogleFonts.outfit(
                                           fontSize: 16,
                                           fontWeight: FontWeight.bold,

@@ -91,7 +91,9 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
     }
   }
   String _gigsTabFilter = 'Events';
-  String _eventsSubFilter = 'Upcoming (Finalized)';
+  String _eventsSubFilter = 'New Events';
+  final Set<String> _savingRsvpEventIds = {};
+  final Set<String> _expandedRsvpEventIds = {};
   String? _loadedBandId;
 
   @override
@@ -165,13 +167,21 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
       final files = await appState.firebaseService.getBandFilesAsync(bandId);
 
       if (mounted) {
+        final uniqueMembers = <String, BandMember>{};
+        for (final m in members) {
+          if (m.userId != null && m.userId!.isNotEmpty) {
+            uniqueMembers.putIfAbsent(m.userId!, () => m);
+          }
+        }
+        final cleanMembers = uniqueMembers.isNotEmpty ? uniqueMembers.values.toList() : members;
+
         setState(() {
           _activeBand = bandInfo;
-          _members = members;
+          _members = cleanMembers;
           _files = files;
         });
 
-        _loadMemberProfiles(appState, members);
+        _loadMemberProfiles(appState, cleanMembers);
 
         _chatSubscription = appState.firebaseService
             .subscribeToBandMessages(bandId)
@@ -1889,13 +1899,14 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
       orElse: () => BandMember(role: 'Member'),
     );
     final roleStr = (currentMember.role ?? _activeBand?.userRole ?? '').toLowerCase();
-    final isLeaderOrAdmin = roleStr.contains('leader') || roleStr.contains('admin');
+    final isLeaderOrAdmin = roleStr.contains('leader') || roleStr.contains('admin') || (_activeBand?.canUserEdit(selfId) ?? false);
 
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (isLeaderOrAdmin && bandId != null) ...[
           Padding(
-            padding: const EdgeInsets.all(16.0),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
             child: AnimatedTapDetector(
               onTap: () => _showAddMemberDialog(bandId),
               child: Container(
@@ -1908,8 +1919,8 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.person_add_alt_1_outlined, color: Colors.white),
-                      SizedBox(width: 8),
+                      const Icon(Icons.person_add_alt_1_outlined, color: Colors.white),
+                      const SizedBox(width: 8),
                       Text(
                         "Add Band Member",
                         style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold),
@@ -1925,9 +1936,36 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  'BAND MEMBERS',
-                  style: GoogleFonts.outfit(fontSize: 13, color: AppTheme.textSecondary, fontWeight: FontWeight.bold, letterSpacing: 1.2),
+                Row(
+                  children: [
+                    Text(
+                      'BAND MEMBERS',
+                      style: GoogleFonts.outfit(
+                        fontSize: 13,
+                        color: AppTheme.textSecondary,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                    if (_members.isNotEmpty) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: AppTheme.primaryAccent.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          '${_members.length}',
+                          style: GoogleFonts.inter(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: AppTheme.primaryAccent,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
                 Row(
                   children: [
@@ -1943,11 +1981,60 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
             ),
           ),
           const SizedBox(height: 8),
+        ] else ...[
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Row(
+              children: [
+                Text(
+                  'BAND MEMBERS',
+                  style: GoogleFonts.outfit(
+                    fontSize: 13,
+                    color: AppTheme.textSecondary,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+                if (_members.isNotEmpty) ...[
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primaryAccent.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      '${_members.length}',
+                      style: GoogleFonts.inter(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.primaryAccent,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
         ],
-        Expanded(
-          child: ListView.builder(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            itemCount: _members.length,
+        if (_isLoading && _members.isEmpty)
+          const Expanded(
+            child: Center(child: CircularProgressIndicator(color: AppTheme.primaryAccent)),
+          )
+        else if (_members.isEmpty)
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Text(
+              'No band members found. Tap "Add Band Member" to add musicians to your band.',
+              style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary, fontStyle: FontStyle.italic),
+            ),
+          )
+        else
+          Expanded(
+            child: ListView.builder(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              itemCount: _members.length,
             itemBuilder: (context, index) {
               final member = _members[index];
               final mRoleStr = (member.role ?? '').toLowerCase();
@@ -2255,32 +2342,41 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
       // Default: Events
       final filteredEvents = <BandEvent>[];
       for (var event in _bandEvents) {
-        final endLocal = DateTime.tryParse(event.endDateTime)?.toLocal() ?? now;
-        final isUpcoming = endLocal.isAfter(now);
+        final startLocal = DateTime.tryParse(event.startDateTime)?.toLocal();
+        final endLocal = DateTime.tryParse(event.endDateTime)?.toLocal() ?? startLocal;
+        final isUpcoming = endLocal != null ? endLocal.isAfter(now) : (startLocal != null && startLocal.isAfter(now));
+        final needsRsvp = isUpcoming && event.requireResponse && !event.isLocked;
+        final isFinalized = isUpcoming && (!event.requireResponse || event.isLocked);
 
-        if (_eventsSubFilter.startsWith('Upcoming') && isUpcoming) {
+        if (_eventsSubFilter.startsWith('New') && needsRsvp) {
+          filteredEvents.add(event);
+        } else if (_eventsSubFilter.startsWith('Upcoming') && isFinalized) {
           filteredEvents.add(event);
         } else if (_eventsSubFilter.startsWith('Past') && !isUpcoming) {
           filteredEvents.add(event);
         }
       }
 
-      // Sort chronologically with newest on top (by startDateTime descending)
+      // Sort: newEvents & upcoming ascending (closest first), past descending (most recent past first)
       filteredEvents.sort((a, b) {
-        final aDate = DateTime.tryParse(a.startDateTime)?.millisecondsSinceEpoch ?? a.createdAt;
-        final bDate = DateTime.tryParse(b.startDateTime)?.millisecondsSinceEpoch ?? b.createdAt;
-        return bDate.compareTo(aDate);
+        final aDate = DateTime.tryParse(a.startDateTime)?.toLocal() ?? DateTime.now();
+        final bDate = DateTime.tryParse(b.startDateTime)?.toLocal() ?? DateTime.now();
+        return _eventsSubFilter.startsWith('Past') ? bDate.compareTo(aDate) : aDate.compareTo(bDate);
       });
 
       for (var event in filteredEvents) {
-        final endLocal = DateTime.tryParse(event.endDateTime)?.toLocal() ?? now;
-        final isUpcoming = endLocal.isAfter(now);
+        final startLocal = DateTime.tryParse(event.startDateTime)?.toLocal();
+        final endLocal = DateTime.tryParse(event.endDateTime)?.toLocal() ?? startLocal;
+        final isUpcoming = endLocal != null ? endLocal.isAfter(now) : (startLocal != null && startLocal.isAfter(now));
+        final needsRsvp = isUpcoming && event.requireResponse && !event.isLocked;
         final timestamp = DateTime.tryParse(event.startDateTime)?.millisecondsSinceEpoch ??
             (event.createdAt > 0 ? event.createdAt : 0);
 
         feedItems.add({
           'id': event.id ?? '',
-          'feedType': isUpcoming ? 'UpcomingEvent' : 'PastEvent',
+          'feedType': !isUpcoming
+              ? 'PastEvent'
+              : (needsRsvp ? 'NewEvent' : 'UpcomingEvent'),
           'title': event.title,
           'content': event.description,
           'authorName': event.createdBy,
@@ -2310,16 +2406,21 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
           ),
         ),
 
-        // Sub-filter row when Events is selected: Upcoming (Finalized) vs Past Events
+        // Sub-filter row when Events is selected: New Events vs Upcoming (Finalized) vs Past Events
         if (!isOtherSelected) ...[
           Padding(
             padding: const EdgeInsets.fromLTRB(16.0, 2.0, 16.0, 8.0),
-            child: Row(
-              children: [
-                _buildEventsSubFilterChip('Upcoming (Finalized)', Icons.upcoming_rounded),
-                const SizedBox(width: 8),
-                _buildEventsSubFilterChip('Past Events', Icons.history_rounded),
-              ],
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  _buildEventsSubFilterChip('New Events', Icons.fiber_new_rounded),
+                  const SizedBox(width: 8),
+                  _buildEventsSubFilterChip('Upcoming (Finalized)', Icons.upcoming_rounded),
+                  const SizedBox(width: 8),
+                  _buildEventsSubFilterChip('Past Events', Icons.history_rounded),
+                ],
+              ),
             ),
           ),
         ],
@@ -2375,9 +2476,11 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                   child: Center(
                     child: Text(
                       !isOtherSelected
-                          ? (_eventsSubFilter.startsWith('Upcoming')
-                              ? "No upcoming events found."
-                              : "No past events found.")
+                          ? (_eventsSubFilter.startsWith('New')
+                              ? "No new events needing response."
+                              : (_eventsSubFilter.startsWith('Upcoming')
+                                  ? "No upcoming events found."
+                                  : "No past events found."))
                           : "No posts or updates found.",
                       style: GoogleFonts.inter(color: AppTheme.textSecondary),
                     ),
@@ -3032,8 +3135,15 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
 
   Widget _buildEventFeedCard(Map<String, dynamic> item, String? bandId) {
     final event = item['originalData'] as BandEvent;
-    final isUpcoming = item['feedType'] == 'UpcomingEvent';
+    final now = DateTime.now();
+    final startLocal = DateTime.tryParse(event.startDateTime)?.toLocal();
+    final endLocal = DateTime.tryParse(event.endDateTime)?.toLocal() ?? startLocal;
+    final isUpcoming = endLocal != null ? endLocal.isAfter(now) : (startLocal != null && startLocal.isAfter(now));
+    final isNewEvent = isUpcoming && event.requireResponse && !event.isLocked;
     final formattedTime = formatBandEventDateRange(event);
+
+    final appState = Provider.of<AppState>(context, listen: false);
+    final currentUserId = appState.currentUserId;
 
     // Regular member response counts (excluding members on hold)
     final regularUserIds = _members
@@ -3105,6 +3215,13 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
         eventIcon = Icons.event_available_rounded;
     }
 
+    final Color badgeColor = isNewEvent
+        ? const Color(0xFFFFB74D)
+        : (isUpcoming ? AppTheme.success : AppTheme.textSecondary);
+    final String badgeText = isNewEvent
+        ? 'NEW EVENT (Needs RSVP)'
+        : (isUpcoming ? 'UPCOMING (Finalized)' : 'PAST EVENT');
+
     return AnimatedTapDetector(
       onTap: () {
         if (bandId != null && event.id != null) {
@@ -3127,7 +3244,9 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
           color: AppTheme.cardBackground,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isUpcoming ? AppTheme.success.withOpacity(0.3) : const Color(0xFF2E2A4E),
+            color: isNewEvent
+                ? const Color(0xFFFFB74D).withOpacity(0.35)
+                : (isUpcoming ? AppTheme.success.withOpacity(0.3) : const Color(0xFF2E2A4E)),
             width: 1.0,
           ),
         ),
@@ -3139,12 +3258,12 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: (isUpcoming ? AppTheme.success : AppTheme.textSecondary).withOpacity(0.12),
+                    color: badgeColor.withOpacity(0.12),
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
                     eventIcon,
-                    color: isUpcoming ? AppTheme.success : AppTheme.textSecondary,
+                    color: badgeColor,
                     size: 20,
                   ),
                 ),
@@ -3158,15 +3277,15 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                             decoration: BoxDecoration(
-                              color: (isUpcoming ? AppTheme.success : AppTheme.textSecondary).withOpacity(0.15),
+                              color: badgeColor.withOpacity(0.15),
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: Text(
-                              isUpcoming ? 'UPCOMING (Finalized)' : 'PAST EVENT',
+                              badgeText,
                               style: GoogleFonts.inter(
                                 fontSize: 9,
                                 fontWeight: FontWeight.bold,
-                                color: isUpcoming ? AppTheme.success : AppTheme.textSecondary,
+                                color: badgeColor,
                               ),
                             ),
                           ),
@@ -3258,6 +3377,203 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                 ],
               ),
             ),
+            if (isNewEvent &&
+                (currentUserId == null || !event.excludedMemberIds.contains(currentUserId))) ...[
+              const SizedBox(height: 12),
+              Builder(
+                builder: (context) {
+                  final userRespStatus = currentUserId != null ? event.responses[currentUserId]?.status : null;
+                  final hasResponse = userRespStatus != null && userRespStatus.trim().isNotEmpty;
+                  final isExpanded = !hasResponse || (event.id != null && _expandedRsvpEventIds.contains(event.id));
+
+                  Color statusColor;
+                  IconData statusIcon;
+                  final lower = (userRespStatus ?? '').toLowerCase();
+                  if (!hasResponse) {
+                    statusColor = const Color(0xFFFFB74D);
+                    statusIcon = Icons.notification_important_rounded;
+                  } else if (lower == 'yes' || lower == 'attending') {
+                    statusColor = AppTheme.success;
+                    statusIcon = Icons.check_circle_rounded;
+                  } else if (lower == 'no' || lower == 'declined') {
+                    statusColor = AppTheme.danger;
+                    statusIcon = Icons.cancel_rounded;
+                  } else {
+                    statusColor = AppTheme.warning;
+                    statusIcon = Icons.help_rounded;
+                  }
+
+                  return AnimatedTapDetector(
+                    onTap: () {
+                      if (hasResponse && event.id != null) {
+                        setState(() {
+                          if (_expandedRsvpEventIds.contains(event.id)) {
+                            _expandedRsvpEventIds.remove(event.id);
+                          } else {
+                            _expandedRsvpEventIds.add(event.id!);
+                          }
+                        });
+                      }
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF130F2B),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: !hasResponse
+                              ? AppTheme.primaryAccent.withOpacity(0.5)
+                              : statusColor.withOpacity(0.35),
+                          width: 1.2,
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(statusIcon, size: 15, color: statusColor),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    !hasResponse
+                                        ? 'RSVP Required'
+                                        : 'Your RSVP: $userRespStatus',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                      color: !hasResponse ? const Color(0xFFFFB74D) : Colors.white,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              if (hasResponse)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: isExpanded
+                                        ? const Color(0xFF28224B)
+                                        : const Color(0xFF1E193C),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(
+                                      color: isExpanded
+                                          ? AppTheme.primaryAccent.withOpacity(0.6)
+                                          : const Color(0xFF382F63),
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        isExpanded ? 'Close' : 'Change',
+                                        style: GoogleFonts.inter(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                          color: isExpanded ? Colors.white : AppTheme.textSecondary,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 3),
+                                      Icon(
+                                        isExpanded
+                                            ? Icons.keyboard_arrow_up_rounded
+                                            : Icons.keyboard_arrow_down_rounded,
+                                        size: 14,
+                                        color: isExpanded ? Colors.white : AppTheme.textSecondary,
+                                      ),
+                                    ],
+                                  ),
+                                )
+                              else
+                                Text(
+                                  'Please respond',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 11,
+                                    color: AppTheme.textSecondary,
+                                  ),
+                                ),
+                            ],
+                          ),
+                          if (isExpanded) ...[
+                            const SizedBox(height: 8),
+                            if (event.id != null && _savingRsvpEventIds.contains(event.id))
+                              const Center(
+                                child: Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 6),
+                                  child: SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: AppTheme.primaryAccent,
+                                    ),
+                                  ),
+                                ),
+                              )
+                            else
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: _buildRsvpButton(
+                                      label: 'Yes',
+                                      icon: Icons.check_rounded,
+                                      color: AppTheme.success,
+                                      isSelected: lower == 'yes' || lower == 'attending',
+                                      onTap: () {
+                                        if (event.id != null) {
+                                          _expandedRsvpEventIds.remove(event.id);
+                                        }
+                                        if (bandId != null) {
+                                          _handleQuickRsvp(bandId, event, 'Yes');
+                                        }
+                                      },
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: _buildRsvpButton(
+                                      label: 'No',
+                                      icon: Icons.close_rounded,
+                                      color: AppTheme.danger,
+                                      isSelected: lower == 'no' || lower == 'declined',
+                                      onTap: () {
+                                        if (event.id != null) {
+                                          _expandedRsvpEventIds.remove(event.id);
+                                        }
+                                        if (bandId != null) {
+                                          _handleQuickRsvp(bandId, event, 'No');
+                                        }
+                                      },
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: _buildRsvpButton(
+                                      label: 'Maybe',
+                                      icon: Icons.help_outline_rounded,
+                                      color: AppTheme.warning,
+                                      isSelected: lower == 'uncertain' || lower == 'maybe',
+                                      onTap: () {
+                                        if (event.id != null) {
+                                          _expandedRsvpEventIds.remove(event.id);
+                                        }
+                                        if (bandId != null) {
+                                          _handleUncertainRsvp(bandId, event);
+                                        }
+                                      },
+                                    ),
+                                  ),
+                                ],
+                              ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ],
             const SizedBox(height: 14),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -3276,6 +3592,120 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                   size: 20,
                 ),
               ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _handleQuickRsvp(String bandId, BandEvent event, String status) async {
+    final appState = Provider.of<AppState>(context, listen: false);
+    final userId = appState.currentUserId;
+    if (userId == null || event.id == null) return;
+
+    final eventId = event.id!;
+    if (_savingRsvpEventIds.contains(eventId)) return;
+
+    setState(() {
+      _savingRsvpEventIds.add(eventId);
+    });
+
+    try {
+      await appState.firebaseService.updateEventResponseAsync(
+        bandId,
+        eventId,
+        userId,
+        status,
+      );
+
+      if (status == 'Yes' && event.temporaryRoomId != null && event.temporaryRoomId!.isNotEmpty) {
+        await appState.firebaseService.addMemberToEventRoomAsync(
+          bandId,
+          event.temporaryRoomId!,
+          userId,
+          'attending',
+        );
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(status == 'Yes' ? 'RSVP: Attending!' : 'RSVP: Declined'),
+            backgroundColor: status == 'Yes' ? AppTheme.success : AppTheme.danger,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to save RSVP: $e'),
+            backgroundColor: AppTheme.danger,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _savingRsvpEventIds.remove(eventId);
+        });
+      }
+    }
+  }
+
+  void _handleUncertainRsvp(String bandId, BandEvent event) {
+    final appState = Provider.of<AppState>(context, listen: false);
+    final userId = appState.currentUserId;
+    if (userId == null || event.id == null) return;
+
+    RsvpReminderDialog.show(
+      context: context,
+      event: event,
+      bandId: bandId,
+      currentUserId: userId,
+      onResponded: () {
+        if (mounted) setState(() {});
+      },
+    );
+  }
+
+  Widget _buildRsvpButton({
+    required String label,
+    required IconData icon,
+    required Color color,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return AnimatedTapDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? color.withOpacity(0.22) : const Color(0xFF1B163B),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: isSelected ? color : const Color(0xFF2C2454),
+            width: isSelected ? 1.5 : 1.0,
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 14,
+              color: isSelected ? color : AppTheme.textSecondary,
+            ),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                color: isSelected ? Colors.white : AppTheme.textSecondary,
+              ),
             ),
           ],
         ),

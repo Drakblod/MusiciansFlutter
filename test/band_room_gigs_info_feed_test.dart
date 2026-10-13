@@ -18,7 +18,9 @@ import 'package:musicians_flutter/widgets/animated_tap_detector.dart';
 
 class MockGigsInfoFirebaseService extends FirebaseService {
   BandEvent? testEvent;
+  List<BandEvent> testEventsList = [];
   List<BandMember> testMembers = [];
+  final List<Map<String, String>> updatedResponses = [];
 
   @override
   Stream<List<Message>> subscribeToBandMessages(String bandId) {
@@ -27,12 +29,31 @@ class MockGigsInfoFirebaseService extends FirebaseService {
 
   @override
   Stream<List<BandEvent>> subscribeToBandEvents(String bandId) {
+    if (testEventsList.isNotEmpty) {
+      return Stream.value(testEventsList);
+    }
     return Stream.value(testEvent != null ? [testEvent!] : []);
   }
 
   @override
   Stream<BandEvent?> subscribeToBandEvent(String bandId, String eventId) {
     return Stream.value(testEvent);
+  }
+
+  @override
+  Future<void> updateEventResponseAsync(
+    String bandId,
+    String eventId,
+    String userId,
+    String status, {
+    String? comment,
+  }) async {
+    updatedResponses.add({
+      'bandId': bandId,
+      'eventId': eventId,
+      'userId': userId,
+      'response': status,
+    });
   }
 
   @override
@@ -180,12 +201,22 @@ void main() {
 
     // Verify Gig Type Badge 'Concert' is displayed
     expect(find.text('Concert'), findsOneWidget);
-    expect(find.text('UPCOMING (Finalized)'), findsOneWidget);
+    expect(find.text('NEW EVENT (Needs RSVP)'), findsOneWidget);
+    expect(find.text('Your RSVP: YES'), findsOneWidget);
+    expect(find.text('Change'), findsOneWidget);
+    expect(find.text('Yes'), findsNothing);
+
+    // Tapping Change expands RSVP buttons
+    await tester.tap(find.text('Change'));
+    await tester.pumpAndSettle();
+    expect(find.text('Yes'), findsOneWidget);
+    expect(find.text('No'), findsOneWidget);
+    expect(find.text('Maybe'), findsOneWidget);
 
     // 2. Verify normalized response counts
     expect(find.textContaining('1 Attending (2 responses)'), findsOneWidget);
 
-    // 3. Verify separate "RSVP / Details" button is REMOVED
+    // 3. Verify old separate "RSVP / Details" button is REMOVED
     expect(find.text('RSVP / Details'), findsNothing);
     expect(find.text('View Details'), findsNothing);
 
@@ -298,6 +329,7 @@ void main() {
     expect(find.widgetWithText(AnimatedTapDetector, 'Other'), findsOneWidget);
 
     // Sub-filters under Events
+    expect(find.text('New Events'), findsOneWidget);
     expect(find.text('Upcoming (Finalized)'), findsOneWidget);
     expect(find.text('Past Events'), findsOneWidget);
 
@@ -322,5 +354,150 @@ void main() {
     expect(find.text('News Update'), findsOneWidget);
     expect(find.text('Gig / Event'), findsOneWidget);
     expect(find.text('Gig / Booking'), findsNothing);
+  });
+
+  testWidgets('Direct 1-tap RSVP saves response and chronology sorts upcoming ascending and past descending', (tester) async {
+    tester.view.physicalSize = const Size(1200, 2400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    final mockService = MockGigsInfoFirebaseService();
+    mockService.testMembers = [
+      BandMember(userId: 'leader_1', nickname: 'Leader', role: 'Leader'),
+      BandMember(userId: 'u2', nickname: 'Member', role: 'Member'),
+    ];
+
+    final now = DateTime.now();
+    final evNear = BandEvent(
+      id: 'ev_near',
+      title: 'Sooner Gig',
+      description: 'Happening in 2 days',
+      eventType: 'Concert',
+      location: 'Stage A',
+      startDateTime: now.add(const Duration(days: 2)).toIso8601String(),
+      endDateTime: now.add(const Duration(days: 2, hours: 2)).toIso8601String(),
+      additionalNotes: '',
+      createdBy: 'leader_1',
+      createdAt: now.millisecondsSinceEpoch,
+      updatedAt: now.millisecondsSinceEpoch,
+      requireResponse: true,
+      responses: {
+        'leader_1': EventResponse(status: 'UNCERTAIN', timestamp: now),
+      },
+    );
+
+    final evFar = BandEvent(
+      id: 'ev_far',
+      title: 'Later Gig',
+      description: 'Happening in 7 days',
+      eventType: 'Festival',
+      location: 'Park B',
+      startDateTime: now.add(const Duration(days: 7)).toIso8601String(),
+      endDateTime: now.add(const Duration(days: 7, hours: 2)).toIso8601String(),
+      additionalNotes: '',
+      createdBy: 'leader_1',
+      createdAt: now.millisecondsSinceEpoch,
+      updatedAt: now.millisecondsSinceEpoch,
+      requireResponse: true,
+      responses: {
+        'leader_1': EventResponse(status: 'UNCERTAIN', timestamp: now),
+      },
+    );
+
+    final evPastOlder = BandEvent(
+      id: 'ev_past_older',
+      title: 'Past Older Event',
+      description: 'Happened 10 days ago',
+      eventType: 'Club',
+      location: 'Club A',
+      startDateTime: now.subtract(const Duration(days: 10)).toIso8601String(),
+      endDateTime: now.subtract(const Duration(days: 10, hours: -2)).toIso8601String(),
+      additionalNotes: '',
+      createdBy: 'leader_1',
+      createdAt: now.millisecondsSinceEpoch,
+      updatedAt: now.millisecondsSinceEpoch,
+      requireResponse: true,
+    );
+
+    final evPastNewer = BandEvent(
+      id: 'ev_past_newer',
+      title: 'Past Newer Event',
+      description: 'Happened 2 days ago',
+      eventType: 'Club',
+      location: 'Club B',
+      startDateTime: now.subtract(const Duration(days: 2)).toIso8601String(),
+      endDateTime: now.subtract(const Duration(days: 2, hours: -2)).toIso8601String(),
+      additionalNotes: '',
+      createdBy: 'leader_1',
+      createdAt: now.millisecondsSinceEpoch,
+      updatedAt: now.millisecondsSinceEpoch,
+      requireResponse: true,
+    );
+
+    mockService.testEventsList = [evFar, evNear, evPastOlder, evPastNewer];
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider<AppState>(
+        create: (_) => MockGigsInfoAppState(mockService),
+        child: const MaterialApp(
+          home: BandRoomChatScreen(),
+        ),
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    // Switch to Gigs/Info tab
+    await tester.tap(find.text('Gigs/Info'));
+    for (int i = 0; i < 10; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+
+    // Default sub-filter is New Events
+    expect(find.text('Sooner Gig'), findsOneWidget);
+    expect(find.text('Later Gig'), findsOneWidget);
+
+    // Verify chronological order for upcoming events: Sooner Gig is above Later Gig
+    final soonerTop = tester.getTopLeft(find.text('Sooner Gig')).dy;
+    final laterTop = tester.getTopLeft(find.text('Later Gig')).dy;
+    expect(soonerTop, lessThan(laterTop));
+
+    // Verify 1-tap RSVP button works: tap Change to expand options on Sooner Gig, then tap Yes
+    final changeFinder = find.text('Change');
+    expect(changeFinder, findsWidgets);
+    await tester.tap(changeFinder.first);
+    await tester.pumpAndSettle();
+
+    final yesFinder = find.widgetWithText(AnimatedTapDetector, 'Yes');
+    expect(yesFinder, findsWidgets);
+    await tester.tap(yesFinder.first);
+    await tester.pumpAndSettle();
+
+    expect(mockService.updatedResponses.length, 1);
+    expect(mockService.updatedResponses.first['eventId'], 'ev_near');
+    expect(mockService.updatedResponses.first['response'], 'Yes');
+    expect(mockService.updatedResponses.first['userId'], 'leader_1');
+
+    // Switch to Past Events
+    await tester.tap(find.text('Past Events'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Past Newer Event'), findsOneWidget);
+    expect(find.text('Past Older Event'), findsOneWidget);
+
+    // Verify chronological order for past events: Past Newer Event is above Past Older Event
+    final newerTop = tester.getTopLeft(find.text('Past Newer Event')).dy;
+    final olderTop = tester.getTopLeft(find.text('Past Older Event')).dy;
+    expect(newerTop, lessThan(olderTop));
+
+    // Past events should have NO RSVP buttons
+    expect(find.widgetWithText(AnimatedTapDetector, 'Yes'), findsNothing);
+    expect(find.widgetWithText(AnimatedTapDetector, 'No'), findsNothing);
+    expect(find.widgetWithText(AnimatedTapDetector, 'Maybe'), findsNothing);
   });
 }

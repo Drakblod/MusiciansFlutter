@@ -83,6 +83,9 @@ class SingleNoImageEventRepository implements PublicEventRepository {
   Future<String> createEvent(PublicCalendarEvent event) async => event.id;
 
   @override
+  Future<void> updateEvent(PublicCalendarEvent event) async {}
+
+  @override
   Future<void> deleteEvent(String eventId) async {}
 }
 

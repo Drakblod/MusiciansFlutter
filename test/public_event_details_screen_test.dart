@@ -18,12 +18,18 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class SpyingPublicEventRepository implements PublicEventRepository {
   final List<String> deletedEventIds = [];
+  final List<PublicCalendarEvent> updatedEvents = [];
 
   @override
   Future<List<PublicCalendarEvent>> getUpcomingEvents() async => [];
 
   @override
   Future<String> createEvent(PublicCalendarEvent event) async => event.id;
+
+  @override
+  Future<void> updateEvent(PublicCalendarEvent event) async {
+    updatedEvents.add(event);
+  }
 
   @override
   Future<void> deleteEvent(String eventId) async {
@@ -329,6 +335,47 @@ void main() {
       expect(spyRepo.deletedEventIds, contains('mock_test_1'));
       expect(find.text('Event "Stockholm Jazz Night" deleted.'), findsOneWidget);
       expect(find.text('Open Details'), findsOneWidget);
+    });
+
+    testWidgets('4d. Tapping Edit opens CreatePublicEventScreen and updates event on save', (tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      final spyRepo = SpyingPublicEventRepository();
+      await tester.pumpWidget(createDetailsTestWidget(event: testEvent, repository: spyRepo));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Open Details'));
+      await tester.pumpAndSettle();
+
+      // Find Edit button
+      final editBtn = find.text('Edit');
+      expect(editBtn, findsOneWidget);
+      await tester.tap(editBtn);
+      await tester.pumpAndSettle();
+
+      // Check edit screen is shown with pre-populated values
+      expect(find.text('EDIT EVENT'), findsOneWidget);
+      expect(find.text('Stockholm Jazz Night'), findsOneWidget);
+      expect(find.text('Save Changes'), findsOneWidget);
+
+      // Modify the title
+      final titleField = find.widgetWithText(TextFormField, 'Stockholm Jazz Night');
+      expect(titleField, findsOneWidget);
+      await tester.enterText(titleField, 'Stockholm Jazz & Blues');
+      await tester.pumpAndSettle();
+
+      // Save changes
+      await tester.tap(find.text('Save Changes'));
+      await tester.pumpAndSettle();
+
+      // Verify updateEvent was called on repository
+      expect(spyRepo.updatedEvents, isNotEmpty);
+      expect(spyRepo.updatedEvents.last.title, equals('Stockholm Jazz & Blues'));
+
+      // Verify details view immediately reflects updated title
+      expect(find.text('Stockholm Jazz & Blues'), findsOneWidget);
     });
 
     testWidgets('5. Home View Event Calendar button navigates to /event-calendar', (tester) async {

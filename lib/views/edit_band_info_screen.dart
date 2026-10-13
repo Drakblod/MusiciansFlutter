@@ -263,10 +263,18 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
       final appState = Provider.of<AppState>(context, listen: false);
       final members = await appState.firebaseService.getBandMembersAsync(bandId);
       if (mounted) {
+        final uniqueMembers = <String, BandMember>{};
+        for (final m in members) {
+          if (m.userId != null && m.userId!.isNotEmpty) {
+            uniqueMembers.putIfAbsent(m.userId!, () => m);
+          }
+        }
+        final cleanMembers = uniqueMembers.isNotEmpty ? uniqueMembers.values.toList() : members;
+
         setState(() {
-          _members = members;
+          _members = cleanMembers;
         });
-        await _loadMemberProfiles(appState, members);
+        await _loadMemberProfiles(appState, cleanMembers);
       }
     } catch (e) {
       debugPrint('Error loading band members: $e');

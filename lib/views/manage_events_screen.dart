@@ -44,6 +44,7 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> with SingleTick
   final Map<String, List<BandEvent>> _bandEventsMap = {};
   final List<StreamSubscription<List<BandEvent>>> _subscriptions = [];
   final Set<String> _savingRsvpEventIds = {};
+  final Set<String> _expandedRsvpEventIds = {};
 
   @override
   void initState() {
@@ -939,127 +940,192 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> with SingleTick
               (currentUserId == null || !event.excludedMemberIds.contains(currentUserId))) ...[
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF130F2B),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: (currentUserId != null ? event.responses[currentUserId]?.status : null) == null
-                        ? AppTheme.primaryAccent.withValues(alpha: 0.5)
-                        : const Color(0xFF28224B),
-                    width: 1.2,
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
-                          children: [
-                            Icon(
-                              (currentUserId != null ? event.responses[currentUserId]?.status : null) == null
-                                  ? Icons.notification_important_rounded
-                                  : (((event.responses[currentUserId]?.status ?? '').toLowerCase() == 'yes' ||
-                                          (event.responses[currentUserId]?.status ?? '').toLowerCase() == 'attending')
-                                      ? Icons.check_circle_rounded
-                                      : (((event.responses[currentUserId]?.status ?? '').toLowerCase() == 'no' ||
-                                              (event.responses[currentUserId]?.status ?? '').toLowerCase() == 'declined')
-                                          ? Icons.cancel_rounded
-                                          : Icons.help_rounded)),
-                              size: 15,
-                              color: (currentUserId != null ? event.responses[currentUserId]?.status : null) == null
-                                  ? const Color(0xFFFFB74D)
-                                  : (((event.responses[currentUserId]?.status ?? '').toLowerCase() == 'yes' ||
-                                          (event.responses[currentUserId]?.status ?? '').toLowerCase() == 'attending')
-                                      ? AppTheme.success
-                                      : (((event.responses[currentUserId]?.status ?? '').toLowerCase() == 'no' ||
-                                              (event.responses[currentUserId]?.status ?? '').toLowerCase() == 'declined')
-                                          ? AppTheme.danger
-                                          : AppTheme.warning)),
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              (currentUserId != null ? event.responses[currentUserId]?.status : null) == null
-                                  ? 'RSVP Required'
-                                  : 'Your RSVP: ${event.responses[currentUserId]?.status}',
-                              style: GoogleFonts.inter(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                                color: (currentUserId != null ? event.responses[currentUserId]?.status : null) == null
-                                    ? const Color(0xFFFFB74D)
-                                    : Colors.white,
-                              ),
-                            ),
-                          ],
+              child: Builder(
+                builder: (context) {
+                  final userRespStatus = currentUserId != null ? event.responses[currentUserId]?.status : null;
+                  final hasResponse = userRespStatus != null && userRespStatus.trim().isNotEmpty;
+                  final isExpanded = !hasResponse || (event.id != null && _expandedRsvpEventIds.contains(event.id));
+
+                  Color statusColor;
+                  IconData statusIcon;
+                  final lower = (userRespStatus ?? '').toLowerCase();
+                  if (!hasResponse) {
+                    statusColor = const Color(0xFFFFB74D);
+                    statusIcon = Icons.notification_important_rounded;
+                  } else if (lower == 'yes' || lower == 'attending') {
+                    statusColor = AppTheme.success;
+                    statusIcon = Icons.check_circle_rounded;
+                  } else if (lower == 'no' || lower == 'declined') {
+                    statusColor = AppTheme.danger;
+                    statusIcon = Icons.cancel_rounded;
+                  } else {
+                    statusColor = AppTheme.warning;
+                    statusIcon = Icons.help_rounded;
+                  }
+
+                  return AnimatedTapDetector(
+                    onTap: () {
+                      if (hasResponse && event.id != null) {
+                        setState(() {
+                          if (_expandedRsvpEventIds.contains(event.id)) {
+                            _expandedRsvpEventIds.remove(event.id);
+                          } else {
+                            _expandedRsvpEventIds.add(event.id!);
+                          }
+                        });
+                      }
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF130F2B),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: !hasResponse
+                              ? AppTheme.primaryAccent.withValues(alpha: 0.5)
+                              : statusColor.withValues(alpha: 0.35),
+                          width: 1.2,
                         ),
-                        Text(
-                          (currentUserId != null ? event.responses[currentUserId]?.status : null) == null
-                              ? 'Please respond'
-                              : 'Tap to change',
-                          style: GoogleFonts.inter(
-                            fontSize: 11,
-                            color: AppTheme.textSecondary,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    if (event.id != null && _savingRsvpEventIds.contains(event.id))
-                      const Center(
-                        child: Padding(
-                          padding: EdgeInsets.symmetric(vertical: 6),
-                          child: SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: AppTheme.primaryAccent,
-                            ),
-                          ),
-                        ),
-                      )
-                    else
-                      Row(
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Expanded(
-                            child: _buildRsvpButton(
-                              label: 'Yes',
-                              icon: Icons.check_rounded,
-                              color: AppTheme.success,
-                              isSelected: ((event.responses[currentUserId]?.status ?? '').toLowerCase() == 'yes' ||
-                                  (event.responses[currentUserId]?.status ?? '').toLowerCase() == 'attending'),
-                              onTap: () => _handleQuickRsvp(bandId, event, 'Yes'),
-                            ),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(statusIcon, size: 15, color: statusColor),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    !hasResponse
+                                        ? 'RSVP Required'
+                                        : 'Your RSVP: $userRespStatus',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                      color: !hasResponse ? const Color(0xFFFFB74D) : Colors.white,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              if (hasResponse)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: isExpanded
+                                        ? const Color(0xFF28224B)
+                                        : const Color(0xFF1E193C),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(
+                                      color: isExpanded
+                                          ? AppTheme.primaryAccent.withValues(alpha: 0.6)
+                                          : const Color(0xFF382F63),
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        isExpanded ? 'Close' : 'Change',
+                                        style: GoogleFonts.inter(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                          color: isExpanded ? Colors.white : AppTheme.textSecondary,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 3),
+                                      Icon(
+                                        isExpanded
+                                            ? Icons.keyboard_arrow_up_rounded
+                                            : Icons.keyboard_arrow_down_rounded,
+                                        size: 14,
+                                        color: isExpanded ? Colors.white : AppTheme.textSecondary,
+                                      ),
+                                    ],
+                                  ),
+                                )
+                              else
+                                Text(
+                                  'Please respond',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 11,
+                                    color: AppTheme.textSecondary,
+                                  ),
+                                ),
+                            ],
                           ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: _buildRsvpButton(
-                              label: 'No',
-                              icon: Icons.close_rounded,
-                              color: AppTheme.danger,
-                              isSelected: ((event.responses[currentUserId]?.status ?? '').toLowerCase() == 'no' ||
-                                  (event.responses[currentUserId]?.status ?? '').toLowerCase() == 'declined'),
-                              onTap: () => _handleQuickRsvp(bandId, event, 'No'),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: _buildRsvpButton(
-                              label: 'Maybe',
-                              icon: Icons.help_outline_rounded,
-                              color: AppTheme.warning,
-                              isSelected: ((event.responses[currentUserId]?.status ?? '').toLowerCase() == 'uncertain' ||
-                                  (event.responses[currentUserId]?.status ?? '').toLowerCase() == 'maybe'),
-                              onTap: () => _handleUncertainRsvp(bandId, event),
-                            ),
-                          ),
+                          if (isExpanded) ...[
+                            const SizedBox(height: 8),
+                            if (event.id != null && _savingRsvpEventIds.contains(event.id))
+                              const Center(
+                                child: Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 6),
+                                  child: SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: AppTheme.primaryAccent,
+                                    ),
+                                  ),
+                                ),
+                              )
+                            else
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: _buildRsvpButton(
+                                      label: 'Yes',
+                                      icon: Icons.check_rounded,
+                                      color: AppTheme.success,
+                                      isSelected: lower == 'yes' || lower == 'attending',
+                                      onTap: () {
+                                        if (event.id != null) {
+                                          _expandedRsvpEventIds.remove(event.id);
+                                        }
+                                        _handleQuickRsvp(bandId, event, 'Yes');
+                                      },
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: _buildRsvpButton(
+                                      label: 'No',
+                                      icon: Icons.close_rounded,
+                                      color: AppTheme.danger,
+                                      isSelected: lower == 'no' || lower == 'declined',
+                                      onTap: () {
+                                        if (event.id != null) {
+                                          _expandedRsvpEventIds.remove(event.id);
+                                        }
+                                        _handleQuickRsvp(bandId, event, 'No');
+                                      },
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: _buildRsvpButton(
+                                      label: 'Maybe',
+                                      icon: Icons.help_outline_rounded,
+                                      color: AppTheme.warning,
+                                      isSelected: lower == 'uncertain' || lower == 'maybe',
+                                      onTap: () {
+                                        if (event.id != null) {
+                                          _expandedRsvpEventIds.remove(event.id);
+                                        }
+                                        _handleUncertainRsvp(bandId, event);
+                                      },
+                                    ),
+                                  ),
+                                ],
+                              ),
+                          ],
                         ],
                       ),
-                  ],
-                ),
+                    ),
+                  );
+                },
               ),
             ),
           ],

@@ -219,6 +219,15 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  void toggleTestUnreadNotification() {
+    if (_unreadNotificationCount == 0) {
+      _unreadNotificationCount = 1;
+    } else {
+      _unreadNotificationCount = 0;
+    }
+    notifyListeners();
+  }
+
   void _clearProfileState() {
     _currentUserProfile = null;
     _activeBandId = null;

@@ -12,7 +12,123 @@ import '../models/mock_live_rehearsal.dart';
 import '../data/mock_live_rehearsals.dart';
 import '../services/mock_rehearsal_audio_controller.dart';
 import '../widgets/map_crosshair.dart';
+import '../widgets/custom_top_bar.dart';
 import '../utils/map_crosshair_targeting.dart';
+
+enum MapEventType {
+  gig,
+  rehearsal,
+  newMember,
+  jamSession,
+  studio,
+}
+
+class MapEventTypeHelper {
+  static MapEventType getEventType(SubRequest gig) {
+    final text = '${gig.requestType ?? ""} ${gig.role ?? ""} ${gig.eventTitle ?? ""} ${gig.description ?? ""} ${gig.extraFields["eventType"] ?? ""}'.toLowerCase();
+
+    // 1. Rehearsal
+    if ((gig.rehearsalDayOfWeek != null && gig.rehearsalDayOfWeek!.isNotEmpty) ||
+        text.contains('rehearsal') ||
+        text.contains('repetition') ||
+        text.contains('bandrep')) {
+      if (!text.contains('live gig') && !text.contains('concert')) {
+        return MapEventType.rehearsal;
+      }
+    }
+
+    // 2. New Member / Audition
+    if (text.contains('new member') ||
+        text.contains('ny medlem') ||
+        text.contains('audition') ||
+        text.contains('permanent') ||
+        text.contains('join the band') ||
+        text.contains('söker musiker')) {
+      return MapEventType.newMember;
+    }
+
+    // 3. Studio / Recording / Producer
+    if (text.contains('studio') ||
+        text.contains('recording') ||
+        text.contains('inspelning') ||
+        text.contains('producer') ||
+        text.contains('co-writing')) {
+      return MapEventType.studio;
+    }
+
+    // 4. Jam Session / Workshop
+    if (text.contains('jam') ||
+        text.contains('workshop') ||
+        text.contains('open stage') ||
+        text.contains('öppen scen') ||
+        text.contains('session')) {
+      return MapEventType.jamSession;
+    }
+
+    // 5. Default: Gig / Live
+    return MapEventType.gig;
+  }
+
+  static BitmapDescriptor getMarkerIcon(MapEventType type) {
+    switch (type) {
+      case MapEventType.gig:
+        return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed);
+      case MapEventType.rehearsal:
+        return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueMagenta);
+      case MapEventType.newMember:
+        return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen);
+      case MapEventType.jamSession:
+        return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure);
+      case MapEventType.studio:
+        return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueOrange);
+    }
+  }
+
+  static Color getColor(MapEventType type) {
+    switch (type) {
+      case MapEventType.gig:
+        return const Color(0xFFEF4444); // Red
+      case MapEventType.rehearsal:
+        return const Color(0xFFD946EF); // Magenta
+      case MapEventType.newMember:
+        return const Color(0xFF10B981); // Green
+      case MapEventType.jamSession:
+        return const Color(0xFF38BDF8); // Azure / Sky Blue
+      case MapEventType.studio:
+        return const Color(0xFFF59E0B); // Amber / Orange
+    }
+  }
+
+  static String getLabel(MapEventType type) {
+    switch (type) {
+      case MapEventType.gig:
+        return 'Gig / Live Show';
+      case MapEventType.rehearsal:
+        return 'Rehearsal';
+      case MapEventType.newMember:
+        return 'New Member';
+      case MapEventType.jamSession:
+        return 'Jam Session';
+      case MapEventType.studio:
+        return 'Studio / Recording';
+    }
+  }
+
+  static IconData getIcon(MapEventType type) {
+    switch (type) {
+      case MapEventType.gig:
+        return Icons.stadium_rounded;
+      case MapEventType.rehearsal:
+        return Icons.music_note_rounded;
+      case MapEventType.newMember:
+        return Icons.person_add_alt_1_rounded;
+      case MapEventType.jamSession:
+        return Icons.groups_rounded;
+      case MapEventType.studio:
+        return Icons.mic_rounded;
+    }
+  }
+}
 
 class GigMapPage extends StatefulWidget {
   const GigMapPage({super.key});
@@ -29,6 +145,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
   String _selectedFilter = 'All';
   SubRequest? _selectedGig;
   bool _showGuideBanner = true;
+  bool _showLegend = false;
 
   // Prototype Mock Live Rehearsal Audio State
   MockRehearsalAudioController? _audioController;
@@ -213,12 +330,13 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
             subRequestId: 'mock_1',
             voicePart: 'Electric Guitar',
             role: 'Rock Guitarist Needed',
+            requestType: 'Gig',
             bandName: 'The Midnight Storm',
             location: 'Stockholm, Sweden',
             date: DateTime.now().add(const Duration(days: 3)).toIso8601String(),
             startTime: '19:00:00',
             endTime: '22:00:00',
-            description: 'Looking for a solid rock guitarist to fill in for a rehearsal and possibly a weekend gig.',
+            description: 'Looking for a solid rock guitarist to fill in for a live weekend gig.',
             isPaid: true,
             latitude: 59.3293,
             longitude: 18.0686,
@@ -228,7 +346,8 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
             id: 'mock_2',
             subRequestId: 'mock_2',
             voicePart: 'Vocalist',
-            role: 'Jazz Vocalist',
+            role: 'Jazz Club Vocalist',
+            requestType: 'Club Gig',
             bandName: 'Cool Autumn Quartet',
             location: 'Gothenburg, Sweden',
             date: DateTime.now().add(const Duration(days: 5)).toIso8601String(),
@@ -244,7 +363,9 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
             id: 'mock_3',
             subRequestId: 'mock_3',
             voicePart: 'Cello',
-            role: 'Classical Cello Substitute',
+            role: 'Classical Cello Rehearsal',
+            requestType: 'Rehearsal',
+            rehearsalDayOfWeek: 'Wednesday',
             bandName: 'Uppsala Sinfonietta',
             location: 'Uppsala, Sweden',
             date: DateTime.now().add(const Duration(days: 2)).toIso8601String(),
@@ -261,15 +382,50 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
             subRequestId: 'mock_4',
             voicePart: 'Drums',
             role: 'Drummer for Pop Band',
+            requestType: 'New Member',
             bandName: 'Vibe Check',
             location: 'Malmö, Sweden',
             date: DateTime.now().add(const Duration(days: 6)).toIso8601String(),
             startTime: '17:30:00',
             endTime: '20:30:00',
-            description: 'Our regular drummer has a family emergency. Energetic pop drumming style required.',
+            description: 'Audition / seeking permanent drummer for touring pop band.',
             isPaid: true,
             latitude: 55.6050,
             longitude: 13.0038,
+            responses: {},
+          ),
+          SubRequest(
+            id: 'mock_5',
+            subRequestId: 'mock_5',
+            voicePart: 'Saxophone / Keys',
+            role: 'Open Jam Session',
+            requestType: 'Jam Session',
+            bandName: 'Groove Collective',
+            location: 'Örebro, Sweden',
+            date: DateTime.now().add(const Duration(days: 4)).toIso8601String(),
+            startTime: '19:00:00',
+            endTime: '22:30:00',
+            description: 'Open jam session for brass & keys players. Bring your instrument!',
+            isPaid: false,
+            latitude: 59.2753,
+            longitude: 15.2134,
+            responses: {},
+          ),
+          SubRequest(
+            id: 'mock_6',
+            subRequestId: 'mock_6',
+            voicePart: 'Bass',
+            role: 'Studio Session Bassist',
+            requestType: 'Recording Session',
+            bandName: 'SoundWave Studios',
+            location: 'Linköping, Sweden',
+            date: DateTime.now().add(const Duration(days: 7)).toIso8601String(),
+            startTime: '10:00:00',
+            endTime: '16:00:00',
+            description: 'Studio recording session for an upcoming album. Pro level required.',
+            isPaid: true,
+            latitude: 58.4108,
+            longitude: 15.6214,
             responses: {},
           ),
         ];
@@ -341,26 +497,22 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
     }
   }
 
-  BitmapDescriptor _getMarkerColor(String? instrument) {
-    if (instrument == null) return BitmapDescriptor.defaultMarker;
-    final inst = instrument.toLowerCase();
-    if (inst.contains('vocal') || inst.contains('singer') || inst.contains('choir') || inst.contains('voice') || inst.contains('soprano') && !inst.contains('recorder') && !inst.contains('sax')) {
-      return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueOrange);
-    } else if (inst.contains('drum') || inst.contains('percussion') || inst.contains('steel pan')) {
-      return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue);
-    } else if (inst.contains('guitar') || inst.contains('bass') || inst.contains('harp') || inst.contains('violin') || inst.contains('cello') || inst.contains('viola') || inst.contains('contrabass')) {
-      return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed);
-    } else if (inst.contains('piano') || inst.contains('keyboard') || inst.contains('organ') || inst.contains('harpsichord') || inst.contains('synth')) {
-      return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueYellow);
-    } else if (inst.contains('trumpet') || inst.contains('trombone') || inst.contains('horn') || inst.contains('tuba') || inst.contains('sax') || inst.contains('flute') || inst.contains('clarinet') || inst.contains('oboe') || inst.contains('bassoon') || inst.contains('recorder') || inst.contains('piccolo') || inst.contains('euphonium')) {
-      return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueCyan);
-    }
-    return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueViolet);
+  BitmapDescriptor _getMarkerColor(SubRequest gig) {
+    final eventType = MapEventTypeHelper.getEventType(gig);
+    return MapEventTypeHelper.getMarkerIcon(eventType);
   }
 
   List<SubRequest> _getFilteredGigs(UserProfile? profile) {
     if (_selectedFilter == 'All') {
       return _allGigs;
+    } else if (_selectedFilter == 'Gigs') {
+      return _allGigs.where((gig) => MapEventTypeHelper.getEventType(gig) == MapEventType.gig).toList();
+    } else if (_selectedFilter == 'Rehearsals') {
+      return _allGigs.where((gig) => MapEventTypeHelper.getEventType(gig) == MapEventType.rehearsal).toList();
+    } else if (_selectedFilter == 'New Members') {
+      return _allGigs.where((gig) => MapEventTypeHelper.getEventType(gig) == MapEventType.newMember).toList();
+    } else if (_selectedFilter == 'Jam Sessions') {
+      return _allGigs.where((gig) => MapEventTypeHelper.getEventType(gig) == MapEventType.jamSession).toList();
     } else if (_selectedFilter == 'My Instruments') {
       final userInstruments = profile?.instruments ?? [];
       if (userInstruments.isEmpty) return [];
@@ -392,7 +544,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
       return Marker(
         markerId: MarkerId(gig.id ?? gig.subRequestId ?? UniqueKey().toString()),
         position: LatLng(gig.latitude!, gig.longitude!),
-        icon: _getMarkerColor(gig.voicePart),
+        icon: _getMarkerColor(gig),
         onTap: () {
           setState(() {
             _selectedGig = gig;
@@ -404,7 +556,10 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
       );
     }).toSet();
 
-    if (!FeatureFlags.enableMockLiveRehearsals) {
+    if (!FeatureFlags.enableMockLiveRehearsals ||
+        _selectedFilter == 'Gigs' ||
+        _selectedFilter == 'New Members' ||
+        _selectedFilter == 'Jam Sessions') {
       return gigMarkers;
     }
 
@@ -450,9 +605,36 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
             ),
           ],
         ),
-        content: Text(
-          'Move pins towards the centre of the screen (telescopic sight) to hear different bands and their recordings, band info, gig promo, etc.',
-          style: GoogleFonts.inter(color: Colors.white70, fontSize: 14, height: 1.4),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Move pins towards the centre of the screen (telescopic sight) to hear different bands and their recordings, band info, gig promo, etc.\n',
+                style: GoogleFonts.inter(color: Colors.white70, fontSize: 13, height: 1.4),
+              ),
+              Text(
+                'PIN EVENT TYPE COLORS:',
+                style: GoogleFonts.outfit(
+                  color: AppTheme.primaryAccent,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1.0,
+                ),
+              ),
+              const SizedBox(height: 8),
+              _buildLegendItem(MapEventType.gig),
+              const SizedBox(height: 6),
+              _buildLegendItem(MapEventType.rehearsal),
+              const SizedBox(height: 6),
+              _buildLegendItem(MapEventType.newMember),
+              const SizedBox(height: 6),
+              _buildLegendItem(MapEventType.jamSession),
+              const SizedBox(height: 6),
+              _buildLegendItem(MapEventType.studio),
+            ],
+          ),
         ),
         actions: [
           TextButton(
@@ -474,33 +656,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
     final markers = _buildMarkers(filteredGigs);
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          'Discovery Map',
-          style: GoogleFonts.outfit(
-            fontWeight: FontWeight.bold,
-            fontSize: 20,
-            color: Colors.white,
-          ),
-        ),
-        backgroundColor: AppTheme.backgroundStart,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 18),
-          onPressed: () => Navigator.pop(context),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.info_outline_rounded, color: Colors.white),
-            tooltip: 'Map View Guide',
-            onPressed: _showMapInfoDialog,
-          ),
-          IconButton(
-            icon: const Icon(Icons.refresh_rounded, color: Colors.white),
-            onPressed: _fetchGigs,
-          ),
-        ],
-      ),
+      appBar: const CustomTopBar(showBack: true),
       body: Container(
         decoration: const BoxDecoration(
           gradient: AppTheme.backgroundGradient,
@@ -559,19 +715,51 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
 
             // Top Filter Row
             Positioned(
-              top: 16,
+              top: 14,
               left: 0,
-              right: 0,
+              right: 60,
               child: SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Row(
                   children: [
                     _buildFilterChip('All'),
+                    _buildFilterChip('Gigs'),
+                    _buildFilterChip('Rehearsals'),
+                    _buildFilterChip('New Members'),
+                    _buildFilterChip('Jam Sessions'),
                     _buildFilterChip('My Instruments'),
                     _buildFilterChip('Paid Gigs'),
                     _buildFilterChip('This Week'),
                   ],
+                ),
+              ),
+            ),
+
+            // Floating Refresh Button
+            Positioned(
+              top: 10,
+              right: 14,
+              child: Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0F0C20).withOpacity(0.92),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: const Color(0xFF2E2A4E), width: 1.2),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.35),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: IconButton(
+                  padding: EdgeInsets.zero,
+                  icon: const Icon(Icons.refresh_rounded, color: Colors.white, size: 20),
+                  tooltip: 'Refresh Map',
+                  onPressed: _fetchGigs,
                 ),
               ),
             ),
@@ -650,6 +838,10 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
 
             // Bottom drawer details card for Mock Live Rehearsals
             if (_selectedRehearsal != null) _buildRehearsalBottomCard(_selectedRehearsal!),
+
+            // Map Pin Legend Overlay
+            if (_selectedGig == null && _selectedRehearsal == null)
+              _buildLegendOverlay(),
           ],
         ),
       ),
@@ -893,6 +1085,152 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
     );
   }
 
+  Widget _buildLegendOverlay() {
+    return Positioned(
+      bottom: 24,
+      left: 16,
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 250),
+        child: !_showLegend
+            ? GestureDetector(
+                key: const ValueKey('legend_button'),
+                onTap: () => setState(() => _showLegend = true),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0F0C20).withOpacity(0.92),
+                    borderRadius: BorderRadius.circular(22),
+                    border: Border.all(color: const Color(0xFF2E2A4E), width: 1.2),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.4),
+                        blurRadius: 10,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.palette_outlined, color: AppTheme.primaryAccent, size: 16),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Pin Colors',
+                        style: GoogleFonts.inter(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            : Container(
+                key: const ValueKey('legend_expanded'),
+                width: 220,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0F0C20).withOpacity(0.96),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.4), width: 1.2),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.45),
+                      blurRadius: 14,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.palette_outlined, color: AppTheme.primaryAccent, size: 16),
+                            const SizedBox(width: 6),
+                            Text(
+                              'PIN EVENT TYPES',
+                              style: GoogleFonts.outfit(
+                                color: Colors.white,
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 1.0,
+                              ),
+                            ),
+                          ],
+                        ),
+                        GestureDetector(
+                          onTap: () => setState(() => _showLegend = false),
+                          child: Container(
+                            padding: const EdgeInsets.all(2),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.08),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.close_rounded, color: Colors.white70, size: 14),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    _buildLegendItem(MapEventType.gig),
+                    const SizedBox(height: 6),
+                    _buildLegendItem(MapEventType.rehearsal),
+                    const SizedBox(height: 6),
+                    _buildLegendItem(MapEventType.newMember),
+                    const SizedBox(height: 6),
+                    _buildLegendItem(MapEventType.jamSession),
+                    const SizedBox(height: 6),
+                    _buildLegendItem(MapEventType.studio),
+                  ],
+                ),
+              ),
+      ),
+    );
+  }
+
+  Widget _buildLegendItem(MapEventType type) {
+    final color = MapEventTypeHelper.getColor(type);
+    final label = MapEventTypeHelper.getLabel(type);
+    final icon = MapEventTypeHelper.getIcon(type);
+
+    return Row(
+      children: [
+        Container(
+          width: 14,
+          height: 14,
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: color.withOpacity(0.5),
+                blurRadius: 4,
+              ),
+            ],
+          ),
+          child: Center(
+            child: Icon(icon, color: Colors.black.withOpacity(0.65), size: 9),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          label,
+          style: GoogleFonts.inter(
+            color: Colors.white,
+            fontSize: 11.5,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildBottomCard(SubRequest gig, AppState appState) {
     final date = gig.date != null ? DateTime.tryParse(gig.date!) ?? DateTime.now() : DateTime.now();
     final formattedDate = DateFormat('MMM dd, yyyy').format(date);
@@ -900,6 +1238,10 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
     final gigReqId = gig.subRequestId ?? gig.id;
     final isCreator = currentUserId != null && (gig.creatorUserId == currentUserId || gig.userId == currentUserId);
     final hasApplied = currentUserId != null && !isCreator && (gig.responses.containsKey(currentUserId) || (gigReqId != null && _appliedGigIds.contains(gigReqId)));
+    final eventType = MapEventTypeHelper.getEventType(gig);
+    final badgeColor = MapEventTypeHelper.getColor(eventType);
+    final badgeLabel = MapEventTypeHelper.getLabel(eventType);
+    final badgeIcon = MapEventTypeHelper.getIcon(eventType);
     
     return Positioned(
       bottom: 20,
@@ -910,7 +1252,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
         decoration: BoxDecoration(
           color: AppTheme.cardBackground.withOpacity(0.95),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.4), width: 1.5),
+          border: Border.all(color: badgeColor.withOpacity(0.5), width: 1.5),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.4),
@@ -923,6 +1265,32 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Event Type Badge
+            Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: badgeColor.withOpacity(0.18),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: badgeColor.withOpacity(0.4), width: 1.0),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(badgeIcon, color: badgeColor, size: 12),
+                  const SizedBox(width: 5),
+                  Text(
+                    badgeLabel.toUpperCase(),
+                    style: GoogleFonts.inter(
+                      color: badgeColor,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                ],
+              ),
+            ),
             // Top Row: Role + Close Button
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
