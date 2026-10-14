@@ -733,88 +733,10 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
 
       items.add(
         Padding(
-          padding: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.only(bottom: 16),
           child: _buildEventCard(event),
         ),
       );
-
-      // Distinct visual boundary ("avgränsning") against the event below if within same month
-      if (i < events.length - 1) {
-        final nextEvent = events[i + 1];
-        final nextMonthHeader = DateFormat('MMMM yyyy').format(nextEvent.startDateTime).toUpperCase();
-        if (nextMonthHeader == monthHeader) {
-          items.add(
-            Padding(
-              padding: const EdgeInsets.only(top: 4, bottom: 16),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Container(
-                      height: 1,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [
-                            Colors.transparent,
-                            const Color(0xFF4A3B7A).withValues(alpha: 0.7),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                  Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 12),
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF1C1738),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: const Color(0xFF3E326E),
-                        width: 1.0,
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          width: 5,
-                          height: 5,
-                          decoration: const BoxDecoration(
-                            color: AppTheme.primaryAccent,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          'NEXT EVENT',
-                          style: GoogleFonts.inter(
-                            fontSize: 9,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 1.0,
-                            color: const Color(0xFFA899E6),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Expanded(
-                    child: Container(
-                      height: 1,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [
-                            const Color(0xFF4A3B7A).withValues(alpha: 0.7),
-                            Colors.transparent,
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        }
-      }
     }
 
     return items;
@@ -883,77 +805,21 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
                 ),
               ],
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (imageWidget != null) imageWidget,
-
-                // Card Top Banner
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1E1A3A),
-                    borderRadius: imageWidget == null
-                        ? const BorderRadius.vertical(top: Radius.circular(15))
-                        : BorderRadius.zero,
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      // Type Badge
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(15),
+              child: IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (imageWidget != null)
+                      imageWidget
+                    else
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: AppTheme.primaryAccent.withValues(alpha: 0.2),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          event.eventTypeDisplayLabel,
-                          style: GoogleFonts.inter(
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                            color: AppTheme.primaryAccent,
-                          ),
-                        ),
-                      ),
-                      // Price Badge
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: event.isFree
-                              ? Colors.greenAccent.withValues(alpha: 0.15)
-                              : Colors.white.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          event.formattedPrice,
-                          style: GoogleFonts.inter(
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                            color: event.isFree ? Colors.greenAccent : Colors.white,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                // Card Body
-                Padding(
-                  padding: const EdgeInsets.all(14.0),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Date Box
-                      Container(
-                        width: 50,
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF161033),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: const Color(0xFF2E2452)),
-                        ),
+                        width: 58,
+                        color: const Color(0xFF161033),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
                         child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Text(
                               monthShort,
@@ -974,29 +840,78 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
                           ],
                         ),
                       ),
-                      const SizedBox(width: 14),
 
-                      // Event Info
-                      Expanded(
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
                           children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Flexible(
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: AppTheme.primaryAccent.withValues(alpha: 0.2),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      event.eventTypeDisplayLabel,
+                                      style: GoogleFonts.inter(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                        color: AppTheme.primaryAccent,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: event.isFree
+                                        ? Colors.greenAccent.withValues(alpha: 0.15)
+                                        : Colors.white.withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    event.formattedPrice,
+                                    style: GoogleFonts.inter(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                      color: event.isFree ? Colors.greenAccent : Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 7),
                             Text(
                               event.title,
                               style: GoogleFonts.outfit(
-                                fontSize: 16,
+                                fontSize: 15,
                                 fontWeight: FontWeight.bold,
                                 color: Colors.white,
+                                height: 1.2,
                               ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
                             ),
                             const SizedBox(height: 2),
                             Text(
                               event.organizerName,
                               style: GoogleFonts.inter(
-                                fontSize: 12,
+                                fontSize: 11,
                                 color: AppTheme.textSecondary,
                                 fontWeight: FontWeight.w500,
                               ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                             const SizedBox(height: 6),
                             Row(
@@ -1011,7 +926,7 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
                                   child: Text(
                                     '${event.venueName}, ${event.city}',
                                     style: GoogleFonts.inter(
-                                      fontSize: 12,
+                                      fontSize: 11,
                                       color: const Color(0xFFD4CEEB),
                                       fontWeight: FontWeight.w400,
                                     ),
@@ -1021,7 +936,7 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 2),
+                            const SizedBox(height: 3),
                             Row(
                               children: [
                                 const Icon(
@@ -1030,42 +945,46 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
                                   color: Color(0xFFA899E6),
                                 ),
                                 const SizedBox(width: 4),
-                                Text(
-                                  timeStr,
-                                  style: GoogleFonts.inter(
-                                    fontSize: 12,
-                                    color: const Color(0xFFD4CEEB),
-                                    fontWeight: FontWeight.w400,
+                                Expanded(
+                                  child: Text(
+                                    timeStr,
+                                    style: GoogleFonts.inter(
+                                      fontSize: 11,
+                                      color: const Color(0xFFD4CEEB),
+                                      fontWeight: FontWeight.w400,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 8),
+                            const SizedBox(height: 6),
                             Text(
                               event.shortDescription,
                               style: GoogleFonts.inter(
-                                fontSize: 12,
+                                fontSize: 11,
                                 color: Colors.white70,
-                                height: 1.3,
+                                height: 1.25,
                               ),
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                             ),
                             if (event.genres.isNotEmpty) ...[
-                              const SizedBox(height: 8),
+                              const SizedBox(height: 6),
                               Wrap(
-                                spacing: 6,
+                                spacing: 4,
                                 runSpacing: 4,
-                                children: event.genres.map((g) {
+                                children: event.genres.take(3).map((g) {
                                   return Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
                                     decoration: BoxDecoration(
                                       color: const Color(0xFF231F45),
                                       borderRadius: BorderRadius.circular(4),
                                     ),
                                     child: Text(
                                       g,
-                                      style: GoogleFonts.inter(fontSize: 10, color: AppTheme.textSecondary),
+                                      style: GoogleFonts.inter(fontSize: 9, color: AppTheme.textSecondary),
                                     ),
                                   );
                                 }).toList(),
@@ -1074,10 +993,10 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
                           ],
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         ),
@@ -1098,36 +1017,88 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
     final bool isNetwork =
         imageSource.startsWith('http://') || imageSource.startsWith('https://');
 
-    return ClipRRect(
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(15)),
-      child: SizedBox(
-        height: 160,
-        width: double.infinity,
-        child: isNetwork
-            ? Image.network(
-                imageSource,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) =>
-                    _buildImageErrorFallback(),
-                loadingBuilder: (context, child, loadingProgress) {
-                  if (loadingProgress == null) return child;
-                  return Container(
-                    color: const Color(0xFF161033),
-                    child: const Center(
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: AppTheme.primaryAccent,
+    final monthShort = DateFormat('MMM').format(event.startDateTime).toUpperCase();
+    final dayStr = DateFormat('dd').format(event.startDateTime);
+
+    return Container(
+      width: 110,
+      constraints: const BoxConstraints(minHeight: 155),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          isNetwork
+              ? Image.network(
+                  imageSource,
+                  width: 110,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) =>
+                      _buildImageErrorFallback(),
+                  loadingBuilder: (context, child, loadingProgress) {
+                    if (loadingProgress == null) return child;
+                    return Container(
+                      color: const Color(0xFF161033),
+                      child: const Center(
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: AppTheme.primaryAccent,
+                        ),
                       ),
-                    ),
-                  );
-                },
-              )
-            : Image.asset(
-                imageSource,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) =>
-                    _buildImageErrorFallback(),
+                    );
+                  },
+                )
+              : Image.asset(
+                  imageSource,
+                  width: 110,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) =>
+                      _buildImageErrorFallback(),
+                ),
+
+          // Date overlay pill at top-left of the poster image
+          Positioned(
+            top: 6,
+            left: 6,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.82),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(
+                  color: AppTheme.primaryAccent.withValues(alpha: 0.4),
+                  width: 0.8,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.5),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    monthShort,
+                    style: GoogleFonts.inter(
+                      fontSize: 8.5,
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.primaryAccent,
+                    ),
+                  ),
+                  Text(
+                    dayStr,
+                    style: GoogleFonts.outfit(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1135,23 +1106,22 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
   Widget _buildImageErrorFallback() {
     return Container(
       color: const Color(0xFF1E1A3A),
-      height: 160,
-      width: double.infinity,
+      width: 110,
       child: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
               Icons.music_note_rounded,
-              size: 32,
+              size: 28,
               color: AppTheme.secondaryAccent.withValues(alpha: 0.5),
             ),
             const SizedBox(height: 4),
             Text(
-              'Event Preview',
+              'No Poster',
               style: GoogleFonts.inter(
-                fontSize: 11,
-                color: AppTheme.textSecondary,
+                fontSize: 9,
+                color: AppTheme.textMuted,
               ),
             ),
           ],

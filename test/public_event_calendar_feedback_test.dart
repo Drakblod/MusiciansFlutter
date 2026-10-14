@@ -308,7 +308,7 @@ void main() {
       expect(timeIcon.color, const Color(0xFFA899E6));
     });
 
-    testWidgets('8. Cards with images render with compact banner height and BoxFit.cover', (tester) async {
+    testWidgets('8. Cards with images render with upright A4 poster proportions (portrait format) beside event text and BoxFit.cover', (tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() => tester.view.resetPhysicalSize());
@@ -326,9 +326,16 @@ void main() {
       expect(cardImage, findsOneWidget);
       expect(tester.widget<Image>(cardImage).fit, BoxFit.cover);
 
-      // Verify the image container is constrained to a sleek height of 160px
+      // Verify the image container is upright/portrait (A4 proportion height > width)
       final imageBox = tester.getSize(cardImage);
-      expect(imageBox.height, 160.0);
+      expect(imageBox.width, 110.0);
+      expect(imageBox.height >= 150.0, isTrue);
+      expect(imageBox.height > imageBox.width, isTrue);
+
+      // Verify image is positioned on the left, with text beside it to the right
+      final imageTopLeft = tester.getTopLeft(cardImage);
+      final titleTopLeft = tester.getTopLeft(find.text('Stockholm Jazz Night'));
+      expect(imageTopLeft.dx < titleTopLeft.dx, isTrue);
     });
 
     testWidgets('9. Cards without images render cleanly without broken or empty image box', (tester) async {
