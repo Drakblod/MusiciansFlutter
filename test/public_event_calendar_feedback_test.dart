@@ -10,6 +10,7 @@ import 'package:musicians_flutter/providers/app_state.dart';
 import 'package:musicians_flutter/repositories/public_event_repository.dart';
 import 'package:musicians_flutter/services/firebase_service.dart';
 import 'package:musicians_flutter/theme/app_theme.dart';
+import 'package:musicians_flutter/views/create_public_event_screen.dart';
 import 'package:musicians_flutter/views/public_event_calendar_screen.dart';
 import 'package:musicians_flutter/views/public_event_details_screen.dart';
 import 'package:musicians_flutter/widgets/animated_tap_detector.dart';
@@ -458,6 +459,122 @@ void main() {
       // Verify CreatePublicEventScreen opened in editing mode with prefilled event details
       expect(find.text('EDIT EVENT'), findsOneWidget);
       expect(find.text('Stockholm Jazz Night'), findsWidgets);
+    });
+
+    testWidgets('15. Event cards display clickable Read More button that opens PublicEventDetailsScreen', (tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      await tester.pumpWidget(createTestWidget());
+      await tester.pumpAndSettle();
+
+      // Verify "Read More" button exists on the cards
+      final readMoreFinder = find.text('Read More');
+      expect(readMoreFinder, findsWidgets);
+
+      // Tap "Read More" on the first card
+      await tester.tap(readMoreFinder.first);
+      await tester.pumpAndSettle();
+
+      // Verify PublicEventDetailsScreen opened
+      expect(find.byType(PublicEventDetailsScreen), findsOneWidget);
+      expect(find.text('ABOUT THIS EVENT'), findsOneWidget);
+    });
+
+    testWidgets('16. PublicEventDetailsScreen displays upright A4 poster with tap-to-zoom InteractiveViewer modal', (tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      final eventWithPoster = PublicCalendarEvent(
+        id: 'poster_event_1',
+        title: 'Festival Showcase',
+        shortDescription: 'Grand festival with multiple stages and special guests.',
+        description: 'Full detailed description for festival showcase.',
+        eventType: PublicEventType.liveGig,
+        organizerName: 'Jazz Club',
+        venueName: 'Concert Hall',
+        city: 'Stockholm',
+        address: 'Storgatan 1',
+        startDateTime: DateTime.now().add(const Duration(days: 3)),
+        endDateTime: DateTime.now().add(const Duration(days: 3, hours: 3)),
+        imageUrl: 'https://example.com/poster_festival.jpg',
+      );
+
+      final mockApp = MockAppStateForFeedbackTest(SpyingFirebaseService());
+      await tester.pumpWidget(
+        ChangeNotifierProvider<AppState>.value(
+          value: mockApp,
+          child: MaterialApp(
+            home: PublicEventDetailsScreen(
+              event: eventWithPoster,
+              repository: SingleNoImageEventRepository(),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Verify A4 poster pill and image are displayed
+      expect(find.text('A4 Poster'), findsOneWidget);
+      final posterImageFinder = find.byWidgetPredicate((w) => w is Image && w.image is NetworkImage);
+      expect(posterImageFinder, findsOneWidget);
+
+      // Verify image container dimensions are upright A4 proportions (height > width)
+      final posterSize = tester.getSize(posterImageFinder);
+      expect(posterSize.height >= 320.0, isTrue);
+      expect(posterSize.width >= 225.0, isTrue);
+      expect(posterSize.height > posterSize.width, isTrue);
+
+      // Tap on poster to open interactive full-screen zoom modal
+      await tester.tap(find.byTooltip('Tap to view / zoom poster'));
+      await tester.pumpAndSettle();
+      tester.takeException();
+
+      // Verify InteractiveViewer is opened in the dialog
+      expect(find.byType(InteractiveViewer), findsOneWidget);
+      expect(find.byIcon(Icons.close_rounded), findsOneWidget);
+
+      // Close the modal
+      await tester.tap(find.byIcon(Icons.close_rounded));
+      await tester.pumpAndSettle();
+      expect(find.byType(InteractiveViewer), findsNothing);
+    });
+
+    testWidgets('17. CreatePublicEventScreen displays upright A4 poster preview and Fit options', (tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      final mockApp = MockAppStateForFeedbackTest(SpyingFirebaseService());
+      await tester.pumpWidget(
+        ChangeNotifierProvider<AppState>.value(
+          value: mockApp,
+          child: const MaterialApp(
+            home: CreatePublicEventScreen(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Verify upright A4 format indicator in upload container
+      expect(find.text('Standing A4 Format'), findsOneWidget);
+      expect(find.text('Upload Cover Photo or Poster'), findsOneWidget);
+
+      // Enter an image URL to test A4 Poster Preview and Fit controls
+      final imageField = find.widgetWithText(TextFormField, 'https://example.com/poster.jpg');
+      await tester.enterText(imageField, 'https://example.com/gig_poster.jpg');
+      await tester.pumpAndSettle();
+
+      // Verify A4 Poster Preview indicator and Fit controls are present
+      expect(find.text('A4 Poster Preview'), findsOneWidget);
+      expect(find.text('Cover (Fill)'), findsOneWidget);
+      expect(find.text('Contain (Full Image)'), findsOneWidget);
+
+      // Toggle fit mode
+      await tester.tap(find.text('Contain (Full Image)'));
+      await tester.pumpAndSettle();
     });
   });
 }

@@ -1018,26 +1018,81 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                             ),
-                            if (event.genres.isNotEmpty) ...[
-                              const SizedBox(height: 6),
-                              Wrap(
-                                spacing: 4,
-                                runSpacing: 4,
-                                children: event.genres.take(3).map((g) {
-                                  return Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFF231F45),
-                                      borderRadius: BorderRadius.circular(4),
+                            const SizedBox(height: 8),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                if (event.genres.isNotEmpty)
+                                  Flexible(
+                                    child: Wrap(
+                                      spacing: 4,
+                                      runSpacing: 4,
+                                      children: event.genres.take(2).map((g) {
+                                        return Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFF231F45),
+                                            borderRadius: BorderRadius.circular(4),
+                                          ),
+                                          child: Text(
+                                            g,
+                                            style: GoogleFonts.inter(fontSize: 9, color: AppTheme.textSecondary),
+                                          ),
+                                        );
+                                      }).toList(),
                                     ),
-                                    child: Text(
-                                      g,
-                                      style: GoogleFonts.inter(fontSize: 9, color: AppTheme.textSecondary),
+                                  )
+                                else
+                                  const SizedBox.shrink(),
+                                Semantics(
+                                  button: true,
+                                  label: 'Read more about ${event.title}',
+                                  child: AnimatedTapDetector(
+                                    onTap: () async {
+                                      final result = await Navigator.pushNamed(
+                                        context,
+                                        '/public-event-details',
+                                        arguments: event,
+                                      );
+                                      if (result == true && mounted) {
+                                        _loadEvents();
+                                      }
+                                    },
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                                      decoration: BoxDecoration(
+                                        color: AppTheme.primaryAccent.withValues(alpha: 0.15),
+                                        borderRadius: BorderRadius.circular(6),
+                                        border: Border.all(
+                                          color: AppTheme.primaryAccent.withValues(alpha: 0.4),
+                                          width: 0.8,
+                                        ),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Text(
+                                            'Read More',
+                                            style: GoogleFonts.inter(
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.bold,
+                                              color: AppTheme.primaryAccent,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 3),
+                                          const Icon(
+                                            Icons.arrow_forward_rounded,
+                                            size: 11,
+                                            color: AppTheme.primaryAccent,
+                                          ),
+                                        ],
+                                      ),
                                     ),
-                                  );
-                                }).toList(),
-                              ),
-                            ],
+                                  ),
+                                ),
+                              ],
+                            ),
                           ],
                         ),
                       ),

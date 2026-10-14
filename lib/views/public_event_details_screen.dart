@@ -366,47 +366,96 @@ class _PublicEventDetailsScreenState extends State<PublicEventDetailsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Event Cover Image
+                  // Event Cover Poster (Upright A4 Format)
                   if (activeEvent.imageUrl != null && activeEvent.imageUrl!.trim().isNotEmpty) ...[
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(16),
-                      child: Container(
-                        width: double.infinity,
-                        constraints: const BoxConstraints(maxHeight: 280),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF141029),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: const Color(0xFF2E2452), width: 1.5),
-                        ),
-                        child: Image.network(
-                          activeEvent.imageUrl!.trim(),
-                          fit: BoxFit.cover,
-                          loadingBuilder: (context, child, loadingProgress) {
-                            if (loadingProgress == null) return child;
-                            return Container(
-                              height: 180,
-                              alignment: Alignment.center,
-                              child: CircularProgressIndicator(
-                                value: loadingProgress.expectedTotalBytes != null
-                                    ? loadingProgress.cumulativeBytesLoaded /
-                                        loadingProgress.expectedTotalBytes!
-                                    : null,
-                                color: AppTheme.primaryAccent,
+                    Center(
+                      child: Semantics(
+                        button: true,
+                        label: 'View event poster for ${activeEvent.title}',
+                        child: Tooltip(
+                          message: 'Tap to view / zoom poster',
+                          child: AnimatedTapDetector(
+                            onTap: () => _showFullscreenPoster(context, activeEvent.imageUrl!.trim(), activeEvent.title),
+                            child: Container(
+                              width: 230,
+                              height: 325, // Upright A4 proportions (~1 : 1.414)
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF141029),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(color: const Color(0xFF382F63), width: 1.5),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.5),
+                                    blurRadius: 16,
+                                    offset: const Offset(0, 6),
+                                  ),
+                                  BoxShadow(
+                                    color: AppTheme.primaryAccent.withValues(alpha: 0.1),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
                               ),
-                            );
-                          },
-                          errorBuilder: (context, error, stackTrace) => Container(
-                            height: 140,
-                            color: const Color(0xFF1C1836),
-                            child: const Center(
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
+                              clipBehavior: Clip.antiAlias,
+                              child: Stack(
+                                fit: StackFit.expand,
                                 children: [
-                                  Icon(Icons.image_not_supported_outlined, color: Colors.white38, size: 36),
-                                  SizedBox(height: 6),
-                                  Text(
-                                    'Unable to load image',
-                                    style: TextStyle(color: Colors.white38, fontSize: 12),
+                                  Image.network(
+                                    activeEvent.imageUrl!.trim(),
+                                    fit: BoxFit.cover,
+                                    loadingBuilder: (context, child, loadingProgress) {
+                                      if (loadingProgress == null) return child;
+                                      return Container(
+                                        height: 325,
+                                        alignment: Alignment.center,
+                                        child: CircularProgressIndicator(
+                                          value: loadingProgress.expectedTotalBytes != null
+                                              ? loadingProgress.cumulativeBytesLoaded /
+                                                  loadingProgress.expectedTotalBytes!
+                                              : null,
+                                          color: AppTheme.primaryAccent,
+                                        ),
+                                      );
+                                    },
+                                    errorBuilder: (context, error, stackTrace) => Container(
+                                      height: 325,
+                                      color: const Color(0xFF1C1836),
+                                      child: const Center(
+                                        child: Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(Icons.image_not_supported_outlined, color: Colors.white38, size: 36),
+                                            SizedBox(height: 6),
+                                            Text(
+                                              'Unable to load image',
+                                              style: TextStyle(color: Colors.white38, fontSize: 12),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  Positioned(
+                                    bottom: 8,
+                                    right: 8,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: Colors.black.withValues(alpha: 0.75),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: const Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(Icons.zoom_in_rounded, color: Colors.white70, size: 14),
+                                          SizedBox(width: 4),
+                                          Text(
+                                            'A4 Poster',
+                                            style: TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
                                   ),
                                 ],
                               ),
@@ -415,7 +464,7 @@ class _PublicEventDetailsScreenState extends State<PublicEventDetailsScreen> {
                         ),
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 20),
                   ],
 
                   // Date, Time & Price Card
@@ -733,5 +782,71 @@ class _PublicEventDetailsScreenState extends State<PublicEventDetailsScreen> {
       ),
     ),
   );
-}
+  }
+
+  void _showFullscreenPoster(BuildContext context, String imageUrl, String title) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.all(12),
+          child: Stack(
+            alignment: Alignment.topRight,
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  color: Colors.black.withValues(alpha: 0.95),
+                  constraints: BoxConstraints(
+                    maxHeight: MediaQuery.of(context).size.height * 0.85,
+                    maxWidth: 600,
+                  ),
+                  child: InteractiveViewer(
+                    minScale: 0.8,
+                    maxScale: 4.0,
+                    child: Center(
+                      child: Image.network(
+                        imageUrl,
+                        fit: BoxFit.contain,
+                        errorBuilder: (context, error, stackTrace) => Container(
+                          padding: const EdgeInsets.all(32),
+                          color: const Color(0xFF1C1836),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.broken_image_rounded, color: Colors.white38, size: 48),
+                              const SizedBox(height: 12),
+                              Text(
+                                title,
+                                style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                top: 10,
+                right: 10,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.7),
+                    shape: BoxShape.circle,
+                  ),
+                  child: IconButton(
+                    icon: const Icon(Icons.close_rounded, color: Colors.white),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
 }

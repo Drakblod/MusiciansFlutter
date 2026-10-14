@@ -55,6 +55,7 @@ class _CreatePublicEventScreenState extends State<CreatePublicEventScreen> {
   final ImagePicker _picker = ImagePicker();
   XFile? _selectedCoverImage;
   Uint8List? _coverImageBytes;
+  BoxFit _posterFit = BoxFit.cover;
 
   bool get isEditing => widget.eventToEdit != null;
 
@@ -730,6 +731,7 @@ class _CreatePublicEventScreenState extends State<CreatePublicEventScreen> {
     String? Function(String?)? validator,
     List<TextInputFormatter>? inputFormatters,
     TextInputType? keyboardType,
+    ValueChanged<String>? onChanged,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -748,6 +750,7 @@ class _CreatePublicEventScreenState extends State<CreatePublicEventScreen> {
             validator: validator,
             inputFormatters: inputFormatters,
             keyboardType: keyboardType,
+            onChanged: onChanged,
             style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
             decoration: InputDecoration(
               hintText: hint,
@@ -773,77 +776,138 @@ class _CreatePublicEventScreenState extends State<CreatePublicEventScreen> {
         _buildSectionHeader('COVER IMAGE & POSTER'),
         const SizedBox(height: 10),
         if (hasImage) ...[
-          Container(
-            height: 200,
-            width: double.infinity,
-            decoration: BoxDecoration(
-              color: AppTheme.cardBackground,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: AppTheme.primaryAccent.withValues(alpha: 0.5), width: 1.5),
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                if (_coverImageBytes != null)
-                  Image.memory(
-                    _coverImageBytes!,
-                    fit: BoxFit.cover,
-                  )
-                else if (_selectedCoverImage != null && !kIsWeb)
-                  Image.file(
-                    File(_selectedCoverImage!.path),
-                    fit: BoxFit.cover,
-                  )
-                else if (_imageUrlController.text.trim().isNotEmpty)
-                  Image.network(
-                    _imageUrlController.text.trim(),
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) => Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.broken_image_rounded, color: Colors.amber, size: 36),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Could not load image URL',
-                            style: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 12),
+          Center(
+            child: Container(
+              height: 240,
+              width: 170, // Upright A4 proportions (~1 : 1.414)
+              decoration: BoxDecoration(
+                color: AppTheme.cardBackground,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: AppTheme.primaryAccent.withValues(alpha: 0.6), width: 1.5),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.35),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  if (_coverImageBytes != null)
+                    Image.memory(
+                      _coverImageBytes!,
+                      fit: _posterFit,
+                    )
+                  else if (_selectedCoverImage != null && !kIsWeb)
+                    Image.file(
+                      File(_selectedCoverImage!.path),
+                      fit: _posterFit,
+                    )
+                  else if (_imageUrlController.text.trim().isNotEmpty)
+                    Image.network(
+                      _imageUrlController.text.trim(),
+                      fit: _posterFit,
+                      errorBuilder: (context, error, stackTrace) => Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.broken_image_rounded, color: Colors.amber, size: 36),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Could not load image URL',
+                              style: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 12),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  // Overlay controls
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.75),
+                            borderRadius: BorderRadius.circular(8),
                           ),
-                        ],
+                          child: IconButton(
+                            icon: const Icon(Icons.edit_rounded, color: Colors.white, size: 18),
+                            tooltip: 'Change Cover Photo',
+                            onPressed: _showImagePickerOptions,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Container(
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.75),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: IconButton(
+                            icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 18),
+                            tooltip: 'Remove Cover Photo',
+                            onPressed: _removeCoverImage,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Positioned(
+                    bottom: 6,
+                    left: 6,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.75),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: const Text(
+                        'A4 Poster Preview',
+                        style: TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold),
                       ),
                     ),
                   ),
-                // Overlay controls
-                Positioned(
-                  top: 10,
-                  right: 10,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.75),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: IconButton(
-                          icon: const Icon(Icons.edit_rounded, color: Colors.white, size: 18),
-                          tooltip: 'Change Cover Photo',
-                          onPressed: _showImagePickerOptions,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Container(
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.75),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: IconButton(
-                          icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 18),
-                          tooltip: 'Remove Cover Photo',
-                          onPressed: _removeCoverImage,
-                        ),
-                      ),
-                    ],
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Center(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Fit: ',
+                  style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
+                ),
+                ChoiceChip(
+                  label: const Text('Cover (Fill)'),
+                  selected: _posterFit == BoxFit.cover,
+                  onSelected: (selected) {
+                    if (selected) setState(() => _posterFit = BoxFit.cover);
+                  },
+                  selectedColor: AppTheme.primaryAccent.withValues(alpha: 0.25),
+                  labelStyle: TextStyle(
+                    fontSize: 11,
+                    color: _posterFit == BoxFit.cover ? Colors.white : AppTheme.textSecondary,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                ChoiceChip(
+                  label: const Text('Contain (Full Image)'),
+                  selected: _posterFit == BoxFit.contain,
+                  onSelected: (selected) {
+                    if (selected) setState(() => _posterFit = BoxFit.contain);
+                  },
+                  selectedColor: AppTheme.primaryAccent.withValues(alpha: 0.25),
+                  labelStyle: TextStyle(
+                    fontSize: 11,
+                    color: _posterFit == BoxFit.contain ? Colors.white : AppTheme.textSecondary,
                   ),
                 ),
               ],
@@ -851,53 +915,73 @@ class _CreatePublicEventScreenState extends State<CreatePublicEventScreen> {
           ),
           const SizedBox(height: 12),
         ] else ...[
-          AnimatedTapDetector(
-            onTap: _showImagePickerOptions,
-            child: Container(
-              height: 130,
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: AppTheme.cardBackground,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                  color: const Color(0xFF2E2452),
-                  width: 1.5,
+          Center(
+            child: AnimatedTapDetector(
+              onTap: _showImagePickerOptions,
+              child: Container(
+                height: 240,
+                width: 170, // Upright A4 proportions (~1 : 1.414)
+                decoration: BoxDecoration(
+                  color: AppTheme.cardBackground,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: const Color(0xFF2E2452),
+                    width: 1.5,
+                  ),
                 ),
-              ),
-              child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: AppTheme.primaryAccent.withValues(alpha: 0.15),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.add_photo_alternate_rounded,
-                        color: AppTheme.primaryAccent,
-                        size: 28,
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: AppTheme.primaryAccent.withValues(alpha: 0.15),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.add_photo_alternate_rounded,
+                              color: AppTheme.primaryAccent,
+                              size: 26,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Upload Cover Photo or Poster',
+                            style: GoogleFonts.outfit(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Standing A4 Format',
+                            style: GoogleFonts.inter(
+                              fontSize: 11,
+                              color: AppTheme.primaryAccent,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Tap to choose from Gallery or Camera',
+                            style: GoogleFonts.inter(
+                              fontSize: 10,
+                              color: AppTheme.textSecondary,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Upload Cover Photo or Poster',
-                      style: GoogleFonts.outfit(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Tap to choose from Gallery or Camera',
-                      style: GoogleFonts.inter(
-                        fontSize: 12,
-                        color: AppTheme.textSecondary,
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ),
@@ -908,6 +992,7 @@ class _CreatePublicEventScreenState extends State<CreatePublicEventScreen> {
           controller: _imageUrlController,
           label: 'Or paste image link (Optional)',
           hint: 'https://example.com/poster.jpg',
+          onChanged: (val) => setState(() {}),
         ),
       ],
     );
