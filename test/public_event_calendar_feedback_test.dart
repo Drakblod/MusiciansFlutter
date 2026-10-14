@@ -438,5 +438,26 @@ void main() {
       );
       expect(constrainedBoxFinder, findsOneWidget);
     });
+
+    testWidgets('14. Event cards display edit pencil icon button and tapping it opens edit event form', (tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      await tester.pumpWidget(createTestWidget());
+      await tester.pumpAndSettle();
+
+      final editButton = find.byTooltip('Edit Event').first;
+      expect(editButton, findsOneWidget);
+      expect(find.byIcon(Icons.edit_outlined), findsWidgets);
+
+      // Tap edit pencil
+      await tester.tap(editButton);
+      await tester.pumpAndSettle();
+
+      // Verify CreatePublicEventScreen opened in editing mode with prefilled event details
+      expect(find.text('EDIT EVENT'), findsOneWidget);
+      expect(find.text('Stockholm Jazz Night'), findsWidgets);
+    });
   });
 }

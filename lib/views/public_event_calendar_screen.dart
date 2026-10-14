@@ -742,6 +742,22 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
     return items;
   }
 
+  Future<void> _editEventFromCard(PublicCalendarEvent event) async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => CreatePublicEventScreen(
+          eventToEdit: event,
+          repository: repository,
+        ),
+      ),
+    );
+
+    if ((result == true || result is PublicCalendarEvent) && mounted) {
+      _loadEvents();
+    }
+  }
+
   Widget _buildEventCard(PublicCalendarEvent event) {
     final monthShort = DateFormat('MMM').format(event.startDateTime).toUpperCase();
     final dayStr = DateFormat('dd').format(event.startDateTime);
@@ -871,22 +887,54 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
                                   ),
                                 ),
                                 const SizedBox(width: 6),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: event.isFree
-                                        ? Colors.greenAccent.withValues(alpha: 0.15)
-                                        : Colors.white.withValues(alpha: 0.1),
-                                    borderRadius: BorderRadius.circular(6),
-                                  ),
-                                  child: Text(
-                                    event.formattedPrice,
-                                    style: GoogleFonts.inter(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.bold,
-                                      color: event.isFree ? Colors.greenAccent : Colors.white,
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: event.isFree
+                                            ? Colors.greenAccent.withValues(alpha: 0.15)
+                                            : Colors.white.withValues(alpha: 0.1),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: Text(
+                                        event.formattedPrice,
+                                        style: GoogleFonts.inter(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold,
+                                          color: event.isFree ? Colors.greenAccent : Colors.white,
+                                        ),
+                                      ),
                                     ),
-                                  ),
+                                    const SizedBox(width: 6),
+                                    Semantics(
+                                      button: true,
+                                      label: 'Edit event ${event.title}',
+                                      child: Tooltip(
+                                        message: 'Edit Event',
+                                        child: AnimatedTapDetector(
+                                          onTap: () => _editEventFromCard(event),
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                                            decoration: BoxDecoration(
+                                              color: AppTheme.primaryAccent.withValues(alpha: 0.18),
+                                              borderRadius: BorderRadius.circular(6),
+                                              border: Border.all(
+                                                color: AppTheme.primaryAccent.withValues(alpha: 0.5),
+                                                width: 0.8,
+                                              ),
+                                            ),
+                                            child: const Icon(
+                                              Icons.edit_outlined,
+                                              size: 13,
+                                              color: AppTheme.primaryAccent,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ],
                             ),
