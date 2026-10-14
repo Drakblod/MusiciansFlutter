@@ -13,6 +13,7 @@ import '../data/mock_live_rehearsals.dart';
 import '../services/mock_rehearsal_audio_controller.dart';
 import '../widgets/map_crosshair.dart';
 import '../widgets/custom_top_bar.dart';
+import '../widgets/animated_tap_detector.dart';
 import '../utils/map_crosshair_targeting.dart';
 
 enum MapEventType {
@@ -597,10 +598,10 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
         ),
         title: Row(
           children: [
-            const Icon(Icons.info_outline_rounded, color: AppTheme.primaryAccent, size: 22),
+            const Icon(Icons.help_outline_rounded, color: AppTheme.primaryAccent, size: 22),
             const SizedBox(width: 8),
             Text(
-              'Map View Guide',
+              'What is Map View?',
               style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold),
             ),
           ],
@@ -610,6 +611,25 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              Text(
+                'Explore Map View to discover audio snippets from gigs, rehearsals, recordings and gig promos, as well as requests for band members, subs and paid gigs.\n',
+                style: GoogleFonts.inter(
+                  color: Colors.white,
+                  fontSize: 13,
+                  height: 1.4,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              Text(
+                'HOW TO EXPLORE & LISTEN:',
+                style: GoogleFonts.outfit(
+                  color: AppTheme.primaryAccent,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1.0,
+                ),
+              ),
+              const SizedBox(height: 4),
               Text(
                 'Move pins towards the centre of the screen (telescopic sight) to hear different bands and their recordings, band info, gig promo, etc.\n',
                 style: GoogleFonts.inter(color: Colors.white70, fontSize: 13, height: 1.4),
@@ -736,96 +756,174 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
               ),
             ),
 
-            // Floating Refresh Button
+            // Floating Refresh and "What is Map View?" Re-open Button
             Positioned(
               top: 10,
               right: 14,
-              child: Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF0F0C20).withOpacity(0.92),
-                  shape: BoxShape.circle,
-                  border: Border.all(color: const Color(0xFF2E2A4E), width: 1.2),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.35),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (!_showGuideBanner) ...[
+                    GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _showGuideBanner = true;
+                        });
+                      },
+                      child: Container(
+                        height: 38,
+                        margin: const EdgeInsets.only(right: 8),
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0F0C20).withOpacity(0.92),
+                          borderRadius: BorderRadius.circular(19),
+                          border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.5), width: 1.2),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.35),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.help_outline_rounded, color: AppTheme.primaryAccent, size: 16),
+                            const SizedBox(width: 6),
+                            Text(
+                              'What is Map View?',
+                              style: GoogleFonts.inter(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: AppTheme.primaryAccent,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                   ],
-                ),
-                child: IconButton(
-                  padding: EdgeInsets.zero,
-                  icon: const Icon(Icons.refresh_rounded, color: Colors.white, size: 20),
-                  tooltip: 'Refresh Map',
-                  onPressed: _fetchGigs,
-                ),
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0F0C20).withOpacity(0.92),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: const Color(0xFF2E2A4E), width: 1.2),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.35),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: IconButton(
+                      padding: EdgeInsets.zero,
+                      icon: const Icon(Icons.refresh_rounded, color: Colors.white, size: 20),
+                      tooltip: 'Refresh Map',
+                      onPressed: _fetchGigs,
+                    ),
+                  ),
+                ],
               ),
             ),
 
-            // Prominent Map View Guide Banner
+            // Clickable "What is Map View?" Box
             if (_showGuideBanner)
               Positioned(
                 top: 64,
                 left: 16,
                 right: 16,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF0F0C20).withOpacity(0.94),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.4), width: 1.2),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.4),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(
-                          color: AppTheme.primaryAccent.withOpacity(0.18),
-                          shape: BoxShape.circle,
+                child: Semantics(
+                  button: true,
+                  label: 'What is Map View? Click to read full guide.',
+                  child: AnimatedTapDetector(
+                    onTap: _showMapInfoDialog,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0F0C20).withOpacity(0.95),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: AppTheme.primaryAccent.withOpacity(0.5),
+                          width: 1.2,
                         ),
-                        child: const Icon(
-                          Icons.center_focus_strong_rounded,
-                          color: AppTheme.primaryAccent,
-                          size: 18,
-                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.45),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
+                          ),
+                          BoxShadow(
+                            color: AppTheme.primaryAccent.withOpacity(0.08),
+                            blurRadius: 2,
+                            offset: const Offset(0, 1),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: GestureDetector(
-                          onTap: _showMapInfoDialog,
-                          child: Text(
-                            'Move pins towards the centre (telescopic sight) to hear bands & recordings.',
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(5),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.primaryAccent.withOpacity(0.2),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.help_outline_rounded,
+                                  color: AppTheme.primaryAccent,
+                                  size: 16,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'What is Map View?',
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                              ),
+                              const Icon(
+                                Icons.arrow_forward_ios_rounded,
+                                color: AppTheme.primaryAccent,
+                                size: 12,
+                              ),
+                              const SizedBox(width: 8),
+                              IconButton(
+                                icon: const Icon(Icons.close_rounded, color: Colors.white60, size: 18),
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(),
+                                tooltip: 'Dismiss',
+                                onPressed: () {
+                                  setState(() {
+                                    _showGuideBanner = false;
+                                  });
+                                },
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Explore Map View to discover audio snippets from gigs, rehearsals, recordings and gig promos, as well as requests for band members, subs and paid gigs.',
                             style: GoogleFonts.inter(
                               fontSize: 12,
-                              color: Colors.white,
-                              fontWeight: FontWeight.w500,
-                              height: 1.3,
+                              color: const Color(0xFFD4CEEB),
+                              height: 1.35,
                             ),
                           ),
-                        ),
+                        ],
                       ),
-                      const SizedBox(width: 6),
-                      IconButton(
-                        icon: const Icon(Icons.close_rounded, color: Colors.white70, size: 18),
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                        tooltip: 'Dismiss',
-                        onPressed: () {
-                          setState(() {
-                            _showGuideBanner = false;
-                          });
-                        },
-                      ),
-                    ],
+                    ),
                   ),
                 ),
               ),
@@ -854,7 +952,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
     }
 
     return Positioned(
-      top: _showGuideBanner ? 132 : 68,
+      top: _showGuideBanner ? 175 : 68,
       right: 16,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.end,
