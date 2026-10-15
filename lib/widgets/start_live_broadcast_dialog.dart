@@ -472,6 +472,7 @@ class _StartLiveBroadcastDialogState extends State<StartLiveBroadcastDialog> {
           ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }
