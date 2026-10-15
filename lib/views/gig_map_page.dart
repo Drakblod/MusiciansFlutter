@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:provider/provider.dart';
@@ -17,6 +18,12 @@ import '../widgets/animated_tap_detector.dart';
 import '../widgets/audio_snippet_player.dart';
 import '../widgets/what_is_map_view_dialog.dart';
 import '../utils/map_crosshair_targeting.dart';
+import '../models/live_broadcast.dart';
+import '../services/live_broadcast_service.dart';
+import '../services/livekit_audio_controller.dart';
+import '../widgets/start_live_broadcast_dialog.dart';
+import '../widgets/live_broadcaster_bar.dart';
+import '../widgets/live_listener_sheet.dart';
 
 class MapCityPreset {
   final String name;
@@ -305,6 +312,14 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
   MockRehearsalAudioController? _audioController;
   MockLiveRehearsal? _selectedRehearsal;
 
+  // Real Live Broadcast (LiveKit Cloud) State
+  LiveBroadcastService? _liveBroadcastService;
+  LiveKitAudioController? _liveKitAudioController;
+  StreamSubscription<List<LiveBroadcast>>? _liveBroadcastsSubscription;
+  List<LiveBroadcast> _activeRealBroadcasts = [];
+  LiveBroadcast? _currentPublishingBroadcast;
+  LiveBroadcast? _currentlyListeningBroadcast;
+
   // MAP-02 Automatic Crosshair Targeting State
   CameraPosition _currentCameraPosition = const CameraPosition(
     target: LatLng(59.3293, 18.0686),
@@ -441,6 +456,17 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
       _audioController = MockRehearsalAudioController();
       _audioController!.initialize();
     }
+    if (FeatureFlags.enableRealLiveBroadcasts) {
+      _liveBroadcastService = LiveBroadcastService();
+      _liveKitAudioController = LiveKitAudioController();
+      _liveBroadcastsSubscription = _liveBroadcastService!.streamActiveBroadcasts().listen((broadcasts) {
+        if (mounted) {
+          setState(() {
+            _activeRealBroadcasts = broadcasts;
+          });
+        }
+      });
+    }
   }
 
   @override
@@ -459,6 +485,10 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
     if (FeatureFlags.enableMockLiveRehearsals) {
       WidgetsBinding.instance.removeObserver(this);
       _audioController?.dispose();
+    }
+    if (FeatureFlags.enableRealLiveBroadcasts) {
+      _liveBroadcastsSubscription?.cancel();
+      _liveKitAudioController?.dispose();
     }
     super.dispose();
   }
@@ -1038,8 +1068,28 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                     _selectedSubCategory == 'All Music' ||
                     _selectedSubCategory == 'Rehearsal')));
 
+    final Set<Marker> realLiveMarkers = {};
+    if (FeatureFlags.enableRealLiveBroadcasts && _activeRealBroadcasts.isNotEmpty) {
+      for (final broadcast in _activeRealBroadcasts) {
+        realLiveMarkers.add(
+          Marker(
+            markerId: MarkerId('real_live_${broadcast.id}'),
+            position: LatLng(broadcast.latitude, broadcast.longitude),
+            icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRose),
+            infoWindow: InfoWindow(
+              title: '🔴 LIVE: ${broadcast.bandName}',
+              snippet: '${broadcast.title} · ${broadcast.listenerCount} listeners',
+            ),
+            onTap: () {
+              _showLiveBroadcastDetails(broadcast);
+            },
+          ),
+        );
+      }
+    }
+
     if (!showRehearsals) {
-      return gigMarkers;
+      return {...gigMarkers, ...realLiveMarkers};
     }
 
     final rehearsalMarkers = mockLiveRehearsals.map((rehearsal) {
@@ -1062,11 +1112,117 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
       );
     }).toSet();
 
-    return {...gigMarkers, ...rehearsalMarkers};
+    return {...gigMarkers, ...rehearsalMarkers, ...realLiveMarkers};
   }
 
   void _showMapInfoDialog() {
     showWhatIsMapViewDialog(context);
+  }
+
+  void _openStartLiveBroadcastDialog() {
+    StartLiveBroadcastDialog.show(
+      context,
+      onStartBroadcast: ({
+        required String bandId,
+        required String bandName,
+        required String title,
+        String? genre,
+        String? description,
+      }) async {
+        final location = _currentCameraPosition.target;
+        if (_liveBroadcastService == null || _liveKitAudioController == null) {
+          throw Exception('Live broadcast service is not initialized.');
+        }
+
+        final session = await _liveBroadcastService!.startLiveBroadcast(
+          bandId: bandId,
+          title: title,
+          location: location,
+          genre: genre,
+          description: description,
+        );
+
+        await _liveKitAudioController!.connectPublisher(session);
+
+        if (mounted) {
+          setState(() {
+            _currentPublishingBroadcast = LiveBroadcast(
+              id: session.broadcastId,
+              bandId: bandId,
+              bandName: bandName,
+              creatorUserId: Provider.of<AppState>(context, listen: false).currentUserId ?? '',
+              title: title,
+              genre: genre,
+              description: description,
+              latitude: location.latitude,
+              longitude: location.longitude,
+              status: LiveBroadcastStatus.active,
+              startedAt: DateTime.now(),
+              livekitRoomName: session.roomName,
+              listenerCount: 0,
+            );
+          });
+        }
+      },
+    );
+  }
+
+  Future<void> _stopPublishingBroadcast() async {
+    if (_currentPublishingBroadcast == null) return;
+    final bId = _currentPublishingBroadcast!.id;
+    try {
+      await _liveBroadcastService?.stopLiveBroadcast(broadcastId: bId);
+    } catch (e) {
+      debugPrint('[GigMapPage] Error stopping live broadcast: $e');
+    }
+    await _liveKitAudioController?.disconnect();
+    if (mounted) {
+      setState(() {
+        _currentPublishingBroadcast = null;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Live broadcast ended.')),
+      );
+    }
+  }
+
+  void _showLiveBroadcastDetails(LiveBroadcast broadcast) {
+    if (_liveBroadcastService == null || _liveKitAudioController == null) return;
+    final isListening = _currentlyListeningBroadcast?.id == broadcast.id;
+
+    LiveListenerSheet.show(
+      context,
+      broadcast: broadcast,
+      audioController: _liveKitAudioController!,
+      isCurrentlyListening: isListening,
+      onStartListening: () async {
+        try {
+          final session = await _liveBroadcastService!.joinLiveBroadcast(
+            broadcastId: broadcast.id,
+          );
+          await _liveKitAudioController!.connectListener(session);
+          if (mounted) {
+            setState(() {
+              _currentlyListeningBroadcast = broadcast;
+            });
+          }
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Could not join live stream: $e')),
+            );
+          }
+        }
+      },
+      onStopListening: () async {
+        await _liveKitAudioController?.disconnect();
+        if (mounted) {
+          setState(() {
+            _currentlyListeningBroadcast = null;
+          });
+        }
+      },
+    );
   }
 
   void _showUploadEventSheet() {
@@ -1433,9 +1589,22 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
               ),
             ),
 
+            // Broadcaster sticky bar (when local user is broadcasting live)
+            if (_currentPublishingBroadcast != null && _liveKitAudioController != null)
+              Positioned(
+                top: 8,
+                left: 0,
+                right: 0,
+                child: LiveBroadcasterBar(
+                  broadcast: _currentPublishingBroadcast!,
+                  audioController: _liveKitAudioController!,
+                  onStopBroadcast: _stopPublishingBroadcast,
+                ),
+              ),
+
             // Top Structured Controls (Filters, Sub-filters, City Jumpers, "What is Map View?" Box)
             Positioned(
-              top: 10,
+              top: _currentPublishingBroadcast != null ? 70 : 10,
               left: 0,
               right: 0,
               child: Column(
@@ -1448,39 +1617,80 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        // Upload Event Button
-                        GestureDetector(
-                          onTap: _showUploadEventSheet,
-                          child: Container(
-                            height: 34,
-                            padding: const EdgeInsets.symmetric(horizontal: 12),
-                            decoration: BoxDecoration(
-                              gradient: AppTheme.primaryGradient,
-                              borderRadius: BorderRadius.circular(17),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: AppTheme.primaryAccent.withOpacity(0.35),
-                                  blurRadius: 6,
-                                  offset: const Offset(0, 2),
+                        // Upload Event & optional Go Live Button
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            GestureDetector(
+                              onTap: _showUploadEventSheet,
+                              child: Container(
+                                height: 34,
+                                padding: const EdgeInsets.symmetric(horizontal: 12),
+                                decoration: BoxDecoration(
+                                  gradient: AppTheme.primaryGradient,
+                                  borderRadius: BorderRadius.circular(17),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: AppTheme.primaryAccent.withOpacity(0.35),
+                                      blurRadius: 6,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
                                 ),
-                              ],
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(Icons.add_location_alt_rounded, color: Colors.white, size: 14),
+                                    const SizedBox(width: 5),
+                                    Text(
+                                      'Upload Event',
+                                      style: GoogleFonts.inter(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(Icons.add_location_alt_rounded, color: Colors.white, size: 14),
-                                const SizedBox(width: 5),
-                                Text(
-                                  'Upload Event',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
+                            if (FeatureFlags.enableRealLiveBroadcasts) ...[
+                              const SizedBox(width: 8),
+                              GestureDetector(
+                                onTap: _openStartLiveBroadcastDialog,
+                                child: Container(
+                                  height: 34,
+                                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.dangerRed,
+                                    borderRadius: BorderRadius.circular(17),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: AppTheme.dangerRed.withOpacity(0.35),
+                                        blurRadius: 6,
+                                        offset: const Offset(0, 2),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(Icons.podcasts_rounded, color: Colors.white, size: 14),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        'Go Live',
+                                        style: GoogleFonts.inter(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
-                              ],
-                            ),
-                          ),
+                              ),
+                            ],
+                          ],
                         ),
 
                         // Action Buttons: Refresh & Guide Toggle
@@ -2689,47 +2899,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
     );
   }
 
-  Widget _buildCityJumperChip(MapCityPreset city) {
-    final isSelected = _selectedCityName == city.name;
-    return Padding(
-      padding: const EdgeInsets.only(right: 6.0),
-      child: GestureDetector(
-        onTap: () => _jumpToCity(city),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-          decoration: BoxDecoration(
-            color: isSelected
-                ? const Color(0xFF6366F1).withOpacity(0.35)
-                : const Color(0xFF0F0C20).withOpacity(0.88),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: isSelected ? const Color(0xFF818CF8) : const Color(0xFF252140),
-              width: 1.0,
-            ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                city.name == 'All Sweden' ? Icons.map_rounded : Icons.location_on_rounded,
-                size: 11,
-                color: isSelected ? Colors.white : const Color(0xFF9E8BFF),
-              ),
-              const SizedBox(width: 4),
-              Text(
-                city.name,
-                style: GoogleFonts.inter(
-                  color: isSelected ? Colors.white : const Color(0xFFCBC7E5),
-                  fontSize: 11,
-                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+
 
   Widget _buildLegendOverlay({double bottomOffset = 24}) {
     return Positioned(

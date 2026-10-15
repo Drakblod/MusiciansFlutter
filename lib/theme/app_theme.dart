@@ -16,7 +16,11 @@ class AppTheme {
   
   static const Color success = Color(0xFF2ECC71);
   static const Color danger = Color(0xFFE74C3C);
+  static const Color dangerRed = Color(0xFFE74C3C);
   static const Color warning = Color(0xFFF1C40F);
+  static const Color warningYellow = Color(0xFFF1C40F);
+  static const Color surfaceDark = Color(0xFF0E0C20);
+  static const Color cardDark = Color(0xFF16132D);
 
   // Gradient definitions
   static const LinearGradient backgroundGradient = LinearGradient(
