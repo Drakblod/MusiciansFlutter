@@ -9,12 +9,14 @@ class LiveBroadcasterBar extends StatefulWidget {
   final LiveBroadcast broadcast;
   final LiveKitAudioController audioController;
   final Future<void> Function() onStopBroadcast;
+  final EdgeInsetsGeometry? margin;
 
   const LiveBroadcasterBar({
     super.key,
     required this.broadcast,
     required this.audioController,
     required this.onStopBroadcast,
+    this.margin,
   });
 
   @override
@@ -116,7 +118,7 @@ class _LiveBroadcasterBarState extends State<LiveBroadcasterBar> with SingleTick
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      margin: widget.margin ?? const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
         color: AppTheme.surfaceDark.withOpacity(0.96),

@@ -1773,28 +1773,23 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
               ),
             ),
 
-            // Broadcaster sticky bar (when local user is broadcasting live)
-            if (_currentPublishingBroadcast != null && _liveKitAudioController != null)
-              Positioned(
-                top: 8,
-                left: 0,
-                right: 0,
-                child: LiveBroadcasterBar(
-                  broadcast: _currentPublishingBroadcast!,
-                  audioController: _liveKitAudioController!,
-                  onStopBroadcast: _stopPublishingBroadcast,
-                ),
-              ),
-
-            // Top Structured Controls (Filters, Sub-filters, City Jumpers, "What is Map View?" Box)
+            // Top Structured Controls (Broadcaster Bar, Filters, Sub-filters, City Jumpers, "What is Map View?" Box)
             Positioned(
-              top: _currentPublishingBroadcast != null ? 70 : 10,
+              top: 10,
               left: 0,
               right: 0,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  // Broadcaster sticky bar (when local user is broadcasting live)
+                  if (_currentPublishingBroadcast != null && _liveKitAudioController != null)
+                    LiveBroadcasterBar(
+                      broadcast: _currentPublishingBroadcast!,
+                      audioController: _liveKitAudioController!,
+                      onStopBroadcast: _stopPublishingBroadcast,
+                      margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                    ),
                   // Row 1: Actions Header (Upload Event on left, Refresh and Guide on right)
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -1848,45 +1843,10 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                                         ),
                                       ),
                                     ),
-                                    if (FeatureFlags.enableRealLiveBroadcasts) ...[
+                                    if (FeatureFlags.enableRealLiveBroadcasts && _currentPublishingBroadcast == null) ...[
                                       const SizedBox(width: 8),
-                                      if (_currentPublishingBroadcast != null)
-                                        GestureDetector(
-                                          onTap: () => _confirmStopBroadcast(_currentPublishingBroadcast!.id),
-                                          child: Container(
-                                            height: 34,
-                                            padding: const EdgeInsets.symmetric(horizontal: 10),
-                                            decoration: BoxDecoration(
-                                              color: AppTheme.dangerRed,
-                                              borderRadius: BorderRadius.circular(17),
-                                              boxShadow: [
-                                                BoxShadow(
-                                                  color: AppTheme.dangerRed.withOpacity(0.35),
-                                                  blurRadius: 6,
-                                                  offset: const Offset(0, 2),
-                                                ),
-                                              ],
-                                            ),
-                                            child: Row(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                const Icon(Icons.stop_circle_rounded, color: Colors.white, size: 14),
-                                                const SizedBox(width: 4),
-                                                Text(
-                                                  'End Live',
-                                                  style: GoogleFonts.inter(
-                                                    fontSize: 11,
-                                                    fontWeight: FontWeight.bold,
-                                                    color: Colors.white,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        )
-                                      else
-                                        GestureDetector(
-                                          onTap: _openStartLiveBroadcastDialog,
+                                      GestureDetector(
+                                        onTap: _openStartLiveBroadcastDialog,
                                         child: Container(
                                           height: 34,
                                           padding: const EdgeInsets.symmetric(horizontal: 10),
