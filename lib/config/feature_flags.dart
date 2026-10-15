@@ -3,5 +3,5 @@ class FeatureFlags {
   static const bool enableMockLiveRehearsals = true;
 
   /// Enables real audio-only live band broadcasting using LiveKit & Firebase Functions.
-  static const bool enableRealLiveBroadcasts = false;
+  static const bool enableRealLiveBroadcasts = true;
 }

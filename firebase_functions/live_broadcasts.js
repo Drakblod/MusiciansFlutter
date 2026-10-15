@@ -9,9 +9,9 @@ const jwt = require('jsonwebtoken');
  */
 function getLiveKitConfig() {
   return {
-    apiKey: process.env.LIVEKIT_API_KEY || 'devkey_placeholder',
-    apiSecret: process.env.LIVEKIT_API_SECRET || 'secret_placeholder_not_for_production_32chars',
-    serverUrl: process.env.LIVEKIT_URL || 'wss://livekit.musicians.app',
+    apiKey: process.env.LIVEKIT_API_KEY || 'APIQ97KxhUGgXdz',
+    apiSecret: process.env.LIVEKIT_API_SECRET || 'CVV6TkKaA5iBIgMRdbkdaLmrnDl8s1KcIOBUg1D5nOA',
+    serverUrl: process.env.LIVEKIT_URL || 'wss://musiciansapp-b9yg950s.livekit.cloud',
   };
 }
 
