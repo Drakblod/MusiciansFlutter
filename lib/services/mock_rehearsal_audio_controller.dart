@@ -17,22 +17,36 @@ class MockRehearsalAudioController {
   LatLng? _pendingCameraTarget;
 
   bool _isMuted = false;
+  bool _isAudioStopped = false;
   bool _isDisposed = false;
   bool _isWebAutoplayBlocked = false;
   bool _isInitialized = false;
 
   bool get isMuted => _isMuted;
+  bool get isAudioStopped => _isAudioStopped;
   bool get isWebAutoplayBlocked => _isWebAutoplayBlocked;
   bool get isInitialized => _isInitialized;
   Map<String, double> get distancesKm => Map.unmodifiable(_distancesKm);
 
   final ValueNotifier<bool> isMutedNotifier = ValueNotifier<bool>(false);
+  final ValueNotifier<bool> isAudioStoppedNotifier = ValueNotifier<bool>(false);
   final ValueNotifier<bool> webAutoplayBlockedNotifier = ValueNotifier<bool>(false);
 
   /// Initializes audio players for all mock live rehearsals.
   Future<void> initialize() async {
     if (_isInitialized || _isDisposed) return;
     _isInitialized = true;
+
+    try {
+      await AudioPlayer.global.setAudioContext(
+        AudioContextConfig(
+          focus: AudioContextConfigFocus.mixWithOthers,
+          respectSilence: false,
+        ).build(),
+      );
+    } catch (e) {
+      debugPrint("[MockRehearsalAudio] Error setting global audio context: $e");
+    }
 
     for (final rehearsal in mockLiveRehearsals) {
       final player = AudioPlayer();
@@ -42,9 +56,15 @@ class MockRehearsalAudioController {
       _distancesKm[rehearsal.id] = double.infinity;
 
       try {
+        await player.setAudioContext(
+          AudioContextConfig(
+            focus: AudioContextConfigFocus.mixWithOthers,
+            respectSilence: false,
+          ).build(),
+        );
         await player.setReleaseMode(ReleaseMode.loop);
 
-        // Try playing at 0 volume
+        // Start playback in loop
         await player.play(
           AssetSource(rehearsal.audioAssetPath),
           volume: 0.0,
@@ -57,6 +77,9 @@ class MockRehearsalAudioController {
         }
       }
     }
+
+    // Immediately trigger proximity evaluation for initial camera position
+    _evaluateDistancesAndVolumes(_pendingCameraTarget ?? const LatLng(59.3293, 18.0686));
   }
 
   /// Called when user explicitly taps "Enable rehearsal audio" on Flutter Web if autoplay was blocked.
@@ -83,8 +106,9 @@ class MockRehearsalAudioController {
 
   /// Receives updated map camera center LatLng. Throttled to ~150ms.
   void updateCameraTarget(LatLng cameraTarget, {bool immediate = false}) {
-    if (_isDisposed || !_isInitialized) return;
+    if (_isDisposed) return;
     _pendingCameraTarget = cameraTarget;
+    if (!_isInitialized) return;
 
     if (immediate) {
       _throttleTimer?.cancel();
@@ -102,7 +126,7 @@ class MockRehearsalAudioController {
 
   /// Calculates distance from map center to each rehearsal, computes target volume, and triggers smooth fade.
   void _evaluateDistancesAndVolumes(LatLng cameraTarget) {
-    if (_isDisposed) return;
+    if (_isDisposed || _isAudioStopped) return;
 
     String? nearestId;
     double minDistance = double.infinity;
@@ -122,6 +146,11 @@ class MockRehearsalAudioController {
       final isNearest = rehearsal.id == nearestId;
       final targetVol = calculateRehearsalVolume(dist, isNearest: isNearest);
       _targetVolumes[rehearsal.id] = targetVol;
+
+      final player = _players[rehearsal.id];
+      if (player != null && targetVol > 0.01 && !_isMuted && !_isAudioStopped && player.state != PlayerState.playing) {
+        player.resume();
+      }
     }
 
     _startSmoothVolumeTransition();
@@ -138,7 +167,7 @@ class MockRehearsalAudioController {
     final Map<String, double> startVolumes = Map.from(_currentVolumes);
 
     _fadeTimer = Timer.periodic(stepDuration, (timer) {
-      if (_isDisposed) {
+      if (_isDisposed || _isAudioStopped) {
         timer.cancel();
         return;
       }
@@ -153,13 +182,74 @@ class MockRehearsalAudioController {
         _currentVolumes[id] = interpolated;
 
         final double effectiveVolume = _isMuted ? 0.0 : interpolated.clamp(0.0, 1.0);
-        _players[id]?.setVolume(effectiveVolume);
+        final player = _players[id];
+        if (player != null) {
+          player.setVolume(effectiveVolume);
+          if (effectiveVolume > 0.01 && player.state != PlayerState.playing) {
+            player.resume();
+          }
+        }
       }
 
       if (currentStep >= steps) {
         timer.cancel();
       }
     });
+  }
+
+  /// Explicitly turns off / stops all audio playback (not just mute).
+  Future<void> stopAudio() async {
+    _isAudioStopped = true;
+    isAudioStoppedNotifier.value = true;
+    _fadeTimer?.cancel();
+    _throttleTimer?.cancel();
+
+    for (final id in _players.keys) {
+      _currentVolumes[id] = 0.0;
+      _targetVolumes[id] = 0.0;
+      final player = _players[id];
+      if (player != null) {
+        try {
+          await player.stop();
+        } catch (e) {
+          debugPrint("[MockRehearsalAudio] Error stopping player $id: $e");
+        }
+      }
+    }
+  }
+
+  /// Turns audio playback back on.
+  Future<void> startAudio() async {
+    _isAudioStopped = false;
+    isAudioStoppedNotifier.value = false;
+
+    for (final rehearsal in mockLiveRehearsals) {
+      final player = _players[rehearsal.id];
+      if (player != null) {
+        try {
+          await player.setReleaseMode(ReleaseMode.loop);
+          await player.play(
+            AssetSource(rehearsal.audioAssetPath),
+            volume: 0.0,
+          );
+        } catch (e) {
+          debugPrint("[MockRehearsalAudio] Error restarting player ${rehearsal.id}: $e");
+        }
+      }
+    }
+
+    if (_pendingCameraTarget != null) {
+      _evaluateDistancesAndVolumes(_pendingCameraTarget!);
+    }
+  }
+
+  /// Toggles between audio playing and completely stopped.
+  void toggleAudioPower() {
+    if (_isAudioStopped) {
+      startAudio();
+    } else {
+      stopAudio();
+    }
   }
 
   /// Toggles mute state.
@@ -224,6 +314,7 @@ class MockRehearsalAudioController {
     _distancesKm.clear();
 
     isMutedNotifier.dispose();
+    isAudioStoppedNotifier.dispose();
     webAutoplayBlockedNotifier.dispose();
   }
 }

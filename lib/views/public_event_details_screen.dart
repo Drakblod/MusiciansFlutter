@@ -218,7 +218,9 @@ class _PublicEventDetailsScreenState extends State<PublicEventDetailsScreen> {
       },
       child: GradientScaffold(
         appBar: const CustomTopBar(showBack: true),
-        body: SingleChildScrollView(
+        body: SafeArea(
+          top: false,
+          child: SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -779,6 +781,7 @@ class _PublicEventDetailsScreenState extends State<PublicEventDetailsScreen> {
             ),
           ],
         ),
+      ),
       ),
     ),
   );

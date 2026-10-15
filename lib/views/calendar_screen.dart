@@ -88,7 +88,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
         title: 'Band Calendar',
         showBack: true,
       ),
-      body: !hasBand
+      body: SafeArea(
+        top: false,
+        child: !hasBand
           ? Center(
               child: Padding(
                 padding: const EdgeInsets.all(24.0),
@@ -300,6 +302,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                     ),
                   ],
                 ),
+      ),
     );
   }
 }

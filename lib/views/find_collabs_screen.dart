@@ -421,7 +421,9 @@ class _FindCollabsScreenState extends State<FindCollabsScreen> {
         title: 'Find Collab',
         showBack: true,
       ),
-      body: SingleChildScrollView(
+      body: SafeArea(
+        top: false,
+        child: SingleChildScrollView(
         padding: const EdgeInsets.all(20.0),
         physics: const BouncingScrollPhysics(),
         child: Column(
@@ -958,6 +960,7 @@ class _FindCollabsScreenState extends State<FindCollabsScreen> {
             const SizedBox(height: 30),
           ],
         ),
+      ),
       ),
     );
   }

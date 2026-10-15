@@ -14,31 +14,96 @@ import '../services/mock_rehearsal_audio_controller.dart';
 import '../widgets/map_crosshair.dart';
 import '../widgets/custom_top_bar.dart';
 import '../widgets/animated_tap_detector.dart';
+import '../widgets/audio_snippet_player.dart';
+import '../widgets/what_is_map_view_dialog.dart';
 import '../utils/map_crosshair_targeting.dart';
 
+class MapCityPreset {
+  final String name;
+  final LatLng coordinates;
+  final double zoom;
+
+  const MapCityPreset({
+    required this.name,
+    required this.coordinates,
+    this.zoom = 12.0,
+  });
+}
+
+const List<MapCityPreset> kMapCityPresets = [
+  MapCityPreset(name: 'Stockholm', coordinates: LatLng(59.3293, 18.0686), zoom: 12.0),
+  MapCityPreset(name: 'Göteborg', coordinates: LatLng(57.7089, 11.9746), zoom: 12.0),
+  MapCityPreset(name: 'Malmö', coordinates: LatLng(55.6050, 13.0038), zoom: 12.0),
+  MapCityPreset(name: 'Uppsala', coordinates: LatLng(59.8586, 17.6389), zoom: 12.5),
+  MapCityPreset(name: 'Örebro', coordinates: LatLng(59.2753, 15.2134), zoom: 12.5),
+  MapCityPreset(name: 'Linköping', coordinates: LatLng(58.4108, 15.6214), zoom: 12.5),
+  MapCityPreset(name: 'Umeå', coordinates: LatLng(63.8258, 20.2630), zoom: 12.0),
+  MapCityPreset(name: 'All Sweden', coordinates: LatLng(59.8, 16.5), zoom: 5.5),
+];
+
+enum MapCategory {
+  music,
+  gigPromo,
+  subAndMember,
+}
+
 enum MapEventType {
-  gig,
-  rehearsal,
-  newMember,
-  jamSession,
-  studio,
+  // Category: Music
+  gigConcert, // Orange (#F97316)
+  rehearsal,  // Röd (#EF4444)
+  jamSession, // Turkos (#06B6D4)
+  recordedMusic, // Mörkblå (#2563EB)
+
+  // Category: Gig Promo
+  gigPromo,   // Lila (#A855F7)
+
+  // Category: Sub & Member Search
+  newMember,  // Mörkgrön (#047857)
+  subs,       // Lime grön (#84CC16)
+  paid,       // Gul (#EAB308)
 }
 
 class MapEventTypeHelper {
-  static MapEventType getEventType(SubRequest gig) {
-    final text = '${gig.requestType ?? ""} ${gig.role ?? ""} ${gig.eventTitle ?? ""} ${gig.description ?? ""} ${gig.extraFields["eventType"] ?? ""}'.toLowerCase();
+  // Aliases for compatibility
+  static const MapEventType gig = MapEventType.gigConcert;
+  static const MapEventType studio = MapEventType.recordedMusic;
 
-    // 1. Rehearsal
-    if ((gig.rehearsalDayOfWeek != null && gig.rehearsalDayOfWeek!.isNotEmpty) ||
-        text.contains('rehearsal') ||
-        text.contains('repetition') ||
-        text.contains('bandrep')) {
-      if (!text.contains('live gig') && !text.contains('concert')) {
-        return MapEventType.rehearsal;
-      }
+  static MapCategory getCategory(MapEventType type) {
+    switch (type) {
+      case MapEventType.gigConcert:
+      case MapEventType.rehearsal:
+      case MapEventType.jamSession:
+      case MapEventType.recordedMusic:
+        return MapCategory.music;
+      case MapEventType.gigPromo:
+        return MapCategory.gigPromo;
+      case MapEventType.newMember:
+      case MapEventType.subs:
+      case MapEventType.paid:
+        return MapCategory.subAndMember;
+    }
+  }
+
+  static MapEventType getEventType(SubRequest gig) {
+    final explicitType = gig.extraFields["eventType"]?.toString().toLowerCase();
+    if (explicitType == 'gigconcert' || explicitType == 'gig_concert') return MapEventType.gigConcert;
+    if (explicitType == 'rehearsal') return MapEventType.rehearsal;
+    if (explicitType == 'jamsession' || explicitType == 'jam_session') return MapEventType.jamSession;
+    if (explicitType == 'recordedmusic' || explicitType == 'recorded_music' || explicitType == 'studio') return MapEventType.recordedMusic;
+    if (explicitType == 'gigpromo' || explicitType == 'gig_promo') return MapEventType.gigPromo;
+    if (explicitType == 'newmember' || explicitType == 'new_member') return MapEventType.newMember;
+    if (explicitType == 'subs' || explicitType == 'sub') return MapEventType.subs;
+    if (explicitType == 'paid') return MapEventType.paid;
+
+    final text = '${gig.requestType ?? ""} ${gig.role ?? ""} ${gig.eventTitle ?? ""} ${gig.description ?? ""}'.toLowerCase();
+
+    // 1. Gig Promo (Lila)
+    if (text.contains('gig promo') || text.contains('promo')) {
+      return MapEventType.gigPromo;
     }
 
-    // 2. New Member / Audition
+    // 2. Sub & Member Search
+    // 2a. New Member (Mörkgrön)
     if (text.contains('new member') ||
         text.contains('ny medlem') ||
         text.contains('audition') ||
@@ -48,16 +113,47 @@ class MapEventTypeHelper {
       return MapEventType.newMember;
     }
 
-    // 3. Studio / Recording / Producer
-    if (text.contains('studio') ||
-        text.contains('recording') ||
-        text.contains('inspelning') ||
-        text.contains('producer') ||
-        text.contains('co-writing')) {
-      return MapEventType.studio;
+    // 2b. Paid (Gul)
+    if (gig.isPaid && (text.contains('paid') || text.contains('betalt') || (gig.payAmount != null && gig.payAmount! > 0 && text.contains('gig')))) {
+      if (!text.contains('concert') && !text.contains('rehearsal')) {
+        return MapEventType.paid;
+      }
     }
 
-    // 4. Jam Session / Workshop
+    // 2c. Subs (Lime grön)
+    if (text.contains('sub') || text.contains('vikarie') || (gig.requestType?.toLowerCase() == 'sub')) {
+      if (!text.contains('rehearsal') && !text.contains('concert')) {
+        return MapEventType.subs;
+      }
+    }
+
+    // 3. Music
+    // 3a. Rehearsal (Röd)
+    if ((gig.rehearsalDayOfWeek != null && gig.rehearsalDayOfWeek!.isNotEmpty) ||
+        gig.requestType?.toLowerCase() == 'rehearsal' ||
+        text.contains('rehearsal') ||
+        text.contains('repetition') ||
+        text.contains('bandrep')) {
+      if (!text.contains('live gig') && !text.contains('concert')) {
+        return MapEventType.rehearsal;
+      }
+    }
+
+    // 3b. Recorded Music (Mörkblå)
+    if (text.contains('recorded music') ||
+        text.contains('inspelad musik') ||
+        text.contains('studio recording') ||
+        text.contains('recording session') ||
+        text.contains('studio session') ||
+        text.contains('recording') ||
+        text.contains('inspelning') ||
+        text.contains('album') ||
+        text.contains('single') ||
+        text.contains('studio')) {
+      return MapEventType.recordedMusic;
+    }
+
+    // 3c. Jam Session (Turkos)
     if (text.contains('jam') ||
         text.contains('workshop') ||
         text.contains('open stage') ||
@@ -66,70 +162,116 @@ class MapEventTypeHelper {
       return MapEventType.jamSession;
     }
 
-    // 5. Default: Gig / Live
-    return MapEventType.gig;
+    // 3d. Default: Gig / Concert / Live Performance (Orange)
+    return MapEventType.gigConcert;
   }
 
   static BitmapDescriptor getMarkerIcon(MapEventType type) {
     switch (type) {
-      case MapEventType.gig:
-        return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed);
-      case MapEventType.rehearsal:
-        return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueMagenta);
-      case MapEventType.newMember:
-        return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen);
-      case MapEventType.jamSession:
-        return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure);
-      case MapEventType.studio:
+      case MapEventType.gigConcert:
         return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueOrange);
+      case MapEventType.rehearsal:
+        return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed);
+      case MapEventType.jamSession:
+        return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueCyan);
+      case MapEventType.recordedMusic:
+        return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue);
+      case MapEventType.gigPromo:
+        return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueViolet);
+      case MapEventType.newMember:
+        return BitmapDescriptor.defaultMarkerWithHue(155.0);
+      case MapEventType.subs:
+        return BitmapDescriptor.defaultMarkerWithHue(85.0);
+      case MapEventType.paid:
+        return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueYellow);
     }
   }
 
   static Color getColor(MapEventType type) {
     switch (type) {
-      case MapEventType.gig:
-        return const Color(0xFFEF4444); // Red
+      case MapEventType.gigConcert:
+        return const Color(0xFFF97316); // Orange
       case MapEventType.rehearsal:
-        return const Color(0xFFD946EF); // Magenta
-      case MapEventType.newMember:
-        return const Color(0xFF10B981); // Green
+        return const Color(0xFFEF4444); // Röd
       case MapEventType.jamSession:
-        return const Color(0xFF38BDF8); // Azure / Sky Blue
-      case MapEventType.studio:
-        return const Color(0xFFF59E0B); // Amber / Orange
+        return const Color(0xFF06B6D4); // Turkos
+      case MapEventType.recordedMusic:
+        return const Color(0xFF2563EB); // Mörkblå
+      case MapEventType.gigPromo:
+        return const Color(0xFFA855F7); // Lila
+      case MapEventType.newMember:
+        return const Color(0xFF047857); // Mörkgrön
+      case MapEventType.subs:
+        return const Color(0xFF84CC16); // Lime grön
+      case MapEventType.paid:
+        return const Color(0xFFEAB308); // Gul
     }
   }
 
   static String getLabel(MapEventType type) {
     switch (type) {
-      case MapEventType.gig:
-        return 'Gig / Live Show';
+      case MapEventType.gigConcert:
+        return 'Gig/Concert/Live Performance';
       case MapEventType.rehearsal:
         return 'Rehearsal';
-      case MapEventType.newMember:
-        return 'New Member';
       case MapEventType.jamSession:
         return 'Jam Session';
-      case MapEventType.studio:
-        return 'Studio / Recording';
+      case MapEventType.recordedMusic:
+        return 'Recorded Music';
+      case MapEventType.gigPromo:
+        return 'Gig Promo';
+      case MapEventType.newMember:
+        return 'New Member';
+      case MapEventType.subs:
+        return 'Subs';
+      case MapEventType.paid:
+        return 'Paid';
+    }
+  }
+
+  static String getShortLabel(MapEventType type) {
+    switch (type) {
+      case MapEventType.gigConcert:
+        return 'Gig / Concert';
+      case MapEventType.rehearsal:
+        return 'Rehearsal';
+      case MapEventType.jamSession:
+        return 'Jam Session';
+      case MapEventType.recordedMusic:
+        return 'Recorded Music';
+      case MapEventType.gigPromo:
+        return 'Gig Promo';
+      case MapEventType.newMember:
+        return 'New Member';
+      case MapEventType.subs:
+        return 'Subs';
+      case MapEventType.paid:
+        return 'Paid Gig';
     }
   }
 
   static IconData getIcon(MapEventType type) {
     switch (type) {
-      case MapEventType.gig:
+      case MapEventType.gigConcert:
         return Icons.stadium_rounded;
       case MapEventType.rehearsal:
         return Icons.music_note_rounded;
-      case MapEventType.newMember:
-        return Icons.person_add_alt_1_rounded;
       case MapEventType.jamSession:
         return Icons.groups_rounded;
-      case MapEventType.studio:
-        return Icons.mic_rounded;
+      case MapEventType.recordedMusic:
+        return Icons.album_rounded;
+      case MapEventType.gigPromo:
+        return Icons.campaign_rounded;
+      case MapEventType.newMember:
+        return Icons.person_add_alt_1_rounded;
+      case MapEventType.subs:
+        return Icons.swap_horiz_rounded;
+      case MapEventType.paid:
+        return Icons.payments_rounded;
     }
   }
 }
+
 
 class GigMapPage extends StatefulWidget {
   const GigMapPage({super.key});
@@ -143,7 +285,18 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
   List<SubRequest> _allGigs = [];
   final Set<String> _appliedGigIds = {};
   bool _isLoading = true;
-  String _selectedFilter = 'All';
+  String _selectedMainCategory = 'All';
+  String? _selectedSubCategory;
+  String _instrumentQuery = '';
+  final TextEditingController _instrumentSearchController = TextEditingController();
+  bool _showInstrumentSearch = false;
+
+  String get _selectedFilter => _selectedMainCategory;
+  set _selectedFilter(String val) {
+    _selectedMainCategory = val;
+  }
+
+  String? _selectedCityName;
   SubRequest? _selectedGig;
   bool _showGuideBanner = true;
   bool _showLegend = false;
@@ -302,6 +455,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    _instrumentSearchController.dispose();
     if (FeatureFlags.enableMockLiveRehearsals) {
       WidgetsBinding.instance.removeObserver(this);
       _audioController?.dispose();
@@ -324,7 +478,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
       final dbGigsWithCoords = rawGigs.where((g) => g.latitude != null && g.longitude != null).toList();
 
       if (dbGigsWithCoords.isEmpty) {
-        // Fallback mock markers inside Sweden
+        // Fallback mock markers inside Sweden covering all 8 event types
         _allGigs = [
           SubRequest(
             id: 'mock_1',
@@ -337,84 +491,192 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
             date: DateTime.now().add(const Duration(days: 3)).toIso8601String(),
             startTime: '19:00:00',
             endTime: '22:00:00',
-            description: 'Looking for a solid rock guitarist to fill in for a live weekend gig.',
+            description: 'Looking for a solid rock guitarist to fill in for a live weekend gig at Debaser.',
             isPaid: true,
+            payAmount: 2500,
+            currency: 'SEK',
             latitude: 59.3293,
             longitude: 18.0686,
             responses: {},
+            extraFields: {
+              'audioSnippetUrl': 'audio/bandrep1.mp3',
+              'audioSnippetTitle': 'Debaser Live Demo - Midnight Storm',
+              'eventType': 'gigConcert',
+              'genre': 'Rock / Blues',
+            },
           ),
           SubRequest(
             id: 'mock_2',
             subRequestId: 'mock_2',
-            voicePart: 'Vocalist',
-            role: 'Jazz Club Vocalist',
-            requestType: 'Club Gig',
-            bandName: 'Cool Autumn Quartet',
-            location: 'Gothenburg, Sweden',
-            date: DateTime.now().add(const Duration(days: 5)).toIso8601String(),
-            startTime: '20:00:00',
-            endTime: '23:00:00',
-            description: 'Need a guest vocalist for standard jazz tunes at a local club show.',
-            isPaid: true,
-            latitude: 57.7089,
-            longitude: 11.9746,
+            voicePart: 'Horn Section',
+            role: 'Weekly Band Rehearsal',
+            requestType: 'Rehearsal',
+            rehearsalDayOfWeek: 'Tuesday',
+            bandName: 'Stockholm Funk Unit',
+            location: 'Södermalm, Stockholm',
+            date: DateTime.now().add(const Duration(days: 2)).toIso8601String(),
+            startTime: '18:30:00',
+            endTime: '21:30:00',
+            description: 'Weekly funk groove rehearsal in our Södermalm studio. Working on tight rhythm section grooves.',
+            isPaid: false,
+            latitude: 59.3145,
+            longitude: 18.0649,
             responses: {},
+            extraFields: {
+              'audioSnippetUrl': 'audio/bandrep2.mp3',
+              'audioSnippetTitle': 'Weekly Funk Groove Rehearsal',
+              'eventType': 'rehearsal',
+              'genre': 'Funk / Soul',
+            },
           ),
           SubRequest(
             id: 'mock_3',
             subRequestId: 'mock_3',
-            voicePart: 'Cello',
-            role: 'Classical Cello Rehearsal',
-            requestType: 'Rehearsal',
-            rehearsalDayOfWeek: 'Wednesday',
-            bandName: 'Uppsala Sinfonietta',
-            location: 'Uppsala, Sweden',
-            date: DateTime.now().add(const Duration(days: 2)).toIso8601String(),
-            startTime: '18:00:00',
-            endTime: '21:00:00',
-            description: 'Substitute required for our weekly orchestra rehearsal. Sheet music provided.',
+            voicePart: 'Brass & Keys',
+            role: 'Open Stage Jam Session',
+            requestType: 'Jam Session',
+            bandName: 'Kulturhuset Jam Society',
+            location: 'Örebro, Sweden',
+            date: DateTime.now().add(const Duration(days: 4)).toIso8601String(),
+            startTime: '19:00:00',
+            endTime: '22:30:00',
+            description: 'Open jam session for brass, keys and rhythm players at Kulturhuset. Bring your instrument!',
             isPaid: false,
-            latitude: 59.8586,
-            longitude: 17.6389,
+            latitude: 59.2753,
+            longitude: 15.2134,
             responses: {},
+            extraFields: {
+              'audioSnippetUrl': 'audio/bandrep3.mp3',
+              'audioSnippetTitle': 'Open Stage Jam Session Highlights',
+              'eventType': 'jamSession',
+              'genre': 'Jazz & Fusion',
+            },
           ),
           SubRequest(
             id: 'mock_4',
             subRequestId: 'mock_4',
+            voicePart: 'Brass / Strings',
+            role: 'Studio Overdubs for EP',
+            requestType: 'Recording Session',
+            bandName: 'Monochrome Sound Lab',
+            location: 'Södermalm, Stockholm',
+            date: DateTime.now().add(const Duration(days: 7)).toIso8601String(),
+            startTime: '11:00:00',
+            endTime: '17:00:00',
+            description: 'Seeking brass horn players for studio overdubs on upcoming indie rock EP.',
+            isPaid: true,
+            payAmount: 3000,
+            currency: 'SEK',
+            latitude: 59.3175,
+            longitude: 18.0720,
+            responses: {},
+            extraFields: {
+              'audioSnippetUrl': 'audio/bandrep3.mp3',
+              'audioSnippetTitle': 'Studio Rough Mix - Horns',
+              'eventType': 'recordedMusic',
+              'genre': 'Alternative / Studio',
+            },
+          ),
+          SubRequest(
+            id: 'mock_5',
+            subRequestId: 'mock_5',
+            voicePart: 'Band Promo',
+            role: 'Summer Festival Tour Promo',
+            requestType: 'Gig Promo',
+            bandName: 'Nordic Echoes',
+            location: 'Gothenburg, Sweden',
+            date: DateTime.now().add(const Duration(days: 9)).toIso8601String(),
+            startTime: '20:00:00',
+            endTime: '23:00:00',
+            description: 'New single release and preview of upcoming summer headline tour across Scandinavia.',
+            isPaid: false,
+            latitude: 57.7089,
+            longitude: 11.9746,
+            responses: {},
+            extraFields: {
+              'audioSnippetUrl': 'audio/bandrep1.mp3',
+              'audioSnippetTitle': 'Summer Tour Single - Nordic Echoes',
+              'eventType': 'gigPromo',
+              'genre': 'Synth Pop',
+            },
+          ),
+          SubRequest(
+            id: 'mock_6',
+            subRequestId: 'mock_6',
             voicePart: 'Drums',
-            role: 'Drummer for Pop Band',
+            role: 'Seeking Permanent Drummer',
             requestType: 'New Member',
             bandName: 'Vibe Check',
             location: 'Malmö, Sweden',
             date: DateTime.now().add(const Duration(days: 6)).toIso8601String(),
             startTime: '17:30:00',
             endTime: '20:30:00',
-            description: 'Audition / seeking permanent drummer for touring pop band.',
+            description: 'Audition / seeking permanent drummer for touring Scandinavian pop-rock band.',
             isPaid: true,
+            payAmount: 1800,
+            currency: 'SEK',
             latitude: 55.6050,
             longitude: 13.0038,
             responses: {},
+            extraFields: {
+              'audioSnippetUrl': 'audio/bandrep1.mp3',
+              'audioSnippetTitle': 'Audition Track: Nightglow (Tempo 128)',
+              'eventType': 'newMember',
+              'genre': 'Pop / Indie',
+            },
           ),
           SubRequest(
-            id: 'mock_5',
-            subRequestId: 'mock_5',
-            voicePart: 'Saxophone / Keys',
-            role: 'Open Jam Session',
-            requestType: 'Jam Session',
-            bandName: 'Groove Collective',
-            location: 'Örebro, Sweden',
-            date: DateTime.now().add(const Duration(days: 4)).toIso8601String(),
-            startTime: '19:00:00',
-            endTime: '22:30:00',
-            description: 'Open jam session for brass & keys players. Bring your instrument!',
+            id: 'mock_7',
+            subRequestId: 'mock_7',
+            voicePart: 'Cello',
+            role: 'Classical Cello Rehearsal Sub',
+            requestType: 'Subs',
+            rehearsalDayOfWeek: 'Wednesday',
+            bandName: 'Uppsala Sinfonietta',
+            location: 'Uppsala, Sweden',
+            date: DateTime.now().add(const Duration(days: 2)).toIso8601String(),
+            startTime: '18:00:00',
+            endTime: '21:00:00',
+            description: 'Substitute cellist required for our weekly orchestra rehearsal. Sheet music provided in advance.',
             isPaid: false,
-            latitude: 59.2753,
-            longitude: 15.2134,
+            latitude: 59.8586,
+            longitude: 17.6389,
             responses: {},
+            extraFields: {
+              'audioSnippetUrl': 'audio/bandrep2.mp3',
+              'audioSnippetTitle': 'Movement 3 Chamber Preview',
+              'eventType': 'subs',
+              'genre': 'Classical',
+            },
           ),
           SubRequest(
-            id: 'mock_6',
-            subRequestId: 'mock_6',
+            id: 'mock_8',
+            subRequestId: 'mock_8',
+            voicePart: 'Lead Guitar',
+            role: 'Paid Festival Lead Guitarist',
+            requestType: 'Paid',
+            bandName: 'Arctic Lights Collective',
+            location: 'Umeå, Sweden',
+            date: DateTime.now().add(const Duration(days: 12)).toIso8601String(),
+            startTime: '19:30:00',
+            endTime: '22:30:00',
+            description: 'Paid sub guitarist needed for high-energy opening slot at Arctic Lights Festival.',
+            isPaid: true,
+            payAmount: 4000,
+            currency: 'SEK',
+            latitude: 63.8258,
+            longitude: 20.2630,
+            responses: {},
+            extraFields: {
+              'audioSnippetUrl': 'audio/bandrep1.mp3',
+              'audioSnippetTitle': 'Festival Opening Anthem',
+              'eventType': 'paid',
+              'genre': 'Rock',
+            },
+          ),
+          SubRequest(
+            id: 'mock_9',
+            subRequestId: 'mock_9',
             voicePart: 'Bass',
             role: 'Studio Session Bassist',
             requestType: 'Recording Session',
@@ -423,11 +685,92 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
             date: DateTime.now().add(const Duration(days: 7)).toIso8601String(),
             startTime: '10:00:00',
             endTime: '16:00:00',
-            description: 'Studio recording session for an upcoming album. Pro level required.',
+            description: 'Studio recording session for an upcoming album. Pro level groove required.',
             isPaid: true,
+            payAmount: 3500,
+            currency: 'SEK',
             latitude: 58.4108,
             longitude: 15.6214,
             responses: {},
+            extraFields: {
+              'audioSnippetUrl': 'audio/bandrep2.mp3',
+              'audioSnippetTitle': 'Album Pre-production Bass Stem',
+              'eventType': 'recordedMusic',
+              'genre': 'Studio / Rock',
+            },
+          ),
+          SubRequest(
+            id: 'mock_10',
+            subRequestId: 'mock_10',
+            voicePart: 'Guitar & Bass',
+            role: 'Funk & Soul Open Stage',
+            requestType: 'Jam Session',
+            bandName: 'Öresund Jam Society',
+            location: 'Möllevången, Malmö',
+            date: DateTime.now().add(const Duration(days: 3)).toIso8601String(),
+            startTime: '20:00:00',
+            endTime: '23:30:00',
+            description: 'Weekly soul & funk jam session on Thursdays. Full backline available.',
+            isPaid: false,
+            latitude: 55.5910,
+            longitude: 13.0070,
+            responses: {},
+            extraFields: {
+              'audioSnippetUrl': 'audio/bandrep2.mp3',
+              'audioSnippetTitle': 'Möllevången Soul Session Excerpt',
+              'eventType': 'jamSession',
+              'genre': 'Soul / Funk',
+            },
+          ),
+          SubRequest(
+            id: 'mock_11',
+            subRequestId: 'mock_11',
+            voicePart: 'Vocalist',
+            role: 'Jazz Club Vocalist',
+            requestType: 'Club Gig',
+            bandName: 'Cool Autumn Quartet',
+            location: 'Gothenburg, Sweden',
+            date: DateTime.now().add(const Duration(days: 5)).toIso8601String(),
+            startTime: '20:00:00',
+            endTime: '23:00:00',
+            description: 'Need a guest vocalist for standard jazz tunes at Nefertiti jazz club show.',
+            isPaid: true,
+            payAmount: 2200,
+            currency: 'SEK',
+            latitude: 57.6970,
+            longitude: 11.9510,
+            responses: {},
+            extraFields: {
+              'audioSnippetUrl': 'audio/bandrep2.mp3',
+              'audioSnippetTitle': 'Autumn in Gothenburg (Vocal Demo)',
+              'eventType': 'gigConcert',
+              'genre': 'Jazz',
+            },
+          ),
+          SubRequest(
+            id: 'mock_12',
+            subRequestId: 'mock_12',
+            voicePart: 'Trombone',
+            role: 'Brass Band Trombone Sub',
+            requestType: 'Subs',
+            bandName: 'West Coast Horn Band',
+            location: 'Gothenburg, Sweden',
+            date: DateTime.now().add(const Duration(days: 8)).toIso8601String(),
+            startTime: '18:00:00',
+            endTime: '21:00:00',
+            description: 'Substitute trombone player needed for concert series.',
+            isPaid: true,
+            payAmount: 2500,
+            currency: 'SEK',
+            latitude: 57.7020,
+            longitude: 11.9680,
+            responses: {},
+            extraFields: {
+              'audioSnippetUrl': 'audio/bandrep2.mp3',
+              'audioSnippetTitle': 'Brass Repertoire Snippet',
+              'eventType': 'subs',
+              'genre': 'Big Band',
+            },
           ),
         ];
       } else {
@@ -444,6 +787,105 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
     }
   }
 
+  void _jumpToCity(MapCityPreset city) {
+    _mapController?.animateCamera(
+      CameraUpdate.newCameraPosition(
+        CameraPosition(
+          target: city.coordinates,
+          zoom: city.zoom,
+        ),
+      ),
+    );
+    setState(() {
+      _currentCameraPosition = CameraPosition(
+        target: city.coordinates,
+        zoom: city.zoom,
+      );
+      _selectedCityName = city.name;
+      _manuallyClosedTargetId = null;
+    });
+    if (FeatureFlags.enableMockLiveRehearsals) {
+      _audioController?.updateCameraTarget(city.coordinates, immediate: true);
+    }
+    final appState = Provider.of<AppState>(context, listen: false);
+    _evaluateCrosshairTargeting(_getFilteredGigs(appState.currentUserProfile));
+  }
+
+  int _getFilterCount(String label, UserProfile? profile) {
+    switch (label) {
+      case 'All':
+        return _allGigs.length +
+            (FeatureFlags.enableMockLiveRehearsals ? mockLiveRehearsals.length : 0);
+      case 'Music':
+        return _allGigs.where((g) => MapEventTypeHelper.getCategory(MapEventTypeHelper.getEventType(g)) == MapCategory.music).length +
+            (FeatureFlags.enableMockLiveRehearsals ? mockLiveRehearsals.length : 0);
+      case 'Gig Promo':
+        return _allGigs.where((g) => MapEventTypeHelper.getCategory(MapEventTypeHelper.getEventType(g)) == MapCategory.gigPromo).length;
+      case 'Sub & Member Search':
+        return _allGigs.where((g) => MapEventTypeHelper.getCategory(MapEventTypeHelper.getEventType(g)) == MapCategory.subAndMember).length;
+      case 'This Week':
+        final now = DateTime.now();
+        final oneWeekLater = now.add(const Duration(days: 7));
+        return _allGigs.where((gig) {
+          if (gig.date == null) return false;
+          final d = DateTime.tryParse(gig.date!);
+          if (d == null) return false;
+          return d.isAfter(now.subtract(const Duration(days: 1))) &&
+              d.isBefore(oneWeekLater);
+        }).length;
+
+      // Sub-filters under Music
+      case 'All Music':
+        return _getFilterCount('Music', profile);
+      case 'Gig / Concert':
+      case 'Gigs':
+        return _allGigs.where((g) => MapEventTypeHelper.getEventType(g) == MapEventType.gigConcert).length;
+      case 'Rehearsal':
+      case 'Rehearsals':
+        return _allGigs.where((g) => MapEventTypeHelper.getEventType(g) == MapEventType.rehearsal).length +
+            (FeatureFlags.enableMockLiveRehearsals ? mockLiveRehearsals.length : 0);
+      case 'Jam Session':
+      case 'Jam Sessions':
+        return _allGigs.where((g) => MapEventTypeHelper.getEventType(g) == MapEventType.jamSession).length;
+      case 'Recorded Music':
+      case 'Studio':
+        return _allGigs.where((g) => MapEventTypeHelper.getEventType(g) == MapEventType.recordedMusic).length;
+
+      // Sub-filters under Sub & Member Search
+      case 'All Sub/Member':
+        return _getFilterCount('Sub & Member Search', profile);
+      case 'New Member':
+      case 'New Members':
+        return _allGigs.where((g) => MapEventTypeHelper.getEventType(g) == MapEventType.newMember).length;
+      case 'Subs':
+        return _allGigs.where((g) => MapEventTypeHelper.getEventType(g) == MapEventType.subs).length;
+      case 'Paid':
+      case 'Paid Gigs':
+        return _allGigs.where((g) => MapEventTypeHelper.getEventType(g) == MapEventType.paid || g.isPaid).length;
+
+      case 'With Audio':
+        return _allGigs.where((g) => g.hasAudioSnippet).length +
+            (FeatureFlags.enableMockLiveRehearsals ? mockLiveRehearsals.length : 0);
+
+      case 'My Instruments':
+        final userInstruments = profile?.instruments ?? [];
+        if (userInstruments.isEmpty) return 0;
+        return _allGigs.where((gig) {
+          if (gig.voicePart == null) return false;
+          final vpLower = gig.voicePart!.toLowerCase();
+          return userInstruments.any((inst) {
+            final instLower = inst.toLowerCase();
+            return instLower == vpLower ||
+                vpLower.contains(instLower) ||
+                instLower.contains(vpLower);
+          });
+        }).length;
+
+      default:
+        return 0;
+    }
+  }
+
   void _evaluateCrosshairTargeting(List<SubRequest> filteredGigs) {
     final candidates = <MapTargetCandidate>[];
 
@@ -453,7 +895,14 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
       }
     }
 
-    if (FeatureFlags.enableMockLiveRehearsals) {
+    final showRehearsals = FeatureFlags.enableMockLiveRehearsals &&
+        (_selectedMainCategory == 'All' ||
+            (_selectedMainCategory == 'Music' &&
+                (_selectedSubCategory == null ||
+                    _selectedSubCategory == 'All Music' ||
+                    _selectedSubCategory == 'Rehearsal')));
+
+    if (showRehearsals) {
       for (final reh in mockLiveRehearsals) {
         candidates.add(MapTargetCandidate.fromRehearsal(reh));
       }
@@ -504,40 +953,61 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
   }
 
   List<SubRequest> _getFilteredGigs(UserProfile? profile) {
-    if (_selectedFilter == 'All') {
-      return _allGigs;
-    } else if (_selectedFilter == 'Gigs') {
-      return _allGigs.where((gig) => MapEventTypeHelper.getEventType(gig) == MapEventType.gig).toList();
-    } else if (_selectedFilter == 'Rehearsals') {
-      return _allGigs.where((gig) => MapEventTypeHelper.getEventType(gig) == MapEventType.rehearsal).toList();
-    } else if (_selectedFilter == 'New Members') {
-      return _allGigs.where((gig) => MapEventTypeHelper.getEventType(gig) == MapEventType.newMember).toList();
-    } else if (_selectedFilter == 'Jam Sessions') {
-      return _allGigs.where((gig) => MapEventTypeHelper.getEventType(gig) == MapEventType.jamSession).toList();
-    } else if (_selectedFilter == 'My Instruments') {
-      final userInstruments = profile?.instruments ?? [];
-      if (userInstruments.isEmpty) return [];
-      return _allGigs.where((gig) {
-        if (gig.voicePart == null) return false;
-        final vpLower = gig.voicePart!.toLowerCase();
-        return userInstruments.any((inst) {
-          final instLower = inst.toLowerCase();
-          return instLower == vpLower || vpLower.contains(instLower) || instLower.contains(vpLower);
-        });
+    List<SubRequest> list = _allGigs;
+
+    // 1. Primary Category Filter
+    if (_selectedMainCategory == 'Music') {
+      list = list.where((g) {
+        final cat = MapEventTypeHelper.getCategory(MapEventTypeHelper.getEventType(g));
+        return cat == MapCategory.music;
       }).toList();
-    } else if (_selectedFilter == 'Paid Gigs') {
-      return _allGigs.where((gig) => gig.isPaid).toList();
-    } else if (_selectedFilter == 'This Week') {
+    } else if (_selectedMainCategory == 'Gig Promo') {
+      list = list.where((g) {
+        final cat = MapEventTypeHelper.getCategory(MapEventTypeHelper.getEventType(g));
+        return cat == MapCategory.gigPromo;
+      }).toList();
+    } else if (_selectedMainCategory == 'Sub & Member Search') {
+      list = list.where((g) {
+        final cat = MapEventTypeHelper.getCategory(MapEventTypeHelper.getEventType(g));
+        return cat == MapCategory.subAndMember;
+      }).toList();
+    } else if (_selectedMainCategory == 'This Week') {
       final now = DateTime.now();
       final oneWeekLater = now.add(const Duration(days: 7));
-      return _allGigs.where((gig) {
+      list = list.where((gig) {
         if (gig.date == null) return false;
         final d = DateTime.tryParse(gig.date!);
         if (d == null) return false;
         return d.isAfter(now.subtract(const Duration(days: 1))) && d.isBefore(oneWeekLater);
       }).toList();
     }
-    return _allGigs;
+
+    // 2. Secondary Sub-Filter
+    if (_selectedSubCategory != null &&
+        _selectedSubCategory != 'All Music' &&
+        _selectedSubCategory != 'All Sub/Member') {
+      list = list.where((g) {
+        final type = MapEventTypeHelper.getEventType(g);
+        final shortLabel = MapEventTypeHelper.getShortLabel(type);
+        final fullLabel = MapEventTypeHelper.getLabel(type);
+        return shortLabel == _selectedSubCategory ||
+            fullLabel == _selectedSubCategory ||
+            type.name == _selectedSubCategory;
+      }).toList();
+    }
+
+    // 3. Instrument Search Query Filter (under Sub & Member Search)
+    if (_instrumentQuery.trim().isNotEmpty) {
+      final q = _instrumentQuery.trim().toLowerCase();
+      list = list.where((gig) {
+        final vp = (gig.voicePart ?? '').toLowerCase();
+        final r = (gig.role ?? '').toLowerCase();
+        final d = (gig.description ?? '').toLowerCase();
+        return vp.contains(q) || r.contains(q) || d.contains(q);
+      }).toList();
+    }
+
+    return list;
   }
 
   Set<Marker> _buildMarkers(List<SubRequest> filteredGigs) {
@@ -546,6 +1016,10 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
         markerId: MarkerId(gig.id ?? gig.subRequestId ?? UniqueKey().toString()),
         position: LatLng(gig.latitude!, gig.longitude!),
         icon: _getMarkerColor(gig),
+        infoWindow: InfoWindow(
+          title: gig.role ?? gig.voicePart ?? 'Event',
+          snippet: '${gig.bandName ?? ""} · ${gig.location ?? ""}',
+        ),
         onTap: () {
           setState(() {
             _selectedGig = gig;
@@ -557,10 +1031,14 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
       );
     }).toSet();
 
-    if (!FeatureFlags.enableMockLiveRehearsals ||
-        _selectedFilter == 'Gigs' ||
-        _selectedFilter == 'New Members' ||
-        _selectedFilter == 'Jam Sessions') {
+    final showRehearsals = FeatureFlags.enableMockLiveRehearsals &&
+        (_selectedMainCategory == 'All' ||
+            (_selectedMainCategory == 'Music' &&
+                (_selectedSubCategory == null ||
+                    _selectedSubCategory == 'All Music' ||
+                    _selectedSubCategory == 'Rehearsal')));
+
+    if (!showRehearsals) {
       return gigMarkers;
     }
 
@@ -588,83 +1066,302 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
   }
 
   void _showMapInfoDialog() {
-    showDialog(
+    showWhatIsMapViewDialog(context);
+  }
+
+  void _showUploadEventSheet() {
+    String selectedCategory = 'Music';
+    String selectedType = 'Gig / Concert';
+    final bandNameController = TextEditingController();
+    final roleController = TextEditingController();
+    final locationController = TextEditingController(text: 'Stockholm, Sweden');
+    final descriptionController = TextEditingController();
+    String selectedAudio = 'audio/bandrep1.mp3';
+
+    showModalBottomSheet(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF0F0C20),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(color: Color(0xFF2E2A4E)),
-        ),
-        title: Row(
-          children: [
-            const Icon(Icons.help_outline_rounded, color: AppTheme.primaryAccent, size: 22),
-            const SizedBox(width: 8),
-            Text(
-              'What is Map View?',
-              style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold),
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF0F0C20),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        side: BorderSide(color: Color(0xFF2E2A4E)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setSheetState) {
+          final typesForCategory = selectedCategory == 'Music'
+              ? ['Gig / Concert', 'Rehearsal', 'Jam Session', 'Recorded Music']
+              : selectedCategory == 'Gig Promo'
+                  ? ['Gig Promo']
+                  : ['New Member', 'Subs', 'Paid'];
+
+          return Padding(
+            padding: EdgeInsets.only(
+              left: 20,
+              right: 20,
+              top: 20,
+              bottom: MediaQuery.of(context).viewInsets.bottom + 24,
             ),
-          ],
-        ),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Explore Map View to discover audio snippets from gigs, rehearsals, recordings and gig promos, as well as requests for band members, subs and paid gigs.\n',
-                style: GoogleFonts.inter(
-                  color: Colors.white,
-                  fontSize: 13,
-                  height: 1.4,
-                  fontWeight: FontWeight.w500,
-                ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.add_location_alt_rounded, color: AppTheme.primaryAccent, size: 22),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Upload Map Event / Audio',
+                            style: GoogleFonts.outfit(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close_rounded, color: Colors.white60),
+                        onPressed: () => Navigator.pop(ctx),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Post a pin to Map View and attach an audio snippet for other musicians and audiences to discover.',
+                    style: GoogleFonts.inter(fontSize: 12, color: Colors.white70),
+                  ),
+                  const SizedBox(height: 16),
+                  
+                  // Category Selector
+                  Text('Category', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white)),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: ['Music', 'Gig Promo', 'Sub & Member Search'].map((cat) {
+                      final isSelected = selectedCategory == cat;
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: ChoiceChip(
+                          label: Text(
+                            cat,
+                            style: GoogleFonts.inter(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: isSelected ? Colors.white : Colors.white70,
+                            ),
+                          ),
+                          selected: isSelected,
+                          selectedColor: AppTheme.primaryAccent,
+                          backgroundColor: const Color(0xFF1E1A38),
+                          onSelected: (val) {
+                            if (val) {
+                              setSheetState(() {
+                                selectedCategory = cat;
+                                if (cat == 'Music') selectedType = 'Gig / Concert';
+                                if (cat == 'Gig Promo') selectedType = 'Gig Promo';
+                                if (cat == 'Sub & Member Search') selectedType = 'New Member';
+                              });
+                            }
+                          },
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Event Type Selector
+                  Text('Event Type', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white)),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
+                    children: typesForCategory.map((type) {
+                      final isSelected = selectedType == type;
+                      return ChoiceChip(
+                        label: Text(type, style: GoogleFonts.inter(fontSize: 11, color: isSelected ? Colors.white : Colors.white70)),
+                        selected: isSelected,
+                        selectedColor: const Color(0xFF6366F1),
+                        backgroundColor: const Color(0xFF1E1A38),
+                        onSelected: (val) {
+                          if (val) setSheetState(() => selectedType = type);
+                        },
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 14),
+
+                  // Band Name
+                  TextField(
+                    controller: bandNameController,
+                    style: GoogleFonts.inter(fontSize: 13, color: Colors.white),
+                    decoration: InputDecoration(
+                      labelText: 'Band Name / Artist',
+                      labelStyle: GoogleFonts.inter(fontSize: 12, color: Colors.white60),
+                      filled: true,
+                      fillColor: const Color(0xFF1A1633),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+
+                  // Role / Title
+                  TextField(
+                    controller: roleController,
+                    style: GoogleFonts.inter(fontSize: 13, color: Colors.white),
+                    decoration: InputDecoration(
+                      labelText: 'Event Title / Role (e.g. Lead Guitarist Needed)',
+                      labelStyle: GoogleFonts.inter(fontSize: 12, color: Colors.white60),
+                      filled: true,
+                      fillColor: const Color(0xFF1A1633),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+
+                  // Location
+                  TextField(
+                    controller: locationController,
+                    style: GoogleFonts.inter(fontSize: 13, color: Colors.white),
+                    decoration: InputDecoration(
+                      labelText: 'Pin Location (Street, City, Country)',
+                      labelStyle: GoogleFonts.inter(fontSize: 12, color: Colors.white60),
+                      filled: true,
+                      fillColor: const Color(0xFF1A1633),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+
+                  // Description
+                  TextField(
+                    controller: descriptionController,
+                    maxLines: 2,
+                    style: GoogleFonts.inter(fontSize: 13, color: Colors.white),
+                    decoration: InputDecoration(
+                      labelText: 'Description / Details',
+                      labelStyle: GoogleFonts.inter(fontSize: 12, color: Colors.white60),
+                      filled: true,
+                      fillColor: const Color(0xFF1A1633),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+
+                  // Audio Snippet Selector
+                  Text('Audio Snippet Demo Track', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white)),
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1A1633),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFF2E2A4E)),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: selectedAudio,
+                        dropdownColor: const Color(0xFF1A1633),
+                        isExpanded: true,
+                        items: const [
+                          DropdownMenuItem(
+                            value: 'audio/bandrep1.mp3',
+                            child: Text('Demo: High-energy Rock Band Stem', style: TextStyle(color: Colors.white, fontSize: 12)),
+                          ),
+                          DropdownMenuItem(
+                            value: 'audio/bandrep2.mp3',
+                            child: Text('Demo: Chamber / Acoustic Rehearsal', style: TextStyle(color: Colors.white, fontSize: 12)),
+                          ),
+                          DropdownMenuItem(
+                            value: 'audio/bandrep3.mp3',
+                            child: Text('Demo: Horns & Funk Live Session', style: TextStyle(color: Colors.white, fontSize: 12)),
+                          ),
+                        ],
+                        onChanged: (val) {
+                          if (val != null) setSheetState(() => selectedAudio = val);
+                        },
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+
+                  // Publish Button
+                  SizedBox(
+                    width: double.infinity,
+                    height: 46,
+                    child: ElevatedButton(
+                      onPressed: () {
+                        final band = bandNameController.text.trim().isEmpty ? 'My Band' : bandNameController.text.trim();
+                        final title = roleController.text.trim().isEmpty ? selectedType : roleController.text.trim();
+                        final newId = 'custom_${DateTime.now().millisecondsSinceEpoch}';
+                        
+                        final lat = _currentCameraPosition.target.latitude;
+                        final lng = _currentCameraPosition.target.longitude;
+
+                        String mappedType = 'gigConcert';
+                        if (selectedType == 'Rehearsal') mappedType = 'rehearsal';
+                        if (selectedType == 'Jam Session') mappedType = 'jamSession';
+                        if (selectedType == 'Recorded Music') mappedType = 'recordedMusic';
+                        if (selectedType == 'Gig Promo') mappedType = 'gigPromo';
+                        if (selectedType == 'New Member') mappedType = 'newMember';
+                        if (selectedType == 'Subs') mappedType = 'subs';
+                        if (selectedType == 'Paid') mappedType = 'paid';
+
+                        final newGig = SubRequest(
+                          id: newId,
+                          subRequestId: newId,
+                          bandName: band,
+                          role: title,
+                          voicePart: title,
+                          requestType: selectedType,
+                          location: locationController.text.trim().isEmpty ? 'Stockholm, Sweden' : locationController.text.trim(),
+                          date: DateTime.now().add(const Duration(days: 3)).toIso8601String(),
+                          startTime: '19:00:00',
+                          endTime: '22:00:00',
+                          description: descriptionController.text.trim().isEmpty ? 'Uploaded via Map View.' : descriptionController.text.trim(),
+                          latitude: lat,
+                          longitude: lng,
+                          isPaid: selectedType == 'Paid',
+                          payAmount: 2000,
+                          responses: {},
+                          extraFields: {
+                            'audioSnippetUrl': selectedAudio,
+                            'audioSnippetTitle': '$band Preview Snippet',
+                            'eventType': mappedType,
+                          },
+                        );
+
+                        setState(() {
+                          _allGigs.insert(0, newGig);
+                          _selectedGig = newGig;
+                          _selectedRehearsal = null;
+                        });
+
+                        Navigator.pop(ctx);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Event & audio pin published to Map View!'),
+                            backgroundColor: AppTheme.success,
+                          ),
+                        );
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.primaryAccent,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      child: Text(
+                        'Publish to Map',
+                        style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              Text(
-                'HOW TO EXPLORE & LISTEN:',
-                style: GoogleFonts.outfit(
-                  color: AppTheme.primaryAccent,
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1.0,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Move pins towards the centre of the screen (telescopic sight) to hear different bands and their recordings, band info, gig promo, etc.\n',
-                style: GoogleFonts.inter(color: Colors.white70, fontSize: 13, height: 1.4),
-              ),
-              Text(
-                'PIN EVENT TYPE COLORS:',
-                style: GoogleFonts.outfit(
-                  color: AppTheme.primaryAccent,
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1.0,
-                ),
-              ),
-              const SizedBox(height: 8),
-              _buildLegendItem(MapEventType.gig),
-              const SizedBox(height: 6),
-              _buildLegendItem(MapEventType.rehearsal),
-              const SizedBox(height: 6),
-              _buildLegendItem(MapEventType.newMember),
-              const SizedBox(height: 6),
-              _buildLegendItem(MapEventType.jamSession),
-              const SizedBox(height: 6),
-              _buildLegendItem(MapEventType.studio),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(
-              'Got it',
-              style: GoogleFonts.inter(color: AppTheme.primaryAccent, fontWeight: FontWeight.bold),
             ),
-          ),
-        ],
+          );
+        },
       ),
     );
   }
@@ -677,7 +1374,9 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
 
     return Scaffold(
       appBar: const CustomTopBar(showBack: true),
-      body: Container(
+      body: SafeArea(
+        top: false,
+        child: Container(
         decoration: const BoxDecoration(
           gradient: AppTheme.backgroundGradient,
         ),
@@ -713,6 +1412,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                     markers: markers,
                     mapToolbarEnabled: false,
                     zoomControlsEnabled: false,
+                    myLocationEnabled: false,
                     myLocationButtonEnabled: false,
                     onTap: (_) {
                       // Deselect gig and rehearsal on tapping map empty space
@@ -733,433 +1433,982 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
               ),
             ),
 
-            // Top Filter Row
-            Positioned(
-              top: 14,
-              left: 0,
-              right: 60,
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Row(
-                  children: [
-                    _buildFilterChip('All'),
-                    _buildFilterChip('Gigs'),
-                    _buildFilterChip('Rehearsals'),
-                    _buildFilterChip('New Members'),
-                    _buildFilterChip('Jam Sessions'),
-                    _buildFilterChip('My Instruments'),
-                    _buildFilterChip('Paid Gigs'),
-                    _buildFilterChip('This Week'),
-                  ],
-                ),
-              ),
-            ),
-
-            // Floating Refresh and "What is Map View?" Re-open Button
+            // Top Structured Controls (Filters, Sub-filters, City Jumpers, "What is Map View?" Box)
             Positioned(
               top: 10,
-              right: 14,
-              child: Row(
+              left: 0,
+              right: 0,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (!_showGuideBanner) ...[
-                    GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          _showGuideBanner = true;
-                        });
-                      },
-                      child: Container(
-                        height: 38,
-                        margin: const EdgeInsets.only(right: 8),
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF0F0C20).withOpacity(0.92),
-                          borderRadius: BorderRadius.circular(19),
-                          border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.5), width: 1.2),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.35),
-                              blurRadius: 8,
-                              offset: const Offset(0, 2),
+                  // Row 1: Actions Header (Upload Event on left, Refresh and Guide on right)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        // Upload Event Button
+                        GestureDetector(
+                          onTap: _showUploadEventSheet,
+                          child: Container(
+                            height: 34,
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            decoration: BoxDecoration(
+                              gradient: AppTheme.primaryGradient,
+                              borderRadius: BorderRadius.circular(17),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: AppTheme.primaryAccent.withOpacity(0.35),
+                                  blurRadius: 6,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
                             ),
-                          ],
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.add_location_alt_rounded, color: Colors.white, size: 14),
+                                const SizedBox(width: 5),
+                                Text(
+                                  'Upload Event',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
-                        child: Row(
+
+                        // Action Buttons: Refresh & Guide Toggle
+                        Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(Icons.help_outline_rounded, color: AppTheme.primaryAccent, size: 16),
-                            const SizedBox(width: 6),
-                            Text(
-                              'What is Map View?',
-                              style: GoogleFonts.inter(
-                                fontSize: 11,
-                                fontWeight: FontWeight.bold,
-                                color: AppTheme.primaryAccent,
+                            // Refresh Button
+                            Container(
+                              width: 34,
+                              height: 34,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF0F0C20).withOpacity(0.92),
+                                shape: BoxShape.circle,
+                                border: Border.all(color: const Color(0xFF2E2A4E), width: 1.2),
+                              ),
+                              child: IconButton(
+                                padding: EdgeInsets.zero,
+                                icon: const Icon(Icons.refresh_rounded, color: Colors.white, size: 18),
+                                tooltip: 'Refresh Map',
+                                onPressed: _fetchGigs,
                               ),
                             ),
+                            if (!_showGuideBanner) ...[
+                              const SizedBox(width: 8),
+                              GestureDetector(
+                                onTap: () => setState(() => _showGuideBanner = true),
+                                child: Container(
+                                  height: 34,
+                                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF0F0C20).withOpacity(0.92),
+                                    borderRadius: BorderRadius.circular(17),
+                                    border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.5), width: 1.2),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(Icons.help_outline_rounded, color: AppTheme.primaryAccent, size: 14),
+                                      const SizedBox(width: 5),
+                                      Text(
+                                        'What is Map View?',
+                                        style: GoogleFonts.inter(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                          color: AppTheme.primaryAccent,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
                           ],
-                        ),
-                      ),
-                    ),
-                  ],
-                  Container(
-                    width: 38,
-                    height: 38,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF0F0C20).withOpacity(0.92),
-                      shape: BoxShape.circle,
-                      border: Border.all(color: const Color(0xFF2E2A4E), width: 1.2),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.35),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
                         ),
                       ],
                     ),
-                    child: IconButton(
-                      padding: EdgeInsets.zero,
-                      icon: const Icon(Icons.refresh_rounded, color: Colors.white, size: 20),
-                      tooltip: 'Refresh Map',
-                      onPressed: _fetchGigs,
+                  ),
+
+                  const SizedBox(height: 8),
+
+                  // Row 2: Full-width Primary Category Filter Tabs
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Row(
+                      children: [
+                        _buildMainFilterChip('All', _getFilterCount('All', appState.currentUserProfile)),
+                        _buildMainFilterChip('Music', _getFilterCount('Music', appState.currentUserProfile)),
+                        _buildMainFilterChip('Gig Promo', _getFilterCount('Gig Promo', appState.currentUserProfile)),
+                        _buildMainFilterChip('Sub & Member Search', _getFilterCount('Sub & Member Search', appState.currentUserProfile)),
+                        _buildMainFilterChip('This Week', _getFilterCount('This Week', appState.currentUserProfile)),
+                      ],
                     ),
                   ),
+
+                  // Row 2: Sub-filter Row (conditional when Music or Sub & Member Search is active)
+                  if (_selectedMainCategory == 'Music') ...[
+                    const SizedBox(height: 6),
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Row(
+                        children: [
+                          _buildSubFilterChip('All Music', MapEventType.gigConcert),
+                          _buildSubFilterChip('Gig / Concert', MapEventType.gigConcert),
+                          _buildSubFilterChip('Rehearsal', MapEventType.rehearsal),
+                          _buildSubFilterChip('Jam Session', MapEventType.jamSession),
+                          _buildSubFilterChip('Recorded Music', MapEventType.recordedMusic),
+                        ],
+                      ),
+                    ),
+                  ] else if (_selectedMainCategory == 'Sub & Member Search') ...[
+                    const SizedBox(height: 6),
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Row(
+                        children: [
+                          _buildSubFilterChip('All Sub/Member', MapEventType.newMember),
+                          _buildSubFilterChip('New Member', MapEventType.newMember),
+                          _buildSubFilterChip('Subs', MapEventType.subs),
+                          _buildSubFilterChip('Paid', MapEventType.paid),
+                          const SizedBox(width: 8),
+                          _buildInstrumentFilterToggle(),
+                        ],
+                      ),
+                    ),
+                    if (_showInstrumentSearch || _instrumentQuery.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      _buildInstrumentSearchBar(),
+                    ],
+                  ],
+
+                  // Row 3: Clickable "What is Map View?" Box
+                  if (_showGuideBanner) ...[
+                    const SizedBox(height: 8),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: _buildWhatIsMapViewBanner(),
+                    ),
+                  ],
                 ],
               ),
             ),
 
-            // Clickable "What is Map View?" Box
-            if (_showGuideBanner)
+            // Bottom drawer details card for Gigs (with Live Audio bar docked directly above it)
+            if (_selectedGig != null)
               Positioned(
-                top: 64,
+                bottom: 20,
                 left: 16,
                 right: 16,
-                child: Semantics(
-                  button: true,
-                  label: 'What is Map View? Click to read full guide.',
-                  child: AnimatedTapDetector(
-                    onTap: _showMapInfoDialog,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF0F0C20).withOpacity(0.95),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: AppTheme.primaryAccent.withOpacity(0.5),
-                          width: 1.2,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.45),
-                            blurRadius: 12,
-                            offset: const Offset(0, 4),
-                          ),
-                          BoxShadow(
-                            color: AppTheme.primaryAccent.withOpacity(0.08),
-                            blurRadius: 2,
-                            offset: const Offset(0, 1),
-                          ),
-                        ],
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(5),
-                                decoration: BoxDecoration(
-                                  color: AppTheme.primaryAccent.withOpacity(0.2),
-                                  shape: BoxShape.circle,
-                                ),
-                                child: const Icon(
-                                  Icons.help_outline_rounded,
-                                  color: AppTheme.primaryAccent,
-                                  size: 16,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  'What is Map View?',
-                                  style: GoogleFonts.outfit(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                    letterSpacing: 0.5,
-                                  ),
-                                ),
-                              ),
-                              const Icon(
-                                Icons.arrow_forward_ios_rounded,
-                                color: AppTheme.primaryAccent,
-                                size: 12,
-                              ),
-                              const SizedBox(width: 8),
-                              IconButton(
-                                icon: const Icon(Icons.close_rounded, color: Colors.white60, size: 18),
-                                padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints(),
-                                tooltip: 'Dismiss',
-                                onPressed: () {
-                                  setState(() {
-                                    _showGuideBanner = false;
-                                  });
-                                },
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            'Explore Map View to discover audio snippets from gigs, rehearsals, recordings and gig promos, as well as requests for band members, subs and paid gigs.',
-                            style: GoogleFonts.inter(
-                              fontSize: 12,
-                              color: const Color(0xFFD4CEEB),
-                              height: 1.35,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _buildLiveAudioBar(isDocked: true),
+                    const SizedBox(height: 8),
+                    _buildBottomCardContent(_selectedGig!, appState),
+                  ],
                 ),
               ),
 
-            // Audio Controls Overlay
-            _buildAudioControlsOverlay(),
+            // Bottom drawer details card for Mock Live Rehearsals (with Live Audio bar docked directly above it)
+            if (_selectedRehearsal != null)
+              Positioned(
+                bottom: 20,
+                left: 16,
+                right: 16,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _buildLiveAudioBar(isDocked: true),
+                    const SizedBox(height: 8),
+                    _buildRehearsalBottomCardContent(_selectedRehearsal!),
+                  ],
+                ),
+              ),
 
-            // Bottom drawer details card for Gigs
-            if (_selectedGig != null) _buildBottomCard(_selectedGig!, appState),
-
-            // Bottom drawer details card for Mock Live Rehearsals
-            if (_selectedRehearsal != null) _buildRehearsalBottomCard(_selectedRehearsal!),
-
-            // Map Pin Legend Overlay
-            if (_selectedGig == null && _selectedRehearsal == null)
-              _buildLegendOverlay(),
+            // When no event card is selected: Pin Legend at bottom-left & Live Audio at bottom-right
+            if (_selectedGig == null && _selectedRehearsal == null) ...[
+              _buildLegendOverlay(bottomOffset: 76),
+              Positioned(
+                bottom: 16,
+                right: 16,
+                child: _buildLiveAudioBar(isDocked: false),
+              ),
+            ],
           ],
+        ),
+      ),
+      ),
+    );
+  }
+
+  Widget _buildWhatIsMapViewBanner() {
+    return Semantics(
+      button: true,
+      label: 'What is Map View? Click to read full guide.',
+      child: AnimatedTapDetector(
+        onTap: _showMapInfoDialog,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: const Color(0xFF0F0C20).withOpacity(0.95),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: AppTheme.primaryAccent.withOpacity(0.5),
+              width: 1.2,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.45),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+              BoxShadow(
+                color: AppTheme.primaryAccent.withOpacity(0.08),
+                blurRadius: 2,
+                offset: const Offset(0, 1),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(5),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primaryAccent.withOpacity(0.2),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.help_outline_rounded,
+                      color: AppTheme.primaryAccent,
+                      size: 16,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'What is Map View?',
+                      style: GoogleFonts.outfit(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ),
+                  const Icon(
+                    Icons.arrow_forward_ios_rounded,
+                    color: AppTheme.primaryAccent,
+                    size: 12,
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded, color: Colors.white60, size: 18),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    tooltip: 'Dismiss',
+                    onPressed: () {
+                      setState(() {
+                        _showGuideBanner = false;
+                      });
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Explore Map View to discover audio snippets from gigs, rehearsals, recordings and gig promos, as well as requests for band members, subs and paid gigs.',
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  color: const Color(0xFFD4CEEB),
+                  height: 1.35,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildAudioControlsOverlay() {
+  Widget _buildLiveAudioBar({bool isDocked = false}) {
     if (!FeatureFlags.enableMockLiveRehearsals || _audioController == null) {
       return const SizedBox.shrink();
     }
 
-    return Positioned(
-      top: _showGuideBanner ? 175 : 68,
-      right: 16,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          ValueListenableBuilder<bool>(
-            valueListenable: _audioController!.webAutoplayBlockedNotifier,
-            builder: (context, isBlocked, _) {
-              if (!isBlocked) return const SizedBox.shrink();
-              return Container(
-                margin: const EdgeInsets.only(bottom: 8),
-                child: ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.warning,
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                  ),
-                  icon: const Icon(Icons.volume_up_rounded, color: Colors.black, size: 16),
-                  label: Text(
-                    'Enable rehearsal audio',
-                    style: GoogleFonts.inter(color: Colors.black, fontSize: 12, fontWeight: FontWeight.bold),
-                  ),
-                  onPressed: () {
-                    _audioController?.enableWebAudio();
-                  },
-                ),
-              );
-            },
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0F0C20).withOpacity(0.95),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: Colors.purpleAccent.withOpacity(0.45),
+          width: 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.4),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
           ),
-          ValueListenableBuilder<bool>(
+        ],
+      ),
+      child: ValueListenableBuilder<bool>(
+        valueListenable: _audioController!.isAudioStoppedNotifier,
+        builder: (context, isStopped, _) {
+          return ValueListenableBuilder<bool>(
             valueListenable: _audioController!.isMutedNotifier,
             builder: (context, isMuted, _) {
-              return Tooltip(
-                message: isMuted ? 'Unmute Live Rehearsals' : 'Mute Live Rehearsals',
-                child: GestureDetector(
-                  onTap: () {
-                    _audioController?.toggleMute();
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              return Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(5),
                     decoration: BoxDecoration(
-                      color: AppTheme.cardBackground.withOpacity(0.9),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: isMuted ? AppTheme.danger : AppTheme.primaryAccent,
-                        width: 1.2,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.3),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
-                        )
-                      ],
+                      color: isStopped
+                          ? AppTheme.danger.withOpacity(0.2)
+                          : isMuted
+                              ? AppTheme.warning.withOpacity(0.2)
+                              : Colors.purpleAccent.withOpacity(0.2),
+                      shape: BoxShape.circle,
                     ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          isMuted ? Icons.volume_off_rounded : Icons.volume_up_rounded,
-                          color: isMuted ? AppTheme.danger : AppTheme.primaryAccent,
-                          size: 16,
+                    child: Icon(
+                      isStopped
+                          ? Icons.power_settings_new_rounded
+                          : isMuted
+                              ? Icons.volume_off_rounded
+                              : Icons.sensors_rounded,
+                      color: isStopped
+                          ? AppTheme.danger
+                          : isMuted
+                              ? AppTheme.warning
+                              : Colors.purpleAccent,
+                      size: 16,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'LIVE AUDIO',
+                        style: GoogleFonts.outfit(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 0.8,
+                          color: Colors.white,
                         ),
-                        const SizedBox(width: 6),
-                        Text(
-                          isMuted ? 'Muted' : 'Live Audio',
-                          style: GoogleFonts.inter(
-                            color: Colors.white,
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
+                      ),
+                      Text(
+                        isStopped
+                            ? 'Turned OFF'
+                            : isMuted
+                                ? 'Muted'
+                                : 'Active (Proximity)',
+                        style: GoogleFonts.inter(
+                          fontSize: 10,
+                          color: isStopped
+                              ? AppTheme.danger
+                              : isMuted
+                                  ? AppTheme.warning
+                                  : Colors.purpleAccent,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(width: 12),
+                  // Power Switch (Turn OFF / Turn ON)
+                  GestureDetector(
+                    onTap: () {
+                      _audioController?.toggleAudioPower();
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: isStopped
+                            ? AppTheme.success.withOpacity(0.2)
+                            : AppTheme.danger.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: isStopped
+                              ? AppTheme.success.withOpacity(0.6)
+                              : AppTheme.danger.withOpacity(0.6),
+                          width: 1,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            isStopped ? Icons.play_arrow_rounded : Icons.power_settings_new_rounded,
+                            size: 13,
+                            color: isStopped ? AppTheme.success : AppTheme.danger,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            isStopped ? 'Turn ON' : 'Turn OFF',
+                            style: GoogleFonts.inter(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: isStopped ? AppTheme.success : AppTheme.danger,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  // Mute Button (disabled if turned off)
+                  if (!isStopped)
+                    GestureDetector(
+                      onTap: () {
+                        _audioController?.toggleMute();
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: isMuted
+                              ? AppTheme.primaryAccent.withOpacity(0.2)
+                              : const Color(0xFF2E2A4E),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: isMuted
+                                ? AppTheme.primaryAccent.withOpacity(0.6)
+                                : const Color(0xFF433D72),
+                            width: 1,
                           ),
                         ),
-                      ],
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              isMuted ? Icons.volume_up_rounded : Icons.volume_off_rounded,
+                              size: 13,
+                              color: isMuted ? AppTheme.primaryAccent : Colors.white70,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              isMuted ? 'Unmute' : 'Mute',
+                              style: GoogleFonts.inter(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: isMuted ? AppTheme.primaryAccent : Colors.white70,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildBottomCardContent(SubRequest gig, AppState appState) {
+    final date = gig.date != null ? DateTime.tryParse(gig.date!) ?? DateTime.now() : DateTime.now();
+    final formattedDate = DateFormat('MMM dd, yyyy').format(date);
+    final currentUserId = appState.currentUserId;
+    final gigReqId = gig.subRequestId ?? gig.id;
+    final isCreator = currentUserId != null && (gig.creatorUserId == currentUserId || gig.userId == currentUserId);
+    final hasApplied = currentUserId != null && !isCreator && (gig.responses.containsKey(currentUserId) || (gigReqId != null && _appliedGigIds.contains(gigReqId)));
+    final eventType = MapEventTypeHelper.getEventType(gig);
+    final badgeColor = MapEventTypeHelper.getColor(eventType);
+    final badgeLabel = MapEventTypeHelper.getShortLabel(eventType);
+    final badgeIcon = MapEventTypeHelper.getIcon(eventType);
+    final genre = gig.extraFields['genre']?.toString() ?? '';
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppTheme.cardBackground.withOpacity(0.96),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: badgeColor.withOpacity(0.55), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.4),
+            blurRadius: 15,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 1. Band name on top in large font + Close button (Page 4 in doc)
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Text(
+                  gig.bandName ?? 'Unknown Band',
+                  style: GoogleFonts.outfit(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              GestureDetector(
+                onTap: () {
+                  final closedId = _selectedGig?.id ?? _selectedGig?.subRequestId;
+                  setState(() {
+                    _selectedGig = null;
+                    _isAutoSelected = false;
+                    _manuallyClosedTargetId = closedId;
+                  });
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.close, size: 16, color: Colors.white70),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+
+          // 2. Event Type underneath (e.g. Rehearsal Sub: Cello, Gig / Concert)
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: badgeColor.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: badgeColor.withOpacity(0.5), width: 1.0),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(badgeIcon, color: badgeColor, size: 12),
+                    const SizedBox(width: 4),
+                    Text(
+                      badgeLabel,
+                      style: GoogleFonts.inter(
+                        color: badgeColor,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (gig.role != null && gig.role!.trim().isNotEmpty) ...[
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    gig.role!,
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white.withOpacity(0.9),
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 10),
+
+          // 3. Location, Date & Time
+          Row(
+            children: [
+              const Icon(Icons.location_on_rounded, size: 14, color: AppTheme.textSecondary),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Text(
+                  gig.location ?? 'Sweden',
+                  style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Icon(Icons.calendar_today_rounded, size: 13, color: AppTheme.textSecondary),
+              const SizedBox(width: 4),
+              Text(
+                '$formattedDate | ${gig.startTime ?? "18:00"} - ${gig.endTime ?? "21:00"}',
+                style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
+              ),
+            ],
+          ),
+
+          // 4. Genre / Band Type
+          if (genre.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                const Icon(Icons.music_note_rounded, size: 14, color: AppTheme.primaryAccent),
+                const SizedBox(width: 4),
+                Text(
+                  genre,
+                  style: GoogleFonts.inter(fontSize: 12, color: AppTheme.primaryAccent, fontWeight: FontWeight.w500),
+                ),
+              ],
+            ),
+          ],
+
+          // 5. Fritext (Description)
+          if (gig.description != null && gig.description!.trim().isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              gig.description!,
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                color: Colors.white70,
+                height: 1.35,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+
+          // 6. Inline Audio snippet player
+          if (gig.hasAudioSnippet) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFF131028),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: badgeColor.withOpacity(0.35), width: 1.0),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.graphic_eq_rounded, color: badgeColor, size: 15),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          gig.audioSnippetTitle ?? 'Audio Preview Snippet',
+                          style: GoogleFonts.inter(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: badgeColor.withOpacity(0.18),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          'SNIPPET',
+                          style: GoogleFonts.inter(
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
+                            color: badgeColor,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  AudioSnippetPlayer(audioUrl: gig.audioSnippetUrl!),
+                ],
+              ),
+            ),
+          ],
+          const SizedBox(height: 12),
+
+          // 7. Buttons Row: "Details" (instead of "View Details") + "Apply"
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () {
+                    Navigator.pushNamed(context, '/gig-details', arguments: gig);
+                  },
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: AppTheme.primaryAccent),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                  child: Text(
+                    'Details',
+                    style: GoogleFonts.inter(
+                      color: AppTheme.primaryAccent,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
                     ),
                   ),
                 ),
-              );
-            },
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: isCreator
+                    ? Container(
+                        height: 42,
+                        decoration: BoxDecoration(
+                          color: AppTheme.primaryAccent.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.4)),
+                        ),
+                        child: Center(
+                          child: Text(
+                            'Your Request',
+                            style: GoogleFonts.inter(
+                              color: AppTheme.primaryAccent,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                      )
+                    : hasApplied
+                    ? Container(
+                        height: 42,
+                        decoration: BoxDecoration(
+                          color: Colors.white10,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: Colors.white12),
+                        ),
+                        child: Center(
+                          child: Text(
+                            'Applied',
+                            style: GoogleFonts.inter(
+                              color: Colors.white54,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                      )
+                    : Container(
+                        decoration: BoxDecoration(
+                          gradient: AppTheme.primaryGradient,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: ElevatedButton(
+                          onPressed: () async {
+                            if (currentUserId == null) return;
+                            try {
+                              if ((gig.id ?? '').startsWith('mock_')) {
+                                await Future.delayed(const Duration(milliseconds: 300));
+                              } else {
+                                await appState.firebaseService.addResponseToSubRequestAsync(
+                                  gig.subRequestId ?? gig.id!,
+                                  currentUserId,
+                                );
+                              }
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Successfully applied for gig!'),
+                                    backgroundColor: AppTheme.success,
+                                  ),
+                                );
+                                setState(() {
+                                  if (gigReqId != null) _appliedGigIds.add(gigReqId);
+                                  gig.responses[currentUserId] = true;
+                                });
+                              }
+                            } catch (e) {
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Failed to apply: $e'),
+                                    backgroundColor: AppTheme.danger,
+                                  ),
+                                );
+                              }
+                            }
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.transparent,
+                            shadowColor: Colors.transparent,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                          child: Text(
+                            'Apply',
+                            style: GoogleFonts.inter(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                      ),
+              ),
+            ],
           ),
         ],
       ),
     );
   }
 
-  Widget _buildRehearsalBottomCard(MockLiveRehearsal rehearsal) {
+  Widget _buildRehearsalBottomCardContent(MockLiveRehearsal rehearsal) {
     final dist = _audioController?.distancesKm[rehearsal.id];
     final distStr = dist != null && dist.isFinite ? '${dist.toStringAsFixed(0)} km away' : '';
 
-    return Positioned(
-      bottom: 20,
-      left: 16,
-      right: 16,
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: AppTheme.cardBackground.withOpacity(0.95),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.purpleAccent.withOpacity(0.5), width: 1.5),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.4),
-              blurRadius: 15,
-              offset: const Offset(0, 5),
-            )
-          ],
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.purpleAccent.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.purpleAccent.withOpacity(0.4)),
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppTheme.cardBackground.withOpacity(0.96),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.purpleAccent.withOpacity(0.55), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.4),
+            blurRadius: 15,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Text(
+                  rehearsal.bandName,
+                  style: GoogleFonts.outfit(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.sensors_rounded, color: Colors.purpleAccent, size: 14),
-                      const SizedBox(width: 6),
-                      Text(
-                        'LIVE REHEARSAL',
-                        style: GoogleFonts.inter(
-                          color: Colors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 1.0,
-                        ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.close_rounded, color: AppTheme.textSecondary, size: 20),
+                onPressed: () {
+                  final closedId = _selectedRehearsal?.id;
+                  setState(() {
+                    _selectedRehearsal = null;
+                    _isAutoSelected = false;
+                    _manuallyClosedTargetId = closedId;
+                  });
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: Colors.purpleAccent.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: Colors.purpleAccent.withOpacity(0.5)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.sensors_rounded, color: Colors.purpleAccent, size: 12),
+                    const SizedBox(width: 4),
+                    Text(
+                      'LIVE REHEARSAL',
+                      style: GoogleFonts.inter(
+                        color: Colors.purpleAccent,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.8,
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-                IconButton(
-                  icon: const Icon(Icons.close_rounded, color: AppTheme.textSecondary, size: 20),
-                  onPressed: () {
-                    final closedId = _selectedRehearsal?.id;
-                    setState(() {
-                      _selectedRehearsal = null;
-                      _isAutoSelected = false;
-                      _manuallyClosedTargetId = closedId;
-                    });
-                  },
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              rehearsal.bandName,
-              style: GoogleFonts.outfit(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
               ),
-            ),
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                const Icon(Icons.location_on_outlined, color: AppTheme.textSecondary, size: 14),
-                const SizedBox(width: 4),
-                Text(
-                  '${rehearsal.city}${distStr.isNotEmpty ? " · $distStr" : ""}',
-                  style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
-                ),
-                const SizedBox(width: 12),
-                const Icon(Icons.music_note_rounded, color: AppTheme.primaryAccent, size: 14),
-                const SizedBox(width: 4),
-                Text(
-                  rehearsal.genre,
-                  style: GoogleFonts.inter(fontSize: 12, color: AppTheme.primaryAccent),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Text(
-              'Broadcasting live rehearsal audio continuously for prototype testing.',
-              style: GoogleFonts.inter(
-                fontSize: 12,
-                color: Colors.white70,
-                height: 1.3,
+              const SizedBox(width: 8),
+              Text(
+                rehearsal.genre,
+                style: GoogleFonts.inter(fontSize: 12, color: AppTheme.primaryAccent, fontWeight: FontWeight.w500),
               ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              const Icon(Icons.location_on_outlined, color: AppTheme.textSecondary, size: 14),
+              const SizedBox(width: 4),
+              Text(
+                '${rehearsal.city}${distStr.isNotEmpty ? " · $distStr" : ""}',
+                style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Broadcasting live rehearsal audio continuously. Move reticle closer to adjust volume.',
+            style: GoogleFonts.inter(
+              fontSize: 12,
+              color: Colors.white70,
+              height: 1.3,
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildFilterChip(String label) {
-    final isSelected = _selectedFilter == label;
+  Widget _buildMainFilterChip(String label, int count) {
+    final isSelected = _selectedMainCategory == label;
     return Padding(
-      padding: const EdgeInsets.only(right: 8.0),
+      padding: const EdgeInsets.only(right: 6.0),
       child: GestureDetector(
         onTap: () {
           setState(() {
-            _selectedFilter = label;
+            _selectedMainCategory = label;
+            _selectedSubCategory = null;
             _selectedGig = null;
             _selectedRehearsal = null;
             _isAutoSelected = false;
             _manuallyClosedTargetId = null;
           });
+          final appState = Provider.of<AppState>(context, listen: false);
+          _evaluateCrosshairTargeting(_getFilteredGigs(appState.currentUserProfile));
         },
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
           decoration: BoxDecoration(
             color: isSelected
                 ? AppTheme.primaryAccent.withOpacity(0.9)
@@ -1170,22 +2419,321 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
               width: 1.2,
             ),
           ),
-          child: Text(
-            label,
-            style: GoogleFonts.inter(
-              color: isSelected ? Colors.white : AppTheme.textSecondary,
-              fontWeight: FontWeight.bold,
-              fontSize: 12,
-            ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                label,
+                style: GoogleFonts.inter(
+                  color: isSelected ? Colors.white : AppTheme.textSecondary,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                ),
+              ),
+              if (count > 0) ...[
+                const SizedBox(width: 5),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                  decoration: BoxDecoration(
+                    color: isSelected
+                        ? Colors.white.withOpacity(0.25)
+                        : const Color(0xFF2E2A4E),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    '$count',
+                    style: GoogleFonts.inter(
+                      color: isSelected ? Colors.white : Colors.white70,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ],
           ),
         ),
       ),
     );
   }
 
-  Widget _buildLegendOverlay() {
+  Widget _buildSubFilterChip(String label, MapEventType sampleType) {
+    final isAll = label == 'All Music' || label == 'All Sub/Member';
+    final isSelected = (_selectedSubCategory == null && isAll) || _selectedSubCategory == label;
+    final color = isAll ? AppTheme.primaryAccent : MapEventTypeHelper.getColor(sampleType);
+    final count = _getFilterCount(label, null);
+
+    return Padding(
+      padding: const EdgeInsets.only(right: 6.0),
+      child: GestureDetector(
+        onTap: () {
+          setState(() {
+            _selectedSubCategory = isAll ? null : label;
+            _selectedGig = null;
+            _selectedRehearsal = null;
+            _isAutoSelected = false;
+            _manuallyClosedTargetId = null;
+          });
+          final appState = Provider.of<AppState>(context, listen: false);
+          _evaluateCrosshairTargeting(_getFilteredGigs(appState.currentUserProfile));
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? color.withOpacity(0.25)
+                : const Color(0xFF0F0C20).withOpacity(0.85),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isSelected ? color : const Color(0xFF2E2A4E),
+              width: 1.0,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (!isAll) ...[
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: color,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 5),
+              ],
+              Text(
+                label,
+                style: GoogleFonts.inter(
+                  color: isSelected ? Colors.white : Colors.white70,
+                  fontSize: 11,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                ),
+              ),
+              if (count > 0) ...[
+                const SizedBox(width: 4),
+                Text(
+                  '($count)',
+                  style: GoogleFonts.inter(
+                    color: isSelected ? Colors.white70 : Colors.white38,
+                    fontSize: 9.5,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInstrumentFilterToggle() {
+    final isFiltering = _instrumentQuery.isNotEmpty;
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _showInstrumentSearch = !_showInstrumentSearch;
+          if (!_showInstrumentSearch && _instrumentQuery.isNotEmpty) {
+            _instrumentQuery = '';
+            _instrumentSearchController.clear();
+          }
+        });
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: isFiltering || _showInstrumentSearch
+              ? const Color(0xFF84CC16).withOpacity(0.25)
+              : const Color(0xFF0F0C20).withOpacity(0.85),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isFiltering || _showInstrumentSearch
+                ? const Color(0xFF84CC16)
+                : const Color(0xFF2E2A4E),
+            width: 1.0,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.search_rounded,
+              size: 13,
+              color: isFiltering || _showInstrumentSearch
+                  ? const Color(0xFF84CC16)
+                  : Colors.white70,
+            ),
+            const SizedBox(width: 4),
+            Text(
+              isFiltering ? 'Instrument: $_instrumentQuery' : 'Search Instrument',
+              style: GoogleFonts.inter(
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                color: isFiltering || _showInstrumentSearch
+                    ? Colors.white
+                    : Colors.white70,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInstrumentSearchBar() {
+    const commonInstruments = ['Guitar', 'Bass', 'Drums', 'Vocals', 'Keys', 'Horns', 'Cello'];
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0F0C20).withOpacity(0.95),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF84CC16).withOpacity(0.4)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: SizedBox(
+                  height: 34,
+                  child: TextField(
+                    controller: _instrumentSearchController,
+                    style: GoogleFonts.inter(fontSize: 12, color: Colors.white),
+                    decoration: InputDecoration(
+                      hintText: 'Filter by instrument or role (e.g. Bass, Drums)...',
+                      hintStyle: GoogleFonts.inter(fontSize: 11, color: Colors.white54),
+                      prefixIcon: const Icon(Icons.search_rounded, size: 16, color: Color(0xFF84CC16)),
+                      suffixIcon: _instrumentQuery.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.clear_rounded, size: 14, color: Colors.white70),
+                              padding: EdgeInsets.zero,
+                              onPressed: () {
+                                setState(() {
+                                  _instrumentQuery = '';
+                                  _instrumentSearchController.clear();
+                                });
+                              },
+                            )
+                          : null,
+                      contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 8),
+                      filled: true,
+                      fillColor: const Color(0xFF1E1A38),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                    onChanged: (val) {
+                      setState(() {
+                        _instrumentQuery = val;
+                      });
+                    },
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: commonInstruments.map((inst) {
+                final isSelected = _instrumentQuery.toLowerCase() == inst.toLowerCase();
+                return Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        if (isSelected) {
+                          _instrumentQuery = '';
+                          _instrumentSearchController.clear();
+                        } else {
+                          _instrumentQuery = inst;
+                          _instrumentSearchController.text = inst;
+                        }
+                      });
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? const Color(0xFF84CC16).withOpacity(0.35)
+                            : const Color(0xFF1A1633),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: isSelected ? const Color(0xFF84CC16) : const Color(0xFF2E2A4E),
+                          width: 1,
+                        ),
+                      ),
+                      child: Text(
+                        inst,
+                        style: GoogleFonts.inter(
+                          fontSize: 10,
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                          color: isSelected ? Colors.white : Colors.white70,
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCityJumperChip(MapCityPreset city) {
+    final isSelected = _selectedCityName == city.name;
+    return Padding(
+      padding: const EdgeInsets.only(right: 6.0),
+      child: GestureDetector(
+        onTap: () => _jumpToCity(city),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? const Color(0xFF6366F1).withOpacity(0.35)
+                : const Color(0xFF0F0C20).withOpacity(0.88),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isSelected ? const Color(0xFF818CF8) : const Color(0xFF252140),
+              width: 1.0,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                city.name == 'All Sweden' ? Icons.map_rounded : Icons.location_on_rounded,
+                size: 11,
+                color: isSelected ? Colors.white : const Color(0xFF9E8BFF),
+              ),
+              const SizedBox(width: 4),
+              Text(
+                city.name,
+                style: GoogleFonts.inter(
+                  color: isSelected ? Colors.white : const Color(0xFFCBC7E5),
+                  fontSize: 11,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLegendOverlay({double bottomOffset = 24}) {
     return Positioned(
-      bottom: 24,
+      bottom: bottomOffset,
       left: 16,
       child: AnimatedSwitcher(
         duration: const Duration(milliseconds: 250),
@@ -1226,7 +2774,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
               )
             : Container(
                 key: const ValueKey('legend_expanded'),
-                width: 220,
+                width: 240,
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   color: const Color(0xFF0F0C20).withOpacity(0.96),
@@ -1240,52 +2788,80 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                     ),
                   ],
                 ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
-                          children: [
-                            const Icon(Icons.palette_outlined, color: AppTheme.primaryAccent, size: 16),
-                            const SizedBox(width: 6),
-                            Text(
-                              'PIN EVENT TYPES',
-                              style: GoogleFonts.outfit(
-                                color: Colors.white,
-                                fontSize: 11,
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: 1.0,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.palette_outlined, color: AppTheme.primaryAccent, size: 16),
+                              const SizedBox(width: 6),
+                              Text(
+                                'PIN EVENT TYPES',
+                                style: GoogleFonts.outfit(
+                                  color: Colors.white,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 1.0,
+                                ),
                               ),
-                            ),
-                          ],
-                        ),
-                        GestureDetector(
-                          onTap: () => setState(() => _showLegend = false),
-                          child: Container(
-                            padding: const EdgeInsets.all(2),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.08),
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(Icons.close_rounded, color: Colors.white70, size: 14),
+                            ],
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    _buildLegendItem(MapEventType.gig),
-                    const SizedBox(height: 6),
-                    _buildLegendItem(MapEventType.rehearsal),
-                    const SizedBox(height: 6),
-                    _buildLegendItem(MapEventType.newMember),
-                    const SizedBox(height: 6),
-                    _buildLegendItem(MapEventType.jamSession),
-                    const SizedBox(height: 6),
-                    _buildLegendItem(MapEventType.studio),
-                  ],
+                          GestureDetector(
+                            onTap: () => setState(() => _showLegend = false),
+                            child: Container(
+                              padding: const EdgeInsets.all(2),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.08),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.close_rounded, color: Colors.white70, size: 14),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      // Category: Music
+                      Text(
+                        'MUSIC',
+                        style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.bold, color: AppTheme.primaryAccent, letterSpacing: 0.8),
+                      ),
+                      const SizedBox(height: 4),
+                      _buildLegendItem(MapEventType.gigConcert),
+                      const SizedBox(height: 5),
+                      _buildLegendItem(MapEventType.rehearsal),
+                      const SizedBox(height: 5),
+                      _buildLegendItem(MapEventType.jamSession),
+                      const SizedBox(height: 5),
+                      _buildLegendItem(MapEventType.recordedMusic),
+                      const SizedBox(height: 10),
+
+                      // Category: Gig Promo
+                      Text(
+                        'GIG PROMO',
+                        style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.bold, color: const Color(0xFFA855F7), letterSpacing: 0.8),
+                      ),
+                      const SizedBox(height: 4),
+                      _buildLegendItem(MapEventType.gigPromo),
+                      const SizedBox(height: 10),
+
+                      // Category: Sub & Member Search
+                      Text(
+                        'SUB & MEMBER SEARCH',
+                        style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.bold, color: const Color(0xFF84CC16), letterSpacing: 0.8),
+                      ),
+                      const SizedBox(height: 4),
+                      _buildLegendItem(MapEventType.newMember),
+                      const SizedBox(height: 5),
+                      _buildLegendItem(MapEventType.subs),
+                      const SizedBox(height: 5),
+                      _buildLegendItem(MapEventType.paid),
+                    ],
+                  ),
                 ),
               ),
       ),
@@ -1317,300 +2893,20 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
           ),
         ),
         const SizedBox(width: 8),
-        Text(
-          label,
-          style: GoogleFonts.inter(
-            color: Colors.white,
-            fontSize: 11.5,
-            fontWeight: FontWeight.w500,
+        Expanded(
+          child: Text(
+            label,
+            style: GoogleFonts.inter(
+              color: Colors.white,
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
         ),
       ],
     );
   }
-
-  Widget _buildBottomCard(SubRequest gig, AppState appState) {
-    final date = gig.date != null ? DateTime.tryParse(gig.date!) ?? DateTime.now() : DateTime.now();
-    final formattedDate = DateFormat('MMM dd, yyyy').format(date);
-    final currentUserId = appState.currentUserId;
-    final gigReqId = gig.subRequestId ?? gig.id;
-    final isCreator = currentUserId != null && (gig.creatorUserId == currentUserId || gig.userId == currentUserId);
-    final hasApplied = currentUserId != null && !isCreator && (gig.responses.containsKey(currentUserId) || (gigReqId != null && _appliedGigIds.contains(gigReqId)));
-    final eventType = MapEventTypeHelper.getEventType(gig);
-    final badgeColor = MapEventTypeHelper.getColor(eventType);
-    final badgeLabel = MapEventTypeHelper.getLabel(eventType);
-    final badgeIcon = MapEventTypeHelper.getIcon(eventType);
-    
-    return Positioned(
-      bottom: 20,
-      left: 16,
-      right: 16,
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: AppTheme.cardBackground.withOpacity(0.95),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: badgeColor.withOpacity(0.5), width: 1.5),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.4),
-              blurRadius: 15,
-              offset: const Offset(0, 5),
-            )
-          ],
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Event Type Badge
-            Container(
-              margin: const EdgeInsets.only(bottom: 8),
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: badgeColor.withOpacity(0.18),
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: badgeColor.withOpacity(0.4), width: 1.0),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(badgeIcon, color: badgeColor, size: 12),
-                  const SizedBox(width: 5),
-                  Text(
-                    badgeLabel.toUpperCase(),
-                    style: GoogleFonts.inter(
-                      color: badgeColor,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 0.8,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            // Top Row: Role + Close Button
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Text(
-                    gig.role ?? gig.voicePart ?? 'Substitute Request',
-                    style: GoogleFonts.outfit(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                GestureDetector(
-                  onTap: () {
-                    final closedId = _selectedGig?.id ?? _selectedGig?.subRequestId;
-                    setState(() {
-                      _selectedGig = null;
-                      _isAutoSelected = false;
-                      _manuallyClosedTargetId = closedId;
-                    });
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.1),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.close, size: 16, color: Colors.white70),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Text(
-              gig.bandName ?? 'Unknown Band',
-              style: GoogleFonts.inter(
-                fontSize: 14,
-                color: AppTheme.primaryAccent,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 10),
-            
-            // Info Row (Date/Time, Location)
-            Row(
-              children: [
-                const Icon(Icons.calendar_today_rounded, size: 14, color: AppTheme.textSecondary),
-                const SizedBox(width: 6),
-                Text(
-                  '$formattedDate | ${gig.startTime ?? "18:00"} - ${gig.endTime ?? "21:00"}',
-                  style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
-                ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            Row(
-              children: [
-                const Icon(Icons.location_on_rounded, size: 14, color: AppTheme.textSecondary),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    gig.location ?? 'Stockholm, Sweden',
-                    style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                // Paid indicator
-                if (gig.isPaid)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: AppTheme.primaryAccent.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      'Paid',
-                      style: GoogleFonts.inter(
-                        fontSize: 10,
-                        color: AppTheme.primaryAccent,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            
-            // Buttons Row
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () {
-                      Navigator.pushNamed(context, '/gig-details', arguments: gig);
-                    },
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: AppTheme.primaryAccent),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
-                    child: Text(
-                      'View Details',
-                      style: GoogleFonts.inter(
-                        color: AppTheme.primaryAccent,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 13,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: isCreator
-                      ? Container(
-                          height: 42,
-                          decoration: BoxDecoration(
-                            color: AppTheme.primaryAccent.withOpacity(0.15),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.4)),
-                          ),
-                          child: Center(
-                            child: Text(
-                              'Your Request',
-                              style: GoogleFonts.inter(
-                                color: AppTheme.primaryAccent,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 13,
-                              ),
-                            ),
-                          ),
-                        )
-                      : hasApplied
-                      ? Container(
-                          height: 42,
-                          decoration: BoxDecoration(
-                            color: Colors.white10,
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: Colors.white12),
-                          ),
-                          child: Center(
-                            child: Text(
-                              'Applied',
-                              style: GoogleFonts.inter(
-                                color: Colors.white54,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 13,
-                              ),
-                            ),
-                          ),
-                        )
-                      : Container(
-                          decoration: BoxDecoration(
-                            gradient: AppTheme.primaryGradient,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: ElevatedButton(
-                            onPressed: () async {
-                              if (currentUserId == null) return;
-                              try {
-                                if ((gig.id ?? '').startsWith('mock_')) {
-                                  // Simulated apply for fallback mock gig
-                                  await Future.delayed(const Duration(milliseconds: 300));
-                                } else {
-                                  await appState.firebaseService.addResponseToSubRequestAsync(
-                                    gig.subRequestId ?? gig.id!,
-                                    currentUserId,
-                                  );
-                                }
-                                if (mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('Successfully applied for gig!'),
-                                      backgroundColor: AppTheme.success,
-                                    ),
-                                  );
-                                  setState(() {
-                                    if (gigReqId != null) _appliedGigIds.add(gigReqId);
-                                    gig.responses[currentUserId] = true;
-                                  });
-                                }
-                              } catch (e) {
-                                if (mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text('Failed to apply: $e'),
-                                      backgroundColor: AppTheme.danger,
-                                    ),
-                                  );
-                                }
-                              }
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.transparent,
-                              shadowColor: Colors.transparent,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                            ),
-                            child: Text(
-                              'Apply',
-                              style: GoogleFonts.inter(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 13,
-                              ),
-                            ),
-                          ),
-                        ),
-                ),
-              ],
-            )
-          ],
-        ),
-      ),
-    );
-  }
 }
+

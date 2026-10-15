@@ -93,7 +93,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
     final appState = Provider.of<AppState>(context);
 
     return GradientScaffold(
-      body: Center(
+      body: SafeArea(
+        child: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24.0),
           physics: const BouncingScrollPhysics(),
@@ -547,6 +548,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             ),
           ),
         ),
+      ),
       ),
     );
   }

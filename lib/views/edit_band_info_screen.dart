@@ -13,6 +13,7 @@ import '../data/genres_taxonomy.dart';
 import '../widgets/secondary_skills_badge.dart';
 import '../utils/band_section_utils.dart';
 import '../widgets/create_band_section_sheet.dart';
+import '../widgets/what_is_map_view_dialog.dart';
 import 'band_room_chat_screen.dart';
 
 class EditBandInfoScreen extends StatefulWidget {
@@ -1150,7 +1151,9 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
       appBar: const CustomTopBar(
         showBack: true,
       ),
-      body: SingleChildScrollView(
+      body: SafeArea(
+        top: false,
+        child: SingleChildScrollView(
         padding: const EdgeInsets.all(20.0),
         physics: const BouncingScrollPhysics(),
         child: Form(
@@ -1523,12 +1526,12 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
               ],
               const SizedBox(height: 20),
 
-              // Map view location (if other than Rehearsal Location)
+              // Map View Location (if other than Rehearsal Location)
               Text.rich(
                 TextSpan(
                   children: [
                     TextSpan(
-                      text: 'Map view location',
+                      text: 'Map View Location',
                       style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
                     ),
                     TextSpan(
@@ -1538,17 +1541,56 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
                   ],
                 ),
               ),
-              const SizedBox(height: 4),
-              Text(
-                'The band’s official location for "Map View" where sound snippets from rehearsals and concerts, recorded music, etc. may be uploaded. Example: 1. Same as "Rehearsal Location" 2. Bandleader’s Address a.o.',
-                style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary, height: 1.3),
+              const SizedBox(height: 8),
+
+              // Klickbar ruta: "What is Map View?"
+              Semantics(
+                button: true,
+                label: 'What is Map View? Click to read full guide.',
+                child: AnimatedTapDetector(
+                  onTap: () => showWhatIsMapViewDialog(context),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0F0C20).withOpacity(0.95),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.5), width: 1.2),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.help_outline_rounded, color: AppTheme.primaryAccent, size: 16),
+                            const SizedBox(width: 6),
+                            Text(
+                              'What is Map View?',
+                              style: GoogleFonts.outfit(
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                            const Spacer(),
+                            const Icon(Icons.arrow_forward_ios_rounded, color: AppTheme.primaryAccent, size: 12),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Explore Map View to discover audio snippets from gigs, rehearsals, recordings and gig promos, as well as requests for band members, subs and paid gigs.',
+                          style: GoogleFonts.inter(fontSize: 11.5, color: const Color(0xFFD4CEEB), height: 1.35),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               ),
               const SizedBox(height: 8),
               TextFormField(
                 controller: _mapViewLocationController,
                 style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
                 decoration: const InputDecoration(
-                  hintText: 'Enter address or city for Map View pin',
+                  hintText: 'Enter FULL address for Map View Pin (Street, City, Country)',
                 ),
               ),
               const SizedBox(height: 12),
@@ -1726,6 +1768,7 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
             ],
           ),
         ),
+      ),
       ),
     );
   }

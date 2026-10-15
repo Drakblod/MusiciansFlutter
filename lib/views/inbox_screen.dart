@@ -69,7 +69,9 @@ class _InboxScreenState extends State<InboxScreen> {
 
     return GradientScaffold(
       appBar: const CustomTopBar(showBack: true),
-      body: Column(
+      body: SafeArea(
+        top: false,
+        child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
@@ -634,6 +636,7 @@ class _InboxScreenState extends State<InboxScreen> {
             ),
           ),
         ],
+      ),
       ),
     );
   }

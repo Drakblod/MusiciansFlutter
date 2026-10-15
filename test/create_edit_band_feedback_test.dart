@@ -297,7 +297,7 @@ void main() {
 
       final rehearsalLocFinder = find.text('Rehearsal Location (if any)');
       final scheduleFinder = find.text('Regular Rehearsal Day & Time (if any)');
-      final mapViewFinder = find.text('Map view location (if other than Rehearsal Location)');
+      final mapViewFinder = find.text('Map View Location (if other than Rehearsal Location)');
 
       expect(rehearsalLocFinder, findsOneWidget);
       expect(scheduleFinder, findsOneWidget);
@@ -308,7 +308,7 @@ void main() {
       final mapViewY = tester.getTopLeft(mapViewFinder).dy;
 
       expect(rehearsalLocY, lessThan(scheduleY), reason: 'Rehearsal Location must be above Schedule');
-      expect(scheduleY, lessThan(mapViewY), reason: 'Schedule must be above Map view location');
+      expect(scheduleY, lessThan(mapViewY), reason: 'Schedule must be above Map View location');
     });
 
     testWidgets('8. Exact disclaimer heading and body are displayed in Create Band and Edit Band', (tester) async {

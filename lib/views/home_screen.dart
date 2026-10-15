@@ -1805,7 +1805,6 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
 
         // 2. Scrollable layout content safely underneath the toolbar
         SafeArea(
-          bottom: false,
           child: SingleChildScrollView(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

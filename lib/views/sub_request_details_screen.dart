@@ -56,7 +56,9 @@ class _SubRequestDetailsScreenState extends State<SubRequestDetailsScreen> {
 
     return GradientScaffold(
       appBar: const CustomTopBar(title: 'Gig Details', showBack: true),
-      body: SingleChildScrollView(
+      body: SafeArea(
+        top: false,
+        child: SingleChildScrollView(
         padding: const EdgeInsets.all(24.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -459,6 +461,7 @@ class _SubRequestDetailsScreenState extends State<SubRequestDetailsScreen> {
             const SizedBox(height: 40),
           ],
         ),
+      ),
       ),
     );
   }

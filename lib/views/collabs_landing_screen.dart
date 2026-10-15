@@ -416,7 +416,9 @@ class _CollabsLandingScreenState extends State<CollabsLandingScreen> {
         title: 'Collabs',
         showBack: true,
       ),
-      body: SingleChildScrollView(
+      body: SafeArea(
+        top: false,
+        child: SingleChildScrollView(
         padding: const EdgeInsets.all(20.0),
         physics: const BouncingScrollPhysics(),
         child: Column(
@@ -902,6 +904,7 @@ class _CollabsLandingScreenState extends State<CollabsLandingScreen> {
             const SizedBox(height: 30),
           ],
         ),
+      ),
       ),
     );
   }

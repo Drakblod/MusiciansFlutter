@@ -567,7 +567,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       appBar: const CustomTopBar(
         showBack: true,
       ),
-      body: SingleChildScrollView(
+      body: SafeArea(
+        top: false,
+        child: SingleChildScrollView(
         padding: const EdgeInsets.all(20.0),
         physics: const BouncingScrollPhysics(),
         child: Form(
@@ -1371,6 +1373,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             ],
           ),
         ),
+      ),
       ),
     );
   }

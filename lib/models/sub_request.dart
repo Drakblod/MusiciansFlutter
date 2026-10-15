@@ -443,4 +443,19 @@ class SubRequest {
       extraFields: extraFields ?? this.extraFields,
     );
   }
+
+  /// Optional audio preview snippet URL or local asset path
+  String? get audioSnippetUrl => (extraFields['audioSnippetUrl'] ??
+          extraFields['audioUrl'] ??
+          extraFields['audioAssetPath'])
+      ?.toString();
+
+  /// Title or descriptor for the attached audio snippet
+  String? get audioSnippetTitle =>
+      (extraFields['audioSnippetTitle'] ?? extraFields['audioTitle'])
+          ?.toString();
+
+  /// Whether an audio preview snippet is available
+  bool get hasAudioSnippet =>
+      audioSnippetUrl != null && audioSnippetUrl!.trim().isNotEmpty;
 }

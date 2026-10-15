@@ -126,7 +126,9 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
         showBack: !widget.isTab,
         title: widget.isTab ? 'My Profile' : '',
       ),
-      body: SingleChildScrollView(
+      body: SafeArea(
+        top: false,
+        child: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -953,6 +955,7 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
             ),
           ],
         ),
+      ),
       ),
     );
   }

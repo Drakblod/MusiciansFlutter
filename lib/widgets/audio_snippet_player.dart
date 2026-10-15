@@ -100,7 +100,7 @@ class _AudioSnippetPlayerState extends State<AudioSnippetPlayer> {
       });
 
       try {
-        await player.setSource(UrlSource(widget.audioUrl));
+        await player.setSource(_getSource(widget.audioUrl));
       } catch (e) {
         debugPrint("[AudioSnippetPlayer] Non-fatal notice: Preloading audio source deferred: $e");
       }
@@ -118,6 +118,14 @@ class _AudioSnippetPlayerState extends State<AudioSnippetPlayer> {
         });
       }
     }
+  }
+
+  Source _getSource(String path) {
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+      return UrlSource(path);
+    }
+    final cleanPath = path.startsWith('assets/') ? path.substring(7) : path;
+    return AssetSource(cleanPath);
   }
 
   @override
@@ -149,7 +157,7 @@ class _AudioSnippetPlayerState extends State<AudioSnippetPlayer> {
           _isLoading = true;
           _errorMessage = null;
         });
-        await _audioPlayer!.play(UrlSource(widget.audioUrl));
+        await _audioPlayer!.play(_getSource(widget.audioUrl));
         if (mounted) {
           setState(() {
             _isLoading = false;
