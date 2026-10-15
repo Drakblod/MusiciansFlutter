@@ -451,8 +451,8 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     _fetchGigs();
+    WidgetsBinding.instance.addObserver(this);
     if (FeatureFlags.enableMockLiveRehearsals) {
-      WidgetsBinding.instance.addObserver(this);
       _audioController = MockRehearsalAudioController();
       _audioController!.initialize();
     }
@@ -461,8 +461,23 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
       _liveKitAudioController = LiveKitAudioController();
       _liveBroadcastsSubscription = _liveBroadcastService!.streamActiveBroadcasts().listen((broadcasts) {
         if (mounted) {
+          final appState = Provider.of<AppState>(context, listen: false);
+          final myUserId = appState.currentUserId;
+          LiveBroadcast? myActiveBroadcast;
+          if (myUserId != null) {
+            myActiveBroadcast = broadcasts.cast<LiveBroadcast?>().firstWhere(
+              (b) => b != null && b.creatorUserId == myUserId && b.status == LiveBroadcastStatus.active,
+              orElse: () => null,
+            );
+          }
+
           setState(() {
             _activeRealBroadcasts = broadcasts;
+            if (myActiveBroadcast != null) {
+              _currentPublishingBroadcast = myActiveBroadcast;
+            } else if (_currentPublishingBroadcast != null) {
+              _currentPublishingBroadcast = null;
+            }
           });
         }
       });
@@ -471,19 +486,20 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (!FeatureFlags.enableMockLiveRehearsals || _audioController == null) return;
-    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
-      _audioController!.pauseAudio();
-    } else if (state == AppLifecycleState.resumed) {
-      _audioController!.resumeAudio();
+    if (FeatureFlags.enableMockLiveRehearsals && _audioController != null) {
+      if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+        _audioController!.pauseAudio();
+      } else if (state == AppLifecycleState.resumed) {
+        _audioController!.resumeAudio();
+      }
     }
   }
 
   @override
   void dispose() {
     _instrumentSearchController.dispose();
+    WidgetsBinding.instance.removeObserver(this);
     if (FeatureFlags.enableMockLiveRehearsals) {
-      WidgetsBinding.instance.removeObserver(this);
       _audioController?.dispose();
     }
     if (FeatureFlags.enableRealLiveBroadcasts) {
@@ -1120,6 +1136,10 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
   }
 
   void _openStartLiveBroadcastDialog() {
+    if (_currentPublishingBroadcast != null) {
+      _confirmStopBroadcast(_currentPublishingBroadcast!.id);
+      return;
+    }
     StartLiveBroadcastDialog.show(
       context,
       onStartBroadcast: ({
@@ -1167,9 +1187,9 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
     );
   }
 
-  Future<void> _stopPublishingBroadcast() async {
-    if (_currentPublishingBroadcast == null) return;
-    final bId = _currentPublishingBroadcast!.id;
+  Future<void> _stopPublishingBroadcast([String? broadcastId]) async {
+    final bId = broadcastId ?? _currentPublishingBroadcast?.id;
+    if (bId == null) return;
     try {
       await _liveBroadcastService?.stopLiveBroadcast(broadcastId: bId);
     } catch (e) {
@@ -1186,8 +1206,172 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
     }
   }
 
+  Future<void> _confirmStopBroadcast([String? broadcastId]) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppTheme.cardDark,
+        title: Text(
+          'End Live Broadcast?',
+          style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
+        content: Text(
+          'Are you sure you want to stop this live broadcast? All active listeners will be disconnected.',
+          style: GoogleFonts.inter(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Cancel', style: GoogleFonts.inter(color: Colors.white60)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.dangerRed),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text('End Broadcast', style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await _stopPublishingBroadcast(broadcastId);
+    }
+  }
+
+  void _showBroadcasterManageSheet(LiveBroadcast broadcast) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(ctx).viewInsets.bottom,
+        ),
+        child: Container(
+          decoration: BoxDecoration(
+            color: AppTheme.surfaceDark,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            border: Border(
+              top: BorderSide(color: AppTheme.dangerRed, width: 2),
+            ),
+          ),
+          child: SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.white24,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: AppTheme.dangerRed,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.circle, color: Colors.white, size: 8),
+                            const SizedBox(width: 4),
+                            Text(
+                              'YOUR LIVE STREAM',
+                              style: GoogleFonts.outfit(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Spacer(),
+                      IconButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        icon: const Icon(Icons.close_rounded, color: Colors.white60),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    broadcast.title,
+                    style: GoogleFonts.outfit(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    broadcast.bandName,
+                    style: GoogleFonts.inter(fontSize: 14, color: AppTheme.primaryAccent, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      const Icon(Icons.headset_rounded, size: 16, color: Colors.white54),
+                      const SizedBox(width: 6),
+                      Text(
+                        '${broadcast.listenerCount} listeners right now',
+                        style: GoogleFonts.inter(fontSize: 13, color: Colors.white70),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: () async {
+                        Navigator.pop(ctx);
+                        await _confirmStopBroadcast(broadcast.id);
+                      },
+                      icon: const Icon(Icons.stop_circle_outlined, color: Colors.white),
+                      label: Text(
+                        'End Live Stream',
+                        style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.dangerRed,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   void _showLiveBroadcastDetails(LiveBroadcast broadcast) {
     if (_liveBroadcastService == null || _liveKitAudioController == null) return;
+    final appState = Provider.of<AppState>(context, listen: false);
+    final isMyBroadcast = appState.currentUserId != null &&
+        (broadcast.creatorUserId == appState.currentUserId ||
+            _currentPublishingBroadcast?.id == broadcast.id);
+
+    if (isMyBroadcast) {
+      _showBroadcasterManageSheet(broadcast);
+      return;
+    }
+
     final isListening = _currentlyListeningBroadcast?.id == broadcast.id;
 
     LiveListenerSheet.show(
@@ -1666,8 +1850,43 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                                     ),
                                     if (FeatureFlags.enableRealLiveBroadcasts) ...[
                                       const SizedBox(width: 8),
-                                      GestureDetector(
-                                        onTap: _openStartLiveBroadcastDialog,
+                                      if (_currentPublishingBroadcast != null)
+                                        GestureDetector(
+                                          onTap: () => _confirmStopBroadcast(_currentPublishingBroadcast!.id),
+                                          child: Container(
+                                            height: 34,
+                                            padding: const EdgeInsets.symmetric(horizontal: 10),
+                                            decoration: BoxDecoration(
+                                              color: AppTheme.dangerRed,
+                                              borderRadius: BorderRadius.circular(17),
+                                              boxShadow: [
+                                                BoxShadow(
+                                                  color: AppTheme.dangerRed.withOpacity(0.35),
+                                                  blurRadius: 6,
+                                                  offset: const Offset(0, 2),
+                                                ),
+                                              ],
+                                            ),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                const Icon(Icons.stop_circle_rounded, color: Colors.white, size: 14),
+                                                const SizedBox(width: 4),
+                                                Text(
+                                                  'End Live',
+                                                  style: GoogleFonts.inter(
+                                                    fontSize: 11,
+                                                    fontWeight: FontWeight.bold,
+                                                    color: Colors.white,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        )
+                                      else
+                                        GestureDetector(
+                                          onTap: _openStartLiveBroadcastDialog,
                                         child: Container(
                                           height: 34,
                                           padding: const EdgeInsets.symmetric(horizontal: 10),
