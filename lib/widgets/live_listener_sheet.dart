@@ -32,12 +32,17 @@ class LiveListenerSheet extends StatelessWidget {
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (ctx) => LiveListenerSheet(
-        broadcast: broadcast,
-        audioController: audioController,
-        isCurrentlyListening: isCurrentlyListening,
-        onStartListening: onStartListening,
-        onStopListening: onStopListening,
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(ctx).viewInsets.bottom,
+        ),
+        child: LiveListenerSheet(
+          broadcast: broadcast,
+          audioController: audioController,
+          isCurrentlyListening: isCurrentlyListening,
+          onStartListening: onStartListening,
+          onStopListening: onStopListening,
+        ),
       ),
     );
   }
@@ -45,7 +50,6 @@ class LiveListenerSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
       decoration: BoxDecoration(
         color: AppTheme.surfaceDark,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
@@ -53,10 +57,14 @@ class LiveListenerSheet extends StatelessWidget {
           top: BorderSide(color: AppTheme.dangerRed, width: 2),
         ),
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
           // Drag handle
           Center(
             child: Container(
@@ -261,6 +269,8 @@ class LiveListenerSheet extends StatelessWidget {
           ],
         ],
       ),
-    );
+    ),
+  ),
+);
   }
 }

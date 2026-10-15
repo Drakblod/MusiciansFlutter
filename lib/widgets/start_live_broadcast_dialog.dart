@@ -33,8 +33,13 @@ class StartLiveBroadcastDialog extends StatefulWidget {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => StartLiveBroadcastDialog(
-        onStartBroadcast: onStartBroadcast,
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(ctx).viewInsets.bottom,
+        ),
+        child: StartLiveBroadcastDialog(
+          onStartBroadcast: onStartBroadcast,
+        ),
       ),
     );
   }
@@ -155,12 +160,6 @@ class _StartLiveBroadcastDialogState extends State<StartLiveBroadcastDialog> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
-        top: 20,
-        left: 20,
-        right: 20,
-      ),
       decoration: BoxDecoration(
         color: AppTheme.surfaceDark,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
@@ -168,11 +167,14 @@ class _StartLiveBroadcastDialogState extends State<StartLiveBroadcastDialog> {
           top: BorderSide(color: AppTheme.dangerRed, width: 2),
         ),
       ),
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+      child: SafeArea(
+        top: false,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
             // Drag handle
             Center(
               child: Container(
