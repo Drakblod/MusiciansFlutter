@@ -74,11 +74,18 @@ class LiveBroadcastService implements ILiveBroadcastService {
   final FirebaseFunctions _functions;
   final FirebaseDatabase _database;
 
+  static const String databaseUrl =
+      "https://musiciansapp-35f70-default-rtdb.europe-west1.firebasedatabase.app";
+
   LiveBroadcastService({
     FirebaseFunctions? functions,
     FirebaseDatabase? database,
   })  : _functions = functions ?? FirebaseFunctions.instanceFor(region: 'europe-west1'),
-        _database = database ?? FirebaseDatabase.instance;
+        _database = database ??
+            FirebaseDatabase.instanceFor(
+              app: FirebaseDatabase.instance.app,
+              databaseURL: databaseUrl,
+            );
 
   @override
   Future<LiveBroadcastSessionToken> startLiveBroadcast({
