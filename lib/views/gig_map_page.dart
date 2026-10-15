@@ -1614,138 +1614,169 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                   // Row 1: Actions Header (Upload Event on left, Refresh and Guide on right)
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        // Upload Event & optional Go Live Button
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            GestureDetector(
-                              onTap: _showUploadEventSheet,
-                              child: Container(
-                                height: 34,
-                                padding: const EdgeInsets.symmetric(horizontal: 12),
-                                decoration: BoxDecoration(
-                                  gradient: AppTheme.primaryGradient,
-                                  borderRadius: BorderRadius.circular(17),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: AppTheme.primaryAccent.withOpacity(0.35),
-                                      blurRadius: 6,
-                                      offset: const Offset(0, 2),
-                                    ),
-                                  ],
-                                ),
-                                child: Row(
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final bool isVeryCompact = constraints.maxWidth < 360;
+                        final bool isCompact = constraints.maxWidth < 430;
+
+                        return SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          physics: const BouncingScrollPhysics(),
+                          child: ConstrainedBox(
+                            constraints: BoxConstraints(minWidth: constraints.maxWidth),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                // Upload Event & optional Go Live Button
+                                Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    const Icon(Icons.add_location_alt_rounded, color: Colors.white, size: 14),
-                                    const SizedBox(width: 5),
-                                    Text(
-                                      'Upload Event',
-                                      style: GoogleFonts.inter(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.white,
+                                    GestureDetector(
+                                      onTap: _showUploadEventSheet,
+                                      child: Container(
+                                        height: 34,
+                                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                                        decoration: BoxDecoration(
+                                          gradient: AppTheme.primaryGradient,
+                                          borderRadius: BorderRadius.circular(17),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: AppTheme.primaryAccent.withOpacity(0.35),
+                                              blurRadius: 6,
+                                              offset: const Offset(0, 2),
+                                            ),
+                                          ],
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            const Icon(Icons.add_location_alt_rounded, color: Colors.white, size: 14),
+                                            const SizedBox(width: 5),
+                                            Text(
+                                              'Upload Event',
+                                              style: GoogleFonts.inter(
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.bold,
+                                                color: Colors.white,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
                                       ),
                                     ),
+                                    if (FeatureFlags.enableRealLiveBroadcasts) ...[
+                                      const SizedBox(width: 8),
+                                      GestureDetector(
+                                        onTap: _openStartLiveBroadcastDialog,
+                                        child: Container(
+                                          height: 34,
+                                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                                          decoration: BoxDecoration(
+                                            color: AppTheme.dangerRed,
+                                            borderRadius: BorderRadius.circular(17),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: AppTheme.dangerRed.withOpacity(0.35),
+                                                blurRadius: 6,
+                                                offset: const Offset(0, 2),
+                                              ),
+                                            ],
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              const Icon(Icons.podcasts_rounded, color: Colors.white, size: 14),
+                                              const SizedBox(width: 4),
+                                              Text(
+                                                'Go Live',
+                                                style: GoogleFonts.inter(
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: Colors.white,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ],
                                 ),
-                              ),
-                            ),
-                            if (FeatureFlags.enableRealLiveBroadcasts) ...[
-                              const SizedBox(width: 8),
-                              GestureDetector(
-                                onTap: _openStartLiveBroadcastDialog,
-                                child: Container(
-                                  height: 34,
-                                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                                  decoration: BoxDecoration(
-                                    color: AppTheme.dangerRed,
-                                    borderRadius: BorderRadius.circular(17),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: AppTheme.dangerRed.withOpacity(0.35),
-                                        blurRadius: 6,
-                                        offset: const Offset(0, 2),
-                                      ),
-                                    ],
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      const Icon(Icons.podcasts_rounded, color: Colors.white, size: 14),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        'Go Live',
-                                        style: GoogleFonts.inter(
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.white,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
 
-                        // Action Buttons: Refresh & Guide Toggle
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            // Refresh Button
-                            Container(
-                              width: 34,
-                              height: 34,
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF0F0C20).withOpacity(0.92),
-                                shape: BoxShape.circle,
-                                border: Border.all(color: const Color(0xFF2E2A4E), width: 1.2),
-                              ),
-                              child: IconButton(
-                                padding: EdgeInsets.zero,
-                                icon: const Icon(Icons.refresh_rounded, color: Colors.white, size: 18),
-                                tooltip: 'Refresh Map',
-                                onPressed: _fetchGigs,
-                              ),
-                            ),
-                            if (!_showGuideBanner) ...[
-                              const SizedBox(width: 8),
-                              GestureDetector(
-                                onTap: () => setState(() => _showGuideBanner = true),
-                                child: Container(
-                                  height: 34,
-                                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF0F0C20).withOpacity(0.92),
-                                    borderRadius: BorderRadius.circular(17),
-                                    border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.5), width: 1.2),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      const Icon(Icons.help_outline_rounded, color: AppTheme.primaryAccent, size: 14),
-                                      const SizedBox(width: 5),
-                                      Text(
-                                        'What is Map View?',
-                                        style: GoogleFonts.inter(
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.bold,
-                                          color: AppTheme.primaryAccent,
-                                        ),
+                                // Action Buttons: Refresh & Guide Toggle
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    // Refresh Button
+                                    Container(
+                                      width: 34,
+                                      height: 34,
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF0F0C20).withOpacity(0.92),
+                                        shape: BoxShape.circle,
+                                        border: Border.all(color: const Color(0xFF2E2A4E), width: 1.2),
                                       ),
+                                      child: IconButton(
+                                        padding: EdgeInsets.zero,
+                                        icon: const Icon(Icons.refresh_rounded, color: Colors.white, size: 18),
+                                        tooltip: 'Refresh Map',
+                                        onPressed: _fetchGigs,
+                                      ),
+                                    ),
+                                    if (!_showGuideBanner) ...[
+                                      const SizedBox(width: 8),
+                                      if (isVeryCompact)
+                                        Container(
+                                          width: 34,
+                                          height: 34,
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFF0F0C20).withOpacity(0.92),
+                                            shape: BoxShape.circle,
+                                            border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.5), width: 1.2),
+                                          ),
+                                          child: IconButton(
+                                            padding: EdgeInsets.zero,
+                                            icon: const Icon(Icons.help_outline_rounded, color: AppTheme.primaryAccent, size: 16),
+                                            tooltip: 'What is Map View?',
+                                            onPressed: () => setState(() => _showGuideBanner = true),
+                                          ),
+                                        )
+                                      else
+                                        GestureDetector(
+                                          onTap: () => setState(() => _showGuideBanner = true),
+                                          child: Container(
+                                            height: 34,
+                                            padding: const EdgeInsets.symmetric(horizontal: 10),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFF0F0C20).withOpacity(0.92),
+                                              borderRadius: BorderRadius.circular(17),
+                                              border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.5), width: 1.2),
+                                            ),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                const Icon(Icons.help_outline_rounded, color: AppTheme.primaryAccent, size: 14),
+                                                const SizedBox(width: 5),
+                                                Text(
+                                                  isCompact ? 'Guide' : 'What is Map View?',
+                                                  style: GoogleFonts.inter(
+                                                    fontSize: 11,
+                                                    fontWeight: FontWeight.bold,
+                                                    color: AppTheme.primaryAccent,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
                                     ],
-                                  ),
+                                  ],
                                 ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ],
+                              ],
+                            ),
+                          ),
+                        );
+                      },
                     ),
                   ),
 
