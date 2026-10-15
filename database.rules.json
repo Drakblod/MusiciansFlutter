@@ -333,6 +333,13 @@
           }
         }
       }
+    },
+    "LiveBroadcasts": {
+      ".read": "auth != null",
+      ".indexOn": ["bandId", "status", "startedAt"],
+      "$broadcastId": {
+        ".write": false
+      }
     }
   }
 }

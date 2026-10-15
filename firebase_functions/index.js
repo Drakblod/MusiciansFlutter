@@ -3860,3 +3860,15 @@ exports.deleteBand = onCall({ region: 'europe-west1' }, async (request) => {
     throw new HttpsError('internal', `Failed to delete band: ${err.message}`);
   }
 });
+
+// Live Band Audio Broadcasting (SEND-LIVE-01)
+const {
+  startLiveBroadcast,
+  joinLiveBroadcast,
+  stopLiveBroadcast,
+} = require('./live_broadcasts');
+
+exports.startLiveBroadcast = startLiveBroadcast;
+exports.joinLiveBroadcast = joinLiveBroadcast;
+exports.stopLiveBroadcast = stopLiveBroadcast;
+
