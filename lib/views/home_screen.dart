@@ -708,7 +708,7 @@ class HomeScreen extends StatelessWidget {
                   child: Padding(
                     padding: const EdgeInsets.only(bottom: 10, right: 10),
                     child: Text(
-                      '2.74.1',
+                      '2.75',
                       style: GoogleFonts.inter(
                         color: AppTheme.textSecondary.withOpacity(0.5),
                         fontSize: 12,
@@ -1961,7 +1961,7 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
                                 }
                               },
                               child: Text(
-                                '2.74.1',
+                                '2.75',
                                 style: GoogleFonts.inter(
                                   color: AppTheme.textSecondary.withOpacity(0.5),
                                   fontSize: 12,
