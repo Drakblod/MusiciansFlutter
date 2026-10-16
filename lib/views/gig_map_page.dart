@@ -1,4 +1,7 @@
 import 'dart:async';
+import 'dart:math' as math;
+import 'dart:ui' as ui;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:provider/provider.dart';
@@ -173,6 +176,62 @@ class MapEventTypeHelper {
 
     // 3d. Default: Gig / Concert / Live Performance (Orange)
     return MapEventType.gigConcert;
+  }
+
+  static Future<BitmapDescriptor> createWebPinBitmap(Color color) async {
+    final pictureRecorder = ui.PictureRecorder();
+    final canvas = Canvas(pictureRecorder);
+    const double width = 52;
+    const double height = 76;
+
+    final shadowPaint = Paint()
+      ..color = Colors.black.withValues(alpha: 0.3)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+    canvas.drawOval(
+      Rect.fromCenter(center: const Offset(width / 2, height - 3), width: 14, height: 6),
+      shadowPaint,
+    );
+
+    final path = Path();
+    const double radius = 19.0;
+    const center = Offset(width / 2, radius + 3);
+
+    path.arcTo(
+      Rect.fromCircle(center: center, radius: radius),
+      math.pi * 0.75,
+      math.pi * 1.5,
+      false,
+    );
+    path.lineTo(width / 2, height - 6);
+    path.close();
+
+    final bodyPaint = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
+    canvas.drawPath(path, bodyPaint);
+
+    final borderPaint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.5;
+    canvas.drawPath(path, borderPaint);
+
+    final innerDiscPaint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(center, 9, innerDiscPaint);
+
+    final centerDotPaint = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(center, 5.0, centerDotPaint);
+
+    final picture = pictureRecorder.endRecording();
+    final image = await picture.toImage(width.toInt(), height.toInt());
+    final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+    final bytes = byteData!.buffer.asUint8List();
+
+    return BitmapDescriptor.bytes(bytes, width: 26, height: 38);
   }
 
   static BitmapDescriptor getMarkerIcon(MapEventType type) {
@@ -449,6 +508,26 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
 ]
 ''';
 
+  static final Map<MapEventType, BitmapDescriptor> _webPinCache = {};
+
+  Future<void> _initWebPins() async {
+    if (!kIsWeb) return;
+    for (final type in MapEventType.values) {
+      if (!_webPinCache.containsKey(type)) {
+        try {
+          final color = MapEventTypeHelper.getColor(type);
+          final descriptor = await MapEventTypeHelper.createWebPinBitmap(color);
+          _webPinCache[type] = descriptor;
+        } catch (e) {
+          debugPrint('Error generating web pin for $type: $e');
+        }
+      }
+    }
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
   String _monthShort(int month) {
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     if (month >= 1 && month <= 12) return months[month - 1];
@@ -514,6 +593,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    _initWebPins();
     _fetchGigs();
     WidgetsBinding.instance.addObserver(this);
     if (FeatureFlags.enableMockLiveRehearsals) {
@@ -1060,6 +1140,9 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
 
   BitmapDescriptor _getMarkerColor(SubRequest gig) {
     final eventType = MapEventTypeHelper.getEventType(gig);
+    if (kIsWeb && _webPinCache.containsKey(eventType)) {
+      return _webPinCache[eventType]!;
+    }
     return MapEventTypeHelper.getMarkerIcon(eventType);
   }
 
@@ -1130,13 +1213,20 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
     final gigMarkers = filteredGigs.map((gig) {
       final eventType = MapEventTypeHelper.getEventType(gig);
       final standardizedType = MapEventTypeHelper.getShortLabel(eventType);
+      final genre = gig.extraFields['genre']?.toString() ??
+          gig.extraFields['Genre']?.toString() ??
+          gig.style ??
+          '';
+      final title = genre.isNotEmpty
+          ? '${gig.bandName ?? "Band"} - $genre'
+          : (gig.bandName ?? 'Band');
       return Marker(
         markerId: MarkerId(gig.id ?? gig.subRequestId ?? UniqueKey().toString()),
         position: LatLng(gig.latitude!, gig.longitude!),
         icon: _getMarkerColor(gig),
         infoWindow: InfoWindow(
-          title: '${gig.bandName ?? "Band"} · $standardizedType',
-          snippet: gig.location ?? '',
+          title: title,
+          snippet: '$standardizedType · ${gig.location ?? ""}',
         ),
         onTap: () {
           setState(() {
@@ -1489,7 +1579,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
     final roleController = TextEditingController();
     final locationController = TextEditingController(text: 'Stockholm, Sweden');
     final descriptionController = TextEditingController();
-    String selectedAudio = 'audio/bandrep1.mp3';
+    final audioTrackController = TextEditingController();
 
     showModalBottomSheet(
       context: context,
@@ -1711,39 +1801,20 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                   ),
                   const SizedBox(height: 10),
 
-                  // Audio Snippet Selector
-                  Text('Audio Snippet Demo Track', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white)),
+                  // Audio Snippet / Audio Track (Fritext)
+                  Text('Audio Snippet', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white)),
                   const SizedBox(height: 6),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF1A1633),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: const Color(0xFF2E2A4E)),
-                    ),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<String>(
-                        value: selectedAudio,
-                        dropdownColor: const Color(0xFF1A1633),
-                        isExpanded: true,
-                        items: const [
-                          DropdownMenuItem(
-                            value: 'audio/bandrep1.mp3',
-                            child: Text('Demo: High-energy Rock Band Stem', style: TextStyle(color: Colors.white, fontSize: 12)),
-                          ),
-                          DropdownMenuItem(
-                            value: 'audio/bandrep2.mp3',
-                            child: Text('Demo: Chamber / Acoustic Rehearsal', style: TextStyle(color: Colors.white, fontSize: 12)),
-                          ),
-                          DropdownMenuItem(
-                            value: 'audio/bandrep3.mp3',
-                            child: Text('Demo: Horns & Funk Live Session', style: TextStyle(color: Colors.white, fontSize: 12)),
-                          ),
-                        ],
-                        onChanged: (val) {
-                          if (val != null) setSheetState(() => selectedAudio = val);
-                        },
-                      ),
+                  TextField(
+                    controller: audioTrackController,
+                    style: GoogleFonts.inter(fontSize: 13, color: Colors.white),
+                    decoration: InputDecoration(
+                      labelText: 'Audio Snippet / Audio Track',
+                      hintText: 'e.g. audio/bandrep1.mp3 or https://...',
+                      hintStyle: GoogleFonts.inter(fontSize: 12, color: Colors.white38),
+                      labelStyle: GoogleFonts.inter(fontSize: 12, color: Colors.white60),
+                      filled: true,
+                      fillColor: const Color(0xFF1A1633),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                     ),
                   ),
                   const SizedBox(height: 18),
@@ -1770,6 +1841,8 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                         if (selectedType == 'Substitute') mappedType = 'subs';
                         if (selectedType == 'Paid Gigs') mappedType = 'paid';
 
+                        final audioUrl = audioTrackController.text.trim();
+
                         final newGig = SubRequest(
                           id: newId,
                           subRequestId: newId,
@@ -1788,8 +1861,10 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                           payAmount: 2000,
                           responses: {},
                           extraFields: {
-                            'audioSnippetUrl': selectedAudio,
-                            'audioSnippetTitle': '$band Preview Snippet',
+                            if (audioUrl.isNotEmpty) ...{
+                              'audioSnippetUrl': audioUrl,
+                              'audioSnippetTitle': '$band Audio Track',
+                            },
                             'eventType': mappedType,
                             'genre': selectedGenres.isNotEmpty ? selectedGenres.first : 'Big Band Contemporary',
                             'subCategory': selectedCategory,
@@ -2107,7 +2182,6 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       child: Row(
                         children: [
-                          _buildSubFilterChip('All Music', MapEventType.gigConcert),
                           _buildSubFilterChip('Gig / Concert', MapEventType.gigConcert),
                           _buildSubFilterChip('Rehearsal', MapEventType.rehearsal),
                           _buildSubFilterChip('Jam Session', MapEventType.jamSession),
@@ -2122,7 +2196,6 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       child: Row(
                         children: [
-                          _buildSubFilterChip('All Sub/Member', MapEventType.newMember),
                           _buildSubFilterChip('New Member', MapEventType.newMember),
                           _buildSubFilterChip('Substitute', MapEventType.subs),
                           _buildSubFilterChip('Paid Gigs', MapEventType.paid),
@@ -2480,7 +2553,10 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
     final badgeColor = MapEventTypeHelper.getColor(eventType);
     final badgeLabel = MapEventTypeHelper.getShortLabel(eventType);
     final badgeIcon = MapEventTypeHelper.getIcon(eventType);
-    final genre = gig.extraFields['genre']?.toString() ?? '';
+    final genre = gig.extraFields['genre']?.toString() ??
+        gig.extraFields['Genre']?.toString() ??
+        gig.style ??
+        '';
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -2979,9 +3055,8 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
   }
 
   Widget _buildSubFilterChip(String label, MapEventType sampleType) {
-    final isAll = label == 'All Music' || label == 'All Sub/Member';
-    final isSelected = (_selectedSubCategory == null && isAll) || _selectedSubCategory == label;
-    final color = isAll ? AppTheme.primaryAccent : MapEventTypeHelper.getColor(sampleType);
+    final isSelected = _selectedSubCategory == label;
+    final color = MapEventTypeHelper.getColor(sampleType);
     final count = _getFilterCount(label, null);
 
     return Padding(
@@ -2989,7 +3064,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
       child: GestureDetector(
         onTap: () {
           setState(() {
-            _selectedSubCategory = isAll ? null : label;
+            _selectedSubCategory = isSelected ? null : label;
             _selectedGig = null;
             _selectedRehearsal = null;
             _isAutoSelected = false;
@@ -3013,17 +3088,15 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (!isAll) ...[
-                Container(
-                  width: 8,
-                  height: 8,
-                  decoration: BoxDecoration(
-                    color: color,
-                    shape: BoxShape.circle,
-                  ),
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  color: color,
+                  shape: BoxShape.circle,
                 ),
-                const SizedBox(width: 5),
-              ],
+              ),
+              const SizedBox(width: 5),
               Text(
                 label,
                 style: GoogleFonts.inter(
