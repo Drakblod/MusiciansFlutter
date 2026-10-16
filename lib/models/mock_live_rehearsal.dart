@@ -8,6 +8,9 @@ class MockLiveRehearsal {
   final LatLng position;
   final String audioAssetPath;
   final String genre;
+  final String? location;
+  final String? dateTime;
+  final String? description;
 
   const MockLiveRehearsal({
     required this.id,
@@ -16,5 +19,8 @@ class MockLiveRehearsal {
     required this.position,
     required this.audioAssetPath,
     this.genre = 'Rock / Indie',
+    this.location,
+    this.dateTime,
+    this.description,
   });
 }

@@ -10,6 +10,9 @@ const List<MockLiveRehearsal> mockLiveRehearsals = [
     position: LatLng(59.3293, 18.0686),
     audioAssetPath: 'audio/bandrep1.mp3',
     genre: 'Indie Rock / Synth',
+    location: 'Södermalm Rehearsal Studio, Stockholm',
+    dateTime: 'Thursday, Oct 23, 2026 - 6.00 PM 9.00 PM',
+    description: 'Pre-production band rehearsal broadcasting live. Testing new track arrangements for the winter tour.',
   ),
   MockLiveRehearsal(
     id: 'live_rehearsal_umea',
@@ -18,6 +21,9 @@ const List<MockLiveRehearsal> mockLiveRehearsals = [
     position: LatLng(63.8258, 20.2630),
     audioAssetPath: 'audio/bandrep2.mp3',
     genre: 'Alternative / Post-Rock',
+    location: 'Umeå Musikstudio, Västerslätt, Umeå',
+    dateTime: 'Wednesday, Oct 22, 2026 - 7.00 PM 10.00 PM',
+    description: 'Weekly full-band rehearsal broadcasting live from Umeå. Preparing songs for upcoming festival gigs.',
   ),
   MockLiveRehearsal(
     id: 'live_rehearsal_gothenburg',
@@ -26,6 +32,9 @@ const List<MockLiveRehearsal> mockLiveRehearsals = [
     position: LatLng(57.7089, 11.9746),
     audioAssetPath: 'audio/bandrep3.mp3',
     genre: 'Funk / Fusion Jam',
+    location: 'Musikens Hus, Karl Johansgatan 16, Göteborg',
+    dateTime: 'Friday, Oct 24, 2026 - 6.00 PM 9.00 PM',
+    description: 'Live funk/fusion rehearsal session broadcasting direct from Majorna, Göteborg.',
   ),
   MockLiveRehearsal(
     id: 'live_rehearsal_la',
@@ -34,5 +43,8 @@ const List<MockLiveRehearsal> mockLiveRehearsals = [
     position: LatLng(34.0522, -118.2437),
     audioAssetPath: 'audio/bandrep3.mp3',
     genre: 'Hard Rock',
+    location: 'Sunset Sound, Hollywood, Los Angeles',
+    dateTime: 'Saturday, Oct 25, 2026 - 8.00 PM 11.00 PM',
+    description: 'Vintage rock rehearsal archives broadcasting continuous audio stream.',
   ),
 ];

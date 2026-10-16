@@ -15,6 +15,7 @@ import '../config/feature_flags.dart';
 import '../models/mock_live_rehearsal.dart';
 import '../data/mock_live_rehearsals.dart';
 import '../data/genres_taxonomy.dart';
+import '../data/skills_taxonomy.dart';
 import '../services/mock_rehearsal_audio_controller.dart';
 import '../widgets/map_crosshair.dart';
 import '../widgets/custom_top_bar.dart';
@@ -29,29 +30,6 @@ import '../services/livekit_audio_controller.dart';
 import '../widgets/start_live_broadcast_dialog.dart';
 import '../widgets/live_broadcaster_bar.dart';
 import '../widgets/live_listener_sheet.dart';
-
-class MapCityPreset {
-  final String name;
-  final LatLng coordinates;
-  final double zoom;
-
-  const MapCityPreset({
-    required this.name,
-    required this.coordinates,
-    this.zoom = 12.0,
-  });
-}
-
-const List<MapCityPreset> kMapCityPresets = [
-  MapCityPreset(name: 'Stockholm', coordinates: LatLng(59.3293, 18.0686), zoom: 12.0),
-  MapCityPreset(name: 'Göteborg', coordinates: LatLng(57.7089, 11.9746), zoom: 12.0),
-  MapCityPreset(name: 'Malmö', coordinates: LatLng(55.6050, 13.0038), zoom: 12.0),
-  MapCityPreset(name: 'Uppsala', coordinates: LatLng(59.8586, 17.6389), zoom: 12.5),
-  MapCityPreset(name: 'Örebro', coordinates: LatLng(59.2753, 15.2134), zoom: 12.5),
-  MapCityPreset(name: 'Linköping', coordinates: LatLng(58.4108, 15.6214), zoom: 12.5),
-  MapCityPreset(name: 'Umeå', coordinates: LatLng(63.8258, 20.2630), zoom: 12.0),
-  MapCityPreset(name: 'All Sweden', coordinates: LatLng(59.8, 16.5), zoom: 5.5),
-];
 
 enum MapCategory {
   music,
@@ -359,15 +337,8 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
   final TextEditingController _instrumentSearchController = TextEditingController();
   bool _showInstrumentSearch = false;
 
-  String get _selectedFilter => _selectedMainCategory;
-  set _selectedFilter(String val) {
-    _selectedMainCategory = val;
-  }
-
-  String? _selectedCityName;
   SubRequest? _selectedGig;
   bool _showGuideBanner = true;
-  bool _showLegend = false;
 
   // Prototype Mock Live Rehearsal Audio State
   MockRehearsalAudioController? _audioController;
@@ -743,6 +714,56 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
             },
           ),
           SubRequest(
+            id: 'mock_3b',
+            subRequestId: 'mock_3b',
+            voicePart: 'Sommarkonsert',
+            role: 'Sommarkonsert',
+            requestType: 'Gig Promo',
+            rehearsalDayOfWeek: 'Friday',
+            bandName: 'Alex Bästa',
+            location: 'Ankdammsgatan 33, Solna',
+            date: '2026-10-24T18:00:00',
+            startTime: '18:00:00',
+            endTime: '21:00:00',
+            description: 'Promo för gig på Fasching Tis 26/10',
+            isPaid: false,
+            latitude: 59.3592,
+            longitude: 17.9940,
+            responses: {},
+            extraFields: {
+              'audioSnippetUrl': 'audio/bandrep2.mp3',
+              'audioSnippetTitle': 'Sommarkonsert Live Demo',
+              'eventType': 'gigPromo',
+              'genre': 'Soul',
+            },
+          ),
+          SubRequest(
+            id: 'mock_3c',
+            subRequestId: 'mock_3c',
+            voicePart: 'Guitar',
+            role: 'Looking for Guitar Sub',
+            requestType: 'Paid Gigs',
+            bandName: 'Stora Stygga',
+            location: 'Agavägen 29, Lidingö',
+            date: '2026-10-16T00:00:00',
+            createdAt: DateTime.parse('2026-10-16T10:00:00').millisecondsSinceEpoch,
+            startTime: '19:00:00',
+            endTime: '22:00:00',
+            description: 'Gig att Fasching ”Tribute to Stevie W.”',
+            isPaid: true,
+            payAmount: 2500,
+            currency: 'SEK',
+            latitude: 59.3620,
+            longitude: 18.1520,
+            responses: {},
+            extraFields: {
+              'audioSnippetUrl': 'audio/bandrep1.mp3',
+              'audioSnippetTitle': 'Stora Stygga Stevie W Tribute Demo',
+              'eventType': 'paid',
+              'genre': 'Big Band Contemporary',
+            },
+          ),
+          SubRequest(
             id: 'mock_4',
             subRequestId: 'mock_4',
             voicePart: 'Brass / Strings',
@@ -977,30 +998,6 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
     }
   }
 
-  void _jumpToCity(MapCityPreset city) {
-    _mapController?.animateCamera(
-      CameraUpdate.newCameraPosition(
-        CameraPosition(
-          target: city.coordinates,
-          zoom: city.zoom,
-        ),
-      ),
-    );
-    setState(() {
-      _currentCameraPosition = CameraPosition(
-        target: city.coordinates,
-        zoom: city.zoom,
-      );
-      _selectedCityName = city.name;
-      _manuallyClosedTargetId = null;
-    });
-    if (FeatureFlags.enableMockLiveRehearsals) {
-      _audioController?.updateCameraTarget(city.coordinates, immediate: true);
-    }
-    final appState = Provider.of<AppState>(context, listen: false);
-    _evaluateCrosshairTargeting(_getFilteredGigs(appState.currentUserProfile));
-  }
-
   int _getFilterCount(String label, UserProfile? profile) {
     switch (label) {
       case 'All':
@@ -1104,9 +1101,12 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
       cameraLng: _currentCameraPosition.target.longitude,
       zoom: _currentCameraPosition.zoom,
       candidates: candidates,
+      hitRadiusPixels: 48.0,
     );
 
     if (bestTarget == null) {
+      // Camera has moved away from target; clear any manual close restriction
+      _manuallyClosedTargetId = null;
       if (_isAutoSelected && (_selectedGig != null || _selectedRehearsal != null)) {
         setState(() {
           _selectedGig = null;
@@ -1120,6 +1120,9 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
     if (bestTarget.id == _manuallyClosedTargetId) {
       return;
     }
+
+    // Acquired a new target, clear previous manual close block
+    _manuallyClosedTargetId = null;
 
     final currentSelectedId = _selectedGig?.id ?? _selectedGig?.subRequestId ?? _selectedRehearsal?.id;
 
@@ -1195,8 +1198,8 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
       }).toList();
     }
 
-    // 3. Instrument Search Query Filter (under Sub & Member Search)
-    if (_instrumentQuery.trim().isNotEmpty) {
+    // 3. Instrument Search Query Filter (strictly under Sub & Member Search)
+    if (_selectedMainCategory == 'Sub & Member Search' && _instrumentQuery.trim().isNotEmpty) {
       final q = _instrumentQuery.trim().toLowerCase();
       list = list.where((gig) {
         final vp = (gig.voicePart ?? '').toLowerCase();
@@ -1274,10 +1277,12 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
       return Marker(
         markerId: MarkerId(rehearsal.id),
         position: rehearsal.position,
-        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueMagenta),
+        icon: kIsWeb && _webPinCache.containsKey(MapEventType.rehearsal)
+            ? _webPinCache[MapEventType.rehearsal]!
+            : BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
         infoWindow: InfoWindow(
-          title: rehearsal.bandName,
-          snippet: 'LIVE rehearsal · ${rehearsal.city}',
+          title: rehearsal.genre.isNotEmpty ? '${rehearsal.bandName} - ${rehearsal.genre}' : rehearsal.bandName,
+          snippet: 'Rehearsal · ${rehearsal.city}',
         ),
         onTap: () {
           setState(() {
@@ -1575,6 +1580,9 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
     String selectedCategory = 'Music';
     String selectedType = 'Gig / Concert';
     List<String> selectedGenres = ['Big Band Contemporary'];
+    DateTime selectedDate = DateTime.now().add(const Duration(days: 7));
+    TimeOfDay selectedStartTime = const TimeOfDay(hour: 18, minute: 0);
+    TimeOfDay selectedEndTime = const TimeOfDay(hour: 21, minute: 0);
     final bandNameController = TextEditingController();
     final roleController = TextEditingController();
     final locationController = TextEditingController(text: 'Stockholm, Sweden');
@@ -1617,7 +1625,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                           const Icon(Icons.add_location_alt_rounded, color: AppTheme.primaryAccent, size: 22),
                           const SizedBox(width: 8),
                           Text(
-                            'Upload Map Event / Audio',
+                            'Upload Map View Pin / Audio',
                             style: GoogleFonts.outfit(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
@@ -1786,6 +1794,99 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                   ),
                   const SizedBox(height: 10),
 
+                  // Date & Time
+                  Text('Date & Time', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white)),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      // Date Picker
+                      Expanded(
+                        child: InkWell(
+                          onTap: () async {
+                            final picked = await showDatePicker(
+                              context: context,
+                              initialDate: selectedDate,
+                              firstDate: DateTime(2025),
+                              lastDate: DateTime(2030),
+                            );
+                            if (picked != null) {
+                              setSheetState(() => selectedDate = picked);
+                            }
+                          },
+                          borderRadius: BorderRadius.circular(10),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF1A1633),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: const Color(0xFF2E2A4E)),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.calendar_today_rounded, size: 14, color: AppTheme.primaryAccent),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    DateFormat('EEE, MMM d, yyyy').format(selectedDate),
+                                    style: GoogleFonts.inter(fontSize: 12, color: Colors.white),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      // Time Picker
+                      Expanded(
+                        child: InkWell(
+                          onTap: () async {
+                            final startPicked = await showTimePicker(
+                              context: context,
+                              initialTime: selectedStartTime,
+                            );
+                            if (startPicked != null) {
+                              if (context.mounted) {
+                                final endPicked = await showTimePicker(
+                                  context: context,
+                                  initialTime: selectedEndTime,
+                                );
+                                setSheetState(() {
+                                  selectedStartTime = startPicked;
+                                  if (endPicked != null) selectedEndTime = endPicked;
+                                });
+                              }
+                            }
+                          },
+                          borderRadius: BorderRadius.circular(10),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF1A1633),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: const Color(0xFF2E2A4E)),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.access_time_rounded, size: 14, color: AppTheme.primaryAccent),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    '${selectedStartTime.format(context)} - ${selectedEndTime.format(context)}',
+                                    style: GoogleFonts.inter(fontSize: 11.5, color: Colors.white),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+
                   // Description
                   TextField(
                     controller: descriptionController,
@@ -1801,7 +1902,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                   ),
                   const SizedBox(height: 10),
 
-                  // Audio Snippet / Audio Track (Fritext)
+                  // Audio Snippet (Fritext)
                   Text('Audio Snippet', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white)),
                   const SizedBox(height: 6),
                   TextField(
@@ -1815,6 +1916,40 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                       filled: true,
                       fillColor: const Color(0xFF1A1633),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        Text('Sample clips: ', style: GoogleFonts.inter(fontSize: 10.5, color: Colors.white54)),
+                        ...['audio/bandrep1.mp3', 'audio/bandrep2.mp3', 'audio/bandrep3.mp3'].map((sample) {
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 6),
+                            child: InkWell(
+                              onTap: () {
+                                setSheetState(() {
+                                  audioTrackController.text = sample;
+                                });
+                              },
+                              borderRadius: BorderRadius.circular(6),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF1E1A38),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: const Color(0xFF2E2A4E)),
+                                ),
+                                child: Text(
+                                  sample.split('/').last,
+                                  style: GoogleFonts.inter(fontSize: 10, color: AppTheme.primaryAccent),
+                                ),
+                              ),
+                            ),
+                          );
+                        }),
+                      ],
                     ),
                   ),
                   const SizedBox(height: 18),
@@ -1851,9 +1986,9 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                           voicePart: title,
                           requestType: selectedType,
                           location: locationController.text.trim().isEmpty ? 'Stockholm, Sweden' : locationController.text.trim(),
-                          date: DateTime.now().add(const Duration(days: 3)).toIso8601String(),
-                          startTime: '19:00:00',
-                          endTime: '22:00:00',
+                          date: selectedDate.toIso8601String(),
+                          startTime: '${selectedStartTime.hour.toString().padLeft(2, '0')}:${selectedStartTime.minute.toString().padLeft(2, '0')}:00',
+                          endTime: '${selectedEndTime.hour.toString().padLeft(2, '0')}:${selectedEndTime.minute.toString().padLeft(2, '0')}:00',
                           description: descriptionController.text.trim().isEmpty ? 'Uploaded via Map View.' : descriptionController.text.trim(),
                           latitude: lat,
                           longitude: lng,
@@ -1890,7 +2025,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
                       child: Text(
-                        'Publish to Map',
+                        'Publish Map View Pin / Audio',
                         style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
                       ),
                     ),
@@ -1988,178 +2123,123 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                       onStopBroadcast: _stopPublishingBroadcast,
                       margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                     ),
-                  // Row 1: Actions Header (Upload Event on left, Refresh and Guide on right)
+
+                  // Row 1 (TOP): Clickable "What is Map View?" Box
+                  if (_showGuideBanner) ...[
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                      child: _buildWhatIsMapViewBanner(),
+                    ),
+                  ],
+
+                  // Row 2: Actions Header (Map View Title Pill on left, Refresh and Guide on right)
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: LayoutBuilder(
-                      builder: (context, constraints) {
-                        final bool isVeryCompact = constraints.maxWidth < 360;
-                        final bool isCompact = constraints.maxWidth < 430;
-
-                        return SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          physics: const BouncingScrollPhysics(),
-                          child: ConstrainedBox(
-                            constraints: BoxConstraints(minWidth: constraints.maxWidth),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                // Upload Event & optional Go Live Button
-                                Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    GestureDetector(
-                                      onTap: _showUploadEventSheet,
-                                      child: Container(
-                                        height: 34,
-                                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                                        decoration: BoxDecoration(
-                                          gradient: AppTheme.primaryGradient,
-                                          borderRadius: BorderRadius.circular(17),
-                                          boxShadow: [
-                                            BoxShadow(
-                                              color: AppTheme.primaryAccent.withOpacity(0.35),
-                                              blurRadius: 6,
-                                              offset: const Offset(0, 2),
-                                            ),
-                                          ],
-                                        ),
-                                        child: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            const Icon(Icons.add_location_alt_rounded, color: Colors.white, size: 14),
-                                            const SizedBox(width: 5),
-                                            Text(
-                                              'Upload Event',
-                                              style: GoogleFonts.inter(
-                                                fontSize: 11,
-                                                fontWeight: FontWeight.bold,
-                                                color: Colors.white,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                    if (FeatureFlags.enableRealLiveBroadcasts && _currentPublishingBroadcast == null) ...[
-                                      const SizedBox(width: 8),
-                                      GestureDetector(
-                                        onTap: _openStartLiveBroadcastDialog,
-                                        child: Container(
-                                          height: 34,
-                                          padding: const EdgeInsets.symmetric(horizontal: 10),
-                                          decoration: BoxDecoration(
-                                            color: AppTheme.dangerRed,
-                                            borderRadius: BorderRadius.circular(17),
-                                            boxShadow: [
-                                              BoxShadow(
-                                                color: AppTheme.dangerRed.withOpacity(0.35),
-                                                blurRadius: 6,
-                                                offset: const Offset(0, 2),
-                                              ),
-                                            ],
-                                          ),
-                                          child: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              const Icon(Icons.podcasts_rounded, color: Colors.white, size: 14),
-                                              const SizedBox(width: 4),
-                                              Text(
-                                                'Go Live',
-                                                style: GoogleFonts.inter(
-                                                  fontSize: 11,
-                                                  fontWeight: FontWeight.bold,
-                                                  color: Colors.white,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ],
-                                ),
-
-                                // Action Buttons: Refresh & Guide Toggle
-                                Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    // Refresh Button
-                                    Container(
-                                      width: 34,
-                                      height: 34,
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFF0F0C20).withOpacity(0.92),
-                                        shape: BoxShape.circle,
-                                        border: Border.all(color: const Color(0xFF2E2A4E), width: 1.2),
-                                      ),
-                                      child: IconButton(
-                                        padding: EdgeInsets.zero,
-                                        icon: const Icon(Icons.refresh_rounded, color: Colors.white, size: 18),
-                                        tooltip: 'Refresh Map',
-                                        onPressed: _fetchGigs,
-                                      ),
-                                    ),
-                                    if (!_showGuideBanner) ...[
-                                      const SizedBox(width: 8),
-                                      if (isVeryCompact)
-                                        Container(
-                                          width: 34,
-                                          height: 34,
-                                          decoration: BoxDecoration(
-                                            color: const Color(0xFF0F0C20).withOpacity(0.92),
-                                            shape: BoxShape.circle,
-                                            border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.5), width: 1.2),
-                                          ),
-                                          child: IconButton(
-                                            padding: EdgeInsets.zero,
-                                            icon: const Icon(Icons.help_outline_rounded, color: AppTheme.primaryAccent, size: 16),
-                                            tooltip: 'What is Map View?',
-                                            onPressed: () => setState(() => _showGuideBanner = true),
-                                          ),
-                                        )
-                                      else
-                                        GestureDetector(
-                                          onTap: () => setState(() => _showGuideBanner = true),
-                                          child: Container(
-                                            height: 34,
-                                            padding: const EdgeInsets.symmetric(horizontal: 10),
-                                            decoration: BoxDecoration(
-                                              color: const Color(0xFF0F0C20).withOpacity(0.92),
-                                              borderRadius: BorderRadius.circular(17),
-                                              border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.5), width: 1.2),
-                                            ),
-                                            child: Row(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                const Icon(Icons.help_outline_rounded, color: AppTheme.primaryAccent, size: 14),
-                                                const SizedBox(width: 5),
-                                                Text(
-                                                  isCompact ? 'Guide' : 'What is Map View?',
-                                                  style: GoogleFonts.inter(
-                                                    fontSize: 11,
-                                                    fontWeight: FontWeight.bold,
-                                                    color: AppTheme.primaryAccent,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                    ],
-                                  ],
-                                ),
-                              ],
-                            ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        // Map View Badge / Title
+                        Container(
+                          height: 34,
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF0F0C20).withOpacity(0.92),
+                            borderRadius: BorderRadius.circular(17),
+                            border: Border.all(color: const Color(0xFF2E2A4E), width: 1.2),
                           ),
-                        );
-                      },
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.map_rounded, color: AppTheme.primaryAccent, size: 16),
+                              const SizedBox(width: 6),
+                              Text(
+                                'Map View',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.primaryAccent.withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Text(
+                                  '${filteredGigs.length}',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppTheme.primaryAccent,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        // Action Buttons: Refresh & Guide Toggle
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // Refresh Button
+                            Container(
+                              width: 34,
+                              height: 34,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF0F0C20).withOpacity(0.92),
+                                shape: BoxShape.circle,
+                                border: Border.all(color: const Color(0xFF2E2A4E), width: 1.2),
+                              ),
+                              child: IconButton(
+                                padding: EdgeInsets.zero,
+                                icon: const Icon(Icons.refresh_rounded, color: Colors.white, size: 18),
+                                tooltip: 'Refresh Map',
+                                onPressed: _fetchGigs,
+                              ),
+                            ),
+                            if (!_showGuideBanner) ...[
+                              const SizedBox(width: 8),
+                              GestureDetector(
+                                onTap: () => setState(() => _showGuideBanner = true),
+                                child: Container(
+                                  height: 34,
+                                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF0F0C20).withOpacity(0.92),
+                                    borderRadius: BorderRadius.circular(17),
+                                    border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.5), width: 1.2),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(Icons.help_outline_rounded, color: AppTheme.primaryAccent, size: 14),
+                                      const SizedBox(width: 5),
+                                      Text(
+                                        'What is Map View?',
+                                        style: GoogleFonts.inter(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                          color: AppTheme.primaryAccent,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ],
                     ),
                   ),
 
                   const SizedBox(height: 8),
 
-                  // Row 2: Full-width Primary Category Filter Tabs
+                  // Row 3: Full-width Primary Category Filter Tabs
                   SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
                     padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -2174,7 +2254,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                     ),
                   ),
 
-                  // Row 2: Sub-filter Row (conditional when Music or Sub & Member Search is active)
+                  // Row 4: Sub-filter Row (conditional when Music or Sub & Member Search is active)
                   if (_selectedMainCategory == 'Music') ...[
                     const SizedBox(height: 6),
                     SingleChildScrollView(
@@ -2196,8 +2276,8 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       child: Row(
                         children: [
-                          _buildSubFilterChip('New Member', MapEventType.newMember),
                           _buildSubFilterChip('Substitute', MapEventType.subs),
+                          _buildSubFilterChip('New Member', MapEventType.newMember),
                           _buildSubFilterChip('Paid Gigs', MapEventType.paid),
                           const SizedBox(width: 8),
                           _buildInstrumentFilterToggle(),
@@ -2208,15 +2288,6 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                       const SizedBox(height: 6),
                       _buildInstrumentSearchBar(),
                     ],
-                  ],
-
-                  // Row 3: Clickable "What is Map View?" Box
-                  if (_showGuideBanner) ...[
-                    const SizedBox(height: 8),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: _buildWhatIsMapViewBanner(),
-                    ),
                   ],
                 ],
               ),
@@ -2256,9 +2327,88 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                 ),
               ),
 
-            // When no event card is selected: Pin Legend at bottom-left & Live Audio at bottom-right
+            // When no event card is selected: Action buttons at bottom-left & Live Audio at bottom-right
             if (_selectedGig == null && _selectedRehearsal == null) ...[
-              _buildLegendOverlay(bottomOffset: 76),
+              Positioned(
+                bottom: 16,
+                left: 16,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: _showUploadEventSheet,
+                      child: Container(
+                        height: 38,
+                        padding: const EdgeInsets.symmetric(horizontal: 14),
+                        decoration: BoxDecoration(
+                          gradient: AppTheme.primaryGradient,
+                          borderRadius: BorderRadius.circular(19),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppTheme.primaryAccent.withOpacity(0.35),
+                              blurRadius: 8,
+                              offset: const Offset(0, 3),
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.add_location_alt_rounded, color: Colors.white, size: 16),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Upload Map View Pin / Audio',
+                              style: GoogleFonts.inter(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    if (FeatureFlags.enableRealLiveBroadcasts && _currentPublishingBroadcast == null) ...[
+                      const SizedBox(width: 8),
+                      GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: _openStartLiveBroadcastDialog,
+                        child: Container(
+                          height: 38,
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          decoration: BoxDecoration(
+                            color: AppTheme.dangerRed,
+                            borderRadius: BorderRadius.circular(19),
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppTheme.dangerRed.withOpacity(0.35),
+                                blurRadius: 8,
+                                offset: const Offset(0, 3),
+                              ),
+                            ],
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.podcasts_rounded, color: Colors.white, size: 15),
+                              const SizedBox(width: 5),
+                              Text(
+                                'Go Live',
+                                style: GoogleFonts.inter(
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
               Positioned(
                 bottom: 16,
                 right: 16,
@@ -2370,147 +2520,109 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
       return const SizedBox.shrink();
     }
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-      decoration: BoxDecoration(
-        color: const Color(0xFF0F0C20).withOpacity(0.95),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: Colors.purpleAccent.withOpacity(0.45),
-          width: 1.2,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.4),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () {},
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: const Color(0xFF0F0C20).withOpacity(0.95),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: Colors.purpleAccent.withOpacity(0.45),
+            width: 1.2,
           ),
-        ],
-      ),
-      child: ValueListenableBuilder<bool>(
-        valueListenable: _audioController!.isAudioStoppedNotifier,
-        builder: (context, isStopped, _) {
-          return ValueListenableBuilder<bool>(
-            valueListenable: _audioController!.isMutedNotifier,
-            builder: (context, isMuted, _) {
-              return Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(5),
-                    decoration: BoxDecoration(
-                      color: isStopped
-                          ? AppTheme.danger.withOpacity(0.2)
-                          : isMuted
-                              ? AppTheme.warning.withOpacity(0.2)
-                              : Colors.purpleAccent.withOpacity(0.2),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      isStopped
-                          ? Icons.power_settings_new_rounded
-                          : isMuted
-                              ? Icons.volume_off_rounded
-                              : Icons.sensors_rounded,
-                      color: isStopped
-                          ? AppTheme.danger
-                          : isMuted
-                              ? AppTheme.warning
-                              : Colors.purpleAccent,
-                      size: 16,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'LIVE AUDIO',
-                        style: GoogleFonts.outfit(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 0.8,
-                          color: Colors.white,
-                        ),
-                      ),
-                      Text(
-                        isStopped
-                            ? 'Turned OFF'
-                            : isMuted
-                                ? 'Muted'
-                                : 'Active (Proximity)',
-                        style: GoogleFonts.inter(
-                          fontSize: 10,
-                          color: isStopped
-                              ? AppTheme.danger
-                              : isMuted
-                                  ? AppTheme.warning
-                                  : Colors.purpleAccent,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(width: 12),
-                  // Power Switch (Turn OFF / Turn ON)
-                  GestureDetector(
-                    onTap: () {
-                      _audioController?.toggleAudioPower();
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.4),
+              blurRadius: 10,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: ValueListenableBuilder<bool>(
+          valueListenable: _audioController!.isAudioStoppedNotifier,
+          builder: (context, isStopped, _) {
+            return ValueListenableBuilder<bool>(
+              valueListenable: _audioController!.isMutedNotifier,
+              builder: (context, isMuted, _) {
+                return Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(5),
                       decoration: BoxDecoration(
                         color: isStopped
-                            ? AppTheme.success.withOpacity(0.2)
-                            : AppTheme.danger.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: isStopped
-                              ? AppTheme.success.withOpacity(0.6)
-                              : AppTheme.danger.withOpacity(0.6),
-                          width: 1,
-                        ),
+                            ? AppTheme.danger.withOpacity(0.2)
+                            : isMuted
+                                ? AppTheme.warning.withOpacity(0.2)
+                                : Colors.purpleAccent.withOpacity(0.2),
+                        shape: BoxShape.circle,
                       ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            isStopped ? Icons.play_arrow_rounded : Icons.power_settings_new_rounded,
-                            size: 13,
-                            color: isStopped ? AppTheme.success : AppTheme.danger,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            isStopped ? 'Turn ON' : 'Turn OFF',
-                            style: GoogleFonts.inter(
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                              color: isStopped ? AppTheme.success : AppTheme.danger,
-                            ),
-                          ),
-                        ],
+                      child: Icon(
+                        isStopped
+                            ? Icons.power_settings_new_rounded
+                            : isMuted
+                                ? Icons.volume_off_rounded
+                                : Icons.sensors_rounded,
+                        color: isStopped
+                            ? AppTheme.danger
+                            : isMuted
+                                ? AppTheme.warning
+                                : Colors.purpleAccent,
+                        size: 16,
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  // Mute Button (disabled if turned off)
-                  if (!isStopped)
+                    const SizedBox(width: 8),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'LIVE AUDIO',
+                          style: GoogleFonts.outfit(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 0.8,
+                            color: Colors.white,
+                          ),
+                        ),
+                        Text(
+                          isStopped
+                              ? 'Turned OFF'
+                              : isMuted
+                                  ? 'Muted'
+                                  : 'Active (Proximity)',
+                          style: GoogleFonts.inter(
+                            fontSize: 10,
+                            color: isStopped
+                                ? AppTheme.danger
+                                : isMuted
+                                    ? AppTheme.warning
+                                    : Colors.purpleAccent,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(width: 12),
+                    // Power Switch (Turn OFF / Turn ON)
                     GestureDetector(
+                      behavior: HitTestBehavior.opaque,
                       onTap: () {
-                        _audioController?.toggleMute();
+                        _audioController?.toggleAudioPower();
                       },
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                         decoration: BoxDecoration(
-                          color: isMuted
-                              ? AppTheme.primaryAccent.withOpacity(0.2)
-                              : const Color(0xFF2E2A4E),
+                          color: isStopped
+                              ? AppTheme.success.withOpacity(0.2)
+                              : AppTheme.danger.withOpacity(0.2),
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
-                            color: isMuted
-                                ? AppTheme.primaryAccent.withOpacity(0.6)
-                                : const Color(0xFF433D72),
+                            color: isStopped
+                                ? AppTheme.success.withOpacity(0.6)
+                                : AppTheme.danger.withOpacity(0.6),
                             width: 1,
                           ),
                         ),
@@ -2518,28 +2630,72 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Icon(
-                              isMuted ? Icons.volume_up_rounded : Icons.volume_off_rounded,
+                              isStopped ? Icons.play_arrow_rounded : Icons.power_settings_new_rounded,
                               size: 13,
-                              color: isMuted ? AppTheme.primaryAccent : Colors.white70,
+                              color: isStopped ? AppTheme.success : AppTheme.danger,
                             ),
                             const SizedBox(width: 4),
                             Text(
-                              isMuted ? 'Unmute' : 'Mute',
+                              isStopped ? 'Turn ON' : 'Turn OFF',
                               style: GoogleFonts.inter(
                                 fontSize: 10,
                                 fontWeight: FontWeight.bold,
-                                color: isMuted ? AppTheme.primaryAccent : Colors.white70,
+                                color: isStopped ? AppTheme.success : AppTheme.danger,
                               ),
                             ),
                           ],
                         ),
                       ),
                     ),
-                ],
-              );
-            },
-          );
-        },
+                    const SizedBox(width: 8),
+                    // Mute Button (disabled if turned off)
+                    if (!isStopped)
+                      GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () {
+                          _audioController?.toggleMute();
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: isMuted
+                                ? AppTheme.primaryAccent.withOpacity(0.2)
+                                : const Color(0xFF2E2A4E),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: isMuted
+                                  ? AppTheme.primaryAccent.withOpacity(0.6)
+                                  : const Color(0xFF433D72),
+                              width: 1,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                isMuted ? Icons.volume_up_rounded : Icons.volume_off_rounded,
+                                size: 13,
+                                color: isMuted ? AppTheme.primaryAccent : Colors.white70,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                isMuted ? 'Unmute' : 'Mute',
+                                style: GoogleFonts.inter(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  color: isMuted ? AppTheme.primaryAccent : Colors.white70,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                  ],
+                );
+              },
+            );
+          },
+        ),
       ),
     );
   }
@@ -2557,13 +2713,19 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
         gig.extraFields['Genre']?.toString() ??
         gig.style ??
         '';
+    final isSubOrMember = eventType == MapEventType.subs ||
+        eventType == MapEventType.newMember ||
+        eventType == MapEventType.paid;
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppTheme.cardBackground.withOpacity(0.96),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: badgeColor.withOpacity(0.55), width: 1.5),
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () {},
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppTheme.cardBackground.withOpacity(0.96),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: badgeColor.withOpacity(0.55), width: 1.5),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.4),
@@ -2772,108 +2934,111 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                   ),
                 ),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: isCreator
-                    ? Container(
-                        height: 42,
-                        decoration: BoxDecoration(
-                          color: AppTheme.primaryAccent.withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.4)),
-                        ),
-                        child: Center(
-                          child: Text(
-                            'Your Request',
-                            style: GoogleFonts.inter(
-                              color: AppTheme.primaryAccent,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 13,
+              if (isSubOrMember) ...[
+                const SizedBox(width: 12),
+                Expanded(
+                  child: isCreator
+                      ? Container(
+                          height: 42,
+                          decoration: BoxDecoration(
+                            color: AppTheme.primaryAccent.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.4)),
+                          ),
+                          child: Center(
+                            child: Text(
+                              'Your Request',
+                              style: GoogleFonts.inter(
+                                color: AppTheme.primaryAccent,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                              ),
                             ),
                           ),
-                        ),
-                      )
-                    : hasApplied
-                    ? Container(
-                        height: 42,
-                        decoration: BoxDecoration(
-                          color: Colors.white10,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: Colors.white12),
-                        ),
-                        child: Center(
-                          child: Text(
-                            'Applied',
-                            style: GoogleFonts.inter(
-                              color: Colors.white54,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 13,
+                        )
+                      : hasApplied
+                      ? Container(
+                          height: 42,
+                          decoration: BoxDecoration(
+                            color: Colors.white10,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: Colors.white12),
+                          ),
+                          child: Center(
+                            child: Text(
+                              'Applied',
+                              style: GoogleFonts.inter(
+                                color: Colors.white54,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                              ),
                             ),
                           ),
-                        ),
-                      )
-                    : Container(
-                        decoration: BoxDecoration(
-                          gradient: AppTheme.primaryGradient,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: ElevatedButton(
-                          onPressed: () async {
-                            if (currentUserId == null) return;
-                            try {
-                              if ((gig.id ?? '').startsWith('mock_')) {
-                                await Future.delayed(const Duration(milliseconds: 300));
-                              } else {
-                                await appState.firebaseService.addResponseToSubRequestAsync(
-                                  gig.subRequestId ?? gig.id!,
-                                  currentUserId,
-                                );
+                        )
+                      : Container(
+                          decoration: BoxDecoration(
+                            gradient: AppTheme.primaryGradient,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: ElevatedButton(
+                            onPressed: () async {
+                              if (currentUserId == null) return;
+                              try {
+                                if ((gig.id ?? '').startsWith('mock_')) {
+                                  await Future.delayed(const Duration(milliseconds: 300));
+                                } else {
+                                  await appState.firebaseService.addResponseToSubRequestAsync(
+                                    gig.subRequestId ?? gig.id!,
+                                    currentUserId,
+                                  );
+                                }
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Successfully applied for gig!'),
+                                      backgroundColor: AppTheme.success,
+                                    ),
+                                  );
+                                  setState(() {
+                                    if (gigReqId != null) _appliedGigIds.add(gigReqId);
+                                    gig.responses[currentUserId] = true;
+                                  });
+                                }
+                              } catch (e) {
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('Failed to apply: $e'),
+                                      backgroundColor: AppTheme.danger,
+                                    ),
+                                  );
+                                }
                               }
-                              if (mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('Successfully applied for gig!'),
-                                    backgroundColor: AppTheme.success,
-                                  ),
-                                );
-                                setState(() {
-                                  if (gigReqId != null) _appliedGigIds.add(gigReqId);
-                                  gig.responses[currentUserId] = true;
-                                });
-                              }
-                            } catch (e) {
-                              if (mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text('Failed to apply: $e'),
-                                    backgroundColor: AppTheme.danger,
-                                  ),
-                                );
-                              }
-                            }
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.transparent,
-                            shadowColor: Colors.transparent,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.transparent,
+                              shadowColor: Colors.transparent,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
                             ),
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                          ),
-                          child: Text(
-                            'Apply',
-                            style: GoogleFonts.inter(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 13,
+                            child: Text(
+                              'Apply',
+                              style: GoogleFonts.inter(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                              ),
                             ),
                           ),
                         ),
-                      ),
-              ),
+                ),
+              ],
             ],
           ),
         ],
+      ),
       ),
     );
   }
@@ -2881,108 +3046,181 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
   Widget _buildRehearsalBottomCardContent(MockLiveRehearsal rehearsal) {
     final dist = _audioController?.distancesKm[rehearsal.id];
     final distStr = dist != null && dist.isFinite ? '${dist.toStringAsFixed(0)} km away' : '';
+    final badgeColor = MapEventTypeHelper.getColor(MapEventType.rehearsal);
+    final badgeLabel = MapEventTypeHelper.getShortLabel(MapEventType.rehearsal);
+    final badgeIcon = MapEventTypeHelper.getIcon(MapEventType.rehearsal);
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppTheme.cardBackground.withOpacity(0.96),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.purpleAccent.withOpacity(0.55), width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.4),
-            blurRadius: 15,
-            offset: const Offset(0, 5),
-          ),
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Text(
-                  rehearsal.bandName,
-                  style: GoogleFonts.outfit(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () {},
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppTheme.cardBackground.withOpacity(0.96),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: badgeColor.withOpacity(0.55), width: 1.5),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.4),
+              blurRadius: 15,
+              offset: const Offset(0, 5),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 1. Band name + Genre / Band Type (Line 1) & Close button
+            // e.g. "Northern Echo - Alternative / Post-Rock"
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Text(
+                    rehearsal.genre.isNotEmpty
+                        ? '${rehearsal.bandName} - ${rehearsal.genre}'
+                        : rehearsal.bandName,
+                    style: GoogleFonts.outfit(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                      height: 1.25,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                 ),
+                const SizedBox(width: 8),
+                GestureDetector(
+                  onTap: () {
+                    final closedId = _selectedRehearsal?.id;
+                    setState(() {
+                      _selectedRehearsal = null;
+                      _isAutoSelected = false;
+                      _manuallyClosedTargetId = closedId;
+                    });
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.close, size: 16, color: Colors.white70),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+
+            // 2. Standardized Event Category (Line 2: "Rehearsal")
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: badgeColor.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: badgeColor.withOpacity(0.6), width: 1.0),
               ),
-              IconButton(
-                icon: const Icon(Icons.close_rounded, color: AppTheme.textSecondary, size: 20),
-                onPressed: () {
-                  final closedId = _selectedRehearsal?.id;
-                  setState(() {
-                    _selectedRehearsal = null;
-                    _isAutoSelected = false;
-                    _manuallyClosedTargetId = closedId;
-                  });
-                },
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(badgeIcon, color: badgeColor, size: 13),
+                  const SizedBox(width: 5),
+                  Text(
+                    badgeLabel,
+                    style: GoogleFonts.inter(
+                      color: badgeColor,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+
+            // 3. Location (Line 3: e.g. "Umeå Musikstudio, Västerslätt, Umeå")
+            Row(
+              children: [
+                const Icon(Icons.location_on_rounded, size: 14, color: AppTheme.textSecondary),
+                const SizedBox(width: 5),
+                Expanded(
+                  child: Text(
+                    rehearsal.location ?? '${rehearsal.city}${distStr.isNotEmpty ? " · $distStr" : ""}',
+                    style: GoogleFonts.inter(fontSize: 12.5, color: Colors.white70),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+
+            // 4. Date & Time (Line 4: e.g. "Wednesday, Oct 22, 2026 - 7.00 PM 10.00 PM")
+            Row(
+              children: [
+                const Icon(Icons.calendar_today_rounded, size: 13, color: AppTheme.textSecondary),
+                const SizedBox(width: 5),
+                Expanded(
+                  child: Text(
+                    rehearsal.dateTime ?? 'Wednesday, Oct 22, 2026 - 7.00 PM 10.00 PM',
+                    style: GoogleFonts.inter(fontSize: 12.5, color: Colors.white70),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+
+            // 5. Fritext-ruta / Description
+            if (rehearsal.description != null && rehearsal.description!.trim().isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(
+                rehearsal.description!,
+                style: GoogleFonts.inter(
+                  fontSize: 12.5,
+                  color: Colors.white.withOpacity(0.85),
+                  height: 1.35,
+                ),
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
               ),
             ],
-          ),
-          const SizedBox(height: 6),
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: Colors.purpleAccent.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: Colors.purpleAccent.withOpacity(0.5)),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.sensors_rounded, color: Colors.purpleAccent, size: 12),
-                    const SizedBox(width: 4),
-                    Text(
-                      'LIVE REHEARSAL',
+            const SizedBox(height: 12),
+
+            // 6. Action button: "Details"
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Rehearsal broadcast: ${rehearsal.bandName}')),
+                      );
+                    },
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: AppTheme.primaryAccent),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    child: Text(
+                      'Details',
                       style: GoogleFonts.inter(
-                        color: Colors.purpleAccent,
-                        fontSize: 10,
+                        color: AppTheme.primaryAccent,
                         fontWeight: FontWeight.bold,
-                        letterSpacing: 0.8,
+                        fontSize: 13,
                       ),
                     ),
-                  ],
+                  ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                rehearsal.genre,
-                style: GoogleFonts.inter(fontSize: 12, color: AppTheme.primaryAccent, fontWeight: FontWeight.w500),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              const Icon(Icons.location_on_outlined, color: AppTheme.textSecondary, size: 14),
-              const SizedBox(width: 4),
-              Text(
-                '${rehearsal.city}${distStr.isNotEmpty ? " · $distStr" : ""}',
-                style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Broadcasting live rehearsal audio continuously. Move reticle closer to adjust volume.',
-            style: GoogleFonts.inter(
-              fontSize: 12,
-              color: Colors.white70,
-              height: 1.3,
+              ],
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -2996,6 +3234,11 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
           setState(() {
             _selectedMainCategory = label;
             _selectedSubCategory = null;
+            if (label == 'All') {
+              _instrumentQuery = '';
+              _instrumentSearchController.clear();
+              _showInstrumentSearch = false;
+            }
             _selectedGig = null;
             _selectedRehearsal = null;
             _isAutoSelected = false;
@@ -3122,27 +3365,46 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
     );
   }
 
+  Future<void> _openInstrumentTaxonomyPicker() async {
+    final categoryMap = SkillsTaxonomy.categoryMapFor(SkillTaxonomyContext.findSub);
+    final selectedList = await SearchableCategoryMultiSelectSheet.show(
+      context: context,
+      title: 'Select Role / Instrument',
+      categoryMap: categoryMap,
+      initialSelected: _instrumentQuery.isNotEmpty ? [_instrumentQuery] : [],
+      isSingleSelect: true,
+      presentation: CategoryPickerPresentation.skillsHierarchy,
+    );
+    if (selectedList != null) {
+      setState(() {
+        if (selectedList.isNotEmpty) {
+          _instrumentQuery = selectedList.first;
+          _instrumentSearchController.text = _instrumentQuery;
+          _showInstrumentSearch = true;
+        } else {
+          _instrumentQuery = '';
+          _instrumentSearchController.clear();
+          _showInstrumentSearch = false;
+        }
+      });
+      final appState = Provider.of<AppState>(context, listen: false);
+      _evaluateCrosshairTargeting(_getFilteredGigs(appState.currentUserProfile));
+    }
+  }
+
   Widget _buildInstrumentFilterToggle() {
     final isFiltering = _instrumentQuery.isNotEmpty;
     return GestureDetector(
-      onTap: () {
-        setState(() {
-          _showInstrumentSearch = !_showInstrumentSearch;
-          if (!_showInstrumentSearch && _instrumentQuery.isNotEmpty) {
-            _instrumentQuery = '';
-            _instrumentSearchController.clear();
-          }
-        });
-      },
+      onTap: _openInstrumentTaxonomyPicker,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         decoration: BoxDecoration(
-          color: isFiltering || _showInstrumentSearch
+          color: isFiltering
               ? const Color(0xFF84CC16).withOpacity(0.25)
               : const Color(0xFF0F0C20).withOpacity(0.85),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isFiltering || _showInstrumentSearch
+            color: isFiltering
                 ? const Color(0xFF84CC16)
                 : const Color(0xFF2E2A4E),
             width: 1.0,
@@ -3154,21 +3416,36 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
             Icon(
               Icons.search_rounded,
               size: 13,
-              color: isFiltering || _showInstrumentSearch
+              color: isFiltering
                   ? const Color(0xFF84CC16)
                   : Colors.white70,
             ),
             const SizedBox(width: 4),
             Text(
-              isFiltering ? 'Instrument: $_instrumentQuery' : 'Search Instrument',
+              isFiltering ? 'Instrument: $_instrumentQuery' : 'Search Instruments',
               style: GoogleFonts.inter(
                 fontSize: 11,
                 fontWeight: FontWeight.bold,
-                color: isFiltering || _showInstrumentSearch
+                color: isFiltering
                     ? Colors.white
                     : Colors.white70,
               ),
             ),
+            if (isFiltering) ...[
+              const SizedBox(width: 6),
+              GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _instrumentQuery = '';
+                    _instrumentSearchController.clear();
+                    _showInstrumentSearch = false;
+                  });
+                  final appState = Provider.of<AppState>(context, listen: false);
+                  _evaluateCrosshairTargeting(_getFilteredGigs(appState.currentUserProfile));
+                },
+                child: const Icon(Icons.close_rounded, size: 14, color: Colors.white70),
+              ),
+            ],
           ],
         ),
       ),
@@ -3282,185 +3559,6 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
       ),
     );
   }
-
-
-
-  Widget _buildLegendOverlay({double bottomOffset = 24}) {
-    return Positioned(
-      bottom: bottomOffset,
-      left: 16,
-      child: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 250),
-        child: !_showLegend
-            ? GestureDetector(
-                key: const ValueKey('legend_button'),
-                onTap: () => setState(() => _showLegend = true),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF0F0C20).withOpacity(0.92),
-                    borderRadius: BorderRadius.circular(22),
-                    border: Border.all(color: const Color(0xFF2E2A4E), width: 1.2),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.4),
-                        blurRadius: 10,
-                        offset: const Offset(0, 3),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.palette_outlined, color: AppTheme.primaryAccent, size: 16),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Pin Colors',
-                        style: GoogleFonts.inter(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              )
-            : Container(
-                key: const ValueKey('legend_expanded'),
-                width: 240,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF0F0C20).withOpacity(0.96),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.4), width: 1.2),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.45),
-                      blurRadius: 14,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Row(
-                            children: [
-                              const Icon(Icons.palette_outlined, color: AppTheme.primaryAccent, size: 16),
-                              const SizedBox(width: 6),
-                              Text(
-                                'PIN EVENT TYPES',
-                                style: GoogleFonts.outfit(
-                                  color: Colors.white,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.bold,
-                                  letterSpacing: 1.0,
-                                ),
-                              ),
-                            ],
-                          ),
-                          GestureDetector(
-                            onTap: () => setState(() => _showLegend = false),
-                            child: Container(
-                              padding: const EdgeInsets.all(2),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.08),
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(Icons.close_rounded, color: Colors.white70, size: 14),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      // Category: Music
-                      Text(
-                        'MUSIC',
-                        style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.bold, color: AppTheme.primaryAccent, letterSpacing: 0.8),
-                      ),
-                      const SizedBox(height: 4),
-                      _buildLegendItem(MapEventType.gigConcert),
-                      const SizedBox(height: 5),
-                      _buildLegendItem(MapEventType.rehearsal),
-                      const SizedBox(height: 5),
-                      _buildLegendItem(MapEventType.jamSession),
-                      const SizedBox(height: 5),
-                      _buildLegendItem(MapEventType.recordedMusic),
-                      const SizedBox(height: 10),
-
-                      // Category: Gig Promo
-                      Text(
-                        'GIG PROMO',
-                        style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.bold, color: const Color(0xFFA855F7), letterSpacing: 0.8),
-                      ),
-                      const SizedBox(height: 4),
-                      _buildLegendItem(MapEventType.gigPromo),
-                      const SizedBox(height: 10),
-
-                      // Category: Sub & Member Search
-                      Text(
-                        'SUB & MEMBER SEARCH',
-                        style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.bold, color: const Color(0xFF84CC16), letterSpacing: 0.8),
-                      ),
-                      const SizedBox(height: 4),
-                      _buildLegendItem(MapEventType.newMember),
-                      const SizedBox(height: 5),
-                      _buildLegendItem(MapEventType.subs),
-                      const SizedBox(height: 5),
-                      _buildLegendItem(MapEventType.paid),
-                    ],
-                  ),
-                ),
-              ),
-      ),
-    );
-  }
-
-  Widget _buildLegendItem(MapEventType type) {
-    final color = MapEventTypeHelper.getColor(type);
-    final label = MapEventTypeHelper.getLabel(type);
-    final icon = MapEventTypeHelper.getIcon(type);
-
-    return Row(
-      children: [
-        Container(
-          width: 14,
-          height: 14,
-          decoration: BoxDecoration(
-            color: color,
-            shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(
-                color: color.withOpacity(0.5),
-                blurRadius: 4,
-              ),
-            ],
-          ),
-          child: Center(
-            child: Icon(icon, color: Colors.black.withOpacity(0.65), size: 9),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(
-            label,
-            style: GoogleFonts.inter(
-              color: Colors.white,
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-      ],
-    );
-  }
 }
+
 
