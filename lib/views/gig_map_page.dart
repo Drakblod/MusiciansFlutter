@@ -1,6 +1,4 @@
 import 'dart:async';
-import 'dart:math' as math;
-import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:provider/provider.dart';
@@ -177,66 +175,6 @@ class MapEventTypeHelper {
     return MapEventType.gigConcert;
   }
 
-  static Future<BitmapDescriptor> createCustomPinBitmap(Color color) async {
-    final pictureRecorder = ui.PictureRecorder();
-    final canvas = Canvas(pictureRecorder);
-    const double width = 64;
-    const double height = 80;
-
-    // 1. Subtle drop shadow under the tip
-    final shadowPaint = Paint()
-      ..color = Colors.black.withOpacity(0.35)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
-    canvas.drawOval(
-      Rect.fromCenter(center: const Offset(width / 2, height - 4), width: 18, height: 8),
-      shadowPaint,
-    );
-
-    // 2. Teardrop pin path
-    final path = Path();
-    const double radius = 24.0;
-    const center = Offset(width / 2, radius + 2); // (32, 26)
-
-    path.arcTo(
-      Rect.fromCircle(center: center, radius: radius),
-      math.pi * 0.75,
-      math.pi * 1.5,
-      false,
-    );
-    path.lineTo(width / 2, height - 8);
-    path.close();
-
-    // 3. Pin body filled with the vibrant event type color
-    final bodyPaint = Paint()
-      ..color = color
-      ..style = PaintingStyle.fill;
-    canvas.drawPath(path, bodyPaint);
-
-    // 4. Clean white outer border
-    final borderPaint = Paint()
-      ..color = Colors.white
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 3.0;
-    canvas.drawPath(path, borderPaint);
-
-    // 5. Inner white disc
-    final innerDiscPaint = Paint()
-      ..color = Colors.white
-      ..style = PaintingStyle.fill;
-    canvas.drawCircle(center, 11, innerDiscPaint);
-
-    // 6. Center color dot
-    final centerDotPaint = Paint()
-      ..color = color
-      ..style = PaintingStyle.fill;
-    canvas.drawCircle(center, 6.5, centerDotPaint);
-
-    final picture = pictureRecorder.endRecording();
-    final image = await picture.toImage(width.toInt(), height.toInt());
-    final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-    return BitmapDescriptor.fromBytes(byteData!.buffer.asUint8List());
-  }
-
   static BitmapDescriptor getMarkerIcon(MapEventType type) {
     switch (type) {
       case MapEventType.gigConcert:
@@ -250,7 +188,7 @@ class MapEventTypeHelper {
       case MapEventType.gigPromo:
         return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueViolet);
       case MapEventType.newMember:
-        return BitmapDescriptor.defaultMarkerWithHue(155.0);
+        return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen);
       case MapEventType.subs:
         return BitmapDescriptor.defaultMarkerWithHue(85.0);
       case MapEventType.paid:
@@ -511,25 +449,6 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
 ]
 ''';
 
-  static final Map<MapEventType, BitmapDescriptor> _customPinCache = {};
-
-  Future<void> _initCustomPins() async {
-    for (final type in MapEventType.values) {
-      if (!_customPinCache.containsKey(type)) {
-        try {
-          final color = MapEventTypeHelper.getColor(type);
-          final descriptor = await MapEventTypeHelper.createCustomPinBitmap(color);
-          _customPinCache[type] = descriptor;
-        } catch (e) {
-          debugPrint('Error generating custom pin for $type: $e');
-        }
-      }
-    }
-    if (mounted) {
-      setState(() {});
-    }
-  }
-
   String _monthShort(int month) {
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     if (month >= 1 && month <= 12) return months[month - 1];
@@ -593,7 +512,6 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
-    _initCustomPins();
     _fetchGigs();
     WidgetsBinding.instance.addObserver(this);
     if (FeatureFlags.enableMockLiveRehearsals) {
@@ -1138,7 +1056,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
 
   BitmapDescriptor _getMarkerColor(SubRequest gig) {
     final eventType = MapEventTypeHelper.getEventType(gig);
-    return _customPinCache[eventType] ?? MapEventTypeHelper.getMarkerIcon(eventType);
+    return MapEventTypeHelper.getMarkerIcon(eventType);
   }
 
   List<SubRequest> _getFilteredGigs(UserProfile? profile) {
@@ -1212,7 +1130,6 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
         markerId: MarkerId(gig.id ?? gig.subRequestId ?? UniqueKey().toString()),
         position: LatLng(gig.latitude!, gig.longitude!),
         icon: _getMarkerColor(gig),
-        anchor: const Offset(0.5, 0.9),
         infoWindow: InfoWindow(
           title: '${gig.bandName ?? "Band"} · $standardizedType',
           snippet: gig.location ?? '',
