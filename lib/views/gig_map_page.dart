@@ -491,7 +491,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
       }
       postDate ??= DateTime.now();
       final month = _monthShort(postDate.month);
-      return 'Posted $month ${postDate.day}';
+      return 'Posted: $month ${postDate.day}, ${postDate.year}';
     }
 
     DateTime? eventDate;
@@ -499,7 +499,9 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
       eventDate = DateTime.tryParse(gig.date!);
     }
     eventDate ??= DateTime.now();
-    final weekday = _weekdayName(eventDate.weekday);
+    final weekday = (gig.rehearsalDayOfWeek != null && gig.rehearsalDayOfWeek!.trim().isNotEmpty)
+        ? gig.rehearsalDayOfWeek!.trim()
+        : _weekdayName(eventDate.weekday);
     final month = _monthShort(eventDate.month);
     final year = eventDate.year;
 
@@ -594,12 +596,13 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
             voicePart: 'Big Band',
             role: 'Gig / Concert',
             requestType: 'Gig / Concert',
+            rehearsalDayOfWeek: 'Friday',
             bandName: 'Mats Holmquist Stora Stygga',
             location: 'Fasching, Kungsgatan 44',
             date: '2026-10-24T18:00:00',
             startTime: '18:00:00',
             endTime: '21:00:00',
-            description: 'Äntligen är de tillbaka med sin nyskapande storbandsjazz på Faschings legendariska scen.',
+            description: 'Äntligen är de tillbaka...',
             isPaid: false,
             latitude: 59.3340,
             longitude: 18.0560,
@@ -614,48 +617,49 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
           SubRequest(
             id: 'mock_2',
             subRequestId: 'mock_2',
-            voicePart: 'Horn Section',
-            role: 'Weekly Band Rehearsal',
-            requestType: 'Rehearsal',
-            rehearsalDayOfWeek: 'Tuesday',
-            bandName: 'Stockholm Funk Unit',
-            location: 'Södermalm, Stockholm',
-            date: DateTime.now().add(const Duration(days: 2)).toIso8601String(),
-            startTime: '18:30:00',
-            endTime: '21:30:00',
-            description: 'Weekly funk groove rehearsal in our Södermalm studio. Working on tight rhythm section grooves.',
+            voicePart: 'Bass',
+            role: 'New Member',
+            requestType: 'New Member',
+            bandName: 'Alex Bästa',
+            location: 'Ljusdal',
+            date: '2026-10-12T00:00:00',
+            createdAt: DateTime.parse('2026-10-12T10:00:00').millisecondsSinceEpoch,
+            startTime: '18:00:00',
+            endTime: '21:00:00',
+            description: 'Vi söker basist med minst 10 års erfarenhet',
             isPaid: false,
-            latitude: 59.3145,
-            longitude: 18.0649,
+            latitude: 61.8286,
+            longitude: 16.0957,
             responses: {},
             extraFields: {
               'audioSnippetUrl': 'audio/bandrep2.mp3',
-              'audioSnippetTitle': 'Weekly Funk Groove Rehearsal',
-              'eventType': 'rehearsal',
-              'genre': 'Funk',
+              'audioSnippetTitle': 'Alex Bästa - Soul Audition Track',
+              'eventType': 'newMember',
+              'genre': 'Soul',
             },
           ),
           SubRequest(
             id: 'mock_3',
             subRequestId: 'mock_3',
-            voicePart: 'Brass & Keys',
-            role: 'Open Stage Jam Session',
-            requestType: 'Jam Session',
-            bandName: 'Kulturhuset Jam Society',
-            location: 'Örebro, Sweden',
-            date: DateTime.now().add(const Duration(days: 4)).toIso8601String(),
-            startTime: '19:00:00',
-            endTime: '22:30:00',
-            description: 'Open jam session for brass, keys and rhythm players at Kulturhuset. Bring your instrument!',
+            voicePart: 'Band Promo',
+            role: 'Gig Promo',
+            requestType: 'Gig Promo',
+            rehearsalDayOfWeek: 'Tuesday',
+            bandName: 'Matsans Home Cookin’',
+            location: 'Bollnäs Folkets Hus',
+            date: '2026-10-24T18:00:00',
+            startTime: '18:00:00',
+            endTime: '21:00:00',
+            description: 'På turné i norrland oktober 2026',
             isPaid: false,
-            latitude: 59.2753,
-            longitude: 15.2134,
+            latitude: 61.3482,
+            longitude: 16.3946,
             responses: {},
             extraFields: {
               'audioSnippetUrl': 'audio/bandrep3.mp3',
-              'audioSnippetTitle': 'Open Stage Jam Session Highlights',
-              'eventType': 'jamSession',
-              'genre': 'Fusion',
+              'audioSnippetTitle': 'Matsans Home Cookin’ - Live Reggae Tour',
+              'eventType': 'gigPromo',
+              'genre': 'Reggae',
             },
           ),
           SubRequest(
