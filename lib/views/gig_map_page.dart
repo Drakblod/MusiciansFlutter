@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -7,6 +8,9 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import 'package:http/http.dart' as http;
+import 'package:file_picker/file_picker.dart';
+import 'edit_band_info_screen.dart';
 import '../providers/app_state.dart';
 import '../theme/app_theme.dart';
 import '../models/sub_request.dart';
@@ -560,6 +564,284 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
 
     return '$weekday, $month ${eventDate.day}, $year - $start $end';
   }
+
+  Future<LatLng> _geocodeAddress(String address, LatLng fallback) async {
+    final clean = address.trim();
+    if (clean.isEmpty) return fallback;
+
+    try {
+      final encoded = Uri.encodeComponent(clean);
+      final url = Uri.parse('https://nominatim.openstreetmap.org/search?q=$encoded&format=json&limit=1');
+      final response = await http.get(
+        url,
+        headers: {
+          'User-Agent': 'MusiciansFlutterApp/2.75.7 (info@musiciansapp.com)',
+          'Accept': 'application/json',
+        },
+      ).timeout(const Duration(seconds: 4));
+
+      if (response.statusCode == 200) {
+        final List data = jsonDecode(response.body);
+        if (data.isNotEmpty) {
+          final lat = double.tryParse(data[0]['lat']?.toString() ?? '');
+          final lon = double.tryParse(data[0]['lon']?.toString() ?? '');
+          if (lat != null && lon != null) {
+            return LatLng(lat, lon);
+          }
+        }
+      }
+    } catch (_) {}
+
+    // Fallback dictionary for common Swedish cities/places
+    final lower = clean.toLowerCase();
+    if (lower.contains('solna') || lower.contains('ankdammsgatan')) return const LatLng(59.3600, 17.9980);
+    if (lower.contains('lidingö') || lower.contains('agavägen')) return const LatLng(59.3620, 18.1520);
+    if (lower.contains('fasching') || lower.contains('kungsgatan')) return const LatLng(59.3360, 18.0560);
+    if (lower.contains('södermalm')) return const LatLng(59.3150, 18.0700);
+    if (lower.contains('stockholm')) return const LatLng(59.3293, 18.0686);
+    if (lower.contains('gothenburg') || lower.contains('göteborg')) return const LatLng(57.7089, 11.9746);
+    if (lower.contains('malmö')) return const LatLng(55.6050, 13.0038);
+    if (lower.contains('uppsala')) return const LatLng(59.8586, 17.6389);
+    if (lower.contains('umeå')) return const LatLng(63.8258, 20.2630);
+    if (lower.contains('linköping')) return const LatLng(58.4108, 15.6214);
+    if (lower.contains('örebro')) return const LatLng(59.2753, 15.2134);
+    if (lower.contains('ljusdal')) return const LatLng(61.8286, 16.0963);
+    if (lower.contains('bollnäs')) return const LatLng(61.3482, 16.3946);
+
+    return fallback;
+  }
+
+  void _openBandProfile({
+    required BuildContext context,
+    required String bandName,
+    required String genre,
+    String? aboutText,
+    String? location,
+    String? audioUrl,
+    String? audioTitle,
+  }) async {
+    final appState = Provider.of<AppState>(context, listen: false);
+
+    // If user has an active band matching this name, open their full EditBandInfoScreen
+    if (appState.activeBandId != null) {
+      try {
+        final activeBand = await appState.firebaseService.getBandInfoAsync(appState.activeBandId!);
+        if (activeBand != null && activeBand.name?.toLowerCase() == bandName.toLowerCase()) {
+          if (context.mounted) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => EditBandInfoScreen(band: activeBand)),
+            );
+            return;
+          }
+        }
+      } catch (_) {}
+    }
+
+    if (!context.mounted) return;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF0F0C20),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        side: BorderSide(color: Color(0xFF2E2A4E)),
+      ),
+      builder: (ctx) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.65,
+          minChildSize: 0.4,
+          maxChildSize: 0.92,
+          expand: false,
+          builder: (context, scrollController) {
+            return SingleChildScrollView(
+              controller: scrollController,
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.white24,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              bandName,
+                              style: GoogleFonts.outfit(
+                                fontSize: 22,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            if (genre.isNotEmpty)
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF60A5FA).withOpacity(0.18),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: const Color(0xFF60A5FA).withOpacity(0.5)),
+                                ),
+                                child: Text(
+                                  genre,
+                                  style: GoogleFonts.inter(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: const Color(0xFF60A5FA),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close_rounded, color: Colors.white70),
+                        onPressed: () => Navigator.pop(ctx),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  if (location != null && location.isNotEmpty) ...[
+                    Row(
+                      children: [
+                        const Icon(Icons.location_on_rounded, size: 14, color: AppTheme.textSecondary),
+                        const SizedBox(width: 6),
+                        Text(
+                          location,
+                          style: GoogleFonts.inter(fontSize: 12.5, color: Colors.white70),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                  ],
+
+                  // Tab / Section: ABOUT (Prominent Band Profile About Section)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF16122E),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.35)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.info_outline_rounded, color: AppTheme.primaryAccent, size: 18),
+                            const SizedBox(width: 8),
+                            Text(
+                              'ABOUT',
+                              style: GoogleFonts.outfit(
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                                color: AppTheme.primaryAccent,
+                                letterSpacing: 0.8,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        Text(
+                          (aboutText != null && aboutText.trim().isNotEmpty)
+                              ? aboutText
+                              : '$bandName is an active ensemble playing $genre, connecting with musicians and fans on the Map View.',
+                          style: GoogleFonts.inter(
+                            fontSize: 13,
+                            color: Colors.white.withOpacity(0.9),
+                            height: 1.45,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  if (audioUrl != null && audioUrl.isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    Text(
+                      'AUDIO TRACK',
+                      style: GoogleFonts.outfit(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF16122E),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.white12),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.music_note_rounded, color: Color(0xFF60A5FA), size: 16),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  audioTitle ?? '$bandName Audio Track',
+                                  style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          AudioSnippetPlayer(audioUrl: audioUrl),
+                        ],
+                      ),
+                    ),
+                  ],
+
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 44,
+                    child: ElevatedButton.icon(
+                      icon: const Icon(Icons.mail_outline_rounded, size: 16),
+                      label: Text('Contact $bandName', style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.primaryAccent,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Contact request sent to $bandName!')),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
 
   @override
   void initState() {
@@ -1588,6 +1870,9 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
     final locationController = TextEditingController(text: 'Stockholm, Sweden');
     final descriptionController = TextEditingController();
     final audioTrackController = TextEditingController();
+    final infoAudioTrackController = TextEditingController();
+    PlatformFile? pickedAudioFile;
+    bool isPublishing = false;
 
     showModalBottomSheet(
       context: context,
@@ -1642,7 +1927,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    'Post a pin to Map View and attach an audio snippet for other musicians and audiences to discover.',
+                    'Post a pin to Map View and attach an audio track for other musicians and audiences to discover.',
                     style: GoogleFonts.inter(fontSize: 12, color: Colors.white70),
                   ),
                   const SizedBox(height: 16),
@@ -1785,7 +2070,9 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                     controller: locationController,
                     style: GoogleFonts.inter(fontSize: 13, color: Colors.white),
                     decoration: InputDecoration(
-                      labelText: 'Pin Location (Street, City, Country)',
+                      labelText: 'Pin Location (Street, City without postal code)',
+                      hintText: 'e.g. Ankdammsgatan 33, Solna or Kungsgatan 44, Stockholm',
+                      hintStyle: GoogleFonts.inter(fontSize: 12, color: Colors.white38),
                       labelStyle: GoogleFonts.inter(fontSize: 12, color: Colors.white60),
                       filled: true,
                       fillColor: const Color(0xFF1A1633),
@@ -1900,17 +2187,17 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                     ),
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 12),
 
-                  // Audio Snippet (Fritext)
-                  Text('Audio Snippet', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white)),
+                  // Audio Track (Fritext)
+                  Text('Audio Track', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white)),
                   const SizedBox(height: 6),
                   TextField(
                     controller: audioTrackController,
                     style: GoogleFonts.inter(fontSize: 13, color: Colors.white),
                     decoration: InputDecoration(
-                      labelText: 'Audio Snippet / Audio Track',
-                      hintText: 'e.g. audio/bandrep1.mp3 or https://...',
+                      labelText: 'Audio Track',
+                      hintText: 'Track name or audio URL (e.g. Sommarkonsert Demo)',
                       hintStyle: GoogleFonts.inter(fontSize: 12, color: Colors.white38),
                       labelStyle: GoogleFonts.inter(fontSize: 12, color: Colors.white60),
                       filled: true,
@@ -1918,38 +2205,106 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                     ),
                   ),
-                  const SizedBox(height: 6),
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: [
-                        Text('Sample clips: ', style: GoogleFonts.inter(fontSize: 10.5, color: Colors.white54)),
-                        ...['audio/bandrep1.mp3', 'audio/bandrep2.mp3', 'audio/bandrep3.mp3'].map((sample) {
-                          return Padding(
-                            padding: const EdgeInsets.only(right: 6),
-                            child: InkWell(
+                  const SizedBox(height: 10),
+
+                  // Info Audio Track (Fritext)
+                  TextField(
+                    controller: infoAudioTrackController,
+                    maxLines: 2,
+                    style: GoogleFonts.inter(fontSize: 13, color: Colors.white),
+                    decoration: InputDecoration(
+                      labelText: 'Info Audio Track',
+                      hintText: 'e.g. Recorded live at Fasching with rough horn mix',
+                      hintStyle: GoogleFonts.inter(fontSize: 12, color: Colors.white38),
+                      labelStyle: GoogleFonts.inter(fontSize: 12, color: Colors.white60),
+                      filled: true,
+                      fillColor: const Color(0xFF1A1633),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+
+                  // Upload Track Button (File Picker)
+                  InkWell(
+                    onTap: () async {
+                      try {
+                        final result = await FilePicker.platform.pickFiles(
+                          type: FileType.custom,
+                          allowedExtensions: ['mp3', 'm4a', 'wav', 'aac', 'ogg'],
+                        );
+                        if (result != null && result.files.isNotEmpty) {
+                          final file = result.files.first;
+                          setSheetState(() {
+                            pickedAudioFile = file;
+                            if (audioTrackController.text.trim().isEmpty) {
+                              audioTrackController.text = file.name;
+                            }
+                          });
+                        }
+                      } catch (e) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('File picker notice: $e')),
+                          );
+                        }
+                      }
+                    },
+                    borderRadius: BorderRadius.circular(10),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1E1A38),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: pickedAudioFile != null ? AppTheme.success : const Color(0xFF2E2A4E),
+                          width: 1.2,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            pickedAudioFile != null ? Icons.check_circle_rounded : Icons.upload_file_rounded,
+                            color: pickedAudioFile != null ? AppTheme.success : AppTheme.primaryAccent,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  pickedAudioFile != null ? 'Selected: ${pickedAudioFile!.name}' : 'Upload Track (Choose Audio File)',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.bold,
+                                    color: pickedAudioFile != null ? Colors.white : Colors.white70,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                Text(
+                                  pickedAudioFile != null
+                                      ? '${(pickedAudioFile!.size / 1024).toStringAsFixed(1)} KB · Ready to attach'
+                                      : 'Tap to choose .mp3, .m4a or .wav from device',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 10.5,
+                                    color: Colors.white54,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          if (pickedAudioFile != null)
+                            GestureDetector(
                               onTap: () {
                                 setSheetState(() {
-                                  audioTrackController.text = sample;
+                                  pickedAudioFile = null;
                                 });
                               },
-                              borderRadius: BorderRadius.circular(6),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF1E1A38),
-                                  borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(color: const Color(0xFF2E2A4E)),
-                                ),
-                                child: Text(
-                                  sample.split('/').last,
-                                  style: GoogleFonts.inter(fontSize: 10, color: AppTheme.primaryAccent),
-                                ),
-                              ),
+                              child: const Icon(Icons.close_rounded, size: 16, color: Colors.white54),
                             ),
-                          );
-                        }),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                   const SizedBox(height: 18),
@@ -1959,75 +2314,94 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                     width: double.infinity,
                     height: 46,
                     child: ElevatedButton(
-                      onPressed: () {
-                        final band = bandNameController.text.trim().isEmpty ? 'My Band' : bandNameController.text.trim();
-                        final title = roleController.text.trim().isEmpty ? selectedType : roleController.text.trim();
-                        final newId = 'custom_${DateTime.now().millisecondsSinceEpoch}';
-                        
-                        final lat = _currentCameraPosition.target.latitude;
-                        final lng = _currentCameraPosition.target.longitude;
+                      onPressed: isPublishing
+                          ? null
+                          : () async {
+                              setSheetState(() => isPublishing = true);
+                              final band = bandNameController.text.trim().isEmpty ? 'My Band' : bandNameController.text.trim();
+                              final title = roleController.text.trim().isEmpty ? selectedType : roleController.text.trim();
+                              final newId = 'custom_${DateTime.now().millisecondsSinceEpoch}';
+                              final addressText = locationController.text.trim().isEmpty ? 'Stockholm, Sweden' : locationController.text.trim();
 
-                        String mappedType = 'gigConcert';
-                        if (selectedType == 'Rehearsal') mappedType = 'rehearsal';
-                        if (selectedType == 'Jam Session') mappedType = 'jamSession';
-                        if (selectedType == 'Recorded Music') mappedType = 'recordedMusic';
-                        if (selectedType == 'Gig Promo') mappedType = 'gigPromo';
-                        if (selectedType == 'New Member') mappedType = 'newMember';
-                        if (selectedType == 'Substitute') mappedType = 'subs';
-                        if (selectedType == 'Paid Gigs') mappedType = 'paid';
+                              // Geocode entered address to get real geographic coordinates (without postal code)
+                              final targetLatLng = await _geocodeAddress(addressText, _currentCameraPosition.target);
 
-                        final audioUrl = audioTrackController.text.trim();
+                              String mappedType = 'gigConcert';
+                              if (selectedType == 'Rehearsal') mappedType = 'rehearsal';
+                              if (selectedType == 'Jam Session') mappedType = 'jamSession';
+                              if (selectedType == 'Recorded Music') mappedType = 'recordedMusic';
+                              if (selectedType == 'Gig Promo') mappedType = 'gigPromo';
+                              if (selectedType == 'New Member') mappedType = 'newMember';
+                              if (selectedType == 'Substitute') mappedType = 'subs';
+                              if (selectedType == 'Paid Gigs') mappedType = 'paid';
 
-                        final newGig = SubRequest(
-                          id: newId,
-                          subRequestId: newId,
-                          bandName: band,
-                          role: title,
-                          voicePart: title,
-                          requestType: selectedType,
-                          location: locationController.text.trim().isEmpty ? 'Stockholm, Sweden' : locationController.text.trim(),
-                          date: selectedDate.toIso8601String(),
-                          startTime: '${selectedStartTime.hour.toString().padLeft(2, '0')}:${selectedStartTime.minute.toString().padLeft(2, '0')}:00',
-                          endTime: '${selectedEndTime.hour.toString().padLeft(2, '0')}:${selectedEndTime.minute.toString().padLeft(2, '0')}:00',
-                          description: descriptionController.text.trim().isEmpty ? 'Uploaded via Map View.' : descriptionController.text.trim(),
-                          latitude: lat,
-                          longitude: lng,
-                          isPaid: selectedType == 'Paid Gigs',
-                          payAmount: 2000,
-                          responses: {},
-                          extraFields: {
-                            if (audioUrl.isNotEmpty) ...{
-                              'audioSnippetUrl': audioUrl,
-                              'audioSnippetTitle': '$band Audio Track',
+                              final audioText = audioTrackController.text.trim();
+                              final audioInfo = infoAudioTrackController.text.trim();
+                              final audioUrl = pickedAudioFile != null
+                                  ? (pickedAudioFile!.path ?? 'audio/bandrep1.mp3')
+                                  : (audioText.isNotEmpty ? audioText : null);
+
+                              final newGig = SubRequest(
+                                id: newId,
+                                subRequestId: newId,
+                                bandName: band,
+                                role: title,
+                                voicePart: title,
+                                requestType: selectedType,
+                                location: addressText,
+                                date: selectedDate.toIso8601String(),
+                                startTime: '${selectedStartTime.hour.toString().padLeft(2, '0')}:${selectedStartTime.minute.toString().padLeft(2, '0')}:00',
+                                endTime: '${selectedEndTime.hour.toString().padLeft(2, '0')}:${selectedEndTime.minute.toString().padLeft(2, '0')}:00',
+                                description: descriptionController.text.trim().isEmpty ? 'Uploaded via Map View.' : descriptionController.text.trim(),
+                                latitude: targetLatLng.latitude,
+                                longitude: targetLatLng.longitude,
+                                isPaid: selectedType == 'Paid Gigs',
+                                payAmount: 2000,
+                                responses: {},
+                                extraFields: {
+                                  if (audioUrl != null && audioUrl.isNotEmpty) ...{
+                                    'audioSnippetUrl': audioUrl,
+                                    'audioSnippetTitle': audioText.isNotEmpty ? audioText : '$band Audio Track',
+                                    if (audioInfo.isNotEmpty) 'infoAudioTrack': audioInfo,
+                                  },
+                                  'eventType': mappedType,
+                                  'genre': selectedGenres.isNotEmpty ? selectedGenres.first : 'Big Band Contemporary',
+                                  'subCategory': selectedCategory,
+                                },
+                              );
+
+                              setState(() {
+                                _allGigs.insert(0, newGig);
+                                _selectedGig = newGig;
+                                _selectedRehearsal = null;
+                              });
+
+                              _mapController?.animateCamera(
+                                CameraUpdate.newLatLngZoom(targetLatLng, 14.5),
+                              );
+
+                              Navigator.pop(ctx);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Pin published at $addressText!'),
+                                  backgroundColor: AppTheme.success,
+                                ),
+                              );
                             },
-                            'eventType': mappedType,
-                            'genre': selectedGenres.isNotEmpty ? selectedGenres.first : 'Big Band Contemporary',
-                            'subCategory': selectedCategory,
-                          },
-                        );
-
-                        setState(() {
-                          _allGigs.insert(0, newGig);
-                          _selectedGig = newGig;
-                          _selectedRehearsal = null;
-                        });
-
-                        Navigator.pop(ctx);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Event & audio pin published to Map View!'),
-                            backgroundColor: AppTheme.success,
-                          ),
-                        );
-                      },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppTheme.primaryAccent,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
-                      child: Text(
-                        'Publish Map View Pin / Audio',
-                        style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
-                      ),
+                      child: isPublishing
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                            )
+                          : Text(
+                              'Publish Map View Pin / Audio',
+                              style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
+                            ),
                     ),
                   ),
                 ],
@@ -2738,23 +3112,62 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 1. Band name + Genre / Band Type (Line 1) & Close button
+          // 1. Band name (clickable -> Band Profile "About") + Genre / Band Type (Line 1) & Close button
           // e.g. "Mats Holmquist Stora Stygga - Big Band Contemporary"
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                child: Text(
-                  genre.isNotEmpty ? '${gig.bandName ?? "Unknown Band"} - $genre' : (gig.bandName ?? 'Unknown Band'),
-                  style: GoogleFonts.outfit(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                    height: 1.25,
+                child: InkWell(
+                  onTap: () {
+                    _openBandProfile(
+                      context: context,
+                      bandName: gig.bandName ?? "Unknown Band",
+                      genre: genre,
+                      aboutText: gig.description,
+                      location: gig.location,
+                      audioUrl: gig.audioSnippetUrl,
+                      audioTitle: gig.audioSnippetTitle,
+                    );
+                  },
+                  borderRadius: BorderRadius.circular(6),
+                  child: RichText(
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    text: TextSpan(
+                      children: [
+                        TextSpan(
+                          text: gig.bandName ?? "Unknown Band",
+                          style: GoogleFonts.outfit(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                            decoration: TextDecoration.underline,
+                            decorationColor: Colors.white38,
+                            height: 1.25,
+                          ),
+                        ),
+                        if (genre.isNotEmpty) ...[
+                          TextSpan(
+                            text: ' - ',
+                            style: GoogleFonts.inter(
+                              fontSize: 13,
+                              color: Colors.white54,
+                            ),
+                          ),
+                          TextSpan(
+                            text: genre,
+                            style: GoogleFonts.inter(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: const Color(0xFF60A5FA), // Mindre, blåfärgad font
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
                   ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
                 ),
               ),
               const SizedBox(width: 8),
@@ -2854,7 +3267,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
             ),
           ],
 
-          // 6. Inline Audio snippet player
+          // 6. Inline Audio Track player
           if (gig.hasAudioSnippet) ...[
             const SizedBox(height: 10),
             Container(
@@ -2873,7 +3286,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(
-                          gig.audioSnippetTitle ?? 'Audio Preview Snippet',
+                          gig.audioSnippetTitle ?? 'Audio Track',
                           style: GoogleFonts.inter(
                             fontSize: 11.5,
                             fontWeight: FontWeight.bold,
@@ -2890,7 +3303,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Text(
-                          'SNIPPET',
+                          'AUDIO TRACK',
                           style: GoogleFonts.inter(
                             fontSize: 9,
                             fontWeight: FontWeight.bold,
@@ -2901,6 +3314,18 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                       ),
                     ],
                   ),
+                  if (gig.extraFields['infoAudioTrack'] != null &&
+                      gig.extraFields['infoAudioTrack'].toString().trim().isNotEmpty) ...[
+                    const SizedBox(height: 3),
+                    Text(
+                      gig.extraFields['infoAudioTrack'].toString().trim(),
+                      style: GoogleFonts.inter(
+                        fontSize: 11,
+                        color: Colors.white70,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 6),
                   AudioSnippetPlayer(audioUrl: gig.audioSnippetUrl!),
                 ],
@@ -3078,19 +3503,56 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(
-                  child: Text(
-                    rehearsal.genre.isNotEmpty
-                        ? '${rehearsal.bandName} - ${rehearsal.genre}'
-                        : rehearsal.bandName,
-                    style: GoogleFonts.outfit(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                      height: 1.25,
-                    ),
+                  child: InkWell(
+                  onTap: () {
+                    _openBandProfile(
+                      context: context,
+                      bandName: rehearsal.bandName,
+                      genre: rehearsal.genre,
+                      aboutText: rehearsal.description,
+                      location: rehearsal.location ?? rehearsal.city,
+                      audioUrl: rehearsal.audioAssetPath,
+                      audioTitle: '${rehearsal.bandName} Live Rehearsal Track',
+                    );
+                  },
+                  borderRadius: BorderRadius.circular(6),
+                  child: RichText(
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
+                    text: TextSpan(
+                      children: [
+                        TextSpan(
+                          text: rehearsal.bandName,
+                          style: GoogleFonts.outfit(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                            decoration: TextDecoration.underline,
+                            decorationColor: Colors.white38,
+                            height: 1.25,
+                          ),
+                        ),
+                        if (rehearsal.genre.isNotEmpty) ...[
+                          TextSpan(
+                            text: ' - ',
+                            style: GoogleFonts.inter(
+                              fontSize: 13,
+                              color: Colors.white54,
+                            ),
+                          ),
+                          TextSpan(
+                            text: rehearsal.genre,
+                            style: GoogleFonts.inter(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: const Color(0xFF60A5FA), // Mindre, blåfärgad font
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
                   ),
+                ),
                 ),
                 const SizedBox(width: 8),
                 GestureDetector(
