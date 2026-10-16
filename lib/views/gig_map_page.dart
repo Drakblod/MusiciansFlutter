@@ -1675,8 +1675,8 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                   ),
                   const SizedBox(height: 12),
 
-                  // Event Type Selector
-                  Text('Event Type', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white)),
+                  // Type Selector
+                  Text('Type', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white)),
                   const SizedBox(height: 6),
                   Wrap(
                     spacing: 8,
