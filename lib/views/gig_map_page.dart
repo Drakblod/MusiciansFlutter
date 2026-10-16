@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:math' as math;
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:provider/provider.dart';
@@ -11,12 +13,14 @@ import '../models/user_profile.dart';
 import '../config/feature_flags.dart';
 import '../models/mock_live_rehearsal.dart';
 import '../data/mock_live_rehearsals.dart';
+import '../data/genres_taxonomy.dart';
 import '../services/mock_rehearsal_audio_controller.dart';
 import '../widgets/map_crosshair.dart';
 import '../widgets/custom_top_bar.dart';
 import '../widgets/animated_tap_detector.dart';
 import '../widgets/audio_snippet_player.dart';
 import '../widgets/what_is_map_view_dialog.dart';
+import '../widgets/searchable_category_multi_select_sheet.dart';
 import '../utils/map_crosshair_targeting.dart';
 import '../models/live_broadcast.dart';
 import '../services/live_broadcast_service.dart';
@@ -173,6 +177,66 @@ class MapEventTypeHelper {
     return MapEventType.gigConcert;
   }
 
+  static Future<BitmapDescriptor> createCustomPinBitmap(Color color) async {
+    final pictureRecorder = ui.PictureRecorder();
+    final canvas = Canvas(pictureRecorder);
+    const double width = 64;
+    const double height = 80;
+
+    // 1. Subtle drop shadow under the tip
+    final shadowPaint = Paint()
+      ..color = Colors.black.withOpacity(0.35)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
+    canvas.drawOval(
+      Rect.fromCenter(center: const Offset(width / 2, height - 4), width: 18, height: 8),
+      shadowPaint,
+    );
+
+    // 2. Teardrop pin path
+    final path = Path();
+    const double radius = 24.0;
+    const center = Offset(width / 2, radius + 2); // (32, 26)
+
+    path.arcTo(
+      Rect.fromCircle(center: center, radius: radius),
+      math.pi * 0.75,
+      math.pi * 1.5,
+      false,
+    );
+    path.lineTo(width / 2, height - 8);
+    path.close();
+
+    // 3. Pin body filled with the vibrant event type color
+    final bodyPaint = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
+    canvas.drawPath(path, bodyPaint);
+
+    // 4. Clean white outer border
+    final borderPaint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3.0;
+    canvas.drawPath(path, borderPaint);
+
+    // 5. Inner white disc
+    final innerDiscPaint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(center, 11, innerDiscPaint);
+
+    // 6. Center color dot
+    final centerDotPaint = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(center, 6.5, centerDotPaint);
+
+    final picture = pictureRecorder.endRecording();
+    final image = await picture.toImage(width.toInt(), height.toInt());
+    final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+    return BitmapDescriptor.fromBytes(byteData!.buffer.asUint8List());
+  }
+
   static BitmapDescriptor getMarkerIcon(MapEventType type) {
     switch (type) {
       case MapEventType.gigConcert:
@@ -218,7 +282,7 @@ class MapEventTypeHelper {
   static String getLabel(MapEventType type) {
     switch (type) {
       case MapEventType.gigConcert:
-        return 'Gig/Concert/Live Performance';
+        return 'Gig / Concert';
       case MapEventType.rehearsal:
         return 'Rehearsal';
       case MapEventType.jamSession:
@@ -230,9 +294,9 @@ class MapEventTypeHelper {
       case MapEventType.newMember:
         return 'New Member';
       case MapEventType.subs:
-        return 'Subs';
+        return 'Substitute';
       case MapEventType.paid:
-        return 'Paid';
+        return 'Paid Gigs';
     }
   }
 
@@ -251,9 +315,9 @@ class MapEventTypeHelper {
       case MapEventType.newMember:
         return 'New Member';
       case MapEventType.subs:
-        return 'Subs';
+        return 'Substitute';
       case MapEventType.paid:
-        return 'Paid Gig';
+        return 'Paid Gigs';
     }
   }
 
@@ -447,9 +511,89 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
 ]
 ''';
 
+  static final Map<MapEventType, BitmapDescriptor> _customPinCache = {};
+
+  Future<void> _initCustomPins() async {
+    for (final type in MapEventType.values) {
+      if (!_customPinCache.containsKey(type)) {
+        try {
+          final color = MapEventTypeHelper.getColor(type);
+          final descriptor = await MapEventTypeHelper.createCustomPinBitmap(color);
+          _customPinCache[type] = descriptor;
+        } catch (e) {
+          debugPrint('Error generating custom pin for $type: $e');
+        }
+      }
+    }
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  String _monthShort(int month) {
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    if (month >= 1 && month <= 12) return months[month - 1];
+    return '';
+  }
+
+  String _weekdayName(int weekday) {
+    const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    if (weekday >= 1 && weekday <= 7) return days[weekday - 1];
+    return '';
+  }
+
+  String _formatTimeNice(String raw) {
+    if (raw.toLowerCase().contains('am') || raw.toLowerCase().contains('pm')) return raw;
+    final parts = raw.split(':');
+    if (parts.length >= 2) {
+      final h = int.tryParse(parts[0]);
+      final m = int.tryParse(parts[1]);
+      if (h != null && m != null) {
+        final period = h >= 12 ? 'PM' : 'AM';
+        final hour12 = h == 0 ? 12 : (h > 12 ? h - 12 : h);
+        final minuteStr = m == 0 ? '00' : (m < 10 ? '0$m' : '$m');
+        return '$hour12.$minuteStr $period';
+      }
+    }
+    return raw;
+  }
+
+  String _formatEventDateTime(SubRequest gig, MapEventType eventType) {
+    final isRequest = eventType == MapEventType.newMember ||
+        eventType == MapEventType.subs ||
+        eventType == MapEventType.paid;
+
+    if (isRequest) {
+      DateTime? postDate;
+      if (gig.createdAt != null) {
+        postDate = DateTime.fromMillisecondsSinceEpoch(gig.createdAt!);
+      } else if (gig.date != null) {
+        postDate = DateTime.tryParse(gig.date!);
+      }
+      postDate ??= DateTime.now();
+      final month = _monthShort(postDate.month);
+      return 'Posted $month ${postDate.day}';
+    }
+
+    DateTime? eventDate;
+    if (gig.date != null) {
+      eventDate = DateTime.tryParse(gig.date!);
+    }
+    eventDate ??= DateTime.now();
+    final weekday = _weekdayName(eventDate.weekday);
+    final month = _monthShort(eventDate.month);
+    final year = eventDate.year;
+
+    final start = _formatTimeNice(gig.startTime ?? '18:00');
+    final end = _formatTimeNice(gig.endTime ?? '21:00');
+
+    return '$weekday, $month ${eventDate.day}, $year - $start $end';
+  }
+
   @override
   void initState() {
     super.initState();
+    _initCustomPins();
     _fetchGigs();
     WidgetsBinding.instance.addObserver(this);
     if (FeatureFlags.enableMockLiveRehearsals) {
@@ -529,26 +673,24 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
           SubRequest(
             id: 'mock_1',
             subRequestId: 'mock_1',
-            voicePart: 'Electric Guitar',
-            role: 'Rock Guitarist Needed',
-            requestType: 'Gig',
-            bandName: 'The Midnight Storm',
-            location: 'Stockholm, Sweden',
-            date: DateTime.now().add(const Duration(days: 3)).toIso8601String(),
-            startTime: '19:00:00',
-            endTime: '22:00:00',
-            description: 'Looking for a solid rock guitarist to fill in for a live weekend gig at Debaser.',
-            isPaid: true,
-            payAmount: 2500,
-            currency: 'SEK',
-            latitude: 59.3293,
-            longitude: 18.0686,
+            voicePart: 'Big Band',
+            role: 'Gig / Concert',
+            requestType: 'Gig / Concert',
+            bandName: 'Mats Holmquist Stora Stygga',
+            location: 'Fasching, Kungsgatan 44',
+            date: '2026-10-24T18:00:00',
+            startTime: '18:00:00',
+            endTime: '21:00:00',
+            description: 'Äntligen är de tillbaka med sin nyskapande storbandsjazz på Faschings legendariska scen.',
+            isPaid: false,
+            latitude: 59.3340,
+            longitude: 18.0560,
             responses: {},
             extraFields: {
               'audioSnippetUrl': 'audio/bandrep1.mp3',
-              'audioSnippetTitle': 'Debaser Live Demo - Midnight Storm',
+              'audioSnippetTitle': 'Stora Stygga Live at Fasching Demo',
               'eventType': 'gigConcert',
-              'genre': 'Rock / Blues',
+              'genre': 'Big Band Contemporary',
             },
           ),
           SubRequest(
@@ -572,7 +714,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
               'audioSnippetUrl': 'audio/bandrep2.mp3',
               'audioSnippetTitle': 'Weekly Funk Groove Rehearsal',
               'eventType': 'rehearsal',
-              'genre': 'Funk / Soul',
+              'genre': 'Funk',
             },
           ),
           SubRequest(
@@ -595,7 +737,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
               'audioSnippetUrl': 'audio/bandrep3.mp3',
               'audioSnippetTitle': 'Open Stage Jam Session Highlights',
               'eventType': 'jamSession',
-              'genre': 'Jazz & Fusion',
+              'genre': 'Fusion',
             },
           ),
           SubRequest(
@@ -603,7 +745,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
             subRequestId: 'mock_4',
             voicePart: 'Brass / Strings',
             role: 'Studio Overdubs for EP',
-            requestType: 'Recording Session',
+            requestType: 'Recorded Music',
             bandName: 'Monochrome Sound Lab',
             location: 'Södermalm, Stockholm',
             date: DateTime.now().add(const Duration(days: 7)).toIso8601String(),
@@ -620,7 +762,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
               'audioSnippetUrl': 'audio/bandrep3.mp3',
               'audioSnippetTitle': 'Studio Rough Mix - Horns',
               'eventType': 'recordedMusic',
-              'genre': 'Alternative / Studio',
+              'genre': 'Indie / Alternative',
             },
           ),
           SubRequest(
@@ -643,18 +785,18 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
               'audioSnippetUrl': 'audio/bandrep1.mp3',
               'audioSnippetTitle': 'Summer Tour Single - Nordic Echoes',
               'eventType': 'gigPromo',
-              'genre': 'Synth Pop',
+              'genre': 'Electronic Dance Music (EDM)',
             },
           ),
           SubRequest(
             id: 'mock_6',
             subRequestId: 'mock_6',
             voicePart: 'Drums',
-            role: 'Seeking Permanent Drummer',
+            role: 'New Member',
             requestType: 'New Member',
             bandName: 'Vibe Check',
             location: 'Malmö, Sweden',
-            date: DateTime.now().add(const Duration(days: 6)).toIso8601String(),
+            date: DateTime.now().subtract(const Duration(days: 2)).toIso8601String(),
             startTime: '17:30:00',
             endTime: '20:30:00',
             description: 'Audition / seeking permanent drummer for touring Scandinavian pop-rock band.',
@@ -668,19 +810,19 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
               'audioSnippetUrl': 'audio/bandrep1.mp3',
               'audioSnippetTitle': 'Audition Track: Nightglow (Tempo 128)',
               'eventType': 'newMember',
-              'genre': 'Pop / Indie',
+              'genre': 'Pop',
             },
           ),
           SubRequest(
             id: 'mock_7',
             subRequestId: 'mock_7',
             voicePart: 'Cello',
-            role: 'Classical Cello Rehearsal Sub',
+            role: 'Substitute',
             requestType: 'Subs',
             rehearsalDayOfWeek: 'Wednesday',
             bandName: 'Uppsala Sinfonietta',
-            location: 'Uppsala, Sweden',
-            date: DateTime.now().add(const Duration(days: 2)).toIso8601String(),
+            location: 'Uppsala Konsert & Kongress',
+            date: DateTime.now().subtract(const Duration(days: 4)).toIso8601String(),
             startTime: '18:00:00',
             endTime: '21:00:00',
             description: 'Substitute cellist required for our weekly orchestra rehearsal. Sheet music provided in advance.',
@@ -699,11 +841,11 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
             id: 'mock_8',
             subRequestId: 'mock_8',
             voicePart: 'Lead Guitar',
-            role: 'Paid Festival Lead Guitarist',
+            role: 'Paid Gigs',
             requestType: 'Paid',
             bandName: 'Arctic Lights Collective',
-            location: 'Umeå, Sweden',
-            date: DateTime.now().add(const Duration(days: 12)).toIso8601String(),
+            location: 'Umeå Open, Umeå',
+            date: DateTime.now().subtract(const Duration(days: 1)).toIso8601String(),
             startTime: '19:30:00',
             endTime: '22:30:00',
             description: 'Paid sub guitarist needed for high-energy opening slot at Arctic Lights Festival.',
@@ -725,7 +867,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
             subRequestId: 'mock_9',
             voicePart: 'Bass',
             role: 'Studio Session Bassist',
-            requestType: 'Recording Session',
+            requestType: 'Recorded Music',
             bandName: 'SoundWave Studios',
             location: 'Linköping, Sweden',
             date: DateTime.now().add(const Duration(days: 7)).toIso8601String(),
@@ -742,7 +884,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
               'audioSnippetUrl': 'audio/bandrep2.mp3',
               'audioSnippetTitle': 'Album Pre-production Bass Stem',
               'eventType': 'recordedMusic',
-              'genre': 'Studio / Rock',
+              'genre': 'Indie / Alternative',
             },
           ),
           SubRequest(
@@ -765,21 +907,21 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
               'audioSnippetUrl': 'audio/bandrep2.mp3',
               'audioSnippetTitle': 'Möllevången Soul Session Excerpt',
               'eventType': 'jamSession',
-              'genre': 'Soul / Funk',
+              'genre': 'Soul',
             },
           ),
           SubRequest(
             id: 'mock_11',
             subRequestId: 'mock_11',
             voicePart: 'Vocalist',
-            role: 'Jazz Club Vocalist',
+            role: 'Gig / Concert',
             requestType: 'Club Gig',
             bandName: 'Cool Autumn Quartet',
-            location: 'Gothenburg, Sweden',
+            location: 'Nefertiti, Gothenburg',
             date: DateTime.now().add(const Duration(days: 5)).toIso8601String(),
             startTime: '20:00:00',
             endTime: '23:00:00',
-            description: 'Need a guest vocalist for standard jazz tunes at Nefertiti jazz club show.',
+            description: 'Guest vocalist featured for standard jazz tunes at Nefertiti jazz club show.',
             isPaid: true,
             payAmount: 2200,
             currency: 'SEK',
@@ -797,11 +939,11 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
             id: 'mock_12',
             subRequestId: 'mock_12',
             voicePart: 'Trombone',
-            role: 'Brass Band Trombone Sub',
+            role: 'Substitute',
             requestType: 'Subs',
             bandName: 'West Coast Horn Band',
             location: 'Gothenburg, Sweden',
-            date: DateTime.now().add(const Duration(days: 8)).toIso8601String(),
+            date: DateTime.now().subtract(const Duration(days: 3)).toIso8601String(),
             startTime: '18:00:00',
             endTime: '21:00:00',
             description: 'Substitute trombone player needed for concert series.',
@@ -904,6 +1046,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
       case 'New Members':
         return _allGigs.where((g) => MapEventTypeHelper.getEventType(g) == MapEventType.newMember).length;
       case 'Subs':
+      case 'Substitute':
         return _allGigs.where((g) => MapEventTypeHelper.getEventType(g) == MapEventType.subs).length;
       case 'Paid':
       case 'Paid Gigs':
@@ -995,7 +1138,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
 
   BitmapDescriptor _getMarkerColor(SubRequest gig) {
     final eventType = MapEventTypeHelper.getEventType(gig);
-    return MapEventTypeHelper.getMarkerIcon(eventType);
+    return _customPinCache[eventType] ?? MapEventTypeHelper.getMarkerIcon(eventType);
   }
 
   List<SubRequest> _getFilteredGigs(UserProfile? profile) {
@@ -1031,14 +1174,19 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
     // 2. Secondary Sub-Filter
     if (_selectedSubCategory != null &&
         _selectedSubCategory != 'All Music' &&
-        _selectedSubCategory != 'All Sub/Member') {
+        _selectedSubCategory != 'All Sub/Member' &&
+        _selectedSubCategory != 'All Sub & Member') {
       list = list.where((g) {
         final type = MapEventTypeHelper.getEventType(g);
         final shortLabel = MapEventTypeHelper.getShortLabel(type);
         final fullLabel = MapEventTypeHelper.getLabel(type);
         return shortLabel == _selectedSubCategory ||
             fullLabel == _selectedSubCategory ||
-            type.name == _selectedSubCategory;
+            type.name == _selectedSubCategory ||
+            (_selectedSubCategory == 'Substitute' && (shortLabel == 'Subs' || type == MapEventType.subs)) ||
+            (_selectedSubCategory == 'Subs' && (shortLabel == 'Substitute' || type == MapEventType.subs)) ||
+            (_selectedSubCategory == 'Paid Gigs' && (shortLabel == 'Paid' || type == MapEventType.paid)) ||
+            (_selectedSubCategory == 'Paid' && (shortLabel == 'Paid Gigs' || type == MapEventType.paid));
       }).toList();
     }
 
@@ -1058,13 +1206,16 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
 
   Set<Marker> _buildMarkers(List<SubRequest> filteredGigs) {
     final gigMarkers = filteredGigs.map((gig) {
+      final eventType = MapEventTypeHelper.getEventType(gig);
+      final standardizedType = MapEventTypeHelper.getShortLabel(eventType);
       return Marker(
         markerId: MarkerId(gig.id ?? gig.subRequestId ?? UniqueKey().toString()),
         position: LatLng(gig.latitude!, gig.longitude!),
         icon: _getMarkerColor(gig),
+        anchor: const Offset(0.5, 0.9),
         infoWindow: InfoWindow(
-          title: gig.role ?? gig.voicePart ?? 'Event',
-          snippet: '${gig.bandName ?? ""} · ${gig.location ?? ""}',
+          title: '${gig.bandName ?? "Band"} · $standardizedType',
+          snippet: gig.location ?? '',
         ),
         onTap: () {
           setState(() {
@@ -1412,6 +1563,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
   void _showUploadEventSheet() {
     String selectedCategory = 'Music';
     String selectedType = 'Gig / Concert';
+    List<String> selectedGenres = ['Big Band Contemporary'];
     final bandNameController = TextEditingController();
     final roleController = TextEditingController();
     final locationController = TextEditingController(text: 'Stockholm, Sweden');
@@ -1432,7 +1584,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
               ? ['Gig / Concert', 'Rehearsal', 'Jam Session', 'Recorded Music']
               : selectedCategory == 'Gig Promo'
                   ? ['Gig Promo']
-                  : ['New Member', 'Subs', 'Paid'];
+                  : ['Substitute', 'New Member', 'Paid Gigs'];
 
           return Padding(
             padding: EdgeInsets.only(
@@ -1502,7 +1654,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                                 selectedCategory = cat;
                                 if (cat == 'Music') selectedType = 'Gig / Concert';
                                 if (cat == 'Gig Promo') selectedType = 'Gig Promo';
-                                if (cat == 'Sub & Member Search') selectedType = 'New Member';
+                                if (cat == 'Sub & Member Search') selectedType = 'Substitute';
                               });
                             }
                           },
@@ -1543,6 +1695,54 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                       filled: true,
                       fillColor: const Color(0xFF1A1633),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+
+                  // Genre / Band Type (Strictly from GenresTaxonomy)
+                  Text('Genre / Band Type', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white)),
+                  const SizedBox(height: 6),
+                  InkWell(
+                    onTap: () async {
+                      final result = await SearchableCategoryMultiSelectSheet.show(
+                        context: context,
+                        title: 'Select Genre / Band Type',
+                        categoryMap: GenresTaxonomy.categoryMap,
+                        initialSelected: selectedGenres,
+                      );
+                      if (result != null && result.isNotEmpty) {
+                        setSheetState(() {
+                          selectedGenres = result;
+                        });
+                      }
+                    },
+                    borderRadius: BorderRadius.circular(10),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1A1633),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xFF2E2A4E)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.music_note_rounded, color: AppTheme.primaryAccent, size: 18),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              selectedGenres.isNotEmpty ? selectedGenres.join(', ') : 'Select Genre / Band Type (from list)',
+                              style: GoogleFonts.inter(
+                                fontSize: 13,
+                                color: selectedGenres.isNotEmpty ? Colors.white : Colors.white54,
+                                fontWeight: selectedGenres.isNotEmpty ? FontWeight.w500 : FontWeight.normal,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const Icon(Icons.arrow_drop_down, color: Colors.white70),
+                        ],
+                      ),
                     ),
                   ),
                   const SizedBox(height: 10),
@@ -1646,8 +1846,8 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                         if (selectedType == 'Recorded Music') mappedType = 'recordedMusic';
                         if (selectedType == 'Gig Promo') mappedType = 'gigPromo';
                         if (selectedType == 'New Member') mappedType = 'newMember';
-                        if (selectedType == 'Subs') mappedType = 'subs';
-                        if (selectedType == 'Paid') mappedType = 'paid';
+                        if (selectedType == 'Substitute') mappedType = 'subs';
+                        if (selectedType == 'Paid Gigs') mappedType = 'paid';
 
                         final newGig = SubRequest(
                           id: newId,
@@ -1663,13 +1863,15 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                           description: descriptionController.text.trim().isEmpty ? 'Uploaded via Map View.' : descriptionController.text.trim(),
                           latitude: lat,
                           longitude: lng,
-                          isPaid: selectedType == 'Paid',
+                          isPaid: selectedType == 'Paid Gigs',
                           payAmount: 2000,
                           responses: {},
                           extraFields: {
                             'audioSnippetUrl': selectedAudio,
                             'audioSnippetTitle': '$band Preview Snippet',
                             'eventType': mappedType,
+                            'genre': selectedGenres.isNotEmpty ? selectedGenres.first : 'Big Band Contemporary',
+                            'subCategory': selectedCategory,
                           },
                         );
 
@@ -2001,8 +2203,8 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                         children: [
                           _buildSubFilterChip('All Sub/Member', MapEventType.newMember),
                           _buildSubFilterChip('New Member', MapEventType.newMember),
-                          _buildSubFilterChip('Subs', MapEventType.subs),
-                          _buildSubFilterChip('Paid', MapEventType.paid),
+                          _buildSubFilterChip('Substitute', MapEventType.subs),
+                          _buildSubFilterChip('Paid Gigs', MapEventType.paid),
                           const SizedBox(width: 8),
                           _buildInstrumentFilterToggle(),
                         ],
@@ -2349,8 +2551,6 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
   }
 
   Widget _buildBottomCardContent(SubRequest gig, AppState appState) {
-    final date = gig.date != null ? DateTime.tryParse(gig.date!) ?? DateTime.now() : DateTime.now();
-    final formattedDate = DateFormat('MMM dd, yyyy').format(date);
     final currentUserId = appState.currentUserId;
     final gigReqId = gig.subRequestId ?? gig.id;
     final isCreator = currentUserId != null && (gig.creatorUserId == currentUserId || gig.userId == currentUserId);
@@ -2379,22 +2579,26 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 1. Band name on top in large font + Close button (Page 4 in doc)
+          // 1. Band name + Genre / Band Type (Line 1) & Close button
+          // e.g. "Mats Holmquist Stora Stygga - Big Band Contemporary"
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
                 child: Text(
-                  gig.bandName ?? 'Unknown Band',
+                  genre.isNotEmpty ? '${gig.bandName ?? "Unknown Band"} - $genre' : (gig.bandName ?? 'Unknown Band'),
                   style: GoogleFonts.outfit(
-                    fontSize: 20,
+                    fontSize: 18,
                     fontWeight: FontWeight.bold,
                     color: Colors.white,
+                    height: 1.25,
                   ),
-                  maxLines: 1,
+                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
+              const SizedBox(width: 8),
               GestureDetector(
                 onTap: () {
                   final closedId = _selectedGig?.id ?? _selectedGig?.subRequestId;
@@ -2415,102 +2619,78 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
               ),
             ],
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
 
-          // 2. Event Type underneath (e.g. Rehearsal Sub: Cello, Gig / Concert)
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: badgeColor.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: badgeColor.withOpacity(0.5), width: 1.0),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(badgeIcon, color: badgeColor, size: 12),
-                    const SizedBox(width: 4),
-                    Text(
-                      badgeLabel,
-                      style: GoogleFonts.inter(
-                        color: badgeColor,
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (gig.role != null && gig.role!.trim().isNotEmpty) ...[
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    gig.role!,
-                    style: GoogleFonts.inter(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white.withOpacity(0.9),
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+          // 2. Standardized Event Category (Line 2: e.g. "Gig / Concert", "Substitute", "Rehearsal")
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: badgeColor.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: badgeColor.withOpacity(0.6), width: 1.0),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(badgeIcon, color: badgeColor, size: 13),
+                const SizedBox(width: 5),
+                Text(
+                  badgeLabel,
+                  style: GoogleFonts.inter(
+                    color: badgeColor,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
               ],
-            ],
+            ),
           ),
           const SizedBox(height: 10),
 
-          // 3. Location, Date & Time
+          // 3. Location (Line 3: e.g. "Fasching, Kungsgatan 44")
           Row(
             children: [
               const Icon(Icons.location_on_rounded, size: 14, color: AppTheme.textSecondary),
-              const SizedBox(width: 4),
+              const SizedBox(width: 5),
               Expanded(
                 child: Text(
                   gig.location ?? 'Sweden',
-                  style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
+                  style: GoogleFonts.inter(fontSize: 12.5, color: Colors.white70),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              const SizedBox(width: 8),
+            ],
+          ),
+          const SizedBox(height: 6),
+
+          // 4. Date & Time (Line 4: either gig/rehearsal time or "Posted Nov 12")
+          Row(
+            children: [
               const Icon(Icons.calendar_today_rounded, size: 13, color: AppTheme.textSecondary),
-              const SizedBox(width: 4),
-              Text(
-                '$formattedDate | ${gig.startTime ?? "18:00"} - ${gig.endTime ?? "21:00"}',
-                style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
+              const SizedBox(width: 5),
+              Expanded(
+                child: Text(
+                  _formatEventDateTime(gig, eventType),
+                  style: GoogleFonts.inter(fontSize: 12.5, color: Colors.white70),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             ],
           ),
 
-          // 4. Genre / Band Type
-          if (genre.isNotEmpty) ...[
-            const SizedBox(height: 6),
-            Row(
-              children: [
-                const Icon(Icons.music_note_rounded, size: 14, color: AppTheme.primaryAccent),
-                const SizedBox(width: 4),
-                Text(
-                  genre,
-                  style: GoogleFonts.inter(fontSize: 12, color: AppTheme.primaryAccent, fontWeight: FontWeight.w500),
-                ),
-              ],
-            ),
-          ],
-
-          // 5. Fritext (Description)
+          // 5. Fritext-ruta / Description (Line 5: e.g. "Äntligen är de tillbaka...")
           if (gig.description != null && gig.description!.trim().isNotEmpty) ...[
             const SizedBox(height: 8),
             Text(
               gig.description!,
               style: GoogleFonts.inter(
-                fontSize: 12,
-                color: Colors.white70,
+                fontSize: 12.5,
+                color: Colors.white.withOpacity(0.85),
                 height: 1.35,
               ),
-              maxLines: 2,
+              maxLines: 3,
               overflow: TextOverflow.ellipsis,
             ),
           ],

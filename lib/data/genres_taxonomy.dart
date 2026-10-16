@@ -63,6 +63,7 @@ class GenresTaxonomy {
     ],
     '🥁 Big Band': [
       'Big Band',
+      'Big Band Contemporary',
       'Mainstream (Basie, Miller, Sinatra, etc)',
       'New Orleans/Dixieland',
       'Swing',
