@@ -458,4 +458,9 @@ class SubRequest {
   /// Whether an audio preview snippet is available
   bool get hasAudioSnippet =>
       audioSnippetUrl != null && audioSnippetUrl!.trim().isNotEmpty;
+
+  /// Optional venue or performance hall name (e.g. Fasching, Stampen, Nefertiti)
+  String? get venue =>
+      (extraFields['venue'] ?? extraFields['Venue'] ?? extraFields['venueName'])
+          ?.toString();
 }

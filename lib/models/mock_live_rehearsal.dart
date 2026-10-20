@@ -9,6 +9,7 @@ class MockLiveRehearsal {
   final String audioAssetPath;
   final String genre;
   final String? location;
+  final String? venue;
   final String? dateTime;
   final String? description;
 
@@ -20,6 +21,7 @@ class MockLiveRehearsal {
     required this.audioAssetPath,
     this.genre = 'Rock / Indie',
     this.location,
+    this.venue,
     this.dateTime,
     this.description,
   });

@@ -6,10 +6,12 @@ import '../theme/app_theme.dart';
 
 class AudioSnippetPlayer extends StatefulWidget {
   final String audioUrl;
+  final bool autoPlay;
 
   const AudioSnippetPlayer({
     super.key,
     required this.audioUrl,
+    this.autoPlay = false,
   });
 
   @override
@@ -99,15 +101,37 @@ class _AudioSnippetPlayerState extends State<AudioSnippetPlayer> {
         }
       });
 
-      try {
-        await player.setSource(_getSource(widget.audioUrl));
-      } catch (e) {
-        debugPrint("[AudioSnippetPlayer] Non-fatal notice: Preloading audio source deferred: $e");
-      }
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
+      if (widget.autoPlay) {
+        try {
+          await player.play(_getSource(widget.audioUrl));
+          if (mounted) {
+            setState(() {
+              _playerState = PlayerState.playing;
+              _isLoading = false;
+            });
+          }
+        } catch (e) {
+          debugPrint("[AudioSnippetPlayer] Autoplay notice (e.g. browser policy): $e");
+          try {
+            await player.setSource(_getSource(widget.audioUrl));
+          } catch (_) {}
+          if (mounted) {
+            setState(() {
+              _isLoading = false;
+            });
+          }
+        }
+      } else {
+        try {
+          await player.setSource(_getSource(widget.audioUrl));
+        } catch (e) {
+          debugPrint("[AudioSnippetPlayer] Non-fatal notice: Preloading audio source deferred: $e");
+        }
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
+        }
       }
     } catch (e, stack) {
       debugPrint("[AudioSnippetPlayer] Error initializing AudioPlayer: $e\n$stack");
@@ -121,11 +145,15 @@ class _AudioSnippetPlayerState extends State<AudioSnippetPlayer> {
   }
 
   Source _getSource(String path) {
-    if (path.startsWith('http://') || path.startsWith('https://')) {
+    if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('blob:') || path.startsWith('data:')) {
       return UrlSource(path);
     }
-    final cleanPath = path.startsWith('assets/') ? path.substring(7) : path;
-    return AssetSource(cleanPath);
+    if (path.startsWith('assets/') || path.startsWith('audio/')) {
+      final cleanPath = path.startsWith('assets/') ? path.substring(7) : path;
+      return AssetSource(cleanPath);
+    }
+    // Device local file path
+    return DeviceFileSource(path);
   }
 
   @override

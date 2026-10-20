@@ -28,7 +28,7 @@ void showWhatIsMapViewDialog(BuildContext context) {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Explore Map View to discover audio snippets from gigs, rehearsals, recordings and gig promos, as well as requests for band members, subs and paid gigs.\n',
+              'Move pins towards the centre of the screen (telescopic sight) to hear different bands and their recordings, band info, gig promo, etc.\n',
               style: GoogleFonts.inter(
                 color: Colors.white,
                 fontSize: 13,
@@ -47,14 +47,14 @@ void showWhatIsMapViewDialog(BuildContext context) {
             ),
             const SizedBox(height: 4),
             Text(
-              'Move pins towards the centre of the screen (telescopic sight) to hear different bands and their recordings, band info, gig promo, etc.\n\n'
+              '• Crosshair / Centre: Move pins towards the centre of the screen (telescopic sight) to hear different bands and preview attached audio, band info, gig promo, etc.\n'
               '• Audio Snippets: Tap any pin or target with crosshair to preview attached recordings, band demos, and gig promos.\n'
               '• City Jumpers: Tap quick city buttons (Stockholm, Göteborg, Malmö, etc.) to immediately fly across Sweden.\n'
-              '• Filters: Filter by Music, Gig Promo, Sub & Member Search, or "This Week".\n',
+              '• Filters: Filter by Music, Sub & Member Search, or "This Week".\n',
               style: GoogleFonts.inter(color: Colors.white70, fontSize: 13, height: 1.4),
             ),
             Text(
-              'PIN EVENT TYPE COLORS:',
+              'PIN NOTER & FÄRGER:',
               style: GoogleFonts.outfit(
                 color: AppTheme.primaryAccent,
                 fontSize: 12,
@@ -63,21 +63,21 @@ void showWhatIsMapViewDialog(BuildContext context) {
               ),
             ),
             const SizedBox(height: 8),
-            _buildDialogColorItem('Gig / Concert / Live Performance', const Color(0xFFF97316), Icons.stadium_rounded),
+            _buildDialogColorItem('Live Gig / Concert (Blinkande halvnot)', const Color(0xFFF97316), isHalfNote: true),
             const SizedBox(height: 6),
-            _buildDialogColorItem('Rehearsal', const Color(0xFFEF4444), Icons.music_note_rounded),
+            _buildDialogColorItem('Live Rehearsal (Blinkande halvnot)', const Color(0xFFEF4444), isHalfNote: true),
             const SizedBox(height: 6),
-            _buildDialogColorItem('Jam Session', const Color(0xFF06B6D4), Icons.groups_rounded),
+            _buildDialogColorItem('Jam Session (Turkos not)', const Color(0xFF06B6D4)),
             const SizedBox(height: 6),
-            _buildDialogColorItem('Recorded Music', const Color(0xFF2563EB), Icons.album_rounded),
+            _buildDialogColorItem('Demos / Recordings (Mörkblå not)', const Color(0xFF2563EB)),
             const SizedBox(height: 6),
-            _buildDialogColorItem('Gig Promo', const Color(0xFFA855F7), Icons.campaign_rounded),
+            _buildDialogColorItem('Gig Promo (Lila not)', const Color(0xFFA855F7)),
             const SizedBox(height: 6),
-            _buildDialogColorItem('New Member', const Color(0xFF047857), Icons.person_add_alt_1_rounded),
+            _buildDialogColorItem('New Member (Mörkgrön not)', const Color(0xFF047857)),
             const SizedBox(height: 6),
-            _buildDialogColorItem('Subs', const Color(0xFF84CC16), Icons.swap_horiz_rounded),
+            _buildDialogColorItem('Subs (Limegrön not)', const Color(0xFF84CC16)),
             const SizedBox(height: 6),
-            _buildDialogColorItem('Paid (All types of paid gigs)', const Color(0xFFEAB308), Icons.payments_rounded),
+            _buildDialogColorItem('Paid Gigs (Gul not)', const Color(0xFFEAB308)),
           ],
         ),
       ),
@@ -94,15 +94,16 @@ void showWhatIsMapViewDialog(BuildContext context) {
   );
 }
 
-Widget _buildDialogColorItem(String label, Color color, IconData icon) {
+Widget _buildDialogColorItem(String label, Color color, {bool isHalfNote = false}) {
   return Row(
     children: [
       Container(
-        width: 14,
-        height: 14,
+        width: 15,
+        height: 15,
         decoration: BoxDecoration(
-          color: color,
+          color: isHalfNote ? Colors.transparent : color,
           shape: BoxShape.circle,
+          border: isHalfNote ? Border.all(color: color, width: 2.5) : null,
           boxShadow: [
             BoxShadow(
               color: color.withOpacity(0.5),
@@ -111,7 +112,9 @@ Widget _buildDialogColorItem(String label, Color color, IconData icon) {
           ],
         ),
         child: Center(
-          child: Icon(icon, color: Colors.black.withOpacity(0.7), size: 9),
+          child: isHalfNote
+              ? null
+              : Icon(Icons.music_note_rounded, color: Colors.black.withOpacity(0.7), size: 10),
         ),
       ),
       const SizedBox(width: 8),

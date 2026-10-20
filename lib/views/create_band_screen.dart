@@ -996,7 +996,7 @@ class _CreateBandScreenState extends State<CreateBandScreen> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          'Explore Map View to discover audio snippets from gigs, rehearsals, recordings and gig promos, as well as requests for band members, subs and paid gigs.',
+                          'Move pins towards the centre of the screen (telescopic sight) to hear different bands and their recordings, band info, gig promo, etc',
                           style: GoogleFonts.inter(fontSize: 11.5, color: const Color(0xFFD4CEEB), height: 1.35),
                         ),
                       ],
