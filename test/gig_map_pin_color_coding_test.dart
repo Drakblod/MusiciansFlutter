@@ -14,7 +14,7 @@ void main() {
       final type = MapEventTypeHelper.getEventType(gig);
       expect(type, MapEventType.gigConcert);
       expect(MapEventTypeHelper.getCategory(type), MapCategory.music);
-      expect(MapEventTypeHelper.getLabel(type), 'Gig/Concert/Live Performance');
+      expect(MapEventTypeHelper.getLabel(type), 'Gig / Concert');
       expect(MapEventTypeHelper.getColor(type), const Color(0xFFF97316));
       expect(MapEventTypeHelper.getIcon(type), Icons.stadium_rounded);
     });
@@ -100,7 +100,7 @@ void main() {
       final type = MapEventTypeHelper.getEventType(gig);
       expect(type, MapEventType.subs);
       expect(MapEventTypeHelper.getCategory(type), MapCategory.subAndMember);
-      expect(MapEventTypeHelper.getLabel(type), 'Subs');
+      expect(MapEventTypeHelper.getLabel(type), 'Substitute');
       expect(MapEventTypeHelper.getColor(type), const Color(0xFF84CC16));
       expect(MapEventTypeHelper.getIcon(type), Icons.swap_horiz_rounded);
     });
@@ -116,7 +116,7 @@ void main() {
       final type = MapEventTypeHelper.getEventType(gig);
       expect(type, MapEventType.paid);
       expect(MapEventTypeHelper.getCategory(type), MapCategory.subAndMember);
-      expect(MapEventTypeHelper.getLabel(type), 'Paid');
+      expect(MapEventTypeHelper.getLabel(type), 'Paid Gigs');
       expect(MapEventTypeHelper.getColor(type), const Color(0xFFEAB308));
       expect(MapEventTypeHelper.getIcon(type), Icons.payments_rounded);
     });

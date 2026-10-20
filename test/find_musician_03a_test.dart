@@ -296,7 +296,7 @@ void main() {
   }
 
   group('FIND-MUSICIAN-03A.1 Entry Context & Request Snapshot Tests', () {
-    testWidgets('1. HomeView/standalone entry renders an empty Name of Event without EVENT 1 header', (WidgetTester tester) async {
+    testWidgets('1. HomeView/standalone entry renders current hierarchy without legacy event headers', (WidgetTester tester) async {
       tester.view.physicalSize = const Size(800, 2000);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -305,13 +305,14 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.textContaining('EVENT 1'), findsNothing);
-      expect(find.text('Name of Event'), findsOneWidget);
-
-      final titleField = tester.widget<TextFormField>(find.widgetWithText(TextFormField, ''));
-      expect(titleField.controller?.text, isEmpty);
+      expect(find.text('Event Type'), findsOneWidget);
+      expect(find.text('Request Type'), findsOneWidget);
+      expect(find.text('Location'), findsOneWidget);
+      expect(find.text('Date & Time'), findsOneWidget);
+      expect(find.text('Description (optional)'), findsOneWidget);
     });
 
-    testWidgets('2. Standalone Name of Event is editable', (WidgetTester tester) async {
+    testWidgets('2. Standalone entry allows selecting Request Type', (WidgetTester tester) async {
       tester.view.physicalSize = const Size(800, 2000);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -319,13 +320,7 @@ void main() {
       await tester.pumpWidget(createWidgetUnderTest(eventId: null));
       await tester.pumpAndSettle();
 
-      final textFields = find.byType(TextFormField);
-      expect(textFields, findsOneWidget);
-
-      await tester.enterText(textFields.first, 'Acoustic Sunday Showcase');
-      await tester.pumpAndSettle();
-
-      expect(find.text('Acoustic Sunday Showcase'), findsWidgets);
+      expect(find.widgetWithText(DropdownButtonFormField<String>, 'Substitute'), findsOneWidget);
     });
 
     testWidgets('3. Standalone Event Type begins unselected and is selectable', (WidgetTester tester) async {
@@ -336,9 +331,11 @@ void main() {
       await tester.pumpWidget(createWidgetUnderTest(eventId: null));
       await tester.pumpAndSettle();
 
-      expect(find.text('Select Event Type'), findsOneWidget);
+      final eventTypeFinder = find.widgetWithText(DropdownButtonFormField<String>, 'Select Event Type');
+      expect(eventTypeFinder, findsOneWidget);
 
-      await tester.tap(find.text('Select Event Type'));
+      await tester.ensureVisible(eventTypeFinder);
+      await tester.tap(eventTypeFinder, warnIfMissed: false);
       await tester.pumpAndSettle();
 
       await tester.tap(find.text('Rehearsal').last);
@@ -388,13 +385,12 @@ void main() {
       await tester.pumpWidget(createWidgetUnderTest(eventId: 'event_existing_1'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Stockholm Rock Gala'), findsWidgets);
       expect(find.text('Concert'), findsWidgets);
       expect(find.text('Special annual charity rock gala'), findsOneWidget);
       expect(find.text('Globe Arena, Stockholm'), findsOneWidget);
     });
 
-    testWidgets('6. Existing-event Name of Event can be edited as request-local data', (WidgetTester tester) async {
+    testWidgets('6. Existing-event Description can be edited as request-local data', (WidgetTester tester) async {
       tester.view.physicalSize = const Size(800, 2000);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -419,10 +415,10 @@ void main() {
       await tester.pumpWidget(createWidgetUnderTest(eventId: 'event_existing_2'));
       await tester.pumpAndSettle();
 
-      final titleFinder = find.widgetWithText(TextFormField, 'Original Festival Name');
-      expect(titleFinder, findsOneWidget);
+      final descFinder = find.widgetWithText(TextField, 'Main festival stage');
+      expect(descFinder, findsOneWidget);
 
-      await tester.enterText(titleFinder, 'Festival Substitute Search Call');
+      await tester.enterText(descFinder, 'Festival Substitute Search Call');
       await tester.pumpAndSettle();
 
       expect(find.text('Festival Substitute Search Call'), findsWidgets);
@@ -487,9 +483,9 @@ void main() {
       await tester.pumpWidget(createWidgetUnderTest(eventId: 'event_source_check'));
       await tester.pumpAndSettle();
 
-      // Edit title and description
-      final titleField = find.widgetWithText(TextFormField, 'Untouched Source Title');
-      await tester.enterText(titleField, 'Heavily Edited Request Snapshot');
+      // Edit description
+      final descField = find.widgetWithText(TextField, 'Untouched Source Description');
+      await tester.enterText(descField, 'Heavily Edited Request Snapshot');
       await tester.pumpAndSettle();
 
       // Verify zero write calls were triggered
@@ -529,8 +525,8 @@ void main() {
       await tester.pumpWidget(createWidgetUnderTest(eventId: 'event_dismiss_test'));
       await tester.pumpAndSettle();
 
-      final titleField = find.widgetWithText(TextFormField, 'Dismissal Event');
-      await tester.enterText(titleField, 'Discarded Title Edit');
+      final descField = find.widgetWithText(TextField, 'Gig desc');
+      await tester.enterText(descField, 'Discarded Description Edit');
       await tester.pumpAndSettle();
 
       // Pump a replacement empty widget to simulate dismissal/navigation away
@@ -539,7 +535,7 @@ void main() {
 
       expect(mockFirebaseService.eventWriteCalls, 0);
       expect(mockFirebaseService.totalWriteCalls, 0);
-      expect(mockFirebaseService.events['event_dismiss_test']!.title, 'Dismissal Event');
+      expect(mockFirebaseService.events['event_dismiss_test']!.description, 'Gig desc');
     });
 
     testWidgets('10. Switching modes preserves the request draft', (WidgetTester tester) async {
@@ -567,21 +563,27 @@ void main() {
       await tester.pumpWidget(createWidgetUnderTest(eventId: 'event_mode_test'));
       await tester.pumpAndSettle();
 
-      final titleField = find.widgetWithText(TextFormField, 'Mode Switch Event');
-      await tester.enterText(titleField, 'Custom Request Title 2026');
+      final descField = find.widgetWithText(TextField, 'Original mode desc');
+      await tester.enterText(descField, 'Custom Request Description 2026');
       await tester.pumpAndSettle();
 
       // Switch to New Band Member mode
-      await tester.tap(find.text('Find New Band Member(s)'));
+      final reqTypeDropdown = find.widgetWithText(DropdownButtonFormField<String>, 'Substitute');
+      await tester.tap(reqTypeDropdown);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('New Member').last);
       await tester.pumpAndSettle();
 
       expect(find.text('New Band Member Recruitment'), findsOneWidget);
 
       // Switch back to Substitute mode
-      await tester.tap(find.text('Find Substitute(s)'));
+      final memberDropdown = find.widgetWithText(DropdownButtonFormField<String>, 'New Member');
+      await tester.tap(memberDropdown);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Substitute').last);
       await tester.pumpAndSettle();
 
-      expect(find.text('Custom Request Title 2026'), findsWidgets);
+      expect(find.text('Custom Request Description 2026'), findsWidgets);
     });
 
     testWidgets('11. Event 1 and Event 2 maintain independent editable values', (WidgetTester tester) async {
@@ -629,14 +631,14 @@ void main() {
       await tester.pumpWidget(createWidgetUnderTest(eventId: 'ev_multi_parent'));
       await tester.pumpAndSettle();
 
-      final title1Field = find.widgetWithText(TextFormField, 'Rehearsal 1');
-      final title2Field = find.widgetWithText(TextFormField, 'Tour Gig');
+      final desc1Field = find.widgetWithText(TextField, 'Rehearsal day 1');
+      final desc2Field = find.widgetWithText(TextField, 'Tour gig day 2');
 
-      expect(title1Field, findsOneWidget);
-      expect(title2Field, findsOneWidget);
+      expect(desc1Field, findsOneWidget);
+      expect(desc2Field, findsOneWidget);
 
-      await tester.enterText(title1Field, 'Rehearsal 1 (Warmup Set)');
-      await tester.enterText(title2Field, 'Tour Gig (Main Stage)');
+      await tester.enterText(desc1Field, 'Rehearsal 1 (Warmup Set)');
+      await tester.enterText(desc2Field, 'Tour Gig (Main Stage)');
       await tester.pumpAndSettle();
 
       expect(find.text('Rehearsal 1 (Warmup Set)'), findsWidgets);
@@ -656,8 +658,8 @@ void main() {
         eventType: 'Rehearsal',
         description: 'Notes 1',
         location: 'Loc 1',
-        startDateTime: '2026-09-10T18:00:00Z',
-        endDateTime: '2026-09-10T21:00:00Z',
+        startDateTime: '2026-09-10T14:00:00Z',
+        endDateTime: '2026-09-10T17:00:00Z',
         additionalNotes: '',
         createdBy: 'organizer_1',
         createdAt: 1772445600000,
@@ -679,8 +681,8 @@ void main() {
         eventType: 'Concert',
         description: 'Notes 2',
         location: 'Loc 2',
-        startDateTime: '2026-09-11T19:00:00Z',
-        endDateTime: '2026-09-11T22:00:00Z',
+        startDateTime: '2026-09-11T14:00:00Z',
+        endDateTime: '2026-09-11T17:00:00Z',
         additionalNotes: '',
         createdBy: 'organizer_1',
         createdAt: 1772445600000,
@@ -700,8 +702,8 @@ void main() {
       await tester.pumpWidget(createWidgetUnderTest(eventId: 'ev_pub_parent'));
       await tester.pumpAndSettle();
 
-      final title1Field = find.widgetWithText(TextFormField, 'Initial Event 1');
-      await tester.enterText(title1Field, 'Edited Snapshot Title 1');
+      final desc1Field = find.widgetWithText(TextField, 'Notes 1');
+      await tester.enterText(desc1Field, 'Edited Snapshot Description 1');
       await tester.pumpAndSettle();
 
       final publishBtn = find.text('PUBLISH MULTIPLE REQUEST');
@@ -711,7 +713,8 @@ void main() {
 
       expect(mockFirebaseService.publishCalls, 1);
       final ev1Req = mockFirebaseService.allSubRequests.firstWhere((r) => r.eventId == 'ev_pub_1');
-      expect(ev1Req.eventTitle, 'Edited Snapshot Title 1');
+      expect(ev1Req.eventTitle, 'Initial Event 1');
+      expect(ev1Req.description, 'Edited Snapshot Description 1');
       expect(ev1Req.date, contains('2026-09-10'));
     });
 
@@ -728,8 +731,8 @@ void main() {
         eventType: 'Rehearsal',
         description: 'N1',
         location: 'L1',
-        startDateTime: '2026-09-10T18:00:00Z',
-        endDateTime: '2026-09-10T21:00:00Z',
+        startDateTime: '2026-09-10T14:00:00Z',
+        endDateTime: '2026-09-10T17:00:00Z',
         additionalNotes: '',
         createdBy: 'organizer_1',
         createdAt: 1772445600000,
@@ -751,8 +754,8 @@ void main() {
         eventType: 'Concert',
         description: 'N2',
         location: 'L2',
-        startDateTime: '2026-09-11T19:00:00Z',
-        endDateTime: '2026-09-11T22:00:00Z',
+        startDateTime: '2026-09-11T14:00:00Z',
+        endDateTime: '2026-09-11T17:00:00Z',
         additionalNotes: '',
         createdBy: 'organizer_1',
         createdAt: 1772445600000,
@@ -772,8 +775,8 @@ void main() {
       await tester.pumpWidget(createWidgetUnderTest(eventId: 'ev_pub2_parent'));
       await tester.pumpAndSettle();
 
-      final title2Field = find.widgetWithText(TextFormField, 'E2');
-      await tester.enterText(title2Field, 'Custom Snapshot E2');
+      final desc2Field = find.widgetWithText(TextField, 'N2');
+      await tester.enterText(desc2Field, 'Custom Snapshot N2');
       await tester.pumpAndSettle();
 
       final publishBtn = find.text('PUBLISH MULTIPLE REQUEST');
@@ -782,7 +785,8 @@ void main() {
       await tester.pumpAndSettle();
 
       final ev2Req = mockFirebaseService.allSubRequests.firstWhere((r) => r.eventId == 'ev_pub2_2');
-      expect(ev2Req.eventTitle, 'Custom Snapshot E2');
+      expect(ev2Req.eventTitle, 'E2');
+      expect(ev2Req.description, 'Custom Snapshot N2');
       expect(ev2Req.date, contains('2026-09-11'));
     });
 
@@ -989,7 +993,7 @@ void main() {
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
 
-      // Open standalone (no eventId) -> Name of Event is empty, Event Type is unselected
+      // Open standalone (no eventId) -> Event Type is unselected
       await tester.pumpWidget(createWidgetUnderTest(eventId: null));
       await tester.pumpAndSettle();
 
@@ -999,7 +1003,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Publication should be blocked and show error SnackBar
-      expect(find.text('Please enter Name of Event and select an Event Type before publishing.'), findsOneWidget);
+      expect(find.text('Please select an Event Type before publishing.'), findsOneWidget);
       expect(mockFirebaseService.publishCalls, 0);
     });
 
@@ -1031,8 +1035,11 @@ void main() {
       expect(tester.takeException(), isNull);
 
       // Switch to New Band Member at 320px
-      await tester.ensureVisible(find.text('Find New Band Member(s)'));
-      await tester.tap(find.text('Find New Band Member(s)'));
+      final reqTypeFinder = find.widgetWithText(DropdownButtonFormField<String>, 'Substitute');
+      await tester.ensureVisible(reqTypeFinder);
+      await tester.tap(reqTypeFinder);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('New Member').last);
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);

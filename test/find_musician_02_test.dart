@@ -378,10 +378,10 @@ void main() {
         title: 'Mats Band - Stockholm Gig',
         description: 'Stockholm Gig',
         additionalNotes: '',
-        eventType: 'Gig',
+        eventType: 'Concert',
         location: 'Stockholm, Sweden',
-        startDateTime: '2026-09-10T19:00:00Z',
-        endDateTime: '2026-09-10T22:00:00Z',
+        startDateTime: '2026-09-10T14:00:00Z',
+        endDateTime: '2026-09-10T17:00:00Z',
         createdBy: 'organizer_1',
         createdAt: 1000,
         updatedAt: 1000,
@@ -395,10 +395,10 @@ void main() {
         title: 'Mats Band - Uppsala Gig',
         description: 'Uppsala Gig',
         additionalNotes: '',
-        eventType: 'Gig',
+        eventType: 'Concert',
         location: 'Uppsala, Sweden',
-        startDateTime: '2026-09-12T19:00:00Z',
-        endDateTime: '2026-09-12T22:00:00Z',
+        startDateTime: '2026-09-12T14:00:00Z',
+        endDateTime: '2026-09-12T17:00:00Z',
         createdBy: 'organizer_1',
         createdAt: 1000,
         updatedAt: 1000,
@@ -425,8 +425,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('FIND MUSICIAN/VOCALIST'), findsOneWidget);
-      expect(find.text('Find Substitute(s)'), findsOneWidget);
-      expect(find.text('Find New Band Member(s)'), findsOneWidget);
+      expect(find.text('Event Type'), findsWidgets);
+      expect(find.text('Request Type'), findsWidgets);
     });
 
     testWidgets('11. Displays only the band name in band context area (no Staffing for...)', (tester) async {
@@ -843,7 +843,7 @@ void main() {
       await tester.tap(find.text('Nordic Stars'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Role / Instrument (2)'), findsOneWidget);
+      expect(find.text('Role / Instrument'), findsOneWidget);
       expect(find.text('Event #1'), findsOneWidget);
       expect(find.text('Event #2'), findsOneWidget);
       expect(find.text('Electric Guitar'), findsOneWidget);
@@ -1122,11 +1122,11 @@ void main() {
         parentEventId: 'ev_clean_parent',
         subEventSequence: 1,
         title: 'Spring Festival 2026 - Day 1',
-        eventType: 'Gig',
+        eventType: 'Concert',
         description: '',
         location: 'Stockholm',
-        startDateTime: '2026-09-20T18:00:00Z',
-        endDateTime: '2026-09-20T22:00:00Z',
+        startDateTime: '2026-09-20T14:00:00Z',
+        endDateTime: '2026-09-20T17:00:00Z',
         additionalNotes: '',
         createdBy: 'user_leader',
         createdAt: 1000,
@@ -1138,11 +1138,11 @@ void main() {
         parentEventId: 'ev_clean_parent',
         subEventSequence: 2,
         title: 'Spring Festival 2026 - Day 2',
-        eventType: 'Gig',
+        eventType: 'Concert',
         description: '',
         location: 'Stockholm',
-        startDateTime: '2026-09-21T18:00:00Z',
-        endDateTime: '2026-09-21T22:00:00Z',
+        startDateTime: '2026-09-21T14:00:00Z',
+        endDateTime: '2026-09-21T17:00:00Z',
         additionalNotes: '',
         createdBy: 'user_leader',
         createdAt: 1000,

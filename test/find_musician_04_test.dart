@@ -338,10 +338,10 @@ void main() {
         id: 'event_test_pay',
         title: 'Special Show',
         description: 'Concert Gig',
-        eventType: 'Gig',
+        eventType: 'Concert',
         location: 'Stockholm',
-        startDateTime: DateTime.now().add(const Duration(days: 2)).toIso8601String(),
-        endDateTime: DateTime.now().add(const Duration(days: 2, hours: 2)).toIso8601String(),
+        startDateTime: '2026-09-10T14:00:00Z',
+        endDateTime: '2026-09-10T17:00:00Z',
         additionalNotes: '',
         createdBy: 'user_leader',
         createdAt: 100,
@@ -349,6 +349,7 @@ void main() {
         requireResponse: true,
       );
       appState.mockService.events['event_test_pay'] = bandEv;
+      appState.mockService.bandEvents['band_test_1'] = [bandEv];
 
       await tester.pumpWidget(createWidgetUnderTest(eventId: 'event_test_pay'));
       await tester.pumpAndSettle();
@@ -376,7 +377,11 @@ void main() {
       await tester.pumpAndSettle();
 
       // Switch to New Band Member
-      await tester.tap(find.text('Find New Band Member(s)'));
+      final reqTypeFinder = find.widgetWithText(DropdownButtonFormField<String>, 'Substitute');
+      await tester.ensureVisible(reqTypeFinder);
+      await tester.tap(reqTypeFinder);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('New Member').last);
       await tester.pumpAndSettle();
 
       await tester.tap(find.text('Favorites List'));

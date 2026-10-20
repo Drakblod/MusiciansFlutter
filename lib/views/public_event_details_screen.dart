@@ -46,6 +46,14 @@ class _PublicEventDetailsScreenState extends State<PublicEventDetailsScreen> {
     PublicCalendarEvent activeEvent,
     PublicEventRepository repo,
   ) async {
+    final appState = Provider.of<AppState>(context, listen: false);
+    final currentUserId = appState.currentUserId;
+    final isCreator = currentUserId != null &&
+        activeEvent.createdBy != null &&
+        activeEvent.createdBy!.isNotEmpty &&
+        currentUserId == activeEvent.createdBy;
+    if (!isCreator) return;
+
     final result = await Navigator.push(
       context,
       MaterialPageRoute(
@@ -210,6 +218,13 @@ class _PublicEventDetailsScreenState extends State<PublicEventDetailsScreen> {
     final timeStr =
         '${DateFormat('HH:mm').format(activeEvent.startDateTime)} – ${DateFormat('HH:mm').format(activeEvent.endDateTime)}';
 
+    final appState = Provider.of<AppState>(context);
+    final currentUserId = appState.currentUserId;
+    final isCreator = currentUserId != null &&
+        activeEvent.createdBy != null &&
+        activeEvent.createdBy!.isNotEmpty &&
+        currentUserId == activeEvent.createdBy;
+
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, result) {
@@ -303,8 +318,9 @@ class _PublicEventDetailsScreenState extends State<PublicEventDetailsScreen> {
                           ],
                         ),
                         // Quick Edit Button in Header
-                        AnimatedTapDetector(
-                          onTap: () => _editEvent(context, activeEvent, effectiveRepo),
+                        if (isCreator)
+                          AnimatedTapDetector(
+                            onTap: () => _editEvent(context, activeEvent, effectiveRepo),
                           child: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                             decoration: BoxDecoration(
@@ -717,34 +733,36 @@ class _PublicEventDetailsScreenState extends State<PublicEventDetailsScreen> {
                           ),
                         ),
                       ),
-                      const SizedBox(width: 10),
-                      AnimatedTapDetector(
-                        onTap: () => _editEvent(context, activeEvent, effectiveRepo),
-                        child: Container(
-                          height: 48,
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          decoration: BoxDecoration(
-                            color: AppTheme.primaryAccent.withValues(alpha: 0.18),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: AppTheme.primaryAccent.withValues(alpha: 0.6)),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.edit_outlined, color: AppTheme.primaryAccent, size: 18),
-                              const SizedBox(width: 6),
-                              Text(
-                                'Edit',
-                                style: GoogleFonts.inter(
-                                  color: AppTheme.primaryAccent,
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 14,
+                      if (isCreator) ...[
+                        const SizedBox(width: 10),
+                        AnimatedTapDetector(
+                          onTap: () => _editEvent(context, activeEvent, effectiveRepo),
+                          child: Container(
+                            height: 48,
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            decoration: BoxDecoration(
+                              color: AppTheme.primaryAccent.withValues(alpha: 0.18),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: AppTheme.primaryAccent.withValues(alpha: 0.6)),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.edit_outlined, color: AppTheme.primaryAccent, size: 18),
+                                const SizedBox(width: 6),
+                                Text(
+                                  'Edit',
+                                  style: GoogleFonts.inter(
+                                    color: AppTheme.primaryAccent,
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 14,
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
-                      ),
+                      ],
                       const SizedBox(width: 10),
                       AnimatedTapDetector(
                         onTap: () => _deleteEvent(context, activeEvent, effectiveRepo),

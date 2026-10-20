@@ -90,6 +90,39 @@ class SingleNoImageEventRepository implements PublicEventRepository {
   Future<void> deleteEvent(String eventId) async {}
 }
 
+class SingleCreatorEventRepository implements PublicEventRepository {
+  @override
+  Future<List<PublicCalendarEvent>> getUpcomingEvents() async {
+    return [
+      PublicCalendarEvent(
+        id: 'creator_event_1',
+        title: 'Stockholm Jazz Night',
+        eventType: PublicEventType.liveGig,
+        organizerName: 'Stockholm Jazz Collective',
+        venueName: 'Jazzbaren',
+        city: 'Stockholm',
+        address: 'Jazzgränd 4, Gamla Stan',
+        startDateTime: DateTime(2026, 9, 10, 20, 0),
+        endDateTime: DateTime(2026, 9, 10, 23, 0),
+        shortDescription: 'Live jazz and swing evening.',
+        description: 'Detailed description for live jazz and swing evening.',
+        isMock: false,
+        createdBy: 'test_user_1',
+        status: PublicEventStatus.published,
+      ),
+    ];
+  }
+
+  @override
+  Future<String> createEvent(PublicCalendarEvent event) async => event.id;
+
+  @override
+  Future<void> updateEvent(PublicCalendarEvent event) async {}
+
+  @override
+  Future<void> deleteEvent(String eventId) async {}
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setupFirebaseCoreMocks();
@@ -440,17 +473,18 @@ void main() {
       expect(constrainedBoxFinder, findsOneWidget);
     });
 
-    testWidgets('14. Event cards display edit pencil icon button and tapping it opens edit event form', (tester) async {
+    testWidgets('14. Event cards display edit pencil icon button and tapping it opens edit event form for creator', (tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() => tester.view.resetPhysicalSize());
 
-      await tester.pumpWidget(createTestWidget());
+      // Using SingleCreatorEventRepository where createdBy == 'test_user_1'
+      await tester.pumpWidget(createTestWidget(repository: SingleCreatorEventRepository()));
       await tester.pumpAndSettle();
 
-      final editButton = find.byTooltip('Edit Event').first;
+      final editButton = find.byTooltip('Edit Event');
       expect(editButton, findsOneWidget);
-      expect(find.byIcon(Icons.edit_outlined), findsWidgets);
+      expect(find.byIcon(Icons.edit_outlined), findsOneWidget);
 
       // Tap edit pencil
       await tester.tap(editButton);
@@ -459,6 +493,19 @@ void main() {
       // Verify CreatePublicEventScreen opened in editing mode with prefilled event details
       expect(find.text('EDIT EVENT'), findsOneWidget);
       expect(find.text('Stockholm Jazz Night'), findsWidgets);
+    });
+
+    testWidgets('14b. Event cards do NOT display edit pencil icon button for non-creators or mock events', (tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      // Default mock events have no matching createdBy
+      await tester.pumpWidget(createTestWidget());
+      await tester.pumpAndSettle();
+
+      expect(find.byTooltip('Edit Event'), findsNothing);
+      expect(find.byIcon(Icons.edit_outlined), findsNothing);
     });
 
     testWidgets('15. Event cards display clickable Read More button that opens PublicEventDetailsScreen', (tester) async {

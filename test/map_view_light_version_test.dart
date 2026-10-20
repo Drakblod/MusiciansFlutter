@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:firebase_core/firebase_core.dart' hide FirebaseService;
 import 'package:firebase_core_platform_interface/test.dart';
 import 'package:provider/provider.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:musicians_flutter/views/gig_map_page.dart';
 import 'package:musicians_flutter/providers/app_state.dart';
 import 'package:musicians_flutter/services/firebase_service.dart';
@@ -15,6 +16,9 @@ class MockFirebaseServiceForMapTest extends FirebaseService {
 
   @override
   Future<List<dynamic>> getSubRequestsAsync() async => [];
+
+  @override
+  Future<List<SubRequest>> getAllSubRequestsAsync() async => [];
 }
 
 class MockAppStateForMapTest extends AppState {
@@ -57,12 +61,11 @@ void main() {
         role: 'Acoustic Player',
         requestType: 'Gig',
       );
-
       expect(gigWithoutAudio.hasAudioSnippet, isFalse);
       expect(gigWithoutAudio.audioSnippetUrl, isNull);
     });
 
-    testWidgets('2. Map View renders primary category filter tabs (All, Music, Gig Promo, Sub & Member Search, This Week)',
+    testWidgets('2. Map View renders primary category filter tabs (MUSIC, SUB & MEMBER SEARCH, THIS WEEK)',
         (tester) async {
       tester.view.physicalSize = const Size(1200, 2400);
       tester.view.devicePixelRatio = 1.0;
@@ -77,14 +80,20 @@ void main() {
         ),
       );
       await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
 
-      // Verify all 5 primary category tabs are rendered
-      expect(find.text('All'), findsOneWidget);
-      expect(find.text('Music'), findsOneWidget);
-      expect(find.text('Gig Promo'), findsOneWidget);
-      expect(find.text('Sub & Member Search'), findsOneWidget);
-      expect(find.text('This Week'), findsOneWidget);
-      expect(find.text('Upload Event'), findsOneWidget);
+      // Close auto-targeted bottom card if open
+      final closeBtn = find.byIcon(Icons.close);
+      if (closeBtn.evaluate().isNotEmpty) {
+        await tester.tap(closeBtn.first);
+        await tester.pump(const Duration(milliseconds: 300));
+      }
+
+      // Verify all 3 primary category tabs are rendered
+      expect(find.text('MUSIC'), findsOneWidget);
+      expect(find.text('SUB & MEMBER SEARCH'), findsOneWidget);
+      expect(find.text('THIS WEEK'), findsOneWidget);
+      expect(find.text('Upload Map View Pin / Audio'), findsOneWidget);
     });
 
     testWidgets('3. Map View shows sub-filters when Music or Sub & Member Search is selected',
@@ -102,36 +111,36 @@ void main() {
         ),
       );
       await tester.pump();
-
-      // Tap 'Music' tab
-      await tester.tap(find.text('Music'));
       await tester.pump(const Duration(milliseconds: 300));
 
-      // Verify sub-filters under Music appear
-      expect(find.text('All Music'), findsOneWidget);
-      expect(find.text('Gig / Concert'), findsOneWidget);
-      expect(find.text('Rehearsal'), findsOneWidget);
-      expect(find.text('Jam Session'), findsOneWidget);
-      expect(find.text('Recorded Music'), findsOneWidget);
+      // Close auto-targeted bottom card if open
+      final closeBtn = find.byIcon(Icons.close);
+      if (closeBtn.evaluate().isNotEmpty) {
+        await tester.tap(closeBtn.first);
+        await tester.pump(const Duration(milliseconds: 300));
+      }
 
-      // Tap 'Sub & Member Search' tab
-      await tester.tap(find.text('Sub & Member Search'));
+      // MUSIC tab is selected by default
+      expect(find.text('Gig Promo'), findsOneWidget);
+      expect(find.text('Live Gigs / Rehearsals'), findsOneWidget);
+      expect(find.text('Jam Sessions'), findsOneWidget);
+      expect(find.text('Demos / Recordings'), findsOneWidget);
+
+      // Tap 'SUB & MEMBER SEARCH' tab
+      await tester.tap(find.text('SUB & MEMBER SEARCH'));
       await tester.pump(const Duration(milliseconds: 300));
 
       // Verify sub-filters under Sub & Member Search appear
-      expect(find.text('All Sub/Member'), findsOneWidget);
-      expect(find.text('New Member'), findsOneWidget);
-      expect(find.text('Subs'), findsOneWidget);
-      expect(find.text('Paid'), findsOneWidget);
-      expect(find.text('Search Instrument'), findsOneWidget);
+      expect(find.text('Substitutes'), findsOneWidget);
+      expect(find.text('New Members'), findsOneWidget);
+      expect(find.text('Paid Gigs'), findsWidgets);
+      expect(find.text('Search Instruments'), findsOneWidget);
 
-      // Tap 'Search Instrument' to open instrument search bar
-      await tester.tap(find.text('Search Instrument'));
+      // Tap 'Search Instruments' to open instrument picker
+      await tester.tap(find.text('Search Instruments'));
       await tester.pump(const Duration(milliseconds: 300));
+      expect(find.text('SELECT ROLE / INSTRUMENT'), findsOneWidget);
       expect(find.byType(TextField), findsWidgets);
-      expect(find.text('Guitar'), findsOneWidget);
-      expect(find.text('Bass'), findsOneWidget);
-      expect(find.text('Drums'), findsOneWidget);
     });
 
     testWidgets('4. Map View keeps top controls streamlined with City Jumpers omitted',
@@ -149,10 +158,17 @@ void main() {
         ),
       );
       await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
 
       // City Jumpers are omitted from the top row
       expect(find.text('All Sweden'), findsNothing);
-      expect(find.text('What is Map View?'), findsOneWidget);
+      expect(
+        find.byWidgetPredicate(
+          (w) => (w is Text && (w.data?.contains('What is Map View') ?? false)) ||
+              (w is RichText && w.text.toPlainText().contains('What is Map View')),
+        ),
+        findsWidgets,
+      );
     });
 
     testWidgets('5. Map View contains Live Audio control with Turn OFF / Turn ON power toggle',
@@ -170,6 +186,19 @@ void main() {
         ),
       );
       await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      // Trigger selection of a mock rehearsal to display the docked Live Audio bar
+      final mapFinder = find.byType(GoogleMap);
+      if (mapFinder.evaluate().isNotEmpty) {
+        final map = tester.widget<GoogleMap>(mapFinder);
+        final rehearsalMarker = map.markers.firstWhere(
+          (m) => m.markerId.value.startsWith('live_rehearsal'),
+          orElse: () => map.markers.first,
+        );
+        rehearsalMarker.onTap?.call();
+        await tester.pump(const Duration(milliseconds: 300));
+      }
 
       // Live Audio bar exists
       expect(find.text('LIVE AUDIO'), findsOneWidget);
@@ -205,16 +234,24 @@ void main() {
         ),
       );
       await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      // Close auto-targeted bottom card if open
+      final closeBtn = find.byIcon(Icons.close);
+      if (closeBtn.evaluate().isNotEmpty) {
+        await tester.tap(closeBtn.first);
+        await tester.pump(const Duration(milliseconds: 300));
+      }
 
       // Tap Upload Event button
-      await tester.tap(find.text('Upload Event'));
+      await tester.tap(find.text('Upload Map View Pin / Audio'));
       await tester.pump(const Duration(milliseconds: 300));
 
       // Verify bottom sheet opens
-      expect(find.text('Upload Map Event / Audio'), findsOneWidget);
-      expect(find.text('Publish to Map'), findsOneWidget);
+      expect(find.text('Upload Map View Pin / Audio'), findsWidgets);
+      expect(find.text('Publish Map View Pin / Audio'), findsOneWidget);
       expect(find.text('Category'), findsOneWidget);
-      expect(find.text('Event Type'), findsOneWidget);
+      expect(find.text('Type'), findsOneWidget);
     });
   });
 }

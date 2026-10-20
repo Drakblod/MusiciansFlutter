@@ -433,7 +433,7 @@ void main() {
 
   group('EDIT-BAND-01: Map View Explanatory Text', () {
     const expectedHelperText =
-        'The band’s official location for "Map View" where sound snippets from rehearsals and concerts, recorded music, etc. may be uploaded. Example: 1. Same as "Rehearsal Location" 2. Bandleader’s Address a.o.';
+        'Move pins towards the centre of the screen (telescopic sight) to hear different bands and their recordings, band info, gig promo, etc';
 
     testWidgets('Map View explanatory text appears in CreateBandScreen directly beneath correct field', (tester) async {
       tester.view.physicalSize = const Size(800, 3000);
@@ -446,9 +446,9 @@ void main() {
       await tester.pumpWidget(createSettingsTestWidget(const CreateBandScreen(), appState));
       await tester.pumpAndSettle();
 
-      final labelFinder = find.text('Map view location (if other than Rehearsal Location)');
-      final helperFinder = find.text(expectedHelperText);
-      final inputFinder = find.widgetWithText(TextFormField, 'Enter address or city for Map View pin');
+      final labelFinder = find.textContaining('Map View Location');
+      final helperFinder = find.textContaining(expectedHelperText);
+      final inputFinder = find.widgetWithText(TextFormField, 'Enter FULL address for Map View Pin (Street, City, Country)');
 
       expect(labelFinder, findsOneWidget);
       expect(helperFinder, findsOneWidget);
@@ -474,9 +474,9 @@ void main() {
       await tester.pumpWidget(createSettingsTestWidget(EditBandInfoScreen(band: band), appState));
       await tester.pumpAndSettle();
 
-      final labelFinder = find.text('Map view location (if other than Rehearsal Location)');
-      final helperFinder = find.text(expectedHelperText);
-      final inputFinder = find.widgetWithText(TextFormField, 'Enter address or city for Map View pin');
+      final labelFinder = find.textContaining('Map View Location');
+      final helperFinder = find.textContaining(expectedHelperText);
+      final inputFinder = find.widgetWithText(TextFormField, 'Enter FULL address for Map View Pin (Street, City, Country)');
 
       expect(labelFinder, findsOneWidget);
       expect(helperFinder, findsOneWidget);

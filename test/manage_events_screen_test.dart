@@ -223,13 +223,14 @@ void main() {
       expect(find.text('PAST EVENTS'), findsOneWidget);
 
       // New Events tab (active by default): displays event needing RSVP
-      expect(find.text('Summer Arena Concert'), findsOneWidget);
+      expect(find.text('"Summer Arena Concert"'), findsOneWidget);
+      expect(find.text('Mats Testband 26'), findsWidgets);
       expect(find.text('Big festival headline'), findsOneWidget);
-      expect(find.text('1 Yes'), findsOneWidget);
-      expect(find.text('1 No'), findsOneWidget);
+      expect(find.text('1 Yes'), findsNothing);
+      expect(find.text('1 No'), findsNothing);
 
       // Finalized event should NOT be in NEW EVENTS tab
-      expect(find.text('Finalized Stadium Tour'), findsNothing);
+      expect(find.text('"Finalized Stadium Tour"'), findsNothing);
 
       // RSVPs and View Event buttons
       expect(find.text('RSVPs'), findsWidgets);
@@ -254,11 +255,11 @@ void main() {
       await tester.pumpAndSettle();
 
       // Finalized event is visible
-      expect(find.text('Finalized Stadium Tour'), findsOneWidget);
+      expect(find.text('"Finalized Stadium Tour"'), findsOneWidget);
       expect(find.text('Fully booked locked concert'), findsOneWidget);
 
       // Non-finalized event needing RSVP should NOT be visible
-      expect(find.text('Summer Arena Concert'), findsNothing);
+      expect(find.text('"Summer Arena Concert"'), findsNothing);
     });
 
     testWidgets('4. ManageEventsScreen switching to Past Events tab shows past events', (WidgetTester tester) async {
@@ -279,10 +280,10 @@ void main() {
       await tester.pumpAndSettle();
 
       // Verify past event and description are visible
-      expect(find.text('Old Rehearsal Session'), findsOneWidget);
+      expect(find.text('"Old Rehearsal Session"'), findsOneWidget);
       expect(find.text('Tutti practice'), findsOneWidget);
-      expect(find.text('Finalized Stadium Tour'), findsNothing);
-      expect(find.text('Summer Arena Concert'), findsNothing);
+      expect(find.text('"Finalized Stadium Tour"'), findsNothing);
+      expect(find.text('"Summer Arena Concert"'), findsNothing);
     });
 
     testWidgets('5. ManageEventsScreen filter search narrows down displayed events in active tab', (WidgetTester tester) async {
@@ -304,13 +305,13 @@ void main() {
       await tester.enterText(searchFinder, 'Arena');
       await tester.pumpAndSettle();
 
-      expect(find.text('Summer Arena Concert'), findsOneWidget);
+      expect(find.text('"Summer Arena Concert"'), findsOneWidget);
 
       // Search for nonexistent event
       await tester.enterText(searchFinder, 'Nonexistent Gig');
       await tester.pumpAndSettle();
 
-      expect(find.text('Summer Arena Concert'), findsNothing);
+      expect(find.text('"Summer Arena Concert"'), findsNothing);
       expect(find.text('No events match "Nonexistent Gig".'), findsOneWidget);
     });
   });

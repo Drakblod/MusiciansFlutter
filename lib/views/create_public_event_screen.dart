@@ -286,7 +286,7 @@ class _CreatePublicEventScreenState extends State<CreatePublicEventScreen> {
                 ),
                 ListTile(
                   leading: const Icon(Icons.photo_library_outlined, color: AppTheme.secondaryAccent),
-                  title: Text('Choose from Gallery', style: GoogleFonts.inter(color: Colors.white)),
+                  title: Text('Upload from this device', style: GoogleFonts.inter(color: Colors.white)),
                   onTap: () {
                     Navigator.pop(context);
                     _pickImage(ImageSource.gallery);
@@ -311,6 +311,16 @@ class _CreatePublicEventScreenState extends State<CreatePublicEventScreen> {
 
   Future<void> _saveEvent() async {
     if (_isSaving) return;
+
+    if (isEditing) {
+      final appState = Provider.of<AppState>(context, listen: false);
+      final currentUserId = appState.currentUserId;
+      final isAuthorizedToEdit = currentUserId != null &&
+          widget.eventToEdit?.createdBy != null &&
+          widget.eventToEdit!.createdBy!.isNotEmpty &&
+          currentUserId == widget.eventToEdit!.createdBy;
+      if (!isAuthorizedToEdit) return;
+    }
 
     if (!_formKey.currentState!.validate()) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -469,6 +479,51 @@ class _CreatePublicEventScreenState extends State<CreatePublicEventScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final appState = Provider.of<AppState>(context);
+    final currentUserId = appState.currentUserId;
+    final isAuthorizedToEdit = !isEditing ||
+        (currentUserId != null &&
+            widget.eventToEdit?.createdBy != null &&
+            widget.eventToEdit!.createdBy!.isNotEmpty &&
+            currentUserId == widget.eventToEdit!.createdBy);
+
+    if (isEditing && !isAuthorizedToEdit) {
+      return GradientScaffold(
+        appBar: const CustomTopBar(
+          title: 'Edit Event',
+          showBack: true,
+        ),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.lock_outline, size: 56, color: AppTheme.danger),
+                const SizedBox(height: 16),
+                Text(
+                  'Editing Not Allowed',
+                  style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Only the creator of this event can edit it.',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.inter(fontSize: 14, color: AppTheme.textSecondary),
+                ),
+                const SizedBox(height: 20),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryAccent),
+                  child: const Text('Go Back'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     return GradientScaffold(
       appBar: CustomTopBar(
         title: isEditing ? 'Edit Event' : 'Add Event',
@@ -971,7 +1026,7 @@ class _CreatePublicEventScreenState extends State<CreatePublicEventScreen> {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            'Tap to choose from Gallery or Camera',
+                            'Tap to upload from this device or use Camera',
                             style: GoogleFonts.inter(
                               fontSize: 10,
                               color: AppTheme.textSecondary,

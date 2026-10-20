@@ -194,7 +194,7 @@ void main() {
 
       expect(
         find.text(
-          'Preferably use your real name to make it easier for users to find you',
+          'Please register your real name to help others find you.',
         ),
         findsOneWidget,
       );

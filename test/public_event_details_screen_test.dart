@@ -342,8 +342,9 @@ void main() {
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() => tester.view.resetPhysicalSize());
 
+      final creatorEvent = testEvent.copyWith(createdBy: 'test_user_1');
       final spyRepo = SpyingPublicEventRepository();
-      await tester.pumpWidget(createDetailsTestWidget(event: testEvent, repository: spyRepo));
+      await tester.pumpWidget(createDetailsTestWidget(event: creatorEvent, repository: spyRepo));
       await tester.pumpAndSettle();
 
       await tester.tap(find.text('Open Details'));

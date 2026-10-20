@@ -447,15 +447,15 @@ void main() {
       expect(find.text('PAST EVENTS'), findsOneWidget);
 
       // Verify unfinalized event on new events tab
-      expect(find.text('New Unfinalized Event'), findsOneWidget);
+      expect(find.text('"New Unfinalized Event"'), findsOneWidget);
 
       // Switch to Upcoming tab
       await tester.tap(find.text('UPCOMING (Finalized)'));
       await tester.pumpAndSettle();
 
       // 9. Tap on Finalized event card -> navigates to EventResultsPage
-      expect(find.text('Finalized Upcoming Event'), findsOneWidget);
-      await tester.tap(find.text('Finalized Upcoming Event'));
+      expect(find.text('"Finalized Upcoming Event"'), findsOneWidget);
+      await tester.tap(find.text('"Finalized Upcoming Event"'));
       await tester.pumpAndSettle();
       expect(find.byType(EventResultsPage), findsOneWidget);
     });
@@ -809,8 +809,9 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
       await tester.pump(const Duration(milliseconds: 300));
 
-      // 3 Part Event badge shown in top-right
-      expect(find.text('3 Part Event'), findsOneWidget);
+      // 3 Part Event badge removed per OCT-SPRINT-01, eventType shown
+      expect(find.text('3 Part Event'), findsNothing);
+      expect(find.text('Concert'), findsOneWidget);
       expect(find.textContaining('Sessions attached'), findsNothing);
 
       // Popup menu for non-creator should NOT have 'Edit Event'

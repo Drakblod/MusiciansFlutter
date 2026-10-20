@@ -146,6 +146,12 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('R&B'), findsOneWidget);
+
+      final secondaryBadge = find.text('SECONDARY SKILLS');
+      if (secondaryBadge.evaluate().isNotEmpty) {
+        await tester.tap(secondaryBadge.first);
+        await tester.pumpAndSettle();
+      }
       expect(find.text('Mix Engineer'), findsOneWidget);
     });
 

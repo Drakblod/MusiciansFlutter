@@ -12,8 +12,6 @@ import 'event_results_page.dart';
 import 'create_event_page.dart';
 import '../utils/date_parser.dart';
 import '../controllers/global_create_event_launcher.dart';
-import '../widgets/animated_tap_detector.dart';
-import '../widgets/rsvp_reminder_dialog.dart';
 
 enum EventTabType { newEvents, upcoming, past }
 
@@ -43,8 +41,6 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> with SingleTick
   // All loaded events: bandId -> List<BandEvent>
   final Map<String, List<BandEvent>> _bandEventsMap = {};
   final List<StreamSubscription<List<BandEvent>>> _subscriptions = [];
-  final Set<String> _savingRsvpEventIds = {};
-  final Set<String> _expandedRsvpEventIds = {};
 
   @override
   void initState() {
@@ -189,120 +185,6 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> with SingleTick
     });
 
     return result;
-  }
-
-  Future<void> _handleQuickRsvp(String bandId, BandEvent event, String status) async {
-    final appState = Provider.of<AppState>(context, listen: false);
-    final userId = appState.currentUserId;
-    if (userId == null || event.id == null) return;
-
-    final eventId = event.id!;
-    if (_savingRsvpEventIds.contains(eventId)) return;
-
-    setState(() {
-      _savingRsvpEventIds.add(eventId);
-    });
-
-    try {
-      await appState.firebaseService.updateEventResponseAsync(
-        bandId,
-        eventId,
-        userId,
-        status,
-      );
-
-      if (status == 'Yes' && event.temporaryRoomId != null && event.temporaryRoomId!.isNotEmpty) {
-        await appState.firebaseService.addMemberToEventRoomAsync(
-          bandId,
-          event.temporaryRoomId!,
-          userId,
-          'attending',
-        );
-      }
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(status == 'Yes' ? 'RSVP: Attending!' : 'RSVP: Declined'),
-            backgroundColor: status == 'Yes' ? AppTheme.success : AppTheme.danger,
-            duration: const Duration(seconds: 2),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to save RSVP: $e'),
-            backgroundColor: AppTheme.danger,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _savingRsvpEventIds.remove(eventId);
-        });
-      }
-    }
-  }
-
-  void _handleUncertainRsvp(String bandId, BandEvent event) {
-    final appState = Provider.of<AppState>(context, listen: false);
-    final userId = appState.currentUserId;
-    if (userId == null || event.id == null) return;
-
-    RsvpReminderDialog.show(
-      context: context,
-      event: event,
-      bandId: bandId,
-      currentUserId: userId,
-      onResponded: () {
-        if (mounted) setState(() {});
-      },
-    );
-  }
-
-  Widget _buildRsvpButton({
-    required String label,
-    required IconData icon,
-    required Color color,
-    required bool isSelected,
-    required VoidCallback onTap,
-  }) {
-    return AnimatedTapDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        decoration: BoxDecoration(
-          color: isSelected ? color.withValues(alpha: 0.22) : const Color(0xFF1B163B),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: isSelected ? color : const Color(0xFF2C2454),
-            width: isSelected ? 1.5 : 1.0,
-          ),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              icon,
-              size: 14,
-              color: isSelected ? color : AppTheme.textSecondary,
-            ),
-            const SizedBox(width: 4),
-            Text(
-              label,
-              style: GoogleFonts.inter(
-                fontSize: 12,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
-                color: isSelected ? Colors.white : AppTheme.textSecondary,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 
   Future<void> _confirmDeleteEvent(String bandId, BandEvent event) async {
@@ -701,9 +583,6 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> with SingleTick
     }
 
     final sessionType = event.eventType.isNotEmpty ? event.eventType : 'Event';
-    final typeBadgeText = event.rehearsals.isNotEmpty
-        ? '${event.rehearsals.length} Part Event'
-        : sessionType;
     final iconData = _getEventTypeIcon(sessionType);
 
     final appState = Provider.of<AppState>(context, listen: false);
@@ -712,7 +591,7 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> with SingleTick
     final canEdit = isCreator;
     final canDelete = isCreator || isAuthorized;
 
-    final VoidCallback openEvent = () {
+    void openEvent() {
       if (event.id != null) {
         if (event.isLocked || tabType == EventTabType.past) {
           Navigator.push(
@@ -738,7 +617,7 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> with SingleTick
           );
         }
       }
-    };
+    }
 
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
@@ -747,537 +626,347 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> with SingleTick
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0xFF2E2A4E), width: 1.2),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header Row with Type, Band Name & Options
-          InkWell(
-            onTap: openEvent,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 12, 10),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: AppTheme.primaryAccent.withOpacity(0.18),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Icon(iconData, color: AppTheme.primaryAccent, size: 22),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: AppTheme.primaryAccent.withOpacity(0.2),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Text(
-                                typeBadgeText,
-                                style: GoogleFonts.inter(
-                                  fontSize: 11,
-                                  color: AppTheme.primaryAccent,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Flexible(
-                              child: Text(
-                                bandName,
-                                style: GoogleFonts.inter(
-                                  fontSize: 11,
-                                  color: AppTheme.textSecondary,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          event.title,
-                          style: GoogleFonts.outfit(
-                            fontSize: 17,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (canEdit || canDelete)
-                    PopupMenuButton<String>(
-                      icon: const Icon(Icons.more_vert, color: AppTheme.textSecondary),
-                      color: const Color(0xFF1A1635),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    onSelected: (action) {
-                      if (action == 'edit') {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => CreateEventPage(
-                              bandId: bandId,
-                              existingEvent: event,
-                            ),
-                          ),
-                        );
-                      } else if (action == 'delete') {
-                        _confirmDeleteEvent(bandId, event);
-                      }
-                    },
-                    itemBuilder: (ctx) => [
-                      if (canEdit)
-                        PopupMenuItem(
-                          value: 'edit',
-                          child: Row(
-                            children: [
-                              const Icon(Icons.edit_outlined, color: AppTheme.primaryAccent, size: 18),
-                              const SizedBox(width: 10),
-                              Text('Edit Event', style: GoogleFonts.inter(color: Colors.white)),
-                            ],
-                          ),
-                        ),
-                      if (canDelete)
-                        PopupMenuItem(
-                          value: 'delete',
-                          child: Row(
-                            children: [
-                              const Icon(Icons.delete_outline, color: AppTheme.danger, size: 18),
-                              const SizedBox(width: 10),
-                              Text('Delete Event', style: GoogleFonts.inter(color: AppTheme.danger)),
-                            ],
-                          ),
-                        ),
-                    ],
-                  ),
-              ],
-            ),
-          ),
-        ),
-
-          // Date & Location Info
-          InkWell(
-            onTap: openEvent,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      const Icon(Icons.calendar_today_outlined, color: AppTheme.textSecondary, size: 15),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          timeOrDateStr,
-                          style: GoogleFonts.inter(
-                            fontSize: 12,
-                            color: Colors.white70,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: openEvent,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header Row with Type, Band Name & Options
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 12, 10),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryAccent.withOpacity(0.18),
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                    ],
-                  ),
-                  if (event.location.isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        const Icon(Icons.location_on_outlined, color: AppTheme.textSecondary, size: 15),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            event.location,
+                      child: Icon(iconData, color: AppTheme.primaryAccent, size: 22),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: AppTheme.primaryAccent.withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              sessionType,
+                              style: GoogleFonts.inter(
+                                fontSize: 11,
+                                color: AppTheme.primaryAccent,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            bandName,
+                            style: GoogleFonts.outfit(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            '"${event.title}"',
                             style: GoogleFonts.inter(
-                              fontSize: 12,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
                               color: AppTheme.textSecondary,
                             ),
                             overflow: TextOverflow.ellipsis,
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
+                    if (canEdit || canDelete)
+                      PopupMenuButton<String>(
+                        icon: const Icon(Icons.more_vert, color: AppTheme.textSecondary),
+                        color: const Color(0xFF1A1635),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        onSelected: (action) {
+                          if (action == 'edit') {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => CreateEventPage(
+                                  bandId: bandId,
+                                  existingEvent: event,
+                                ),
+                              ),
+                            );
+                          } else if (action == 'delete') {
+                            _confirmDeleteEvent(bandId, event);
+                          }
+                        },
+                        itemBuilder: (ctx) => [
+                          if (canEdit)
+                            PopupMenuItem(
+                              value: 'edit',
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.edit_outlined, color: AppTheme.primaryAccent, size: 18),
+                                  const SizedBox(width: 10),
+                                  Text('Edit Event', style: GoogleFonts.inter(color: Colors.white)),
+                                ],
+                              ),
+                            ),
+                          if (canDelete)
+                            PopupMenuItem(
+                              value: 'delete',
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.delete_outline, color: AppTheme.danger, size: 18),
+                                  const SizedBox(width: 10),
+                                  Text('Delete Event', style: GoogleFonts.inter(color: AppTheme.danger)),
+                                ],
+                              ),
+                            ),
+                        ],
+                      ),
                   ],
-                  if (event.description.isNotEmpty) ...[
-                    const SizedBox(height: 6),
+                ),
+              ),
+
+              // Date & Location Info
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                     Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Icon(Icons.notes_rounded, color: AppTheme.textSecondary, size: 15),
+                        const Icon(Icons.calendar_today_outlined, color: AppTheme.textSecondary, size: 15),
                         const SizedBox(width: 6),
                         Expanded(
                           child: Text(
-                            event.description,
+                            timeOrDateStr,
                             style: GoogleFonts.inter(
                               fontSize: 12,
                               color: Colors.white70,
-                              height: 1.3,
+                              fontWeight: FontWeight.w500,
                             ),
-                            maxLines: 3,
-                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (event.location.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          const Icon(Icons.location_on_outlined, color: AppTheme.textSecondary, size: 15),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              event.location,
+                              style: GoogleFonts.inter(
+                                fontSize: 12,
+                                color: AppTheme.textSecondary,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                    if (event.description.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(Icons.notes_rounded, color: AppTheme.textSecondary, size: 15),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              event.description,
+                              style: GoogleFonts.inter(
+                                fontSize: 12,
+                                color: Colors.white70,
+                                height: 1.3,
+                              ),
+                              maxLines: 3,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 12),
+              const Divider(height: 1, color: Color(0xFF231F45)),
+
+              // Bottom Stats & Action Bar
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+                child: Wrap(
+                  alignment: WrapAlignment.spaceBetween,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    // RSVP Attendance Summary (Hidden for New Events)
+                    if (tabType != EventTabType.newEvents)
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 4,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: AppTheme.success.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.check, color: AppTheme.success, size: 13),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '$yesCount Yes',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 11,
+                                    color: AppTheme.success,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          if (noCount > 0)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: AppTheme.danger.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.close, color: AppTheme.danger, size: 13),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '$noCount No',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 11,
+                                      color: AppTheme.danger,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          if (maybeCount > 0)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: AppTheme.warning.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.help_outline, color: AppTheme.warning, size: 13),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '$maybeCount ?',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 11,
+                                      color: AppTheme.warning,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                        ],
+                      ),
+
+                    // Details Buttons
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        TextButton.icon(
+                          style: TextButton.styleFrom(
+                            foregroundColor: AppTheme.primaryAccent,
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          icon: const Icon(Icons.analytics_outlined, size: 15),
+                          label: Text(
+                            'RSVPs',
+                            style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w600),
+                          ),
+                          onPressed: () {
+                            if (event.id != null) {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => EventResultsPage(
+                                    bandId: bandId,
+                                    eventId: event.id!,
+                                    initialEvent: event,
+                                  ),
+                                ),
+                              );
+                            }
+                          },
+                        ),
+                        const SizedBox(width: 4),
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppTheme.primaryAccent,
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          onPressed: () {
+                            if (event.id != null) {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => EventDetailsPage(
+                                    bandId: bandId,
+                                    eventId: event.id!,
+                                    initialEvent: event,
+                                  ),
+                                ),
+                              );
+                            }
+                          },
+                          child: Text(
+                            'View Event',
+                            style: GoogleFonts.inter(
+                              fontSize: 11,
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
                       ],
                     ),
                   ],
-                ],
-              ),
-            ),
-          ),
-
-          if (event.requireResponse &&
-              !event.isLocked &&
-              (currentUserId == null || !event.excludedMemberIds.contains(currentUserId))) ...[
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
-              child: Builder(
-                builder: (context) {
-                  final userRespStatus = currentUserId != null ? event.responses[currentUserId]?.status : null;
-                  final hasResponse = userRespStatus != null && userRespStatus.trim().isNotEmpty;
-                  final isExpanded = !hasResponse || (event.id != null && _expandedRsvpEventIds.contains(event.id));
-
-                  Color statusColor;
-                  IconData statusIcon;
-                  final lower = (userRespStatus ?? '').toLowerCase();
-                  if (!hasResponse) {
-                    statusColor = const Color(0xFFFFB74D);
-                    statusIcon = Icons.notification_important_rounded;
-                  } else if (lower == 'yes' || lower == 'attending') {
-                    statusColor = AppTheme.success;
-                    statusIcon = Icons.check_circle_rounded;
-                  } else if (lower == 'no' || lower == 'declined') {
-                    statusColor = AppTheme.danger;
-                    statusIcon = Icons.cancel_rounded;
-                  } else {
-                    statusColor = AppTheme.warning;
-                    statusIcon = Icons.help_rounded;
-                  }
-
-                  return AnimatedTapDetector(
-                    onTap: () {
-                      if (hasResponse && event.id != null) {
-                        setState(() {
-                          if (_expandedRsvpEventIds.contains(event.id)) {
-                            _expandedRsvpEventIds.remove(event.id);
-                          } else {
-                            _expandedRsvpEventIds.add(event.id!);
-                          }
-                        });
-                      }
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF130F2B),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: !hasResponse
-                              ? AppTheme.primaryAccent.withValues(alpha: 0.5)
-                              : statusColor.withValues(alpha: 0.35),
-                          width: 1.2,
-                        ),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Row(
-                                children: [
-                                  Icon(statusIcon, size: 15, color: statusColor),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    !hasResponse
-                                        ? 'RSVP Required'
-                                        : 'Your RSVP: $userRespStatus',
-                                    style: GoogleFonts.inter(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
-                                      color: !hasResponse ? const Color(0xFFFFB74D) : Colors.white,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              if (hasResponse)
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                  decoration: BoxDecoration(
-                                    color: isExpanded
-                                        ? const Color(0xFF28224B)
-                                        : const Color(0xFF1E193C),
-                                    borderRadius: BorderRadius.circular(6),
-                                    border: Border.all(
-                                      color: isExpanded
-                                          ? AppTheme.primaryAccent.withValues(alpha: 0.6)
-                                          : const Color(0xFF382F63),
-                                    ),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Text(
-                                        isExpanded ? 'Close' : 'Change',
-                                        style: GoogleFonts.inter(
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w600,
-                                          color: isExpanded ? Colors.white : AppTheme.textSecondary,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 3),
-                                      Icon(
-                                        isExpanded
-                                            ? Icons.keyboard_arrow_up_rounded
-                                            : Icons.keyboard_arrow_down_rounded,
-                                        size: 14,
-                                        color: isExpanded ? Colors.white : AppTheme.textSecondary,
-                                      ),
-                                    ],
-                                  ),
-                                )
-                              else
-                                Text(
-                                  'Please respond',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 11,
-                                    color: AppTheme.textSecondary,
-                                  ),
-                                ),
-                            ],
-                          ),
-                          if (isExpanded) ...[
-                            const SizedBox(height: 8),
-                            if (event.id != null && _savingRsvpEventIds.contains(event.id))
-                              const Center(
-                                child: Padding(
-                                  padding: EdgeInsets.symmetric(vertical: 6),
-                                  child: SizedBox(
-                                    width: 20,
-                                    height: 20,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: AppTheme.primaryAccent,
-                                    ),
-                                  ),
-                                ),
-                              )
-                            else
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: _buildRsvpButton(
-                                      label: 'Yes',
-                                      icon: Icons.check_rounded,
-                                      color: AppTheme.success,
-                                      isSelected: lower == 'yes' || lower == 'attending',
-                                      onTap: () {
-                                        if (event.id != null) {
-                                          _expandedRsvpEventIds.remove(event.id);
-                                        }
-                                        _handleQuickRsvp(bandId, event, 'Yes');
-                                      },
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: _buildRsvpButton(
-                                      label: 'No',
-                                      icon: Icons.close_rounded,
-                                      color: AppTheme.danger,
-                                      isSelected: lower == 'no' || lower == 'declined',
-                                      onTap: () {
-                                        if (event.id != null) {
-                                          _expandedRsvpEventIds.remove(event.id);
-                                        }
-                                        _handleQuickRsvp(bandId, event, 'No');
-                                      },
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: _buildRsvpButton(
-                                      label: 'Maybe',
-                                      icon: Icons.help_outline_rounded,
-                                      color: AppTheme.warning,
-                                      isSelected: lower == 'uncertain' || lower == 'maybe',
-                                      onTap: () {
-                                        if (event.id != null) {
-                                          _expandedRsvpEventIds.remove(event.id);
-                                        }
-                                        _handleUncertainRsvp(bandId, event);
-                                      },
-                                    ),
-                                  ),
-                                ],
-                              ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-          ],
-
-          const SizedBox(height: 12),
-          const Divider(height: 1, color: Color(0xFF231F45)),
-
-          // Bottom Stats & Action Bar
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                // RSVP Attendance Summary
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: AppTheme.success.withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.check, color: AppTheme.success, size: 13),
-                          const SizedBox(width: 4),
-                          Text(
-                            '$yesCount Yes',
-                            style: GoogleFonts.inter(
-                              fontSize: 11,
-                              color: AppTheme.success,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (noCount > 0) ...[
-                      const SizedBox(width: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: AppTheme.danger.withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.close, color: AppTheme.danger, size: 13),
-                            const SizedBox(width: 4),
-                            Text(
-                              '$noCount No',
-                              style: GoogleFonts.inter(
-                                fontSize: 11,
-                                color: AppTheme.danger,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                    if (maybeCount > 0) ...[
-                      const SizedBox(width: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: AppTheme.warning.withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.help_outline, color: AppTheme.warning, size: 13),
-                            const SizedBox(width: 4),
-                            Text(
-                              '$maybeCount ?',
-                              style: GoogleFonts.inter(
-                                fontSize: 11,
-                                color: AppTheme.warning,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ],
                 ),
-
-                // Details Button
-                Row(
-                  children: [
-                    TextButton.icon(
-                      style: TextButton.styleFrom(
-                        foregroundColor: AppTheme.primaryAccent,
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      ),
-                      icon: const Icon(Icons.analytics_outlined, size: 16),
-                      label: Text(
-                        'RSVPs',
-                        style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600),
-                      ),
-                      onPressed: () {
-                        if (event.id != null) {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => EventResultsPage(
-                                bandId: bandId,
-                                eventId: event.id!,
-                                initialEvent: event,
-                              ),
-                            ),
-                          );
-                        }
-                      },
-                    ),
-                    const SizedBox(width: 4),
-                    ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppTheme.primaryAccent,
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      ),
-                      onPressed: () {
-                        if (event.id != null) {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => EventDetailsPage(
-                                bandId: bandId,
-                                eventId: event.id!,
-                                initialEvent: event,
-                              ),
-                            ),
-                          );
-                        }
-                      },
-                      child: Text(
-                        'View Event',
-                        style: GoogleFonts.inter(
-                          fontSize: 12,
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

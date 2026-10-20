@@ -250,14 +250,16 @@ void main() {
       });
 
       final now = DateTime.now();
+      final futureDate = now.add(const Duration(days: 7));
+      final futureDateStr = '${futureDate.year}-${futureDate.month.toString().padLeft(2, '0')}-${futureDate.day.toString().padLeft(2, '0')}';
       final event = BandEvent(
         id: 'event_multi_1',
         title: 'Headline Festival',
         description: 'Big festival gig',
         eventType: 'Festival',
         location: 'Park Arena',
-        startDateTime: '2026-10-05T18:00:00Z',
-        endDateTime: '2026-10-05T23:00:00Z',
+        startDateTime: '${futureDateStr}T18:00:00Z',
+        endDateTime: '${futureDateStr}T23:00:00Z',
         additionalNotes: 'Bring gear',
         createdBy: 'leader_user',
         createdAt: now.millisecondsSinceEpoch,
@@ -268,7 +270,7 @@ void main() {
             id: 'sched_loadin',
             title: 'Load-in & Line Check',
             type: 'Prep',
-            date: '2026-10-05',
+            date: futureDateStr,
             startTime: '14:00',
             endTime: '15:30',
             location: 'Backstage',

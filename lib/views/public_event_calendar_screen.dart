@@ -7,7 +7,6 @@ import '../config/feature_toggles.dart';
 import '../models/public_calendar_event.dart';
 import '../providers/app_state.dart';
 import '../repositories/public_event_repository.dart';
-import '../services/firebase_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/animated_tap_detector.dart';
 import '../widgets/custom_top_bar.dart';
@@ -743,6 +742,14 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
   }
 
   Future<void> _editEventFromCard(PublicCalendarEvent event) async {
+    final appState = Provider.of<AppState>(context, listen: false);
+    final currentUserId = appState.currentUserId;
+    final isCreator = currentUserId != null &&
+        event.createdBy != null &&
+        event.createdBy!.isNotEmpty &&
+        currentUserId == event.createdBy;
+    if (!isCreator) return;
+
     final result = await Navigator.push(
       context,
       MaterialPageRoute(
@@ -759,6 +766,13 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
   }
 
   Widget _buildEventCard(PublicCalendarEvent event) {
+    final appState = Provider.of<AppState>(context, listen: false);
+    final currentUserId = appState.currentUserId;
+    final isCreator = currentUserId != null &&
+        event.createdBy != null &&
+        event.createdBy!.isNotEmpty &&
+        currentUserId == event.createdBy;
+
     final monthShort = DateFormat('MMM').format(event.startDateTime).toUpperCase();
     final dayStr = DateFormat('dd').format(event.startDateTime);
     final timeStr =
@@ -833,24 +847,40 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
                       Container(
                         width: 58,
                         color: const Color(0xFF161033),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        padding: const EdgeInsets.only(top: 8, bottom: 8),
                         child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
+                          mainAxisAlignment: MainAxisAlignment.start,
                           children: [
-                            Text(
-                              monthShort,
-                              style: GoogleFonts.inter(
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                                color: AppTheme.primaryAccent,
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.82),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(
+                                  color: AppTheme.primaryAccent.withValues(alpha: 0.4),
+                                  width: 0.8,
+                                ),
                               ),
-                            ),
-                            Text(
-                              dayStr,
-                              style: GoogleFonts.outfit(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    monthShort,
+                                    style: GoogleFonts.inter(
+                                      fontSize: 9.5,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppTheme.primaryAccent,
+                                    ),
+                                  ),
+                                  Text(
+                                    dayStr,
+                                    style: GoogleFonts.outfit(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ],
@@ -865,77 +895,54 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              mainAxisAlignment: MainAxisAlignment.end,
                               children: [
-                                Flexible(
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: AppTheme.primaryAccent.withValues(alpha: 0.2),
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    child: Text(
-                                      event.eventTypeDisplayLabel,
-                                      style: GoogleFonts.inter(
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.bold,
-                                        color: AppTheme.primaryAccent,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: event.isFree
+                                        ? Colors.greenAccent.withValues(alpha: 0.15)
+                                        : Colors.white.withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    event.formattedPrice,
+                                    style: GoogleFonts.inter(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                      color: event.isFree ? Colors.greenAccent : Colors.white,
                                     ),
                                   ),
                                 ),
-                                const SizedBox(width: 6),
-                                Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                                      decoration: BoxDecoration(
-                                        color: event.isFree
-                                            ? Colors.greenAccent.withValues(alpha: 0.15)
-                                            : Colors.white.withValues(alpha: 0.1),
-                                        borderRadius: BorderRadius.circular(6),
-                                      ),
-                                      child: Text(
-                                        event.formattedPrice,
-                                        style: GoogleFonts.inter(
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.bold,
-                                          color: event.isFree ? Colors.greenAccent : Colors.white,
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 6),
-                                    Semantics(
-                                      button: true,
-                                      label: 'Edit event ${event.title}',
-                                      child: Tooltip(
-                                        message: 'Edit Event',
-                                        child: AnimatedTapDetector(
-                                          onTap: () => _editEventFromCard(event),
-                                          child: Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                                            decoration: BoxDecoration(
-                                              color: AppTheme.primaryAccent.withValues(alpha: 0.18),
-                                              borderRadius: BorderRadius.circular(6),
-                                              border: Border.all(
-                                                color: AppTheme.primaryAccent.withValues(alpha: 0.5),
-                                                width: 0.8,
-                                              ),
+                                if (isCreator) ...[
+                                  const SizedBox(width: 6),
+                                  Semantics(
+                                    button: true,
+                                    label: 'Edit event ${event.title}',
+                                    child: Tooltip(
+                                      message: 'Edit Event',
+                                      child: AnimatedTapDetector(
+                                        onTap: () => _editEventFromCard(event),
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                                          decoration: BoxDecoration(
+                                            color: AppTheme.primaryAccent.withValues(alpha: 0.18),
+                                            borderRadius: BorderRadius.circular(6),
+                                            border: Border.all(
+                                              color: AppTheme.primaryAccent.withValues(alpha: 0.5),
+                                              width: 0.8,
                                             ),
-                                            child: const Icon(
-                                              Icons.edit_outlined,
-                                              size: 13,
-                                              color: AppTheme.primaryAccent,
-                                            ),
+                                          ),
+                                          child: const Icon(
+                                            Icons.edit_outlined,
+                                            size: 13,
+                                            color: AppTheme.primaryAccent,
                                           ),
                                         ),
                                       ),
                                     ),
-                                  ],
-                                ),
+                                  ),
+                                ],
                               ],
                             ),
                             const SizedBox(height: 7),

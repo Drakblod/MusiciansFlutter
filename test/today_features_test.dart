@@ -188,7 +188,7 @@ void main() {
       expect(find.text('Add Member'), findsWidgets);
     });
 
-    testWidgets('4. ManageEventsScreen displays RSVP buttons (Yes, No, Maybe) on New Events and allows 1-tap response', (tester) async {
+    testWidgets('4. ManageEventsScreen does not display inline RSVP buttons on New Events and card is clickable', (tester) async {
       tester.view.physicalSize = const Size(800, 2000);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -221,19 +221,14 @@ void main() {
       await tester.pumpWidget(createTestApp(const ManageEventsScreen(initialBandId: 'b1', embedded: true), appState));
       await tester.pumpAndSettle();
 
-      // Check RSVP Required banner and buttons
-      expect(find.text('RSVP Required'), findsOneWidget);
-      expect(find.text('Yes'), findsOneWidget);
-      expect(find.text('No'), findsOneWidget);
-      expect(find.text('Maybe'), findsOneWidget);
+      // Inline RSVP controls removed per OCT-SPRINT-01
+      expect(find.text('RSVP Required'), findsNothing);
+      expect(find.text('Yes'), findsNothing);
+      expect(find.text('No'), findsNothing);
+      expect(find.text('Maybe'), findsNothing);
 
-      // Tap 'Yes'
-      await tester.tap(find.text('Yes'));
-      await tester.pumpAndSettle();
-
-      // Verify FirebaseService called with 'Yes'
-      expect(mockService.lastRsvpStatus, 'Yes');
-      expect(mockService.lastRsvpEventId, 'ev_1');
+      // Event title rendered within straight quotes
+      expect(find.text('"Gig at Stadium"'), findsOneWidget);
     });
   });
 }

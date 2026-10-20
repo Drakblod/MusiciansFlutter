@@ -52,17 +52,23 @@ void main() {
     );
     await tester.pump();
 
-    // Verify title and exact text of the clickable box
-    expect(find.text('What is Map View?'), findsOneWidget);
-    expect(
-      find.text(
-        'Explore Map View to discover audio snippets from gigs, rehearsals, recordings and gig promos, as well as requests for band members, subs and paid gigs.',
-      ),
-      findsOneWidget,
+    const expectedGuideText =
+        'Move pins towards the centre of the screen (telescopic sight) to hear different bands and their recordings, band info, gig promo, etc';
+
+    final guideFinder = find.byWidgetPredicate(
+      (w) => w is RichText && w.text.toPlainText().contains(expectedGuideText),
+    );
+    final whatIsFinder = find.byWidgetPredicate(
+      (w) => (w is Text && (w.data?.contains('What is Map View') ?? false)) ||
+          (w is RichText && w.text.toPlainText().contains('What is Map View')),
     );
 
+    // Verify title and exact text of the clickable box
+    expect(whatIsFinder, findsWidgets);
+    expect(guideFinder, findsOneWidget);
+
     // Tap the clickable box to open dialog
-    await tester.tap(find.text('What is Map View?'));
+    await tester.tap(guideFinder);
     await tester.pump(const Duration(milliseconds: 300));
 
     // Verify dialog opens with guide and Got it button
@@ -80,12 +86,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
 
     // Box is dismissed, floating re-open button appears
-    expect(
-      find.text(
-        'Explore Map View to discover audio snippets from gigs, rehearsals, recordings and gig promos, as well as requests for band members, subs and paid gigs.',
-      ),
-      findsNothing,
-    );
+    expect(guideFinder, findsNothing);
     expect(find.text('What is Map View?'), findsOneWidget);
 
     // Tap re-open button
@@ -93,11 +94,6 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
 
     // Box is restored
-    expect(
-      find.text(
-        'Explore Map View to discover audio snippets from gigs, rehearsals, recordings and gig promos, as well as requests for band members, subs and paid gigs.',
-      ),
-      findsOneWidget,
-    );
+    expect(guideFinder, findsOneWidget);
   });
 }

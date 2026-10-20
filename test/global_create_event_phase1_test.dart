@@ -90,19 +90,19 @@ void main() {
   group('Global Create Event Entry Point - Phase 1 Verification Tests', () {
     test('1. AppState validateAndSanitizeBubbles handles defaults, valid selections, and invalid IDs safely', () {
       final defaults = AppState.validateAndSanitizeBubbles(null);
-      expect(defaults, equals(['find_musicians', 'band_room', 'create_event']));
+      expect(defaults, equals(['find_musicians', 'band_room', 'find_gigs']));
 
       final validUserSaved = AppState.validateAndSanitizeBubbles(['browse_musicians', 'find_gigs', 'marketplace']);
       expect(validUserSaved, equals(['browse_musicians', 'find_gigs', 'marketplace']));
 
       final invalidIds = AppState.validateAndSanitizeBubbles(['unknown_1', 'obsolete_2', 'fake_3']);
-      expect(invalidIds, equals(['find_musicians', 'band_room', 'create_event']));
+      expect(invalidIds, equals(['find_musicians', 'band_room', 'find_gigs']));
 
       final duplicates = AppState.validateAndSanitizeBubbles(['find_musicians', 'find_musicians', 'band_room']);
-      expect(duplicates, equals(['find_musicians', 'band_room', 'create_event']));
+      expect(duplicates, equals(['find_musicians', 'band_room', 'find_gigs']));
 
       final wrongLength = AppState.validateAndSanitizeBubbles(['find_musicians']);
-      expect(wrongLength, equals(['find_musicians', 'band_room', 'create_event']));
+      expect(wrongLength, equals(['find_musicians', 'band_room', 'find_gigs']));
     });
 
     test('2. HomeUsageTracker getClicks and resetClicks safely include create_event', () async {
