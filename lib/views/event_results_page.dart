@@ -97,6 +97,7 @@ class EventResultsPage extends StatefulWidget {
 class _EventResultsPageState extends State<EventResultsPage> {
   BandEvent? _event;
   StreamSubscription<BandEvent?>? _eventSubscription;
+  String? _bandName;
   List<BandMember> _members = [];
   Map<String, UserProfile> _cachedProfiles = {};
   List<BandEvent> _linkedSubEvents = [];
@@ -144,6 +145,21 @@ class _EventResultsPageState extends State<EventResultsPage> {
 
     try {
       final appState = Provider.of<AppState>(context, listen: false);
+
+      // Resolve band name safely
+      if (appState.activeBandId == widget.bandId &&
+          appState.activeBandName != null &&
+          appState.activeBandName!.trim().isNotEmpty) {
+        _bandName = appState.activeBandName!.trim();
+      }
+      try {
+        final band = await appState.firebaseService.getBandInfoAsync(widget.bandId);
+        if (band?.name != null && band!.name!.trim().isNotEmpty) {
+          _bandName = band.name!.trim();
+        }
+      } catch (e) {
+        debugPrint('[EventResultsPage] Error fetching band info: $e');
+      }
 
       // Load band members (current roster)
       final members = await appState.firebaseService.getBandMembersAsync(widget.bandId);
@@ -520,7 +536,7 @@ class _EventResultsPageState extends State<EventResultsPage> {
   Widget build(BuildContext context) {
     return GradientScaffold(
       appBar: const CustomTopBar(
-        title: 'Event Results',
+        title: 'RSVP RESULTS',
         showBack: true,
       ),
       body: _buildBody(),
@@ -578,18 +594,6 @@ class _EventResultsPageState extends State<EventResultsPage> {
       child: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          Padding(
-            padding: const EdgeInsets.only(bottom: 16),
-            child: Text(
-              'EVENT RESULTS',
-              style: GoogleFonts.outfit(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-                letterSpacing: 1.5,
-              ),
-            ),
-          ),
           // Linked Occurrences Switcher if multiple parts exist
           if (_linkedSubEvents.length > 1)
             Container(
@@ -659,11 +663,20 @@ class _EventResultsPageState extends State<EventResultsPage> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            event.title,
+                            (_bandName != null && _bandName!.isNotEmpty) ? _bandName! : 'Band',
                             style: GoogleFonts.outfit(
                               fontSize: 22,
                               fontWeight: FontWeight.bold,
                               color: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '"${event.title}"',
+                            style: GoogleFonts.outfit(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white70,
                             ),
                           ),
                           if (event.eventType.isNotEmpty && event.eventType.toLowerCase() != 'event') ...[
@@ -708,7 +721,39 @@ class _EventResultsPageState extends State<EventResultsPage> {
                 ),
                 const SizedBox(height: 12),
 
-                // 2. Event Description Card (Distinct card directly below Main Event Name)
+                // Main Event date range
+                Row(
+                  children: [
+                    const Icon(Icons.calendar_today_outlined, size: 14, color: AppTheme.textSecondary),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        formatBandEventDateRange(event),
+                        style: GoogleFonts.inter(fontSize: 13, color: Colors.white, fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ],
+                ),
+
+                // Remaining metadata (Location)
+                if (event.location.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      const Icon(Icons.location_on_outlined, size: 14, color: AppTheme.textSecondary),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          event.location,
+                          style: GoogleFonts.inter(fontSize: 13, color: Colors.white),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+                const SizedBox(height: 12),
+
+                // Event Description Card (Preserved exactly as-is)
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(12),
@@ -748,38 +793,6 @@ class _EventResultsPageState extends State<EventResultsPage> {
                     ],
                   ),
                 ),
-                const SizedBox(height: 12),
-
-                // 3. Main Event date range
-                Row(
-                  children: [
-                    const Icon(Icons.calendar_today_outlined, size: 14, color: AppTheme.textSecondary),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        formatBandEventDateRange(event),
-                        style: GoogleFonts.inter(fontSize: 13, color: Colors.white, fontWeight: FontWeight.w600),
-                      ),
-                    ),
-                  ],
-                ),
-
-                // 4. Remaining metadata (Location)
-                if (event.location.isNotEmpty) ...[
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      const Icon(Icons.location_on_outlined, size: 14, color: AppTheme.textSecondary),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          event.location,
-                          style: GoogleFonts.inter(fontSize: 13, color: Colors.white),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
               ],
             ),
           ),

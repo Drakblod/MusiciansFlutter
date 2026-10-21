@@ -535,7 +535,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
 
       // Top overview card shows title & date
-      expect(find.text('Autumn Gala'), findsOneWidget);
+      expect(find.text('"Autumn Gala"'), findsOneWidget);
       expect(find.text('Finalized'), findsOneWidget);
 
       // 10. Horizontal pills: YES (1), NO (1), UNCERTAIN (1), NO ANSWER (1), SUBSTITUTES (1)
@@ -638,7 +638,7 @@ void main() {
 
       // No assertion errors or overflow errors thrown
       expect(tester.takeException(), isNull);
-      expect(find.text('Narrow Screen Gala'), findsOneWidget);
+      expect(find.text('"Narrow Screen Gala"'), findsOneWidget);
       expect(find.textContaining('EVENT 1'), findsOneWidget);
     });
 

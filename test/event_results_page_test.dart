@@ -55,12 +55,18 @@ BandEvent createTestBandEvent({
 
 class MockResultsFirebaseService extends FirebaseService {
   BandEvent? mockEvent;
+  Band? mockBand;
   List<BandMember> mockMembers = [];
   Map<String, UserProfile> mockProfiles = {};
   Map<String, SubstituteAssignment> mockSubAssignments = {};
   List<BandEvent> mockBandEvents = [];
 
   int writeCount = 0;
+
+  @override
+  Future<Band?> getBandInfoAsync(String bandId) async {
+    return mockBand;
+  }
 
   @override
   Stream<BandEvent?> subscribeToBandEvent(String bandId, String eventId) {
@@ -252,7 +258,7 @@ void main() {
         await tester.pumpAndSettle();
 
         // 1. Verify Header title and metadata
-        expect(find.text('Friday Big Show'), findsWidgets);
+        expect(find.text('"Friday Big Show"'), findsWidgets);
         expect(find.text('Grand Ballroom'), findsWidgets);
 
         // 2. Verify all 4 exact category pills are present with counts
@@ -843,6 +849,179 @@ void main() {
 
         // 5. Stale Charlie is NOT shown under EXTERNAL GUESTS either
         expect(find.text('Charlie Revoked'), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'RSVP-RESULTS-01: Page title is RSVP RESULTS, old titles absent, band name and quoted event name hierarchy render correctly',
+      (tester) async {
+        final mockService = MockResultsFirebaseService();
+        mockService.mockBand = Band(id: 'band_test_1', name: 'The Rolling Stones');
+
+        final now = DateTime.now();
+        final event = createTestBandEvent(
+          id: 'event_rsvp_1',
+          title: 'Summer Tour',
+          description: 'A special outdoor stadium show.',
+          location: 'Wembley Stadium, London',
+          startDateTime: '2026-08-15T19:00:00Z',
+          endDateTime: '2026-08-15T22:00:00Z',
+          responses: {
+            'u1': EventResponse(status: 'yes', timestamp: now),
+            'u2': EventResponse(status: 'no', timestamp: now),
+            'u3': EventResponse(status: 'uncertain', timestamp: now, uncertainReason: 'Waiting for flight confirmation'),
+          },
+        );
+
+        mockService.mockMembers = [
+          BandMember(userId: 'u1', nickname: 'Mick', role: 'member'),
+          BandMember(userId: 'u2', nickname: 'Keith', role: 'member'),
+          BandMember(userId: 'u3', nickname: 'Ronnie', role: 'member'),
+          BandMember(userId: 'u4', nickname: 'Charlie', role: 'member'),
+        ];
+        mockService.mockProfiles = {
+          'u1': UserProfile(userId: 'u1', displayName: 'Mick Jagger', mainInstrument: 'Vocals'),
+          'u2': UserProfile(userId: 'u2', displayName: 'Keith Richards', mainInstrument: 'Guitar'),
+          'u3': UserProfile(userId: 'u3', displayName: 'Ronnie Wood', mainInstrument: 'Guitar'),
+          'u4': UserProfile(userId: 'u4', displayName: 'Charlie Watts', mainInstrument: 'Drums'),
+        };
+        mockService.mockBandEvents = [event];
+        mockService.mockEvent = event;
+
+        await tester.pumpWidget(
+          createTestWidget(
+            service: mockService,
+            bandId: 'band_test_1',
+            eventId: 'event_rsvp_1',
+            initialEvent: event,
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        // 1. Exact title: CustomTopBar has title 'RSVP RESULTS', redundant body heading removed
+        expect(
+          find.byWidgetPredicate(
+            (w) => w.runtimeType.toString() == 'CustomTopBar' && (w as dynamic).title == 'RSVP RESULTS',
+          ),
+          findsOneWidget,
+        );
+        // Redundant body heading is absent
+        expect(find.text('RSVP RESULTS'), findsNothing);
+
+        // 2. Absence of old titles
+        expect(find.text('Event Results'), findsNothing);
+        expect(find.text('EVENT RESULTS'), findsNothing);
+
+        // 3. Band name is displayed prominently
+        expect(find.text('The Rolling Stones'), findsOneWidget);
+
+        // 4. Quoted event name directly below band name
+        expect(find.text('"Summer Tour"'), findsOneWidget);
+
+        // 5. Location and date
+        expect(find.text('Wembley Stadium, London'), findsOneWidget);
+
+        // 6. Description section and exact label
+        expect(find.text('Event Description'), findsOneWidget);
+        expect(find.text('A special outdoor stadium show.'), findsOneWidget);
+
+        // 7. RSVP groups intact with counts
+        expect(find.text('YES (1)'), findsOneWidget);
+        expect(find.text('NO (1)'), findsOneWidget);
+        expect(find.text('UNCERTAIN (1)'), findsOneWidget);
+        expect(find.text('NO ANSWER (1)'), findsOneWidget);
+
+        // 8. Strictly read-only: No write controls
+        expect(find.text('Edit Event'), findsNothing);
+        expect(find.text('Finalize Event'), findsNothing);
+        expect(find.text('Lock RSVP'), findsNothing);
+        expect(find.text('Find Substitute'), findsNothing);
+        expect(find.byType(DropdownButton), findsNothing);
+        expect(mockService.writeCount, 0);
+      },
+    );
+
+    testWidgets(
+      'RSVP-RESULTS-01: Band name falls back safely to "Band" when band is not resolved',
+      (tester) async {
+        final mockService = MockResultsFirebaseService();
+        mockService.mockBand = null; // No band resolved
+
+        final event = createTestBandEvent(
+          id: 'event_fallback_1',
+          title: 'Acoustic Gig',
+          description: 'Intimate acoustic set.',
+          location: 'Local Pub',
+        );
+
+        mockService.mockBandEvents = [event];
+        mockService.mockEvent = event;
+
+        await tester.pumpWidget(
+          createTestWidget(
+            service: mockService,
+            bandId: 'band_unknown',
+            eventId: 'event_fallback_1',
+            initialEvent: event,
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        // Band fallback
+        expect(find.text('Band'), findsWidgets);
+        expect(find.text('"Acoustic Gig"'), findsOneWidget);
+        expect(
+          find.byWidgetPredicate(
+            (w) => w.runtimeType.toString() == 'CustomTopBar' && (w as dynamic).title == 'RSVP RESULTS',
+          ),
+          findsOneWidget,
+        );
+        expect(mockService.writeCount, 0);
+      },
+    );
+
+    testWidgets(
+      'RSVP-RESULTS-01: Renders cleanly on a narrow 320 px width viewport without overflow',
+      (tester) async {
+        tester.view.physicalSize = const Size(320, 800);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(() {
+          tester.view.resetPhysicalSize();
+          tester.view.resetDevicePixelRatio();
+        });
+
+        final mockService = MockResultsFirebaseService();
+        mockService.mockBand = Band(id: 'band_narrow', name: 'Very Long Symphonic Orchestra Band Name That Wraps');
+
+        final event = createTestBandEvent(
+          id: 'event_narrow',
+          title: 'Extremely Long Event Title For Annual Summer Tour Festival Gala',
+          description: 'Long description for small screen testing.',
+          location: 'Concert Hall Building A, Street 100, Capital City',
+        );
+
+        mockService.mockBandEvents = [event];
+        mockService.mockEvent = event;
+
+        await tester.pumpWidget(
+          createTestWidget(
+            service: mockService,
+            bandId: 'band_narrow',
+            eventId: 'event_narrow',
+            initialEvent: event,
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(
+          find.byWidgetPredicate(
+            (w) => w.runtimeType.toString() == 'CustomTopBar' && (w as dynamic).title == 'RSVP RESULTS',
+          ),
+          findsOneWidget,
+        );
+        expect(find.text('Very Long Symphonic Orchestra Band Name That Wraps'), findsOneWidget);
+        expect(find.text('"Extremely Long Event Title For Annual Summer Tour Festival Gala"'), findsOneWidget);
+        expect(tester.takeException(), isNull);
       },
     );
   });
