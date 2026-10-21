@@ -400,6 +400,11 @@ class MapEventTypeHelper {
 class GigMapPage extends StatefulWidget {
   const GigMapPage({super.key});
 
+  @visibleForTesting
+  static const String darkMapStyle = _GigMapPageState._darkMapStyle;
+  @visibleForTesting
+  static const String whiteMapStyle = _GigMapPageState._whiteMapStyle;
+
   @override
   State<GigMapPage> createState() => _GigMapPageState();
 }
@@ -516,6 +521,15 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
     "stylers": [
       {
         "color": "#8e8c9a"
+      }
+    ]
+  },
+  {
+    "featureType": "road",
+    "elementType": "labels",
+    "stylers": [
+      {
+        "visibility": "off"
       }
     ]
   },
@@ -642,6 +656,15 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
     "stylers": [
       {
         "color": "#64748b"
+      }
+    ]
+  },
+  {
+    "featureType": "road",
+    "elementType": "labels",
+    "stylers": [
+      {
+        "visibility": "off"
       }
     ]
   },

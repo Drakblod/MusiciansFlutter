@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:firebase_core/firebase_core.dart' hide FirebaseService;
@@ -252,6 +253,54 @@ void main() {
       expect(find.text('Publish Map View Pin / Audio'), findsOneWidget);
       expect(find.text('Category'), findsOneWidget);
       expect(find.text('Type'), findsOneWidget);
+    });
+
+    test('7. MAP-VIEW-ROAD-LABELS-01: Both dark and white map styles hide all road labels while preserving geometry, locality and transit', () {
+      final darkRules = (jsonDecode(GigMapPage.darkMapStyle) as List).cast<Map<String, dynamic>>();
+      final whiteRules = (jsonDecode(GigMapPage.whiteMapStyle) as List).cast<Map<String, dynamic>>();
+
+      for (final rules in [darkRules, whiteRules]) {
+        // 1. Both styles contain a road + labels rule with visibility: off
+        final roadLabelsRule = rules.firstWhere(
+          (rule) => rule['featureType'] == 'road' && rule['elementType'] == 'labels',
+        );
+        expect(
+          (roadLabelsRule['stylers'] as List).any((s) => s['visibility'] == 'off'),
+          isTrue,
+        );
+
+        // 2. Road geometry remains visible (no visibility: off on road geometry)
+        final roadGeomRules = rules.where(
+          (rule) => rule['featureType'] == 'road' && rule['elementType']?.toString().startsWith('geometry') == true,
+        );
+        expect(roadGeomRules.isNotEmpty, isTrue);
+        for (final geom in roadGeomRules) {
+          expect(
+            (geom['stylers'] as List).any((s) => s['visibility'] == 'off'),
+            isFalse,
+          );
+        }
+
+        // 3. administrative.locality labels remain visible (no visibility: off)
+        final localityRules = rules.where(
+          (rule) => rule['featureType'] == 'administrative.locality',
+        );
+        expect(localityRules.isNotEmpty, isTrue);
+        for (final loc in localityRules) {
+          expect(
+            (loc['stylers'] as List).any((s) => s['visibility'] == 'off'),
+            isFalse,
+          );
+        }
+      }
+
+      // 4. Transit labels remain unchanged and explicitly visible in whiteMapStyle
+      final transitStationLabels = whiteRules.where(
+        (rule) => rule['featureType']?.toString().startsWith('transit') == true &&
+            rule['stylers'] != null &&
+            (rule['stylers'] as List).any((s) => s['visibility'] == 'on'),
+      );
+      expect(transitStationLabels.isNotEmpty, isTrue);
     });
   });
 }

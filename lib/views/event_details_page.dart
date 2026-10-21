@@ -15,6 +15,7 @@ import '../widgets/animated_tap_detector.dart';
 import 'find_sub_screen.dart';
 import 'event_room_chat_screen.dart';
 import 'create_event_page.dart';
+import 'event_results_page.dart';
 import '../utils/date_parser.dart';
 
 class _EventScheduleItemModel {
@@ -65,6 +66,7 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
   final ScrollController _scrollController = ScrollController();
   BandEvent? _event;
   StreamSubscription<BandEvent?>? _eventSubscription;
+  String? _bandName;
   List<BandMember> _members = [];
   Map<String, UserProfile> _cachedProfiles = {};
   bool _isLoadingMembers = true;
@@ -77,15 +79,18 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
   final Set<int> _savingIndices = {};
   bool _hasInitializedExpansion = false;
 
-  // Attendance details expansion state (e.g. '0_YES', '1_UNCERTAIN')
-  String? _activeAttendanceGroupKey;
-
   List<BandEvent> _linkedSubEvents = [];
 
   @override
   void initState() {
     super.initState();
     _event = widget.initialEvent;
+    final appState = Provider.of<AppState>(context, listen: false);
+    if (appState.activeBandId == widget.bandId &&
+        appState.activeBandName != null &&
+        appState.activeBandName!.trim().isNotEmpty) {
+      _bandName = appState.activeBandName!.trim();
+    }
     _subscribeToEvent();
     _loadMembersAndProfiles();
   }
@@ -154,6 +159,22 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
 
     try {
       final appState = Provider.of<AppState>(context, listen: false);
+
+      // Resolve band name safely
+      if (appState.activeBandId == widget.bandId &&
+          appState.activeBandName != null &&
+          appState.activeBandName!.trim().isNotEmpty) {
+        _bandName = appState.activeBandName!.trim();
+      }
+      try {
+        final band = await appState.firebaseService.getBandInfoAsync(widget.bandId);
+        if (band?.name != null && band!.name!.trim().isNotEmpty) {
+          _bandName = band.name!.trim();
+        }
+      } catch (e) {
+        debugPrint('[EventDetailsPage] Error fetching band info: $e');
+      }
+
       final members = await appState.firebaseService.getBandMembersAsync(widget.bandId);
 
       if (_event != null) {
@@ -528,8 +549,8 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
     );
 
     return GradientScaffold(
-      appBar: CustomTopBar(
-        title: event.title,
+      appBar: const CustomTopBar(
+        title: 'Event Details',
         showBack: true,
       ),
       body: SafeArea(
@@ -537,18 +558,6 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
           controller: _scrollController,
           padding: const EdgeInsets.all(20),
           children: [
-            Padding(
-              padding: const EdgeInsets.only(bottom: 16),
-              child: Text(
-                'EVENT DETAILS',
-                style: GoogleFonts.outfit(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                  letterSpacing: 1.5,
-                ),
-              ),
-            ),
             // Finalized / Locked Banner
             if (event.isLocked) ...[
               Container(
@@ -644,54 +653,22 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              event.title,
-                              style: GoogleFonts.outfit(
-                                fontSize: 22,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                              ),
-                            ),
-                            if (event.eventType.isNotEmpty && event.eventType.toLowerCase() != 'event') ...[
-                              const SizedBox(height: 4),
-                              Text(
-                                event.eventType,
-                                style: GoogleFonts.inter(
-                                  fontSize: 13,
-                                  color: AppTheme.primaryAccent,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                      if (hasMultipleEvents)
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: AppTheme.primaryAccent.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.5)),
-                          ),
-                          child: Text(
-                            'EVENT SCHEDULE (${scheduleItems.length} Events)',
-                            style: GoogleFonts.outfit(
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                              color: AppTheme.primaryAccent,
-                              letterSpacing: 1.1,
-                            ),
-                          ),
-                        ),
-                    ],
+                  Text(
+                    (_bandName != null && _bandName!.isNotEmpty) ? _bandName! : 'Band',
+                    style: GoogleFonts.outfit(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '"${event.title}"',
+                    style: GoogleFonts.outfit(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white.withOpacity(0.7),
+                    ),
                   ),
                   const SizedBox(height: 12),
                   Row(
@@ -1395,201 +1372,6 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
               ),
             ],
 
-            // Attendance Responses Section (Placed at the bottom below all RSVP event cards)
-            if (event.requireResponse) ...[
-              Text(
-                'ATTENDANCE RESPONSES',
-                style: GoogleFonts.outfit(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: AppTheme.primaryAccent,
-                  letterSpacing: 1.5,
-                ),
-              ),
-              const SizedBox(height: 10),
-
-              ...List.generate(scheduleItems.length, (itemIndex) {
-                final item = scheduleItems[itemIndex];
-                final countsAndLists = _calculateAttendanceForScheduleItem(event, item);
-                final yesList = countsAndLists['yes'] ?? [];
-                final noList = countsAndLists['no'] ?? [];
-                final uncertainList = countsAndLists['uncertain'] ?? [];
-
-                final itemLabel = hasMultipleEvents
-                    ? 'EVENT ${itemIndex + 1} · ${item.type.toUpperCase()} · "${item.title}"'
-                    : '${item.type.toUpperCase()} · "${item.title}"';
-
-                final yesKey = '${itemIndex}_YES';
-                final noKey = '${itemIndex}_NO';
-                final uncertainKey = '${itemIndex}_UNCERTAIN';
-
-                final isYesActive = _activeAttendanceGroupKey == yesKey;
-                final isNoActive = _activeAttendanceGroupKey == noKey;
-                final isUncertainActive = _activeAttendanceGroupKey == uncertainKey;
-
-                List<_RespondentEntry>? activeList;
-                Color activeColor = Colors.white;
-                String activeTitle = '';
-
-                if (isYesActive) {
-                  activeList = yesList;
-                  activeColor = AppTheme.success;
-                  activeTitle = 'YES Respondents (${yesList.length})';
-                } else if (isNoActive) {
-                  activeList = noList;
-                  activeColor = AppTheme.danger;
-                  activeTitle = 'NO Respondents (${noList.length})';
-                } else if (isUncertainActive) {
-                  activeList = uncertainList;
-                  activeColor = AppTheme.warning;
-                  activeTitle = 'UNCERTAIN Respondents (${uncertainList.length})';
-                }
-
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: AppTheme.cardBackground,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        itemLabel,
-                        style: GoogleFonts.outfit(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                          letterSpacing: 0.5,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-
-                      // Compact Single Row Counts
-                      Row(
-                        children: [
-                          _buildAttendanceCountPill(
-                            icon: Icons.check_circle_outline_rounded,
-                            label: 'YES (${yesList.length})',
-                            color: AppTheme.success,
-                            isSelected: isYesActive,
-                            onTap: () {
-                              setState(() {
-                                _activeAttendanceGroupKey = isYesActive ? null : yesKey;
-                              });
-                            },
-                          ),
-                          const SizedBox(width: 6),
-                          _buildAttendanceCountPill(
-                            icon: Icons.cancel_outlined,
-                            label: 'NO (${noList.length})',
-                            color: AppTheme.danger,
-                            isSelected: isNoActive,
-                            onTap: () {
-                              setState(() {
-                                _activeAttendanceGroupKey = isNoActive ? null : noKey;
-                              });
-                            },
-                          ),
-                          const SizedBox(width: 6),
-                          _buildAttendanceCountPill(
-                            icon: Icons.help_outline_rounded,
-                            label: 'UNCERTAIN (${uncertainList.length})',
-                            color: AppTheme.warning,
-                            isSelected: isUncertainActive,
-                            onTap: () {
-                              setState(() {
-                                _activeAttendanceGroupKey = isUncertainActive ? null : uncertainKey;
-                              });
-                            },
-                          ),
-                        ],
-                      ),
-
-                      // Expandable Member Name List for Active Group
-                      if (activeList != null && activeList.isNotEmpty) ...[
-                        const SizedBox(height: 10),
-                        Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF16132D),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: activeColor.withOpacity(0.4)),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                activeTitle,
-                                style: GoogleFonts.inter(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.bold,
-                                  color: activeColor,
-                                ),
-                              ),
-                              const SizedBox(height: 6),
-                              ...activeList.map((entry) {
-                                return Padding(
-                                  padding: const EdgeInsets.symmetric(vertical: 4),
-                                  child: Row(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      CircleAvatar(
-                                        radius: 10,
-                                        backgroundColor: activeColor.withOpacity(0.2),
-                                        child: Text(
-                                          entry.name.isNotEmpty ? entry.name[0].toUpperCase() : 'M',
-                                          style: GoogleFonts.inter(
-                                            color: activeColor,
-                                            fontSize: 9,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              entry.name,
-                                              style: GoogleFonts.inter(
-                                                fontSize: 12.5,
-                                                color: Colors.white,
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                            ),
-                                            if (entry.reason != null && entry.reason!.isNotEmpty) ...[
-                                              const SizedBox(height: 2),
-                                              Text(
-                                                entry.reason!,
-                                                style: GoogleFonts.inter(
-                                                  fontSize: 11,
-                                                  color: AppTheme.textSecondary,
-                                                  fontStyle: FontStyle.italic,
-                                                ),
-                                              ),
-                                            ],
-                                          ],
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              }),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                );
-              }),
-              const SizedBox(height: 16),
-            ],
-
             // Event Creator Actions (Strictly for actual Event Creator)
             if (currentUserId != null && currentUserId == event.createdBy) ...[
               Text(
@@ -1602,6 +1384,44 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                 ),
               ),
               const SizedBox(height: 10),
+
+              // View RSVP Results
+              AnimatedTapDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => EventResultsPage(
+                        bandId: widget.bandId,
+                        eventId: widget.eventId,
+                        initialEvent: _event,
+                      ),
+                    ),
+                  );
+                },
+                child: Container(
+                  height: 48,
+                  margin: const EdgeInsets.only(bottom: 12),
+                  decoration: BoxDecoration(
+                    color: AppTheme.cardBackground,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppTheme.primaryAccent, width: 1.5),
+                  ),
+                  child: Center(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.poll_outlined, color: AppTheme.primaryAccent, size: 20),
+                        const SizedBox(width: 8),
+                        Text(
+                          "View RSVP Results",
+                          style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
 
               // Edit Event
               AnimatedTapDetector(
@@ -1985,142 +1805,4 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
       ),
     );
   }
-
-  Widget _buildAttendanceCountPill({
-    required IconData icon,
-    required String label,
-    required Color color,
-    required bool isSelected,
-    required VoidCallback onTap,
-  }) {
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
-          decoration: BoxDecoration(
-            color: isSelected ? color.withOpacity(0.25) : const Color(0xFF16132D),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: isSelected ? color : const Color(0xFF2E2A4E),
-              width: isSelected ? 1.5 : 1.0,
-            ),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, size: 12, color: isSelected ? color : color.withOpacity(0.8)),
-              const SizedBox(width: 4),
-              Flexible(
-                child: Text(
-                  label,
-                  style: GoogleFonts.inter(
-                    fontSize: 11,
-                    fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
-                    color: isSelected ? Colors.white : color,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Map<String, List<_RespondentEntry>> _calculateAttendanceForScheduleItem(
-    BandEvent event,
-    _EventScheduleItemModel item,
-  ) {
-    final yesList = <_RespondentEntry>[];
-    final noList = <_RespondentEntry>[];
-    final uncertainList = <_RespondentEntry>[];
-
-    if (item.isMain) {
-      // Main event attendance
-      for (final member in _members) {
-        final uid = member.userId;
-        if (uid == null || uid.isEmpty) continue;
-        if (event.excludedMemberIds.contains(uid)) continue;
-
-        final profile = _cachedProfiles[uid];
-        final name = profile?.displayName ??
-            profile?.nickname ??
-            ((member.nickname != null && member.nickname!.trim().toLowerCase() != 'leader') ? member.nickname : null) ??
-            'Unknown Member';
-
-        final resp = event.responses[uid];
-        final status = classifyEventResponse(resp?.status);
-        final reason = resp?.uncertainReason ?? resp?.comment;
-
-        if (status == EventResponseStatus.yes) {
-          yesList.add(_RespondentEntry(name: name, reason: reason));
-        } else if (status == EventResponseStatus.no) {
-          noList.add(_RespondentEntry(name: name, reason: reason));
-        } else if (status == EventResponseStatus.uncertain) {
-          uncertainList.add(_RespondentEntry(name: name, reason: reason));
-        }
-      }
-
-      event.externalInvitees.forEach((uid, invitee) {
-        final profile = _cachedProfiles[uid];
-        final name = invitee.displayName ?? profile?.displayName ?? profile?.nickname ?? 'Unknown Guest';
-        final status = classifyEventResponse(invitee.status);
-        final reason = invitee.comment;
-
-        if (status == EventResponseStatus.yes) {
-          yesList.add(_RespondentEntry(name: '$name (Guest)', reason: reason));
-        } else if (status == EventResponseStatus.no) {
-          noList.add(_RespondentEntry(name: '$name (Guest)', reason: reason));
-        } else if (status == EventResponseStatus.uncertain) {
-          uncertainList.add(_RespondentEntry(name: '$name (Guest)', reason: reason));
-        }
-      });
-    } else {
-      // Attached Schedule item attendance
-      final scheduleId = item.scheduleItemId;
-      final scheduleMap = scheduleId != null ? (event.scheduleResponses[scheduleId] ?? {}) : <String, EventResponse>{};
-
-      for (final member in _members) {
-        final uid = member.userId;
-        if (uid == null || uid.isEmpty) continue;
-        if (event.excludedMemberIds.contains(uid)) continue;
-
-        final profile = _cachedProfiles[uid];
-        final name = profile?.displayName ??
-            profile?.nickname ??
-            ((member.nickname != null && member.nickname!.trim().toLowerCase() != 'leader') ? member.nickname : null) ??
-            'Unknown Member';
-
-        final resp = scheduleMap[uid];
-        final status = classifyEventResponse(resp?.status);
-        final reason = resp?.uncertainReason ?? resp?.comment;
-
-        if (status == EventResponseStatus.yes) {
-          yesList.add(_RespondentEntry(name: name, reason: reason));
-        } else if (status == EventResponseStatus.no) {
-          noList.add(_RespondentEntry(name: name, reason: reason));
-        } else if (status == EventResponseStatus.uncertain) {
-          uncertainList.add(_RespondentEntry(name: name, reason: reason));
-        }
-      }
-    }
-
-    return {
-      'yes': yesList,
-      'no': noList,
-      'uncertain': uncertainList,
-    };
-  }
-}
-
-class _RespondentEntry {
-  final String name;
-  final String? reason;
-
-  _RespondentEntry({
-    required this.name,
-    this.reason,
-  });
 }
