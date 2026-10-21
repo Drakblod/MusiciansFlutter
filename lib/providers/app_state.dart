@@ -180,38 +180,65 @@ class AppState extends ChangeNotifier {
   }
 
   List<AppNotification> get userNotifications => _userNotifications;
-
-  int get unreadSubResponsesCount {
-    return _userNotifications
-        .where((n) => !n.isRead && (n.type == 'sub_request_response' || n.type == 'sub_response'))
-        .length;
+  set userNotifications(List<AppNotification> value) {
+    _userNotifications = value;
+    _unreadNotificationCount = value.where((n) => !n.isRead).length;
+    notifyListeners();
   }
 
-  bool get hasUnreadSubResponses => unreadSubResponsesCount > 0;
-
-  int get unreadGigsCount {
-    return _userNotifications
-        .where((n) => !n.isRead && (n.type == 'sub_request_invite' || n.type == 'sub_request' || n.type == 'grouped_sub_request'))
-        .length;
+  /// Map of unread activity counts per feature destination derived from user notifications.
+  Map<String, int> get unreadActivityCounts {
+    final counts = <String, int>{};
+    for (final notif in userNotifications) {
+      if (!notif.isRead) {
+        final fid = notif.effectiveFeatureId;
+        if (fid != null && fid.isNotEmpty) {
+          counts[fid] = (counts[fid] ?? 0) + 1;
+        }
+      }
+    }
+    return counts;
   }
 
-  bool get hasUnreadGigs => unreadGigsCount > 0;
-
-  int get unreadBandRoomCount {
-    return _userNotifications
-        .where((n) => !n.isRead && (n.type == 'band_room_message' || n.type == 'band_section_chat'))
-        .length;
+  /// Whether there is any unread activity for the given feature destination.
+  bool hasUnreadActivity(String featureId) {
+    return unreadActivityCount(featureId) > 0;
   }
 
-  bool get hasUnreadBandRoom => unreadBandRoomCount > 0;
-
-  int get unreadCollabsCount {
-    return _userNotifications
-        .where((n) => !n.isRead && (n.type == 'session_application' || n.type == 'session_application_status' || n.type == 'session_message'))
-        .length;
+  /// Number of unread notifications for the given feature destination.
+  int unreadActivityCount(String featureId) {
+    return unreadActivityCounts[featureId] ?? 0;
   }
 
-  bool get hasUnreadCollabs => unreadCollabsCount > 0;
+  int get unreadSubResponsesCount => unreadActivityCount('find_musicians');
+  bool get hasUnreadSubResponses => hasUnreadActivity('find_musicians');
+
+  int get unreadGigsCount => unreadActivityCount('find_gigs');
+  bool get hasUnreadGigs => hasUnreadActivity('find_gigs');
+
+  int get unreadBandRoomCount => unreadActivityCount('band_room');
+  bool get hasUnreadBandRoom => hasUnreadActivity('band_room');
+
+  int get unreadCollabsCount => unreadActivityCount('collabs');
+  bool get hasUnreadCollabs => hasUnreadActivity('collabs');
+
+  /// Marks all unread notifications matching [featureId] as read.
+  Future<void> markFeatureAsRead(String featureId) async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    bool changed = false;
+    for (int i = 0; i < _userNotifications.length; i++) {
+      final n = _userNotifications[i];
+      if (!n.isRead && n.effectiveFeatureId == featureId) {
+        _userNotifications[i] = n.copyWith(isRead: true, readAt: now);
+        changed = true;
+      }
+    }
+    if (changed) {
+      _unreadNotificationCount = _userNotifications.where((n) => !n.isRead).length;
+      notifyListeners();
+    }
+    await firebaseService.markFeatureNotificationsReadAsync(featureId);
+  }
 
   void setUserNotificationsForTest(List<AppNotification> notifs) {
     _userNotifications = notifs;
@@ -290,45 +317,57 @@ class AppState extends ChangeNotifier {
   }
 
   void _subscribeToUnread() {
-    _unreadSubscription?.cancel();
-    _unreadSubscription = firebaseService
-        .subscribeToUnreadNotifications()
-        .listen(
-          (hasUnread) {
-            _hasUnreadMessages = hasUnread;
-            notifyListeners();
-          },
-          onError: (err) {
-            debugPrint("Error in unread stream: $err");
-          },
-        );
+    try {
+      _unreadSubscription?.cancel();
+      _unreadSubscription = firebaseService
+          .subscribeToUnreadNotifications()
+          .listen(
+            (hasUnread) {
+              _hasUnreadMessages = hasUnread;
+              notifyListeners();
+            },
+            onError: (err) {
+              debugPrint("Error in unread stream: $err");
+            },
+          );
+    } catch (e) {
+      debugPrint("Error subscribing to unread notifications: $e");
+    }
 
-    _unreadNotificationsSubscription?.cancel();
-    _unreadNotificationsSubscription = firebaseService
-        .subscribeToUnreadNotificationCount()
-        .listen(
-          (count) {
-            _unreadNotificationCount = count;
-            notifyListeners();
-          },
-          onError: (err) {
-            debugPrint("Error in unread notifications stream: $err");
-          },
-        );
+    try {
+      _unreadNotificationsSubscription?.cancel();
+      _unreadNotificationsSubscription = firebaseService
+          .subscribeToUnreadNotificationCount()
+          .listen(
+            (count) {
+              _unreadNotificationCount = count;
+              notifyListeners();
+            },
+            onError: (err) {
+              debugPrint("Error in unread notifications stream: $err");
+            },
+          );
+    } catch (e) {
+      debugPrint("Error subscribing to unread notification count: $e");
+    }
 
-    _userNotificationsSubscription?.cancel();
-    _userNotificationsSubscription = firebaseService
-        .subscribeToUserNotifications()
-        .listen(
-          (notifs) {
-            _userNotifications = notifs;
-            _unreadNotificationCount = notifs.where((n) => !n.isRead).length;
-            notifyListeners();
-          },
-          onError: (err) {
-            debugPrint("Error in user notifications stream: $err");
-          },
-        );
+    try {
+      _userNotificationsSubscription?.cancel();
+      _userNotificationsSubscription = firebaseService
+          .subscribeToUserNotifications()
+          .listen(
+            (notifs) {
+              _userNotifications = notifs;
+              _unreadNotificationCount = notifs.where((n) => !n.isRead).length;
+              notifyListeners();
+            },
+            onError: (err) {
+              debugPrint("Error in user notifications stream: $err");
+            },
+          );
+    } catch (e) {
+      debugPrint("Error subscribing to user notifications: $e");
+    }
   }
 
   Future<void> login(String email, String password) async {

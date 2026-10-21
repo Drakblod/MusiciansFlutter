@@ -860,6 +860,9 @@ describe('Real RTDB Emulator Rules Tests', function () {
     });
 
     it('46. Candidate A CAN write Candidate A own response when in audience', async () => {
+      await testEnvFinal.withSecurityRulesDisabled(async (context) => {
+        await context.database().ref('SubRequests/sub_fav_targeted_1/Responses/user_sub_cand_1').remove();
+      });
       const candA = testEnvFinal.authenticatedContext('user_sub_cand_1');
       await assertSucceeds(candA.database().ref('SubRequests/sub_fav_targeted_1/Responses/user_sub_cand_1').set(true));
     });
@@ -1315,6 +1318,119 @@ describe('Real RTDB Emulator Rules Tests', function () {
       await assertFails(unauth.database().ref(`Bands/${BAND_ID}/Events/${EVENT_OPEN}/Responses/user_member`).get());
       await assertFails(unauth.database().ref(`Bands/${BAND_ID}/Events/${EVENT_OPEN}/Responses/user_member`).set({ status: 'YES' }));
       await assertFails(unauth.database().ref(`Bands/${BAND_ID}/Events/${EVENT_OPEN}`).set({ title: 'Hack' }));
+    });
+  });
+
+  describe('11. User Notifications and Band Files Rules (HOME-ACTIVITY-BADGES-01)', () => {
+    it('1. Direct client write to userNotifications is rejected', async () => {
+      const user = testEnvFinal.authenticatedContext('user_123');
+      await assertFails(
+        user.database().ref('userNotifications/user_123/notif_direct').set({
+          type: 'test',
+          title: 'Direct write test',
+        })
+      );
+    });
+
+    it('2. Files write with spoofed UploadedBy is rejected', async () => {
+      const attacker = testEnvFinal.authenticatedContext('attacker_uid');
+      await assertFails(
+        attacker.database().ref('files/band_test/file_spoofed').set({
+          FileName: 'fake.pdf',
+          FileUrl: 'https://example.com/fake.pdf',
+          UploadedBy: 'victim_uid',
+          UploadedAt: Date.now(),
+        })
+      );
+    });
+
+    it('3. Files write with legitimate UploadedBy matching auth.uid is accepted', async () => {
+      const legitUser = testEnvFinal.authenticatedContext('legit_uid');
+      await assertSucceeds(
+        legitUser.database().ref('files/band_test/file_legit').set({
+          FileName: 'sheet.pdf',
+          FileUrl: 'https://example.com/sheet.pdf',
+          UploadedBy: 'legit_uid',
+          UploadedAt: Date.now(),
+          Category: 'sheet_music',
+        })
+      );
+    });
+
+    it('4. Legacy file record without UploadedBy remains readable by authenticated users', async () => {
+      await testEnvFinal.withSecurityRulesDisabled(async (context) => {
+        await context.database().ref('files/band_test/legacy_file').set({
+          FileName: 'legacy_chart.pdf',
+          FileUrl: 'https://example.com/legacy_chart.pdf',
+        });
+      });
+      const reader = testEnvFinal.authenticatedContext('reader_uid');
+      await assertSucceeds(reader.database().ref('files/band_test/legacy_file').get());
+    });
+  });
+
+  describe('12. Candidate Response Shape and Data Integrity (SUBREQUEST-RULES-RECONCILIATION-01)', () => {
+    beforeEach(async () => {
+      await testEnvFinal.withSecurityRulesDisabled(async (context) => {
+        const db = context.database();
+        await db.ref('SubRequests/sub_integrity_test').set({
+          SubRequestId: 'sub_integrity_test',
+          CreatorUserId: 'user_leader',
+          bandId: 'band_rules_test',
+          eventId: 'event_open',
+          VoicePart: 'Drums',
+          Status: 'published',
+        });
+        await db.ref('subRequestAudience/sub_integrity_test/user_sub_cand_1').set(true);
+      });
+    });
+
+    it('1. First write of true succeeds', async () => {
+      const candidate = testEnvFinal.authenticatedContext('user_sub_cand_1');
+      const ref = candidate.database().ref('SubRequests/sub_integrity_test/Responses/user_sub_cand_1');
+      await assertSucceeds(ref.set(true));
+    });
+
+    it('2. Writing false is rejected', async () => {
+      const candidate = testEnvFinal.authenticatedContext('user_sub_cand_1');
+      const ref = candidate.database().ref('SubRequests/sub_integrity_test/Responses/user_sub_cand_1');
+      await assertFails(ref.set(false));
+    });
+
+    it('3. Writing arbitrary string is rejected', async () => {
+      const candidate = testEnvFinal.authenticatedContext('user_sub_cand_1');
+      const ref = candidate.database().ref('SubRequests/sub_integrity_test/Responses/user_sub_cand_1');
+      await assertFails(ref.set('applied'));
+    });
+
+    it('4. Writing arbitrary object is rejected', async () => {
+      const candidate = testEnvFinal.authenticatedContext('user_sub_cand_1');
+      const ref = candidate.database().ref('SubRequests/sub_integrity_test/Responses/user_sub_cand_1');
+      await assertFails(ref.set({ status: 'applied', timestamp: Date.now() }));
+    });
+
+    it('5. Overwrite is rejected', async () => {
+      await testEnvFinal.withSecurityRulesDisabled(async (context) => {
+        await context.database().ref('SubRequests/sub_integrity_test/Responses/user_sub_cand_1').set(true);
+      });
+      const candidate = testEnvFinal.authenticatedContext('user_sub_cand_1');
+      const ref = candidate.database().ref('SubRequests/sub_integrity_test/Responses/user_sub_cand_1');
+      await assertFails(ref.set(true));
+    });
+
+    it('6. Direct deletion is rejected', async () => {
+      await testEnvFinal.withSecurityRulesDisabled(async (context) => {
+        await context.database().ref('SubRequests/sub_integrity_test/Responses/user_sub_cand_1').set(true);
+      });
+      const candidate = testEnvFinal.authenticatedContext('user_sub_cand_1');
+      const ref = candidate.database().ref('SubRequests/sub_integrity_test/Responses/user_sub_cand_1');
+      await assertFails(ref.remove());
+    });
+
+    it('7. Writing another user’s response is rejected', async () => {
+      const candidate = testEnvFinal.authenticatedContext('user_sub_cand_1');
+      const ref = candidate.database().ref('SubRequests/sub_integrity_test/Responses/user_sub_cand_2');
+      await assertFails(ref.set(true));
     });
   });
 });

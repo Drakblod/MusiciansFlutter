@@ -5,6 +5,7 @@ class AppNotification {
   final String id;
   final String type;
   final String category; // 'messages' | 'events' | 'requests' | 'system'
+  final String? featureId; // 'find_gigs' | 'find_musicians' | 'collabs' | 'band_room' | 'messages'
   final String title;
   final String body;
   final int createdAt; // epoch milliseconds
@@ -16,6 +17,7 @@ class AppNotification {
     required this.id,
     required this.type,
     this.category = 'system',
+    this.featureId,
     required this.title,
     required this.body,
     required this.createdAt,
@@ -23,6 +25,55 @@ class AppNotification {
     this.readAt,
     this.data = const {},
   });
+
+  /// Centralized mapping from notification type or payload to feature destination.
+  /// Supported feature IDs:
+  /// - 'find_gigs'
+  /// - 'find_musicians'
+  /// - 'collabs'
+  /// - 'band_room'
+  /// - 'messages'
+  static String? resolveFeatureId(String? type, [String? explicitFeatureId, Map<String, dynamic>? data]) {
+    if (explicitFeatureId != null && explicitFeatureId.trim().isNotEmpty) {
+      return explicitFeatureId.trim();
+    }
+    if (data != null) {
+      final f = data['featureId'] ?? data['FeatureId'];
+      if (f != null && f.toString().trim().isNotEmpty) {
+        return f.toString().trim();
+      }
+    }
+    if (type == null) return null;
+    switch (type.toLowerCase()) {
+      case 'sub_request_invite':
+      case 'sub_request':
+      case 'grouped_sub_request':
+      case 'gig_finalized':
+        return 'find_gigs';
+      case 'sub_request_response':
+      case 'sub_response':
+        return 'find_musicians';
+      case 'session_application':
+      case 'session_application_status':
+      case 'session_message':
+        return 'collabs';
+      case 'band_room_message':
+      case 'band_section_chat':
+      case 'event_invite':
+      case 'event_reminder':
+      case 'event_threshold':
+      case 'event_milestone':
+      case 'band_file_uploaded':
+        return 'band_room';
+      case 'direct_message':
+        return 'messages';
+      default:
+        return null;
+    }
+  }
+
+  /// Returns the effective feature destination, falling back to the type-to-feature mapping.
+  String? get effectiveFeatureId => resolveFeatureId(type, featureId, data);
 
   /// Derives category from type if category is not explicitly set or empty.
   static String resolveCategory(String? type, [String? explicitCategory]) {
@@ -134,10 +185,14 @@ class AppNotification {
       } catch (_) {}
     }
 
+    final rawFeatureId = rawMap['featureId'] ?? rawMap['FeatureId'] ?? (rawData is Map ? (rawData['featureId'] ?? rawData['FeatureId']) : null);
+    final featureId = resolveFeatureId(type, rawFeatureId?.toString(), data);
+
     return AppNotification(
       id: id,
       type: type,
       category: category,
+      featureId: featureId,
       title: title,
       body: body,
       createdAt: createdAt,
@@ -152,6 +207,7 @@ class AppNotification {
       'id': id,
       'type': type,
       'category': category,
+      if (featureId != null) 'featureId': featureId,
       'title': title,
       'body': body,
       'createdAt': createdAt,
@@ -165,6 +221,7 @@ class AppNotification {
     String? id,
     String? type,
     String? category,
+    String? featureId,
     String? title,
     String? body,
     int? createdAt,
@@ -176,6 +233,7 @@ class AppNotification {
       id: id ?? this.id,
       type: type ?? this.type,
       category: category ?? this.category,
+      featureId: featureId ?? this.featureId,
       title: title ?? this.title,
       body: body ?? this.body,
       createdAt: createdAt ?? this.createdAt,
@@ -193,6 +251,7 @@ class AppNotification {
           id == other.id &&
           type == other.type &&
           category == other.category &&
+          featureId == other.featureId &&
           title == other.title &&
           body == other.body &&
           createdAt == other.createdAt &&
@@ -204,6 +263,7 @@ class AppNotification {
         id,
         type,
         category,
+        featureId,
         title,
         body,
         createdAt,

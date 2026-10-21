@@ -95,7 +95,16 @@
       }
     },
     "SubRequests": {
-      ".indexOn": ["eventId", "EventId", "bandId", "BandId", "Status", "CreatorUserId", "RequestGroupId", "requestGroupId"],
+      ".indexOn": [
+        "eventId",
+        "EventId",
+        "bandId",
+        "BandId",
+        "Status",
+        "CreatorUserId",
+        "RequestGroupId",
+        "requestGroupId"
+      ],
       "$subRequestId": {
         ".read": "auth != null",
         ".write": "auth != null && !data.exists() && !newData.child('Responses').exists() && (newData.child('bandId').exists() || newData.child('BandId').exists()) && ( (newData.child('bandId').exists() && (root.child('Bands').child(newData.child('bandId').val()).child('Members_band').child(auth.uid).child('Role').val() == 'Leader' || root.child('Bands').child(newData.child('bandId').val()).child('Members_band').child(auth.uid).child('Role').val() == 'Admin') && root.child('Bands').child(newData.child('bandId').val()).child('Events').child(newData.child('eventId').val()).exists()) || (newData.child('BandId').exists() && (root.child('Bands').child(newData.child('BandId').val()).child('Members_band').child(auth.uid).child('Role').val() == 'Leader' || root.child('Bands').child(newData.child('BandId').val()).child('Members_band').child(auth.uid).child('Role').val() == 'Admin') && root.child('Bands').child(newData.child('BandId').val()).child('Events').child(newData.child('EventId').val()).exists()) )",
@@ -173,7 +182,7 @@
         },
         "Responses": {
           "$userId": {
-            ".write": "auth != null && auth.uid == $userId && data.parent().parent().child('Status').val() == 'published' && root.child('subRequestAudience').child($subRequestId).child(auth.uid).val() == true"
+            ".write": "auth != null && auth.uid == $userId && !data.exists() && newData.val() == true && data.parent().parent().child('Status').val() == 'published' && root.child('subRequestAudience').child($subRequestId).child(auth.uid).val() == true"
           }
         }
       }
@@ -192,7 +201,10 @@
       "$userId": {
         ".read": "auth != null && auth.uid == $userId",
         ".write": false,
-        ".indexOn": ["createdAt", "isRead"]
+        ".indexOn": [
+          "createdAt",
+          "isRead"
+        ]
       }
     },
     "subRequestPublications": {
@@ -236,8 +248,12 @@
       ".write": "auth != null"
     },
     "files": {
-      ".read": "auth != null",
-      ".write": "auth != null"
+      "$bandId": {
+        ".read": "auth != null",
+        "$fileId": {
+          ".write": "auth != null && (!newData.exists() || !newData.hasChild('UploadedBy') || newData.child('UploadedBy').val() == auth.uid)"
+        }
+      }
     },
     "marketplaceListings": {
       ".read": "auth != null",
@@ -249,7 +265,12 @@
     },
     "PublicEvents": {
       ".read": "auth != null",
-      ".indexOn": ["startDateTime", "createdBy", "status", "eventType"],
+      ".indexOn": [
+        "startDateTime",
+        "createdBy",
+        "status",
+        "eventType"
+      ],
       "$eventId": {
         ".write": "auth != null && ( (!data.exists() && (newData.child('createdBy').val() == auth.uid || !newData.child('createdBy').exists())) || (data.exists() && (data.child('createdBy').val() == auth.uid || !data.child('createdBy').exists())) )"
       }

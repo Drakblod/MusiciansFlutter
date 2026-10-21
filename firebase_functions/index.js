@@ -15,6 +15,61 @@ const isEmulator = process.env.FUNCTIONS_EMULATOR === 'true' ||
   process.env.FIREBASE_EMULATOR_HUB !== undefined;
 const databaseTriggerRegion = isEmulator ? 'us-central1' : 'europe-west1';
 
+// In emulator environment, stub outbound FCM messaging to avoid external network timeouts on fake tokens
+if (isEmulator) {
+  admin.messaging = function() {
+    return {
+      send: async () => 'mock-fcm-message-id',
+      sendEach: async (messages) => ({
+        responses: (messages || []).map(() => ({ success: true, messageId: 'mock-fcm-id' })),
+        successCount: (messages || []).length,
+        failureCount: 0,
+      }),
+    };
+  };
+}
+
+const KNOWN_FEATURE_IDS = ['find_gigs', 'find_musicians', 'collabs', 'band_room', 'messages'];
+
+/**
+ * Resolves the destination feature ID for a notification, preserving explicit featureId
+ * or falling back to centralized type-to-feature mapping.
+ */
+function resolveNotificationFeatureId(notif) {
+  if (!notif) return null;
+  const explicit = notif.featureId || notif.data?.featureId;
+  if (explicit && KNOWN_FEATURE_IDS.includes(explicit)) {
+    return explicit;
+  }
+  const type = notif.type;
+  switch (type) {
+    case 'sub_request_invite':
+    case 'sub_request':
+    case 'grouped_sub_request':
+    case 'gig_finalized':
+      return 'find_gigs';
+    case 'sub_request_response':
+    case 'sub_response':
+      return 'find_musicians';
+    case 'session_application':
+    case 'session_application_status':
+    case 'session_message':
+      return 'collabs';
+    case 'band_room_message':
+    case 'band_section_chat':
+    case 'event_invite':
+    case 'event_reminder':
+    case 'event_threshold':
+    case 'event_milestone':
+    case 'band_file_uploaded':
+      return 'band_room';
+    case 'direct_message':
+      return 'messages';
+    default:
+      return null;
+  }
+}
+
 /**
  * Helper to record a single user notification in /userNotifications/{recipientUserId}/{notificationId}
  */
@@ -23,16 +78,21 @@ async function recordUserNotification(recipientUserId, notificationData) {
   try {
     const now = Date.now();
     const notificationId = notificationData.id || `notif_${now}_${recipientUserId}_${Math.random().toString(36).substring(2, 8)}`;
+    const featId = notificationData.featureId || notificationData.data?.featureId || resolveNotificationFeatureId(notificationData) || null;
     const payload = {
       id: notificationId,
       type: notificationData.type || 'system',
+      featureId: featId,
       category: notificationData.category || 'system',
       title: notificationData.title || '',
       body: notificationData.body || '',
       createdAt: notificationData.createdAt || now,
       isRead: false,
       readAt: null,
-      data: notificationData.data || {},
+      data: {
+        ...(notificationData.data || {}),
+        ...(featId ? { featureId: featId } : {}),
+      },
     };
     await admin.database().ref(`/userNotifications/${recipientUserId}/${notificationId}`).set(payload);
   } catch (err) {
@@ -54,16 +114,21 @@ async function recordUserNotificationsBatch(recipientUserIds, notificationDataBu
         ? notificationDataBuilder(recipientId)
         : notificationDataBuilder;
       const notificationId = notif.id || `notif_${now}_${recipientId}_${Math.random().toString(36).substring(2, 8)}`;
+      const featId = notif.featureId || notif.data?.featureId || resolveNotificationFeatureId(notif) || null;
       updates[`/userNotifications/${recipientId}/${notificationId}`] = {
         id: notificationId,
         type: notif.type || 'system',
+        featureId: featId,
         category: notif.category || 'system',
         title: notif.title || '',
         body: notif.body || '',
         createdAt: notif.createdAt || now,
         isRead: false,
         readAt: null,
-        data: notif.data || {},
+        data: {
+          ...(notif.data || {}),
+          ...(featId ? { featureId: featId } : {}),
+        },
       };
     }
     if (Object.keys(updates).length > 0) {
@@ -713,7 +778,10 @@ exports.publishSubRequestGroup = onCall({ region: 'europe-west1' }, async (reque
         const slotEventId = slot.eventId || eventId;
         if (slotEventId && slotEventId !== 'standalone' && !slotEventId.startsWith('freelance')) {
           const evSnap = await db.ref(`/Bands/${bandId}/Events/${slotEventId}`).once('value');
-          if (evSnap.exists() && evSnap.val()?.createdBy && evSnap.val()?.createdBy !== callerId && role !== 'Leader' && role !== 'Admin') {
+          if (!evSnap.exists()) {
+            throw new HttpsError('permission-denied', `Event ${slotEventId} does not exist in band ${bandId}.`);
+          }
+          if (evSnap.val()?.createdBy && evSnap.val()?.createdBy !== callerId && role !== 'Leader' && role !== 'Admin') {
             throw new HttpsError('permission-denied', `Event ${slotEventId} does not belong to caller.`);
           }
         }
@@ -841,12 +909,12 @@ exports.publishSubRequestGroup = onCall({ region: 'europe-west1' }, async (reque
       const rawTargetUserIds = slot.targetUserIds || slot.TargetUserIds || [];
 
       let isEligible = false;
-      if (Array.isArray(rawTargetUserIds) && rawTargetUserIds.length > 0) {
-        isEligible = rawTargetUserIds.includes(userId);
-      } else if (searchSource === 'favorites') {
+      if (searchSource === 'favorites') {
         // Enforce that target user is genuinely in the caller's favorites list
         const isVerifiedFavorite = callerFavorites[userId] === true || callerFavorites[userId] === 'true';
-        isEligible = isVerifiedFavorite;
+        isEligible = isVerifiedFavorite && (rawTargetUserIds.length === 0 || rawTargetUserIds.includes(userId));
+      } else if (Array.isArray(rawTargetUserIds) && rawTargetUserIds.length > 0) {
+        isEligible = rawTargetUserIds.includes(userId);
       } else {
         isEligible = matchesInstrument(voicePart, userSkills);
       }
@@ -938,11 +1006,13 @@ exports.respondToSubRequest = onCall({ region: 'europe-west1' }, async (request)
     const notifData = {
       id: notifId,
       type: 'sub_request_response',
+      featureId: 'find_musicians',
       category: 'requests',
       title: notificationTitle,
       body: notificationBody,
       createdAt: Date.now(),
       isRead: false,
+      readAt: null,
       data: {
         subRequestId: subRequestId,
         applicantId: userId,
@@ -953,6 +1023,7 @@ exports.respondToSubRequest = onCall({ region: 'europe-west1' }, async (request)
         bandName: bandName,
         eventType: gigEventType,
         dateTime: gigDateTimeStr,
+        featureId: 'find_musicians',
       },
     };
 
@@ -3652,6 +3723,195 @@ exports.markAllNotificationsRead = onCall({ region: 'europe-west1' }, async (req
 });
 
 /**
+ * Marks all unread notifications belonging to a specific feature as read in the caller's /userNotifications/{callerUid} feed.
+ */
+exports.markFeatureNotificationsRead = onCall({ region: 'europe-west1' }, async (request) => {
+  const callerUid = request.auth?.uid;
+  if (!callerUid) {
+    throw new HttpsError('unauthenticated', 'User must be authenticated.');
+  }
+
+  const featureId = request.data?.featureId;
+  if (!featureId || typeof featureId !== 'string' || !KNOWN_FEATURE_IDS.includes(featureId.trim())) {
+    throw new HttpsError('invalid-argument', 'A valid featureId is required.');
+  }
+
+  const targetFeature = featureId.trim();
+  const feedRef = admin.database().ref(`/userNotifications/${callerUid}`);
+  const feedSnap = await feedRef.once('value');
+
+  if (!feedSnap.exists() || !feedSnap.val()) {
+    return { success: true, updatedCount: 0 };
+  }
+
+  const notifs = feedSnap.val();
+  const updates = {};
+  const now = Date.now();
+  let updatedCount = 0;
+
+  Object.keys(notifs).forEach((nId) => {
+    const n = notifs[nId];
+    if (n && !n.isRead && resolveNotificationFeatureId(n) === targetFeature) {
+      updates[`/userNotifications/${callerUid}/${nId}/isRead`] = true;
+      updates[`/userNotifications/${callerUid}/${nId}/readAt`] = now;
+      updatedCount++;
+    }
+  });
+
+  if (updatedCount > 0) {
+    await admin.database().ref().update(updates);
+  }
+
+  return { success: true, updatedCount };
+});
+
+/**
+ * Database trigger when a response is created under /SubRequests/{subRequestId}/Responses/{applicantId}.
+ * Records a notification for the creator of the SubRequest if not already created.
+ */
+exports.onSubRequestResponseCreated = functions.region(databaseTriggerRegion).database
+  .ref('/SubRequests/{subRequestId}/Responses/{applicantId}')
+  .onCreate(async (snapshot, context) => {
+    const subRequestId = context.params.subRequestId;
+    const applicantId = context.params.applicantId;
+    if (!subRequestId || !applicantId) return null;
+
+    try {
+      const db = admin.database();
+      const subSnap = await db.ref(`/SubRequests/${subRequestId}`).once('value');
+      if (!subSnap.exists()) return null;
+
+      const val = subSnap.val() || {};
+      const creatorId = val.CreatorUserId || val.creatorUserId || val.UserId || val.userId;
+      if (!creatorId || creatorId === applicantId) return null;
+
+      const notifId = `notif_sub_resp_${subRequestId}_${applicantId}`;
+      const existingSnap = await db.ref(`/userNotifications/${creatorId}/${notifId}`).once('value');
+      if (existingSnap.exists()) {
+        return null; // Already recorded by callable
+      }
+
+      let applicantName = 'A musician';
+      try {
+        const userSnap = await db.ref(`/users/${applicantId}`).once('value');
+        if (userSnap.exists()) {
+          const uVal = userSnap.val() || {};
+          applicantName = uVal.displayName || uVal.nickname || uVal.DisplayName || 'A musician';
+        }
+      } catch (_) {}
+
+      const rawEventType = val.eventType || val.EventType || val.Role || val.role || 'Gig';
+      const gigEventType = (typeof rawEventType === 'string' && rawEventType.trim().length > 0)
+        ? rawEventType.trim()
+        : 'Gig';
+
+      const gigDateTimeStr = formatDateTimeLabel(
+        val.date || val.Date || val.startDateTime,
+        val.startTime || val.StartTime,
+        val.endTime || val.EndTime
+      );
+
+      const bandName = val.BandName || val.bandName || 'Band';
+      const role = val.VoicePart || val.voicePart || val.Role || val.role || 'Substitute';
+      const notificationTitle = 'Gig Request Response';
+      const notificationBody = `${bandName}\n${gigEventType}\n${gigDateTimeStr}`;
+
+      const notifData = {
+        id: notifId,
+        type: 'sub_request_response',
+        featureId: 'find_musicians',
+        category: 'requests',
+        title: notificationTitle,
+        body: notificationBody,
+        createdAt: Date.now(),
+        isRead: false,
+        readAt: null,
+        data: {
+          subRequestId: subRequestId,
+          applicantId: applicantId,
+          applicantName: applicantName,
+          bandId: val.BandId || val.bandId || '',
+          eventId: val.EventId || val.eventId || '',
+          voicePart: role,
+          bandName: bandName,
+          eventType: gigEventType,
+          dateTime: gigDateTimeStr,
+          featureId: 'find_musicians',
+        },
+      };
+
+      await recordUserNotification(creatorId, notifData);
+      return null;
+    } catch (err) {
+      console.error('Error in onSubRequestResponseCreated trigger:', err);
+      return null;
+    }
+  });
+
+/**
+ * Database trigger when a file is uploaded under /files/{bandId}/{fileId}.
+ * Records a notification for all band members except the uploader.
+ */
+exports.onBandFileUploaded = functions.region(databaseTriggerRegion).database
+  .ref('/files/{bandId}/{fileId}')
+  .onCreate(async (snapshot, context) => {
+    const fileData = snapshot.val();
+    if (!fileData) return null;
+
+    const bandId = context.params.bandId;
+    const fileId = context.params.fileId;
+    const uploaderId = fileData.UploadedBy || fileData.uploadedBy || fileData.uploaderId || fileData.userId || fileData.UserId;
+    const fileName = fileData.FileName || fileData.fileName || fileData.Name || fileData.name || 'A file';
+
+    try {
+      const db = admin.database();
+      const bandRef = db.ref(`/Bands/${bandId}`);
+      const bandSnap = await bandRef.once('value');
+      const bandVal = bandSnap.val() || {};
+      const bandName = bandVal.Name || bandVal.name || bandId;
+
+      let memberIds = [];
+      if (bandVal.Members_band) {
+        memberIds = Object.keys(bandVal.Members_band);
+      } else if (bandVal.Members) {
+        memberIds = Object.keys(bandVal.Members);
+      }
+
+      if (memberIds.length === 0) {
+        const convMembersSnap = await db.ref(`/bandconversations/${bandId}/members`).once('value');
+        if (convMembersSnap.exists() && convMembersSnap.val()) {
+          memberIds = Object.keys(convMembersSnap.val());
+        }
+      }
+
+      const recipients = memberIds.filter(uid => uid && uid !== uploaderId);
+      if (recipients.length === 0) return null;
+
+      await recordUserNotificationsBatch(recipients, (uid) => ({
+        id: `notif_file_${bandId}_${fileId}_${uid}`,
+        type: 'band_file_uploaded',
+        featureId: 'band_room',
+        category: 'band',
+        title: `📁 ${bandName}`,
+        body: `New file uploaded: ${fileName}`,
+        createdAt: Date.now(),
+        data: {
+          bandId: bandId,
+          fileId: fileId,
+          fileName: fileName,
+          uploadedBy: uploaderId || '',
+          featureId: 'band_room',
+        },
+      }));
+
+      return null;
+    } catch (err) {
+      console.error('Error in onBandFileUploaded trigger:', err);
+      return null;
+    }
+  });
+
+/**
  * Permanently deletes the caller's user account and all associated data.
  * If the user is the leader of a band:
  *   - If other members exist, leadership is automatically transferred to an Admin or next member.
@@ -3871,4 +4131,6 @@ const {
 exports.startLiveBroadcast = startLiveBroadcast;
 exports.joinLiveBroadcast = joinLiveBroadcast;
 exports.stopLiveBroadcast = stopLiveBroadcast;
+exports.KNOWN_FEATURE_IDS = KNOWN_FEATURE_IDS;
+exports.resolveNotificationFeatureId = resolveNotificationFeatureId;
 

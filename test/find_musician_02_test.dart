@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
 import 'package:musicians_flutter/models/sub_request.dart';
 import 'package:musicians_flutter/models/user_profile.dart';
+import 'package:musicians_flutter/models/app_notification.dart';
 import 'package:musicians_flutter/models/band.dart';
 import 'package:musicians_flutter/models/band_event.dart';
 import 'package:musicians_flutter/providers/app_state.dart';
@@ -36,6 +37,9 @@ class MockFirebaseService extends Fake implements FirebaseService {
 
   @override
   Stream<int> subscribeToUnreadNotificationCount([String? userId]) => Stream.value(0);
+
+  @override
+  Stream<List<AppNotification>> subscribeToUserNotifications([String? userId]) => Stream.value([]);
 
   @override
   Future<Set<String>> getUserAppliedSubRequestIdsAsync(String userId) async => <String>{};
@@ -1070,6 +1074,7 @@ void main() {
     });
 
     testWidgets('31. Legacy SubRequests without RequestGroupId render cleanly as individual singleton groups', (tester) async {
+      final futureDate = DateTime.now().add(const Duration(days: 7)).toIso8601String();
       final legacySub = SubRequest(
         subRequestId: 'legacy_single_sub',
         role: 'Substitute',
@@ -1077,7 +1082,7 @@ void main() {
         bandName: 'Solo Jazz Trio',
         isPaid: false,
         status: 'published',
-        date: '2026-10-20T18:00:00Z',
+        date: futureDate,
         requestGroupId: null,
       );
 

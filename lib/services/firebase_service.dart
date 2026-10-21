@@ -2134,6 +2134,19 @@ class FirebaseService {
     } catch (_) {}
   }
 
+  Future<void> markFeatureNotificationsReadAsync(String featureId) async {
+    final uid = currentUserId;
+    if (uid == null || uid.isEmpty) return;
+    try {
+      final callable = _functions.httpsCallable('markFeatureNotificationsRead');
+      await callable.call<Map<String, dynamic>>({
+        'featureId': featureId,
+      });
+    } catch (e) {
+      debugPrint('[FirebaseService] markFeatureNotificationsRead error: $e');
+    }
+  }
+
   Future<void> markAllNotificationsReadAsync() async {
     final uid = currentUserId;
     if (uid != null && uid.isNotEmpty) {
@@ -2527,7 +2540,15 @@ class FirebaseService {
     String? category,
   ]) async {
     final ref = _dbRef('files/$bandId').push();
-    final Map<String, dynamic> data = {'FileName': fileName, 'FileUrl': fileUrl};
+    final uid = currentUserId;
+    final Map<String, dynamic> data = {
+      'FileName': fileName,
+      'FileUrl': fileUrl,
+      'UploadedAt': DateTime.now().millisecondsSinceEpoch,
+    };
+    if (uid != null && uid.isNotEmpty) {
+      data['UploadedBy'] = uid;
+    }
     if (category != null && category.isNotEmpty) {
       data['Category'] = category;
     }

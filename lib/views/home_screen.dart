@@ -12,13 +12,13 @@ import '../controllers/global_create_event_launcher.dart';
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
-  Future<void> _handleBandNavigation(
+  Future<bool> _handleBandNavigation(
     BuildContext context,
     AppState appState,
     String routeName,
   ) async {
     final userId = appState.currentUserId;
-    if (userId == null) return;
+    if (userId == null) return false;
 
     // Show loading spinner dialog
     showDialog(
@@ -36,899 +36,25 @@ class HomeScreen extends StatelessWidget {
       }
 
       if (bands.isEmpty) {
-        if (context.mounted) {
-          Navigator.pushNamed(context, routeName);
-        }
-      } else if (bands.length == 1) {
-        if (context.mounted) {
-          _proceedToBandRoute(
-            context,
-            appState,
-            bands.keys.first,
-            bands.values.first,
-            routeName,
-          );
-        }
-      } else {
-        if (context.mounted) {
-          _showBandSelectorBottomSheet(context, appState, bands, routeName);
-        }
-      }
-    } catch (e) {
-      if (context.mounted) {
-        Navigator.pop(context); // Dismiss loading dialog
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error checking band memberships: $e'),
-            backgroundColor: AppTheme.danger,
-          ),
-        );
-      }
-    }
-  }
-
-  Future<void> _proceedToBandRoute(
-    BuildContext context,
-    AppState appState,
-    String bandId,
-    String bandName,
-    String routeName,
-  ) async {
-    appState.selectBand(bandId, bandName);
-
-    if (routeName == '/find-sub') {
-      final userId = appState.currentUserId;
-      if (userId != null) {
-        try {
-          final subRequests = await appState.firebaseService.getUserSubRequestsAsync(userId);
-          final activeForBand = subRequests.where((req) {
-            final matchesBand = (req.bandId != null && req.bandId == bandId) ||
-                (req.bandName != null &&
-                    (req.bandName == bandName ||
-                        req.bandName == bandId ||
-                        req.bandName!.replaceAll(' ', '_') == bandId));
-            final isNotDeleted = req.status != 'deleted';
-            return matchesBand && isNotDeleted;
-          }).toList();
-
-          if (activeForBand.isNotEmpty && context.mounted) {
-            await _showSubRequestChoiceBottomSheet(
-              context,
-              appState,
-              bandId,
-              bandName,
-              activeForBand.length,
+        if (routeName == '/band-room') {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('You need to be part of a band to access Band Room.'),
+                backgroundColor: AppTheme.danger,
+              ),
             );
-            return;
           }
-        } catch (e) {
-          debugPrint("Error checking active sub requests for band $bandId: $e");
+          return false;
         }
-      }
-    }
-
-    if (context.mounted) {
-      Navigator.pushNamed(context, routeName);
-    }
-  }
-
-  Future<void> _showSubRequestChoiceBottomSheet(
-    BuildContext context,
-    AppState appState,
-    String bandId,
-    String bandName,
-    int activeCount,
-  ) async {
-    final choice = await showModalBottomSheet<String>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (sheetContext) {
-        return Container(
-          decoration: BoxDecoration(
-            color: const Color(0xFF0F0C22).withOpacity(0.98),
-            borderRadius: const BorderRadius.only(
-              topLeft: Radius.circular(24),
-              topRight: Radius.circular(24),
-            ),
-            border: Border.all(color: const Color(0xFF2E2A4E), width: 1.5),
-          ),
-          padding: EdgeInsets.only(
-            left: 24,
-            right: 24,
-            top: 16,
-            bottom: MediaQuery.of(sheetContext).padding.bottom + 24,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.white24,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: AppTheme.primaryAccent.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      bandName.toUpperCase(),
-                      style: GoogleFonts.outfit(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        color: AppTheme.primaryAccent,
-                        letterSpacing: 1.2,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'FIND MUSICIAN / SUBSTITUTE',
-                style: GoogleFonts.outfit(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                  letterSpacing: 1.5,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'You have $activeCount active request${activeCount == 1 ? '' : 's'} for $bandName.',
-                style: GoogleFonts.inter(
-                  fontSize: 13,
-                  color: AppTheme.textSecondary,
-                ),
-              ),
-              const SizedBox(height: 20),
-
-              // Option 1: Create New Sub Request
-              AnimatedTapDetector(
-                onTap: () {
-                  Navigator.pop(sheetContext, 'create');
-                },
-                child: Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: AppTheme.cardBackground,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                      color: const Color(0xFF2E2A4E),
-                      width: 1.5,
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.06),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.person_add_alt_1_outlined,
-                          color: Colors.white,
-                          size: 24,
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Create New Request',
-                              style: GoogleFonts.outfit(
-                                fontSize: 15,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                              ),
-                            ),
-                            const SizedBox(height: 3),
-                            Text(
-                              'Find a substitute or new band member',
-                              style: GoogleFonts.inter(
-                                fontSize: 12,
-                                color: AppTheme.textSecondary,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const Icon(
-                        Icons.arrow_forward_ios_rounded,
-                        color: AppTheme.textSecondary,
-                        size: 16,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-
-              // Option 2: Manage Active Requests
-              AnimatedTapDetector(
-                onTap: () {
-                  Navigator.pop(sheetContext, 'manage');
-                },
-                child: Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: AppTheme.primaryAccent.withOpacity(0.12),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                      color: AppTheme.primaryAccent.withOpacity(0.6),
-                      width: 1.5,
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: AppTheme.primaryAccent.withOpacity(0.25),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.assignment_ind_outlined,
-                          color: AppTheme.primaryAccent,
-                          size: 24,
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Manage Active Requests',
-                              style: GoogleFonts.outfit(
-                                fontSize: 15,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                              ),
-                            ),
-                            const SizedBox(height: 3),
-                            Text(
-                              'Review applicants, assign subs, or edit postings',
-                              style: GoogleFonts.inter(
-                                fontSize: 12,
-                                color: AppTheme.textSecondary,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const Icon(
-                        Icons.arrow_forward_ios_rounded,
-                        color: AppTheme.primaryAccent,
-                        size: 16,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-
-    if (context.mounted && choice != null) {
-      if (choice == 'manage') {
-        Navigator.pushNamed(
-          context,
-          '/sub-request-responses',
-          arguments: {'bandId': bandId},
-        );
-      } else if (choice == 'create') {
-        Navigator.pushNamed(context, '/find-sub');
-      }
-    }
-  }
-
-  Future<void> _showBandSelectorBottomSheet(
-    BuildContext context,
-    AppState appState,
-    Map<String, String> bands,
-    String routeName,
-  ) async {
-    final selectedBand = await showModalBottomSheet<MapEntry<String, String>>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (sheetContext) {
-        return Container(
-          decoration: BoxDecoration(
-            color: const Color(0xFF0F0C22).withOpacity(0.95),
-            borderRadius: const BorderRadius.only(
-              topLeft: Radius.circular(24),
-              topRight: Radius.circular(24),
-            ),
-            border: Border.all(color: const Color(0xFF2E2A4E), width: 1.5),
-          ),
-          padding: EdgeInsets.only(
-            left: 24,
-            right: 24,
-            top: 16,
-            bottom: MediaQuery.of(sheetContext).padding.bottom + 24,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.white24,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-              Text(
-                'SELECT A BAND',
-                style: GoogleFonts.outfit(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                  letterSpacing: 2,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Choose which band you are acting on behalf of.',
-                style: GoogleFonts.inter(
-                  fontSize: 13,
-                  color: AppTheme.textSecondary,
-                ),
-              ),
-              const SizedBox(height: 20),
-              ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxHeight: MediaQuery.of(sheetContext).size.height * 0.4,
-                ),
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: bands.length,
-                  itemBuilder: (itemCtx, index) {
-                    final bandId = bands.keys.elementAt(index);
-                    final bandName = bands[bandId]!;
-                    final isSelected = appState.activeBandId == bandId;
-
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: AnimatedTapDetector(
-                        onTap: () {
-                          Navigator.pop(sheetContext, MapEntry(bandId, bandName));
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                          decoration: BoxDecoration(
-                            color: isSelected
-                                ? AppTheme.primaryAccent.withOpacity(0.12)
-                                : AppTheme.cardBackground,
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(
-                              color: isSelected
-                                  ? AppTheme.primaryAccent
-                                  : const Color(0xFF2E2A4E),
-                              width: 1.5,
-                            ),
-                          ),
-                          child: Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color: isSelected
-                                      ? AppTheme.primaryAccent.withOpacity(0.2)
-                                      : Colors.white.withOpacity(0.05),
-                                  shape: BoxShape.circle,
-                                ),
-                                child: const Icon(
-                                  Icons.groups_rounded,
-                                  color: Colors.white,
-                                  size: 20,
-                                ),
-                              ),
-                              const SizedBox(width: 14),
-                              Expanded(
-                                child: Text(
-                                  bandName,
-                                  style: GoogleFonts.inter(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                              ),
-                              if (isSelected)
-                                const Icon(
-                                  Icons.check_circle_rounded,
-                                  color: AppTheme.primaryAccent,
-                                  size: 20,
-                                ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (FeatureToggles.useExperimentalHomeView) {
-      return const ExperimentalHomeViewContent();
-    }
-
-    final appState = Provider.of<AppState>(context);
-    final profile = appState.currentUserProfile;
-    final userName = profile?.displayName ?? profile?.nickname ?? 'AlexHill';
-
-    // 1. Define all possible action items on the home screen
-    final List<HomeActionItem> actionItems = [
-      HomeActionItem(
-        id: 'find_musicians',
-        icon: Icons.people_outline_rounded,
-        title: 'Find Musicians',
-        subtitle: 'Find and connect with talented musicians near you',
-        badgeCount: appState.unreadSubResponsesCount,
-        showRedDot: appState.hasUnreadSubResponses,
-        onTap: () {
-          appState.trackButtonClick('find_musicians');
-          final isProducer = profile?.instruments.contains('PRODUCER') == true ||
-              profile?.userType == 'PRODUCER';
-          if (isProducer) {
-            Navigator.pushNamed(context, '/producer-search');
-          } else {
-            _handleBandNavigation(context, appState, '/find-sub');
-          }
-        },
-      ),
-      HomeActionItem(
-        id: 'browse_musicians',
-        icon: Icons.search_rounded,
-        title: 'Profiles',
-        subtitle: 'Explore musicians/collaborators',
-        onTap: () {
-          appState.trackButtonClick('browse_musicians');
-          Navigator.pushNamed(context, '/browse-musicians');
-        },
-      ),
-      HomeActionItem(
-        id: 'find_gigs',
-        icon: Icons.local_activity_outlined,
-        title: 'Find Gigs',
-        subtitle: 'Find gigs and opportunities in your area',
-        badgeCount: appState.unreadGigsCount,
-        showRedDot: appState.hasUnreadGigs,
-        onTap: () {
-          appState.trackButtonClick('find_gigs');
-          Navigator.pushNamed(context, '/find-gigs');
-        },
-      ),
-      HomeActionItem(
-        id: 'band_room',
-        icon: Icons.groups_outlined,
-        title: 'Band Room',
-        subtitle: 'Manage your band, chat and organize everything',
-        badgeCount: appState.unreadBandRoomCount,
-        showRedDot: appState.hasUnreadBandRoom,
-        onTap: () {
-          appState.trackButtonClick('band_room');
-          _handleBandNavigation(context, appState, '/band-room');
-        },
-      ),
-      HomeActionItem(
-        id: 'create_event',
-        icon: Icons.event_available_rounded,
-        title: 'Events',
-        subtitle: 'Create a band event or collaboration session',
-        onTap: () {
-          appState.trackButtonClick('create_event');
-          GlobalCreateEventLauncher.showLauncherSheet(context, appState);
-        },
-      ),
-      HomeActionItem(
-        id: 'collabs',
-        icon: Icons.handshake_outlined,
-        title: 'Collabs',
-        subtitle: 'Collaborate with other musicians on projects',
-        badgeCount: appState.unreadCollabsCount,
-        showRedDot: appState.hasUnreadCollabs,
-        onTap: () {
-          appState.trackButtonClick('collabs');
-          Navigator.pushNamed(context, '/collabs');
-        },
-      ),
-      HomeActionItem(
-        id: 'event_calendar',
-        icon: Icons.calendar_today_outlined,
-        title: 'Event Calendar',
-        subtitle: 'Discover live music, open sessions, workshops and music events',
-        onTap: () {
-          appState.trackButtonClick('event_calendar');
-          Navigator.pushNamed(context, '/event-calendar');
-        },
-      ),
-      HomeActionItem(
-        id: 'marketplace',
-        icon: Icons.storefront_outlined,
-        title: 'Marketplace',
-        subtitle: 'Buy, sell, or rent gear and spaces, or offer music services',
-        onTap: () {
-          appState.trackButtonClick('marketplace');
-          Navigator.pushNamed(context, '/marketplace');
-        },
-      ),
-    ];
-
-    // 2. Sort the action items based on user's click metrics
-    final clicks = appState.buttonClicks;
-    final Map<String, int> defaultOrder = {
-      'find_musicians': 0,
-      'band_room': 1,
-      'find_gigs': 2,
-      'create_event': 3,
-      'browse_musicians': 4,
-      'collabs': 5,
-      'event_calendar': 6,
-      'marketplace': 7,
-    };
-
-    actionItems.sort((a, b) {
-      final clicksA = clicks[a.id] ?? 0;
-      final clicksB = clicks[b.id] ?? 0;
-      if (clicksA != clicksB) {
-        return clicksB.compareTo(clicksA); // Descending (most clicked first)
-      }
-      return (defaultOrder[a.id] ?? 0).compareTo(defaultOrder[b.id] ?? 0); // Stable default order
-    });
-
-    return SafeArea(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: 10),
-            Text(
-              'Good evening,',
-              style: GoogleFonts.inter(
-                fontSize: 18,
-                color: AppTheme.textSecondary,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              userName,
-              style: GoogleFonts.outfit(
-                fontSize: 34,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              "Let's make some music happen.",
-              style: GoogleFonts.inter(
-                fontSize: 14,
-                color: AppTheme.textSecondary,
-              ),
-            ),
-            const SizedBox(height: 20),
-
-            // Action Cards List (Dynamically sorted)
-            ...actionItems.expand((item) => [
-              _buildActionCard(
-                context,
-                icon: item.icon,
-                title: item.title,
-                subtitle: item.subtitle,
-                badgeCount: item.badgeCount,
-                showRedDot: item.showRedDot,
-                onTap: item.onTap,
-              ),
-              const SizedBox(height: 16),
-            ]).toList(),
-            const SizedBox(height: 24), // Extra spacing to reach total height 40 before Logout
-
-            // Logout Button
-            Center(
-              child: AnimatedTapDetector(
-                onTap: () async {
-                  await appState.logout();
-                  if (context.mounted) {
-                    Navigator.pushReplacementNamed(context, '/login');
-                  }
-                },
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
-                  child: Text(
-                    'Logout',
-                    style: GoogleFonts.inter(
-                      color: AppTheme.primaryAccent,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 30),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                GestureDetector(
-                  onTap: () => Navigator.pushNamed(context, '/admin-push-sounds'),
-                  child: Padding(
-                    padding: const EdgeInsets.only(bottom: 10, left: 10),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.volume_up_outlined, size: 14, color: AppTheme.textSecondary.withOpacity(0.6)),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Push Sounds Admin',
-                          style: GoogleFonts.inter(
-                            color: AppTheme.textSecondary.withOpacity(0.6),
-                            fontSize: 12,
-                            fontWeight: FontWeight.w400,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                GestureDetector(
-                  onTap: () => Navigator.pushNamed(context, '/admin-push-sounds'),
-                  child: Padding(
-                    padding: const EdgeInsets.only(bottom: 10, right: 10),
-                    child: Text(
-                      '2.76.1',
-                      style: GoogleFonts.inter(
-                        color: AppTheme.textSecondary.withOpacity(0.5),
-                        fontSize: 12,
-                        fontWeight: FontWeight.w400,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildActionCard(
-    BuildContext context, {
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required VoidCallback onTap,
-    int badgeCount = 0,
-    bool showRedDot = false,
-  }) {
-    return AnimatedTapDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: AppTheme.cardBackground,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: const Color(0xFF231F45),
-            width: 1,
-          ),
-        ),
-        child: Row(
-          children: [
-            Stack(
-              clipBehavior: Clip.none,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: AppTheme.primaryAccent.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(
-                    icon,
-                    color: AppTheme.primaryAccent,
-                    size: 26,
-                  ),
-                ),
-                if (showRedDot || badgeCount > 0)
-                  Positioned(
-                    top: -2,
-                    right: -2,
-                    child: Container(
-                      padding: badgeCount > 0
-                          ? const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5)
-                          : const EdgeInsets.all(4.5),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFF3B30),
-                        shape: badgeCount > 0 ? BoxShape.rectangle : BoxShape.circle,
-                        borderRadius: badgeCount > 0 ? BorderRadius.circular(8) : null,
-                        border: Border.all(color: AppTheme.cardBackground, width: 2),
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFFFF3B30).withOpacity(0.6),
-                            blurRadius: 6,
-                            spreadRadius: 1,
-                          ),
-                        ],
-                      ),
-                      child: badgeCount > 0
-                          ? Text(
-                              badgeCount > 99 ? '99+' : '$badgeCount',
-                              style: GoogleFonts.inter(
-                                color: Colors.white,
-                                fontSize: 9,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            )
-                          : null,
-                    ),
-                  ),
-              ],
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          title,
-                          style: GoogleFonts.outfit(
-                            color: Colors.white,
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                      if (showRedDot || badgeCount > 0)
-                        Container(
-                          margin: const EdgeInsets.only(left: 8),
-                          width: 8,
-                          height: 8,
-                          decoration: const BoxDecoration(
-                            color: Color(0xFFFF3B30),
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    subtitle,
-                    style: GoogleFonts.inter(
-                      color: AppTheme.textSecondary,
-                      fontSize: 12,
-                      height: 1.3,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Helper model for home screen action items representation
-class HomeActionItem {
-  final String id;
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final VoidCallback onTap;
-  final int badgeCount;
-  final bool showRedDot;
-
-  HomeActionItem({
-    required this.id,
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-    this.badgeCount = 0,
-    this.showRedDot = false,
-  });
-}
-
-// =========================================================================
-// EXPERIMENTAL DYNAMIC HOME SCREEN WIDGETS
-// To rollback, set "useExperimentalHomeView = false" in HomeScreen above.
-// =========================================================================
-
-class ExperimentalHomeViewContent extends StatefulWidget {
-  const ExperimentalHomeViewContent({super.key});
-
-  @override
-  State<ExperimentalHomeViewContent> createState() => _ExperimentalHomeViewContentState();
-}
-
-class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewContent> {
-  Map<String, int> _localClicks = {};
-  bool _isLoading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadUsageData();
-  }
-
-  Future<void> _loadUsageData() async {
-    final clicks = await HomeUsageTracker.getClicks();
-    if (mounted) {
-      setState(() {
-        _localClicks = clicks;
-        _isLoading = false;
-      });
-    }
-  }
-
-  Future<void> _handleBandNavigation(
-    BuildContext context,
-    AppState appState,
-    String routeName,
-  ) async {
-    final userId = appState.currentUserId;
-    if (userId == null) return;
-
-    // Show loading spinner dialog
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const Center(
-        child: CircularProgressIndicator(color: AppTheme.primaryAccent),
-      ),
-    );
-
-    try {
-      final bands = await appState.firebaseService.getUserBandsAsync(userId);
-      if (context.mounted) {
-        Navigator.pop(context); // Dismiss loading dialog
-      }
-
-      if (bands.isEmpty) {
         if (context.mounted) {
           await Navigator.pushNamed(context, routeName);
+          return true;
         }
+        return false;
       } else if (bands.length == 1) {
         if (context.mounted) {
-          await _proceedToBandRoute(
+          return await _proceedToBandRoute(
             context,
             appState,
             bands.keys.first,
@@ -936,10 +62,12 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
             routeName,
           );
         }
+        return false;
       } else {
         if (context.mounted) {
-          await _showBandSelectorBottomSheet(context, appState, bands, routeName);
+          return await _showBandSelectorBottomSheet(context, appState, bands, routeName);
         }
+        return false;
       }
     } catch (e) {
       if (context.mounted) {
@@ -951,10 +79,11 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
           ),
         );
       }
+      return false;
     }
   }
 
-  Future<void> _proceedToBandRoute(
+  Future<bool> _proceedToBandRoute(
     BuildContext context,
     AppState appState,
     String bandId,
@@ -979,14 +108,13 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
           }).toList();
 
           if (activeForBand.isNotEmpty && context.mounted) {
-            await _showSubRequestChoiceBottomSheet(
+            return await _showSubRequestChoiceBottomSheet(
               context,
               appState,
               bandId,
               bandName,
               activeForBand.length,
             );
-            return;
           }
         } catch (e) {
           debugPrint("Error checking active sub requests for band $bandId: $e");
@@ -996,10 +124,12 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
 
     if (context.mounted) {
       await Navigator.pushNamed(context, routeName);
+      return true;
     }
+    return false;
   }
 
-  Future<void> _showSubRequestChoiceBottomSheet(
+  Future<bool> _showSubRequestChoiceBottomSheet(
     BuildContext context,
     AppState appState,
     String bandId,
@@ -1215,18 +345,21 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
 
     if (context.mounted && choice != null) {
       if (choice == 'manage') {
-        Navigator.pushNamed(
+        await Navigator.pushNamed(
           context,
           '/sub-request-responses',
           arguments: {'bandId': bandId},
         );
+        return true;
       } else if (choice == 'create') {
-        Navigator.pushNamed(context, '/find-sub');
+        await Navigator.pushNamed(context, '/find-sub');
+        return true;
       }
     }
+    return false;
   }
 
-  Future<void> _showBandSelectorBottomSheet(
+  Future<bool> _showBandSelectorBottomSheet(
     BuildContext context,
     AppState appState,
     Map<String, String> bands,
@@ -1365,7 +498,7 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
     );
 
     if (context.mounted && selectedBand != null) {
-      await _proceedToBandRoute(
+      return await _proceedToBandRoute(
         context,
         appState,
         selectedBand.key,
@@ -1373,6 +506,933 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
         routeName,
       );
     }
+    return false;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (FeatureToggles.useExperimentalHomeView) {
+      return const ExperimentalHomeViewContent();
+    }
+
+    final appState = Provider.of<AppState>(context);
+    final profile = appState.currentUserProfile;
+    final userName = profile?.displayName ?? profile?.nickname ?? 'AlexHill';
+
+    // 1. Define all possible action items on the home screen
+    final List<HomeActionItem> actionItems = [
+      HomeActionItem(
+        id: 'find_musicians',
+        icon: Icons.people_outline_rounded,
+        title: 'Find Musicians',
+        subtitle: 'Find and connect with talented musicians near you',
+        badgeCount: appState.unreadActivityCount('find_musicians'),
+        showRedDot: appState.hasUnreadActivity('find_musicians'),
+        onTap: () async {
+          appState.trackButtonClick('find_musicians');
+          final isProducer = profile?.instruments.contains('PRODUCER') == true ||
+              profile?.userType == 'PRODUCER';
+          bool navigated = false;
+          if (isProducer) {
+            await Navigator.pushNamed(context, '/producer-search');
+            navigated = true;
+          } else {
+            navigated = await _handleBandNavigation(context, appState, '/find-sub');
+          }
+          if (navigated && context.mounted && appState.hasUnreadActivity('find_musicians')) {
+            appState.markFeatureAsRead('find_musicians');
+          }
+        },
+      ),
+      HomeActionItem(
+        id: 'browse_musicians',
+        icon: Icons.search_rounded,
+        title: 'Profiles',
+        subtitle: 'Explore musicians/collaborators',
+        badgeCount: 0,
+        showRedDot: false,
+        onTap: () {
+          appState.trackButtonClick('browse_musicians');
+          Navigator.pushNamed(context, '/browse-musicians');
+        },
+      ),
+      HomeActionItem(
+        id: 'find_gigs',
+        icon: Icons.local_activity_outlined,
+        title: 'Find Gigs',
+        subtitle: 'Find gigs and opportunities in your area',
+        badgeCount: appState.unreadActivityCount('find_gigs'),
+        showRedDot: appState.hasUnreadActivity('find_gigs'),
+        onTap: () async {
+          appState.trackButtonClick('find_gigs');
+          await Navigator.pushNamed(context, '/find-gigs');
+          if (context.mounted && appState.hasUnreadActivity('find_gigs')) {
+            appState.markFeatureAsRead('find_gigs');
+          }
+        },
+      ),
+      HomeActionItem(
+        id: 'band_room',
+        icon: Icons.groups_outlined,
+        title: 'Band Room',
+        subtitle: 'Manage your band, chat and organize everything',
+        badgeCount: appState.unreadActivityCount('band_room'),
+        showRedDot: appState.hasUnreadActivity('band_room'),
+        onTap: () async {
+          appState.trackButtonClick('band_room');
+          final navigated = await _handleBandNavigation(context, appState, '/band-room');
+          if (navigated && context.mounted && appState.hasUnreadActivity('band_room')) {
+            appState.markFeatureAsRead('band_room');
+          }
+        },
+      ),
+      HomeActionItem(
+        id: 'create_event',
+        icon: Icons.event_available_rounded,
+        title: 'Events',
+        subtitle: 'Create a band event or collaboration session',
+        badgeCount: 0,
+        showRedDot: false,
+        onTap: () {
+          appState.trackButtonClick('create_event');
+          GlobalCreateEventLauncher.showLauncherSheet(context, appState);
+        },
+      ),
+      HomeActionItem(
+        id: 'collabs',
+        icon: Icons.handshake_outlined,
+        title: 'Collabs',
+        subtitle: 'Collaborate with other musicians on projects',
+        badgeCount: appState.unreadActivityCount('collabs'),
+        showRedDot: appState.hasUnreadActivity('collabs'),
+        onTap: () async {
+          appState.trackButtonClick('collabs');
+          await Navigator.pushNamed(context, '/collabs');
+          if (context.mounted && appState.hasUnreadActivity('collabs')) {
+            appState.markFeatureAsRead('collabs');
+          }
+        },
+      ),
+      HomeActionItem(
+        id: 'event_calendar',
+        icon: Icons.calendar_today_outlined,
+        title: 'Event Calendar',
+        subtitle: 'Discover live music, open sessions, workshops and music events',
+        badgeCount: 0,
+        showRedDot: false,
+        onTap: () {
+          appState.trackButtonClick('event_calendar');
+          Navigator.pushNamed(context, '/event-calendar');
+        },
+      ),
+      HomeActionItem(
+        id: 'marketplace',
+        icon: Icons.storefront_outlined,
+        title: 'Marketplace',
+        subtitle: 'Buy, sell, or rent gear and spaces, or offer music services',
+        badgeCount: 0,
+        showRedDot: false,
+        onTap: () {
+          appState.trackButtonClick('marketplace');
+          Navigator.pushNamed(context, '/marketplace');
+        },
+      ),
+    ];
+
+    // 2. Sort the action items based on user's click metrics
+    final clicks = appState.buttonClicks;
+    final Map<String, int> defaultOrder = {
+      'find_musicians': 0,
+      'band_room': 1,
+      'find_gigs': 2,
+      'create_event': 3,
+      'browse_musicians': 4,
+      'collabs': 5,
+      'event_calendar': 6,
+      'marketplace': 7,
+    };
+
+    actionItems.sort((a, b) {
+      final clicksA = clicks[a.id] ?? 0;
+      final clicksB = clicks[b.id] ?? 0;
+      if (clicksA != clicksB) {
+        return clicksB.compareTo(clicksA); // Descending (most clicked first)
+      }
+      return (defaultOrder[a.id] ?? 0).compareTo(defaultOrder[b.id] ?? 0); // Stable default order
+    });
+
+    return SafeArea(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 10),
+            Text(
+              'Good evening,',
+              style: GoogleFonts.inter(
+                fontSize: 18,
+                color: AppTheme.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              userName,
+              style: GoogleFonts.outfit(
+                fontSize: 34,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              "Let's make some music happen.",
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                color: AppTheme.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // Action Cards List (Dynamically sorted)
+            ...actionItems.expand((item) => [
+              _buildActionCard(
+                context,
+                icon: item.icon,
+                title: item.title,
+                subtitle: item.subtitle,
+                badgeCount: item.badgeCount,
+                showRedDot: item.showRedDot,
+                onTap: item.onTap,
+              ),
+              const SizedBox(height: 16),
+            ]).toList(),
+            const SizedBox(height: 24), // Extra spacing to reach total height 40 before Logout
+
+            // Logout Button
+            Center(
+              child: AnimatedTapDetector(
+                onTap: () async {
+                  await appState.logout();
+                  if (context.mounted) {
+                    Navigator.pushReplacementNamed(context, '/login');
+                  }
+                },
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
+                  child: Text(
+                    'Logout',
+                    style: GoogleFonts.inter(
+                      color: AppTheme.primaryAccent,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 30),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Flexible(
+                  child: GestureDetector(
+                    onTap: () => Navigator.pushNamed(context, '/admin-push-sounds'),
+                    child: Padding(
+                      padding: const EdgeInsets.only(bottom: 10, left: 10),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.volume_up_outlined, size: 14, color: AppTheme.textSecondary.withOpacity(0.6)),
+                          const SizedBox(width: 4),
+                          Flexible(
+                            child: Text(
+                              'Push Sounds Admin',
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.inter(
+                                color: AppTheme.textSecondary.withOpacity(0.6),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w400,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () => Navigator.pushNamed(context, '/admin-push-sounds'),
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: 10, right: 10),
+                    child: Text(
+                      '2.76.2',
+                      style: GoogleFonts.inter(
+                        color: AppTheme.textSecondary.withOpacity(0.5),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w400,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActionCard(
+    BuildContext context, {
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+    int badgeCount = 0,
+    bool showRedDot = false,
+  }) {
+    final hasDot = showRedDot || badgeCount > 0;
+    return AnimatedTapDetector(
+      onTap: onTap,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: AppTheme.cardBackground,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: const Color(0xFF231F45),
+                width: 1,
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primaryAccent.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    icon,
+                    color: AppTheme.primaryAccent,
+                    size: 26,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: GoogleFonts.outfit(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        subtitle,
+                        style: GoogleFonts.inter(
+                          color: AppTheme.textSecondary,
+                          fontSize: 12,
+                          height: 1.3,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (hasDot)
+            Positioned(
+              top: 14,
+              right: 14,
+              child: Semantics(
+                label: '$title, new activity',
+                child: Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFF3B30),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: AppTheme.cardBackground, width: 1.5),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFFFF3B30).withOpacity(0.7),
+                        blurRadius: 4,
+                        spreadRadius: 0.5,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Helper model for home screen action items representation
+class HomeActionItem {
+  final String id;
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+  final int badgeCount;
+  final bool showRedDot;
+  final bool hasActivity;
+  final int activityCount;
+
+  HomeActionItem({
+    required this.id,
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+    this.badgeCount = 0,
+    this.showRedDot = false,
+    bool? hasActivity,
+    int? activityCount,
+  })  : hasActivity = hasActivity ?? (showRedDot || badgeCount > 0),
+        activityCount = activityCount ?? badgeCount;
+}
+
+// =========================================================================
+// EXPERIMENTAL DYNAMIC HOME SCREEN WIDGETS
+// To rollback, set "useExperimentalHomeView = false" in HomeScreen above.
+// =========================================================================
+
+class ExperimentalHomeViewContent extends StatefulWidget {
+  const ExperimentalHomeViewContent({super.key});
+
+  @override
+  State<ExperimentalHomeViewContent> createState() => _ExperimentalHomeViewContentState();
+}
+
+class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewContent> {
+  Map<String, int> _localClicks = {};
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUsageData();
+  }
+
+  Future<void> _loadUsageData() async {
+    final clicks = await HomeUsageTracker.getClicks();
+    if (mounted) {
+      setState(() {
+        _localClicks = clicks;
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<bool> _handleBandNavigation(
+    BuildContext context,
+    AppState appState,
+    String routeName,
+  ) async {
+    final userId = appState.currentUserId;
+    if (userId == null) return false;
+
+    // Show loading spinner dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(color: AppTheme.primaryAccent),
+      ),
+    );
+
+    try {
+      final bands = await appState.firebaseService.getUserBandsAsync(userId);
+      if (context.mounted) {
+        Navigator.pop(context); // Dismiss loading dialog
+      }
+
+      if (bands.isEmpty) {
+        if (routeName == '/band-room') {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('You need to be part of a band to access Band Room.'),
+                backgroundColor: AppTheme.danger,
+              ),
+            );
+          }
+          return false;
+        }
+        if (context.mounted) {
+          await Navigator.pushNamed(context, routeName);
+          return true;
+        }
+        return false;
+      } else if (bands.length == 1) {
+        if (context.mounted) {
+          return await _proceedToBandRoute(
+            context,
+            appState,
+            bands.keys.first,
+            bands.values.first,
+            routeName,
+          );
+        }
+        return false;
+      } else {
+        if (context.mounted) {
+          return await _showBandSelectorBottomSheet(context, appState, bands, routeName);
+        }
+        return false;
+      }
+    } catch (e) {
+      if (context.mounted) {
+        Navigator.pop(context); // Dismiss loading dialog
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error checking band memberships: $e'),
+            backgroundColor: AppTheme.danger,
+          ),
+        );
+      }
+      return false;
+    }
+  }
+
+  Future<bool> _proceedToBandRoute(
+    BuildContext context,
+    AppState appState,
+    String bandId,
+    String bandName,
+    String routeName,
+  ) async {
+    appState.selectBand(bandId, bandName);
+
+    if (routeName == '/find-sub') {
+      final userId = appState.currentUserId;
+      if (userId != null) {
+        try {
+          final subRequests = await appState.firebaseService.getUserSubRequestsAsync(userId);
+          final activeForBand = subRequests.where((req) {
+            final matchesBand = (req.bandId != null && req.bandId == bandId) ||
+                (req.bandName != null &&
+                    (req.bandName == bandName ||
+                        req.bandName == bandId ||
+                        req.bandName!.replaceAll(' ', '_') == bandId));
+            final isNotDeleted = req.status != 'deleted';
+            return matchesBand && isNotDeleted;
+          }).toList();
+
+          if (activeForBand.isNotEmpty && context.mounted) {
+            return await _showSubRequestChoiceBottomSheet(
+              context,
+              appState,
+              bandId,
+              bandName,
+              activeForBand.length,
+            );
+          }
+        } catch (e) {
+          debugPrint("Error checking active sub requests for band $bandId: $e");
+        }
+      }
+    }
+
+    if (context.mounted) {
+      await Navigator.pushNamed(context, routeName);
+      return true;
+    }
+    return false;
+  }
+
+  Future<bool> _showSubRequestChoiceBottomSheet(
+    BuildContext context,
+    AppState appState,
+    String bandId,
+    String bandName,
+    int activeCount,
+  ) async {
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        return Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFF0F0C22).withOpacity(0.98),
+            borderRadius: const BorderRadius.only(
+              topLeft: Radius.circular(24),
+              topRight: Radius.circular(24),
+            ),
+            border: Border.all(color: const Color(0xFF2E2A4E), width: 1.5),
+          ),
+          padding: EdgeInsets.only(
+            left: 24,
+            right: 24,
+            top: 16,
+            bottom: MediaQuery.of(sheetContext).padding.bottom + 24,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.white24,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primaryAccent.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      bandName.toUpperCase(),
+                      style: GoogleFonts.outfit(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.primaryAccent,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'FIND MUSICIAN / SUBSTITUTE',
+                style: GoogleFonts.outfit(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                  letterSpacing: 1.5,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'You have $activeCount active request${activeCount == 1 ? '' : 's'} for $bandName.',
+                style: GoogleFonts.inter(
+                  fontSize: 13,
+                  color: AppTheme.textSecondary,
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // Option 1: Create New Sub Request
+              AnimatedTapDetector(
+                onTap: () {
+                  Navigator.pop(sheetContext, 'create');
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppTheme.cardBackground,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: const Color(0xFF2E2A4E),
+                      width: 1.5,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.06),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.person_add_alt_1_outlined,
+                          color: Colors.white,
+                          size: 24,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Create New Request',
+                              style: GoogleFonts.outfit(
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              'Find a substitute or new band member',
+                              style: GoogleFonts.inter(
+                                fontSize: 12,
+                                color: AppTheme.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Icon(
+                        Icons.arrow_forward_ios_rounded,
+                        color: AppTheme.textSecondary,
+                        size: 16,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // Option 2: Manage Active Requests
+              AnimatedTapDetector(
+                onTap: () {
+                  Navigator.pop(sheetContext, 'manage');
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primaryAccent.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: AppTheme.primaryAccent.withOpacity(0.6),
+                      width: 1.5,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: AppTheme.primaryAccent.withOpacity(0.25),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.assignment_ind_outlined,
+                          color: AppTheme.primaryAccent,
+                          size: 24,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Manage Active Requests',
+                              style: GoogleFonts.outfit(
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              'Review applicants, assign subs, or edit postings',
+                              style: GoogleFonts.inter(
+                                fontSize: 12,
+                                color: AppTheme.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Icon(
+                        Icons.arrow_forward_ios_rounded,
+                        color: AppTheme.primaryAccent,
+                        size: 16,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (context.mounted && choice != null) {
+      if (choice == 'manage') {
+        await Navigator.pushNamed(
+          context,
+          '/sub-request-responses',
+          arguments: {'bandId': bandId},
+        );
+        return true;
+      } else if (choice == 'create') {
+        await Navigator.pushNamed(context, '/find-sub');
+        return true;
+      }
+    }
+    return false;
+  }
+
+  Future<bool> _showBandSelectorBottomSheet(
+    BuildContext context,
+    AppState appState,
+    Map<String, String> bands,
+    String routeName,
+  ) async {
+    final selectedBand = await showModalBottomSheet<MapEntry<String, String>>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        return Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFF0F0C22).withOpacity(0.95),
+            borderRadius: const BorderRadius.only(
+              topLeft: Radius.circular(24),
+              topRight: Radius.circular(24),
+            ),
+            border: Border.all(color: const Color(0xFF2E2A4E), width: 1.5),
+          ),
+          padding: EdgeInsets.only(
+            left: 24,
+            right: 24,
+            top: 16,
+            bottom: MediaQuery.of(sheetContext).padding.bottom + 24,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.white24,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                'SELECT A BAND',
+                style: GoogleFonts.outfit(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                  letterSpacing: 2,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Choose which band you are acting on behalf of.',
+                style: GoogleFonts.inter(
+                  fontSize: 13,
+                  color: AppTheme.textSecondary,
+                ),
+              ),
+              const SizedBox(height: 20),
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(sheetContext).size.height * 0.4,
+                ),
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: bands.length,
+                  itemBuilder: (itemCtx, index) {
+                    final bandId = bands.keys.elementAt(index);
+                    final bandName = bands[bandId]!;
+                    final isSelected = appState.activeBandId == bandId;
+
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: AnimatedTapDetector(
+                        onTap: () {
+                          Navigator.pop(sheetContext, MapEntry(bandId, bandName));
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? AppTheme.primaryAccent.withOpacity(0.12)
+                                : AppTheme.cardBackground,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: isSelected
+                                  ? AppTheme.primaryAccent
+                                  : const Color(0xFF2E2A4E),
+                              width: 1.5,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: isSelected
+                                      ? AppTheme.primaryAccent.withOpacity(0.2)
+                                      : Colors.white.withOpacity(0.05),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.groups_rounded,
+                                  color: Colors.white,
+                                  size: 20,
+                                ),
+                              ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Text(
+                                  bandName,
+                                  style: GoogleFonts.inter(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                              if (isSelected)
+                                const Icon(
+                                  Icons.check_circle_rounded,
+                                  color: AppTheme.primaryAccent,
+                                  size: 20,
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (context.mounted && selectedBand != null) {
+      return await _proceedToBandRoute(
+        context,
+        appState,
+        selectedBand.key,
+        selectedBand.value,
+        routeName,
+      );
+    }
+    return false;
   }
 
   String _getShortLabel(String id, String fullTitle) {
@@ -1469,37 +1529,28 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
               ),
             ),
           ),
-          if (item.showRedDot || item.badgeCount > 0)
+          if (item.showRedDot || item.badgeCount > 0 || item.hasActivity)
             Positioned(
               top: 2,
               right: 6,
-              child: Container(
-                padding: item.badgeCount > 0
-                    ? const EdgeInsets.symmetric(horizontal: 6, vertical: 2)
-                    : const EdgeInsets.all(5),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFF3B30),
-                  shape: item.badgeCount > 0 ? BoxShape.rectangle : BoxShape.circle,
-                  borderRadius: item.badgeCount > 0 ? BorderRadius.circular(10) : null,
-                  border: Border.all(color: const Color(0xFF0F0C20), width: 2),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFFFF3B30).withOpacity(0.8),
-                      blurRadius: 8,
-                      spreadRadius: 1,
-                    ),
-                  ],
+              child: Semantics(
+                label: '${item.title}, new activity',
+                child: Container(
+                  width: 10,
+                  height: 10,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFF3B30),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: const Color(0xFF0F0C20), width: 2),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFFFF3B30).withOpacity(0.8),
+                        blurRadius: 6,
+                        spreadRadius: 1,
+                      ),
+                    ],
+                  ),
                 ),
-                child: item.badgeCount > 0
-                    ? Text(
-                        item.badgeCount > 99 ? '99+' : '${item.badgeCount}',
-                        style: GoogleFonts.inter(
-                          color: Colors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      )
-                    : null,
               ),
             ),
         ],
@@ -1516,22 +1567,23 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
     int badgeCount = 0,
     bool showRedDot = false,
   }) {
+    final hasDot = showRedDot || badgeCount > 0;
     return AnimatedTapDetector(
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: AppTheme.cardBackground,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: const Color(0xFF231F45),
-            width: 1,
-          ),
-        ),
-        child: Row(
-          children: [
-            Stack(
-              clipBehavior: Clip.none,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: AppTheme.cardBackground,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: const Color(0xFF231F45),
+                width: 1,
+              ),
+            ),
+            child: Row(
               children: [
                 Container(
                   padding: const EdgeInsets.all(12),
@@ -1545,84 +1597,59 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
                     size: 26,
                   ),
                 ),
-                if (showRedDot || badgeCount > 0)
-                  Positioned(
-                    top: -2,
-                    right: -2,
-                    child: Container(
-                      padding: badgeCount > 0
-                          ? const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5)
-                          : const EdgeInsets.all(4.5),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFF3B30),
-                        shape: badgeCount > 0 ? BoxShape.rectangle : BoxShape.circle,
-                        borderRadius: badgeCount > 0 ? BorderRadius.circular(8) : null,
-                        border: Border.all(color: AppTheme.cardBackground, width: 2),
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFFFF3B30).withOpacity(0.6),
-                            blurRadius: 6,
-                            spreadRadius: 1,
-                          ),
-                        ],
-                      ),
-                      child: badgeCount > 0
-                          ? Text(
-                              badgeCount > 99 ? '99+' : '$badgeCount',
-                              style: GoogleFonts.inter(
-                                color: Colors.white,
-                                fontSize: 9,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            )
-                          : null,
-                    ),
-                  ),
-              ],
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        child: Text(
-                          title,
-                          style: GoogleFonts.outfit(
-                            color: Colors.white,
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
+                      Text(
+                        title,
+                        style: GoogleFonts.outfit(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
-                      if (showRedDot || badgeCount > 0)
-                        Container(
-                          margin: const EdgeInsets.only(left: 8),
-                          width: 8,
-                          height: 8,
-                          decoration: const BoxDecoration(
-                            color: Color(0xFFFF3B30),
-                            shape: BoxShape.circle,
-                          ),
+                      const SizedBox(height: 4),
+                      Text(
+                        subtitle,
+                        style: GoogleFonts.inter(
+                          color: AppTheme.textSecondary,
+                          fontSize: 12,
+                          height: 1.3,
                         ),
+                      ),
                     ],
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    subtitle,
-                    style: GoogleFonts.inter(
-                      color: AppTheme.textSecondary,
-                      fontSize: 12,
-                      height: 1.3,
-                    ),
+                ),
+              ],
+            ),
+          ),
+          if (hasDot)
+            Positioned(
+              top: 14,
+              right: 14,
+              child: Semantics(
+                label: '$title, new activity',
+                child: Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFF3B30),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: AppTheme.cardBackground, width: 1.5),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFFFF3B30).withOpacity(0.7),
+                        blurRadius: 4,
+                        spreadRadius: 0.5,
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
             ),
-          ],
-        ),
+        ],
       ),
     );
   }
@@ -1645,16 +1672,21 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
         icon: Icons.people_outline_rounded,
         title: 'Find Musicians',
         subtitle: 'Find and connect with talented musicians near you',
-        badgeCount: appState.unreadSubResponsesCount,
-        showRedDot: appState.hasUnreadSubResponses,
+        badgeCount: appState.unreadActivityCount('find_musicians'),
+        showRedDot: appState.hasUnreadActivity('find_musicians'),
         onTap: () async {
           await HomeUsageTracker.incrementClick('find_musicians');
           final isProducer = profile?.instruments.contains('PRODUCER') == true ||
               profile?.userType == 'PRODUCER';
+          bool navigated = false;
           if (isProducer) {
             await Navigator.pushNamed(context, '/producer-search');
+            navigated = true;
           } else {
-            await _handleBandNavigation(context, appState, '/find-sub');
+            navigated = await _handleBandNavigation(context, appState, '/find-sub');
+          }
+          if (navigated && context.mounted && appState.hasUnreadActivity('find_musicians')) {
+            appState.markFeatureAsRead('find_musicians');
           }
           _loadUsageData();
         },
@@ -1664,6 +1696,8 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
         icon: Icons.search_rounded,
         title: 'Profiles',
         subtitle: 'Explore musicians/collaborators',
+        badgeCount: 0,
+        showRedDot: false,
         onTap: () async {
           await HomeUsageTracker.incrementClick('browse_musicians');
           await Navigator.pushNamed(context, '/browse-musicians');
@@ -1675,11 +1709,14 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
         icon: Icons.local_activity_outlined,
         title: 'Find Gigs',
         subtitle: 'Find gigs and opportunities in your area',
-        badgeCount: appState.unreadGigsCount,
-        showRedDot: appState.hasUnreadGigs,
+        badgeCount: appState.unreadActivityCount('find_gigs'),
+        showRedDot: appState.hasUnreadActivity('find_gigs'),
         onTap: () async {
           await HomeUsageTracker.incrementClick('find_gigs');
           await Navigator.pushNamed(context, '/find-gigs');
+          if (context.mounted && appState.hasUnreadActivity('find_gigs')) {
+            appState.markFeatureAsRead('find_gigs');
+          }
           _loadUsageData();
         },
       ),
@@ -1688,11 +1725,14 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
         icon: Icons.handshake_outlined,
         title: 'Collabs',
         subtitle: 'Collaborate with other musicians on projects',
-        badgeCount: appState.unreadCollabsCount,
-        showRedDot: appState.hasUnreadCollabs,
+        badgeCount: appState.unreadActivityCount('collabs'),
+        showRedDot: appState.hasUnreadActivity('collabs'),
         onTap: () async {
           await HomeUsageTracker.incrementClick('collabs');
           await Navigator.pushNamed(context, '/collabs');
+          if (context.mounted && appState.hasUnreadActivity('collabs')) {
+            appState.markFeatureAsRead('collabs');
+          }
           _loadUsageData();
         },
       ),
@@ -1701,6 +1741,8 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
         icon: Icons.calendar_today_outlined,
         title: 'Event Calendar',
         subtitle: 'Discover live music, open sessions, workshops and music events',
+        badgeCount: 0,
+        showRedDot: false,
         onTap: () async {
           await HomeUsageTracker.incrementClick('event_calendar');
           await Navigator.pushNamed(context, '/event-calendar');
@@ -1712,11 +1754,14 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
         icon: Icons.groups_outlined,
         title: 'Band Room',
         subtitle: 'Manage your band, chat and organize everything',
-        badgeCount: appState.unreadBandRoomCount,
-        showRedDot: appState.hasUnreadBandRoom,
+        badgeCount: appState.unreadActivityCount('band_room'),
+        showRedDot: appState.hasUnreadActivity('band_room'),
         onTap: () async {
           await HomeUsageTracker.incrementClick('band_room');
-          await _handleBandNavigation(context, appState, '/band-room');
+          final navigated = await _handleBandNavigation(context, appState, '/band-room');
+          if (navigated && context.mounted && appState.hasUnreadActivity('band_room')) {
+            appState.markFeatureAsRead('band_room');
+          }
           _loadUsageData();
         },
       ),
@@ -1725,6 +1770,8 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
         icon: Icons.event_available_rounded,
         title: 'Events',
         subtitle: 'Create a band event or collaboration session',
+        badgeCount: 0,
+        showRedDot: false,
         onTap: () async {
           await HomeUsageTracker.incrementClick('create_event');
           if (context.mounted) {
@@ -1738,6 +1785,8 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
         icon: Icons.storefront_outlined,
         title: 'Marketplace',
         subtitle: 'Buy, sell, or rent gear and spaces, or offer music services',
+        badgeCount: 0,
+        showRedDot: false,
         onTap: () async {
           await HomeUsageTracker.incrementClick('marketplace');
           await Navigator.pushNamed(context, '/marketplace');
@@ -1928,22 +1977,27 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            GestureDetector(
-                              onTap: () => Navigator.pushNamed(context, '/admin-push-sounds'),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.volume_up_outlined, size: 14, color: AppTheme.textSecondary.withOpacity(0.6)),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    'Push Sounds Admin',
-                                    style: GoogleFonts.inter(
-                                      color: AppTheme.textSecondary.withOpacity(0.6),
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w400,
+                            Flexible(
+                              child: GestureDetector(
+                                onTap: () => Navigator.pushNamed(context, '/admin-push-sounds'),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.volume_up_outlined, size: 14, color: AppTheme.textSecondary.withOpacity(0.6)),
+                                    const SizedBox(width: 4),
+                                    Flexible(
+                                      child: Text(
+                                        'Push Sounds Admin',
+                                        overflow: TextOverflow.ellipsis,
+                                        style: GoogleFonts.inter(
+                                          color: AppTheme.textSecondary.withOpacity(0.6),
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w400,
+                                        ),
+                                      ),
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
                             ),
                             GestureDetector(
@@ -1961,7 +2015,7 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
                                 }
                               },
                               child: Text(
-                                '2.76.1',
+                                '2.76.2',
                                 style: GoogleFonts.inter(
                                   color: AppTheme.textSecondary.withOpacity(0.5),
                                   fontSize: 12,

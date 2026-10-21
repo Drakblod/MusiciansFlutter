@@ -1085,4 +1085,189 @@ describe('Real Cloud Functions Emulator Integration Tests (JS Client SDK + Emula
     const snapB1 = await adminDb.ref('userNotifications/user_b/notif_b_batch1').get();
     assert.strictEqual(snapB1.val().isRead, false);
   });
+
+  describe('HOME-ACTIVITY-BADGES-01: Real Emulator Callables & Triggers', () => {
+    it('1. markFeatureNotificationsRead rejects unauthenticated callers', async () => {
+      const fn = httpsCallable(functionsUnauth, 'markFeatureNotificationsRead');
+      let rejected = false;
+      try {
+        await fn({ featureId: 'find_gigs' });
+      } catch (err) {
+        rejected = isAuthError(err);
+      }
+      assert.strictEqual(rejected, true, 'Unauthenticated call must be rejected');
+    });
+
+    it('2. markFeatureNotificationsRead rejects invalid or unknown featureId', async () => {
+      const fn = httpsCallable(functionsUserA, 'markFeatureNotificationsRead');
+      let rejected = false;
+      try {
+        await fn({ featureId: 'invalid_feature' });
+      } catch (err) {
+        rejected = true;
+      }
+      assert.strictEqual(rejected, true, 'Invalid featureId must be rejected');
+    });
+
+    it('3. markFeatureNotificationsRead clears caller notifications and sets server timestamp, leaving others intact', async () => {
+      const now = Date.now();
+      // user_a notifications
+      await adminDb.ref('userNotifications/user_a/n_gig_explicit').set({
+        id: 'n_gig_explicit',
+        type: 'sub_request_invite',
+        featureId: 'find_gigs',
+        isRead: false,
+        readAt: null,
+      });
+      await adminDb.ref('userNotifications/user_a/n_gig_legacy').set({
+        id: 'n_gig_legacy',
+        type: 'grouped_sub_request', // legacy fallback -> find_gigs
+        isRead: false,
+        readAt: null,
+      });
+      await adminDb.ref('userNotifications/user_a/n_band').set({
+        id: 'n_band',
+        type: 'band_room_message',
+        featureId: 'band_room',
+        isRead: false,
+        readAt: null,
+      });
+
+      // user_b notification (must not be affected)
+      await adminDb.ref('userNotifications/user_b/n_user_b').set({
+        id: 'n_user_b',
+        type: 'sub_request_invite',
+        featureId: 'find_gigs',
+        isRead: false,
+        readAt: null,
+      });
+
+      const fn = httpsCallable(functionsUserA, 'markFeatureNotificationsRead');
+      const res = await fn({ featureId: 'find_gigs' });
+      assert.strictEqual(res.data.success, true);
+      assert.strictEqual(res.data.updatedCount, 2);
+
+      const snapGig1 = await adminDb.ref('userNotifications/user_a/n_gig_explicit').get();
+      const snapGig2 = await adminDb.ref('userNotifications/user_a/n_gig_legacy').get();
+      const snapBand = await adminDb.ref('userNotifications/user_a/n_band').get();
+      const snapUserB = await adminDb.ref('userNotifications/user_b/n_user_b').get();
+
+      assert.strictEqual(snapGig1.val().isRead, true);
+      assert(snapGig1.val().readAt >= now);
+      assert.strictEqual(snapGig2.val().isRead, true);
+      assert(snapGig2.val().readAt >= now);
+
+      // user_a band_room remains unread
+      assert.strictEqual(snapBand.val().isRead, false);
+
+      // user_b notification remains unread (isolation)
+      assert.strictEqual(snapUserB.val().isRead, false);
+    });
+
+    it('4. User B cannot clear User A notifications', async () => {
+      await adminDb.ref('userNotifications/user_a/n_victim').set({
+        id: 'n_victim',
+        type: 'sub_request_invite',
+        featureId: 'find_gigs',
+        isRead: false,
+        readAt: null,
+      });
+
+      const fnB = httpsCallable(functionsUserB, 'markFeatureNotificationsRead');
+      await fnB({ featureId: 'find_gigs' });
+
+      const snap = await adminDb.ref('userNotifications/user_a/n_victim').get();
+      assert.strictEqual(snap.val().isRead, false);
+    });
+
+    it('5. onSubRequestResponseCreated trigger notifies request creator and prevents duplicate notifications', async () => {
+      const subReqId = 'sub_req_test_1';
+      const creatorUid = 'user_a';
+      const applicantUid = 'user_b';
+
+      await adminDb.ref(`SubRequests/${subReqId}`).set({
+        CreatorUserId: creatorUid,
+        BandName: 'The Emulator Band',
+        eventType: 'Gig',
+        Role: 'Bassist',
+      });
+      await adminDb.ref(`users/${applicantUid}/info`).set({
+        displayName: 'Applicant Bob',
+      });
+
+      // Write applicant response
+      await adminDb.ref(`SubRequests/${subReqId}/Responses/${applicantUid}`).set(true);
+
+      // Wait for trigger to write notification
+      const notifRef = adminDb.ref(`userNotifications/${creatorUid}/notif_sub_resp_${subReqId}_${applicantUid}`);
+      let created = false;
+      for (let i = 0; i < 20; i++) {
+        const snap = await notifRef.get();
+        if (snap.exists() && snap.val()) {
+          created = true;
+          assert.strictEqual(snap.val().type, 'sub_request_response');
+          assert.strictEqual(snap.val().featureId, 'find_musicians');
+          assert.strictEqual(snap.val().data.subRequestId, subReqId);
+          assert.strictEqual(snap.val().data.applicantId, applicantUid);
+          break;
+        }
+        await new Promise(r => setTimeout(r, 200));
+      }
+      assert.strictEqual(created, true, 'Notification should be created by trigger');
+
+      // Test idempotency: rewrite response
+      await adminDb.ref(`SubRequests/${subReqId}/Responses/${applicantUid}`).set(true);
+      await new Promise(r => setTimeout(r, 400));
+
+      const notifsSnap = await adminDb.ref(`userNotifications/${creatorUid}`).get();
+      const notifs = notifsSnap.val() || {};
+      const matching = Object.values(notifs).filter(n => n.data && n.data.subRequestId === subReqId);
+      assert.strictEqual(matching.length, 1, 'Duplicate response write must not duplicate notification');
+    });
+
+    it('6. onBandFileUploaded trigger notifies band members and excludes uploader', async () => {
+      const bandId = 'band_file_test';
+      const uploaderUid = 'user_a';
+      const memberUid = 'user_b';
+
+      await adminDb.ref(`Bands/${bandId}`).set({
+        Name: 'Emulator Band Files',
+        Members_band: {
+          [uploaderUid]: true,
+          [memberUid]: true,
+        },
+      });
+
+      const fileId = 'file_test_123';
+      await adminDb.ref(`files/${bandId}/${fileId}`).set({
+        FileName: 'Chart_A.pdf',
+        FileUrl: 'https://storage/Chart_A.pdf',
+        UploadedBy: uploaderUid,
+        UploadedAt: Date.now(),
+        Category: 'charts',
+      });
+
+      // Member should receive notification
+      const memberNotifRef = adminDb.ref(`userNotifications/${memberUid}/notif_file_${bandId}_${fileId}_${memberUid}`);
+      let notifiedMember = false;
+      for (let i = 0; i < 20; i++) {
+        const snap = await memberNotifRef.get();
+        if (snap.exists() && snap.val()) {
+          notifiedMember = true;
+          assert.strictEqual(snap.val().type, 'band_file_uploaded');
+          assert.strictEqual(snap.val().featureId, 'band_room');
+          assert.strictEqual(snap.val().data.bandId, bandId);
+          assert.strictEqual(snap.val().data.fileId, fileId);
+          break;
+        }
+        await new Promise(r => setTimeout(r, 200));
+      }
+      assert.strictEqual(notifiedMember, true, 'Band member must receive file upload notification');
+
+      // Uploader must NOT receive notification
+      const uploaderNotifRef = adminDb.ref(`userNotifications/${uploaderUid}/notif_file_${bandId}_${fileId}_${uploaderUid}`);
+      const uploaderSnap = await uploaderNotifRef.get();
+      assert.strictEqual(uploaderSnap.exists(), false, 'Uploader must not receive own file notification');
+    });
+  });
 });

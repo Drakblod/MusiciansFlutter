@@ -1760,3 +1760,420 @@ describe('v2 Callable Cloud Functions Logic Tests', () => {
     });
   });
 });
+
+const KNOWN_FEATURE_IDS = ['find_gigs', 'find_musicians', 'collabs', 'band_room', 'messages'];
+
+function resolveNotificationFeatureId(notif) {
+  if (!notif) return null;
+  const explicit = notif.featureId || notif.data?.featureId;
+  if (explicit && KNOWN_FEATURE_IDS.includes(explicit)) {
+    return explicit;
+  }
+  const type = notif.type;
+  switch (type) {
+    case 'sub_request_invite':
+    case 'sub_request':
+    case 'grouped_sub_request':
+    case 'gig_finalized':
+      return 'find_gigs';
+    case 'sub_request_response':
+    case 'sub_response':
+      return 'find_musicians';
+    case 'session_application':
+    case 'session_application_status':
+    case 'session_message':
+      return 'collabs';
+    case 'band_room_message':
+    case 'band_section_chat':
+    case 'event_invite':
+    case 'event_reminder':
+    case 'event_threshold':
+    case 'event_milestone':
+    case 'band_file_uploaded':
+      return 'band_room';
+    case 'direct_message':
+      return 'messages';
+    default:
+      return null;
+  }
+}
+
+async function handleMarkFeatureNotificationsRead(request, db) {
+  const callerUid = request.auth?.uid;
+  if (!callerUid) {
+    throw new Error('unauthenticated: User must be authenticated.');
+  }
+
+  const featureId = request.data?.featureId;
+  if (!featureId || typeof featureId !== 'string' || !KNOWN_FEATURE_IDS.includes(featureId.trim())) {
+    throw new Error('invalid-argument: A valid featureId is required.');
+  }
+
+  const targetFeature = featureId.trim();
+  const feedSnap = await db.ref('userNotifications/' + callerUid).get();
+
+  if (!feedSnap.exists() || !feedSnap.val()) {
+    return { success: true, updatedCount: 0 };
+  }
+
+  const notifs = feedSnap.val();
+  const updates = {};
+  const now = Date.now();
+  let updatedCount = 0;
+
+  Object.keys(notifs).forEach((nId) => {
+    const n = notifs[nId];
+    if (n && !n.isRead && resolveNotificationFeatureId(n) === targetFeature) {
+      updates[`userNotifications/${callerUid}/${nId}/isRead`] = true;
+      updates[`userNotifications/${callerUid}/${nId}/readAt`] = now;
+      updatedCount++;
+    }
+  });
+
+  if (updatedCount > 0) {
+    await db.ref('').update(updates);
+  }
+
+  return { success: true, updatedCount };
+}
+
+async function handleOnSubRequestResponseCreated(subRequestId, applicantId, db) {
+  if (!subRequestId || !applicantId) return null;
+
+  const subSnap = await db.ref(`SubRequests/${subRequestId}`).get();
+  if (!subSnap.exists()) return null;
+
+  const val = subSnap.val() || {};
+  const creatorId = val.CreatorUserId || val.creatorUserId || val.UserId || val.userId;
+  if (!creatorId || creatorId === applicantId) return null;
+
+  const notifId = `notif_sub_resp_${subRequestId}_${applicantId}`;
+  const existingSnap = await db.ref(`userNotifications/${creatorId}/${notifId}`).get();
+  if (existingSnap.exists()) {
+    return { created: false, reason: 'already_exists' };
+  }
+
+  let applicantName = 'A musician';
+  try {
+    const userSnap = await db.ref(`users/${applicantId}`).get();
+    if (userSnap.exists()) {
+      const uVal = userSnap.val() || {};
+      applicantName = uVal.displayName || uVal.nickname || uVal.DisplayName || 'A musician';
+    }
+  } catch (_) {}
+
+  const bandName = val.BandName || val.bandName || 'Band';
+  const rawEventType = val.eventType || val.EventType || val.Role || val.role || 'Gig';
+  const role = val.VoicePart || val.voicePart || val.Role || val.role || 'Substitute';
+
+  const notifData = {
+    id: notifId,
+    type: 'sub_request_response',
+    featureId: 'find_musicians',
+    category: 'requests',
+    title: 'Gig Request Response',
+    body: `${bandName}\n${rawEventType}`,
+    createdAt: Date.now(),
+    isRead: false,
+    readAt: null,
+    data: {
+      subRequestId: subRequestId,
+      applicantId: applicantId,
+      applicantName: applicantName,
+      bandId: val.BandId || val.bandId || '',
+      voicePart: role,
+      featureId: 'find_musicians',
+    },
+  };
+
+  await db.ref(`userNotifications/${creatorId}/${notifId}`).set(notifData);
+  return { created: true, notifId, recipient: creatorId, notifData };
+}
+
+async function handleOnBandFileUploaded(bandId, fileId, fileData, db) {
+  if (!fileData) return null;
+
+  const uploaderId = fileData.UploadedBy || fileData.uploadedBy || fileData.uploaderId;
+  const fileName = fileData.FileName || fileData.fileName || 'A file';
+
+  const bandSnap = await db.ref(`Bands/${bandId}`).get();
+  const bandVal = bandSnap.val() || {};
+  const bandName = bandVal.Name || bandVal.name || bandId;
+
+  let memberIds = [];
+  if (bandVal.Members_band) {
+    memberIds = Object.keys(bandVal.Members_band);
+  } else if (bandVal.Members) {
+    memberIds = Object.keys(bandVal.Members);
+  }
+
+  const recipients = memberIds.filter(uid => uid && uid !== uploaderId);
+  if (recipients.length === 0) return { notifiedCount: 0 };
+
+  const updates = {};
+  const now = Date.now();
+  for (const uid of recipients) {
+    const notifId = `notif_file_${bandId}_${fileId}_${uid}`;
+    updates[`userNotifications/${uid}/${notifId}`] = {
+      id: notifId,
+      type: 'band_file_uploaded',
+      featureId: 'band_room',
+      category: 'band',
+      title: `📁 ${bandName}`,
+      body: `New file uploaded: ${fileName}`,
+      createdAt: now,
+      isRead: false,
+      readAt: null,
+      data: {
+        bandId,
+        fileId,
+        fileName,
+        uploadedBy: uploaderId || '',
+        featureId: 'band_room',
+      },
+    };
+  }
+
+  await db.ref('').update(updates);
+  return { notifiedCount: recipients.length, recipients };
+}
+
+describe('HOME-ACTIVITY-BADGES-01: Backend Callable & Trigger Logic Tests', () => {
+  let db;
+
+  beforeEach(() => {
+    db = new MockDatabase();
+  });
+
+  it('39. markFeatureNotificationsRead requires authentication', async () => {
+    await assert.rejects(
+      handleMarkFeatureNotificationsRead({ auth: null, data: { featureId: 'find_gigs' } }, db),
+      /unauthenticated/
+    );
+  });
+
+  it('40. markFeatureNotificationsRead rejects invalid or unknown featureId', async () => {
+    await assert.rejects(
+      handleMarkFeatureNotificationsRead({ auth: { uid: 'user_1' }, data: { featureId: 'unknown_feature' } }, db),
+      /invalid-argument/
+    );
+  });
+
+  it('41. markFeatureNotificationsRead clears only matching feature notifications and sets server timestamp', async () => {
+    db.data['userNotifications/user_1/n_gig_1'] = {
+      id: 'n_gig_1',
+      type: 'sub_request_invite',
+      featureId: 'find_gigs',
+      isRead: false,
+      readAt: null,
+    };
+    db.data['userNotifications/user_1/n_band_1'] = {
+      id: 'n_band_1',
+      type: 'band_room_message',
+      featureId: 'band_room',
+      isRead: false,
+      readAt: null,
+    };
+    db.data['userNotifications/user_1/n_legacy_gig'] = {
+      id: 'n_legacy_gig',
+      type: 'gig_finalized', // legacy without featureId, resolves to find_gigs
+      isRead: false,
+      readAt: null,
+    };
+
+    const res = await handleMarkFeatureNotificationsRead(
+      { auth: { uid: 'user_1' }, data: { featureId: 'find_gigs' } },
+      db
+    );
+
+    assert.strictEqual(res.success, true);
+    assert.strictEqual(res.updatedCount, 2);
+
+    // Both find_gigs notifications are marked read with readAt timestamp
+    assert.strictEqual(db.data['userNotifications/user_1/n_gig_1'].isRead, true);
+    assert(db.data['userNotifications/user_1/n_gig_1'].readAt > 0);
+    assert.strictEqual(db.data['userNotifications/user_1/n_legacy_gig'].isRead, true);
+    assert(db.data['userNotifications/user_1/n_legacy_gig'].readAt > 0);
+
+    // band_room notification remains unread
+    assert.strictEqual(db.data['userNotifications/user_1/n_band_1'].isRead, false);
+    assert.strictEqual(db.data['userNotifications/user_1/n_band_1'].readAt, null);
+  });
+
+  it('42. markFeatureNotificationsRead cannot clear another user notifications', async () => {
+    db.data['userNotifications/victim_user/n_victim_1'] = {
+      id: 'n_victim_1',
+      type: 'sub_request_invite',
+      featureId: 'find_gigs',
+      isRead: false,
+      readAt: null,
+    };
+
+    const res = await handleMarkFeatureNotificationsRead(
+      { auth: { uid: 'caller_user' }, data: { featureId: 'find_gigs' } },
+      db
+    );
+
+    assert.strictEqual(res.updatedCount, 0);
+    assert.strictEqual(db.data['userNotifications/victim_user/n_victim_1'].isRead, false);
+  });
+
+  it('43. SubRequest response writes notification with featureId: find_musicians to creator', async () => {
+    db.data['SubRequests/sub_123'] = {
+      CreatorUserId: 'creator_uid',
+      BandName: 'The Jazzers',
+      eventType: 'Concert',
+      Role: 'Pianist',
+    };
+    db.data['users/applicant_uid'] = {
+      displayName: 'Alice Keys',
+    };
+
+    const result = await handleOnSubRequestResponseCreated('sub_123', 'applicant_uid', db);
+
+    assert.strictEqual(result.created, true);
+    assert.strictEqual(result.recipient, 'creator_uid');
+
+    const createdNotif = db.data['userNotifications/creator_uid/notif_sub_resp_sub_123_applicant_uid'];
+    assert(createdNotif);
+    assert.strictEqual(createdNotif.type, 'sub_request_response');
+    assert.strictEqual(createdNotif.featureId, 'find_musicians');
+    assert.strictEqual(createdNotif.data.featureId, 'find_musicians');
+    assert.strictEqual(createdNotif.data.subRequestId, 'sub_123');
+    assert.strictEqual(createdNotif.data.applicantId, 'applicant_uid');
+  });
+
+  it('44. SubRequest response duplicate triggers do not create duplicate notifications', async () => {
+    db.data['SubRequests/sub_123'] = {
+      CreatorUserId: 'creator_uid',
+      BandName: 'The Jazzers',
+    };
+
+    const first = await handleOnSubRequestResponseCreated('sub_123', 'applicant_uid', db);
+    assert.strictEqual(first.created, true);
+
+    const second = await handleOnSubRequestResponseCreated('sub_123', 'applicant_uid', db);
+    assert.strictEqual(second.created, false);
+    assert.strictEqual(second.reason, 'already_exists');
+  });
+
+  it('45. onBandFileUploaded notifies all other band members and excludes uploader', async () => {
+    db.data['Bands/band_777'] = {
+      Name: 'Rock Symphony',
+      Members_band: {
+        uploader_uid: true,
+        member_a: true,
+        member_b: true,
+      },
+    };
+
+    const fileData = {
+      FileName: 'LeadSheet.pdf',
+      UploadedBy: 'uploader_uid',
+    };
+
+    const res = await handleOnBandFileUploaded('band_777', 'file_abc', fileData, db);
+
+    assert.strictEqual(res.notifiedCount, 2);
+    assert(res.recipients.includes('member_a'));
+    assert(res.recipients.includes('member_b'));
+    assert(!res.recipients.includes('uploader_uid'));
+
+    const notifA = db.data['userNotifications/member_a/notif_file_band_777_file_abc_member_a'];
+    assert(notifA);
+    assert.strictEqual(notifA.type, 'band_file_uploaded');
+    assert.strictEqual(notifA.featureId, 'band_room');
+    assert.strictEqual(notifA.data.fileName, 'LeadSheet.pdf');
+
+    // Uploader must NOT have notification
+    assert.strictEqual(db.data['userNotifications/uploader_uid/notif_file_band_777_file_abc_uploader_uid'], undefined);
+  });
+
+  it('46. database.rules.json explicitly forbids direct client writes to userNotifications', () => {
+    const fs = require('fs');
+    const path = require('path');
+    const rulesText = fs.readFileSync(path.join(__dirname, '../../database.rules.json'), 'utf8');
+    const rules = JSON.parse(rulesText);
+
+    assert(rules.rules.userNotifications);
+    assert(rules.rules.userNotifications['$userId']);
+    assert.strictEqual(rules.rules.userNotifications['$userId']['.write'], false);
+  });
+
+  it('47. markFeatureNotificationsRead resolves legacy notifications without featureId: sub_request_invite cleared by find_gigs, band_room_message cleared by band_room, unrelated remain unread', async () => {
+    db.data['userNotifications/user_legacy/n_sub_invite'] = {
+      id: 'n_sub_invite',
+      type: 'sub_request_invite', // legacy without featureId
+      isRead: false,
+      readAt: null,
+    };
+    db.data['userNotifications/user_legacy/n_band_msg'] = {
+      id: 'n_band_msg',
+      type: 'band_room_message', // legacy without featureId
+      isRead: false,
+      readAt: null,
+    };
+    db.data['userNotifications/user_legacy/n_collab_app'] = {
+      id: 'n_collab_app',
+      type: 'session_application', // legacy without featureId
+      isRead: false,
+      readAt: null,
+    };
+
+    // 1. Clear find_gigs
+    const resGigs = await handleMarkFeatureNotificationsRead(
+      { auth: { uid: 'user_legacy' }, data: { featureId: 'find_gigs' } },
+      db
+    );
+    assert.strictEqual(resGigs.success, true);
+    assert.strictEqual(resGigs.updatedCount, 1);
+    assert.strictEqual(db.data['userNotifications/user_legacy/n_sub_invite'].isRead, true);
+    assert(db.data['userNotifications/user_legacy/n_sub_invite'].readAt > 0);
+    assert.strictEqual(db.data['userNotifications/user_legacy/n_band_msg'].isRead, false);
+    assert.strictEqual(db.data['userNotifications/user_legacy/n_collab_app'].isRead, false);
+
+    // 2. Clear band_room
+    const resBand = await handleMarkFeatureNotificationsRead(
+      { auth: { uid: 'user_legacy' }, data: { featureId: 'band_room' } },
+      db
+    );
+    assert.strictEqual(resBand.success, true);
+    assert.strictEqual(resBand.updatedCount, 1);
+    assert.strictEqual(db.data['userNotifications/user_legacy/n_band_msg'].isRead, true);
+    assert(db.data['userNotifications/user_legacy/n_band_msg'].readAt > 0);
+    // Unrelated collab remains unread
+    assert.strictEqual(db.data['userNotifications/user_legacy/n_collab_app'].isRead, false);
+  });
+
+  it('48. onBandFileUploaded processes real Flutter service data shape with UploadedBy, UploadedAt, FileName, FileUrl, Category', async () => {
+    db.data['Bands/band_prod'] = {
+      Name: 'Production Band',
+      Members_band: {
+        flutter_uploader: true,
+        band_member_1: true,
+      },
+    };
+
+    const flutterServicePayload = {
+      FileName: 'Setlist_2026.pdf',
+      FileUrl: 'https://firebasestorage.googleapis.com/v0/b/musicians/Setlist_2026.pdf',
+      UploadedAt: 1776739200000,
+      UploadedBy: 'flutter_uploader',
+      Category: 'sheet_music',
+    };
+
+    const res = await handleOnBandFileUploaded('band_prod', 'file_prod_1', flutterServicePayload, db);
+
+    assert.strictEqual(res.notifiedCount, 1);
+    assert(res.recipients.includes('band_member_1'));
+    assert(!res.recipients.includes('flutter_uploader'));
+
+    const notif = db.data['userNotifications/band_member_1/notif_file_band_prod_file_prod_1_band_member_1'];
+    assert(notif);
+    assert.strictEqual(notif.type, 'band_file_uploaded');
+    assert.strictEqual(notif.featureId, 'band_room');
+    assert.strictEqual(notif.data.fileName, 'Setlist_2026.pdf');
+    assert.strictEqual(notif.data.bandId, 'band_prod');
+    assert.strictEqual(notif.data.fileId, 'file_prod_1');
+  });
+});

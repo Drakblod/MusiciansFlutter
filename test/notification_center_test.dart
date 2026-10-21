@@ -739,8 +739,11 @@ void main() {
       expect(appState.hasUnreadSubResponses, isTrue);
       expect(appState.unreadSubResponsesCount, 1);
       expect(find.text('Find\nMusician/Vocalist'), findsOneWidget);
-      // Badge with count 1 should be visible
-      expect(find.text('1'), findsWidgets);
+      // Small red dot activity indicator with semantics (no number)
+      expect(
+        find.byWidgetPredicate((w) => w is Semantics && w.properties.label == 'Find Musicians, new activity'),
+        findsOneWidget,
+      );
     });
   });
 }

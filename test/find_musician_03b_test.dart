@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
 import 'package:musicians_flutter/models/sub_request.dart';
 import 'package:musicians_flutter/models/user_profile.dart';
+import 'package:musicians_flutter/models/app_notification.dart';
 import 'package:musicians_flutter/models/band.dart';
 import 'package:musicians_flutter/models/band_event.dart';
 import 'package:musicians_flutter/providers/app_state.dart';
@@ -43,6 +44,9 @@ class Mock03bFirebaseService extends Fake implements FirebaseService {
 
   @override
   Stream<int> subscribeToUnreadNotificationCount([String? userId]) => const Stream.empty();
+
+  @override
+  Stream<List<AppNotification>> subscribeToUserNotifications([String? userId]) => const Stream.empty();
 
   @override
   Future<Set<String>> getUserAppliedSubRequestIdsAsync(String userId) async => {};
@@ -1411,6 +1415,7 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
 
       mockService.allSubRequests.clear();
+      final futureDate = DateTime.now().add(const Duration(days: 7)).toIso8601String();
       final req1 = SubRequest(
         id: 'sub_gigs_1',
         subRequestId: 'sub_gigs_1',
@@ -1420,7 +1425,7 @@ void main() {
         role: 'Substitute',
         voicePart: 'Lead Guitar',
         description: 'Need a shredder for weekend show',
-        date: '2026-10-20T18:00:00Z',
+        date: futureDate,
         startTime: '19:00',
         endTime: '22:00',
         location: 'Stockholm Club',
@@ -1467,6 +1472,7 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
 
       mockService.allSubRequests.clear();
+      final futureDate = DateTime.now().add(const Duration(days: 7)).toIso8601String();
       final occ1 = SubRequest(
         id: 'sub_multi_occ_1',
         subRequestId: 'sub_multi_occ_1',
@@ -1476,7 +1482,7 @@ void main() {
         role: 'Substitute',
         voicePart: 'Lead Guitar',
         description: 'Tour gig',
-        date: '2026-10-20T18:00:00Z',
+        date: futureDate,
         eventSequence: 1,
         eventTitle: 'Tour Stop Oslo',
         requestGroupId: 'grp_tour_distinct',
