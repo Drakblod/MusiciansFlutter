@@ -55,6 +55,8 @@ class _AudioSnippetPlayerState extends State<AudioSnippetPlayer> {
       _duration = Duration.zero;
       _playerState = PlayerState.stopped;
       _initPlayer();
+    } else if (oldWidget.autoPlay && !widget.autoPlay && _playerState == PlayerState.playing) {
+      _audioPlayer?.pause();
     }
   }
 
@@ -163,6 +165,7 @@ class _AudioSnippetPlayerState extends State<AudioSnippetPlayer> {
     _playerStateSubscription?.cancel();
     _playerCompleteSubscription?.cancel();
     try {
+      _audioPlayer?.stop();
       _audioPlayer?.dispose();
     } catch (e) {
       debugPrint("[AudioSnippetPlayer] Error disposing AudioPlayer: $e");

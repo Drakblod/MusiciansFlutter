@@ -17,7 +17,7 @@ describe('Real RTDB Emulator Rules Tests', function () {
   let testEnvTransitional;
   let testEnvFinal;
 
-  before(async () => {
+  before(async function () {
     process.env.FIREBASE_DATABASE_EMULATOR_HOST = '127.0.0.1:9000';
 
     const transitionalRules = fs.readFileSync(
@@ -1431,6 +1431,48 @@ describe('Real RTDB Emulator Rules Tests', function () {
       const candidate = testEnvFinal.authenticatedContext('user_sub_cand_1');
       const ref = candidate.database().ref('SubRequests/sub_integrity_test/Responses/user_sub_cand_2');
       await assertFails(ref.set(true));
+    });
+  });
+
+  describe('7. Map View Ordinary Pin Rules (MAP-VIEW-FEEDBACK-03)', () => {
+    it('Authenticated direct write of map_pin to SubRequests/{id} is denied', async () => {
+      const userA = testEnvFinal.authenticatedContext('user_a');
+      const ref = userA.database().ref('SubRequests/map_pin_rules_1');
+      await assertFails(
+        ref.set({
+          SubRequestId: 'map_pin_rules_1',
+          CreatorUserId: 'user_a',
+          NotificationMode: 'map_pin',
+          Status: 'published',
+          Location: 'Stockholm, Sweden',
+        })
+      );
+    });
+
+    it('Unauthenticated direct write of map_pin to SubRequests/{id} is denied', async () => {
+      const unauth = testEnvFinal.unauthenticatedContext();
+      const ref = unauth.database().ref('SubRequests/map_pin_rules_unauth');
+      await assertFails(
+        ref.set({
+          SubRequestId: 'map_pin_rules_unauth',
+          CreatorUserId: 'user_a',
+          NotificationMode: 'map_pin',
+          Status: 'published',
+        })
+      );
+    });
+
+    it('Direct client write of map_pin without band credentials is denied in transitional rules', async () => {
+      const userA = testEnvTransitional.authenticatedContext('user_a');
+      const ref = userA.database().ref('SubRequests/map_pin_trans_1');
+      await assertFails(
+        ref.set({
+          SubRequestId: 'map_pin_trans_1',
+          CreatorUserId: 'user_a',
+          NotificationMode: 'map_pin',
+          Status: 'published',
+        })
+      );
     });
   });
 });

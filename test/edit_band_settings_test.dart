@@ -433,7 +433,7 @@ void main() {
 
   group('EDIT-BAND-01: Map View Explanatory Text', () {
     const expectedHelperText =
-        'Move pins towards the centre of the screen (telescopic sight) to hear different bands and their recordings, band info, gig promo, etc';
+        'Explore Map View to discover audio snippets from gigs, rehearsals, recordings and gig promos, as well as requests for band members, subs and paid gigs.';
 
     testWidgets('Map View explanatory text appears in CreateBandScreen directly beneath correct field', (tester) async {
       tester.view.physicalSize = const Size(800, 3000);
@@ -460,6 +460,14 @@ void main() {
 
       expect(labelY, lessThan(helperY), reason: 'Label must be above explanatory text');
       expect(helperY, lessThan(inputY), reason: 'Explanatory text must be above input field');
+
+      // Tap helper box to open dialog and verify context-specific copy is displayed
+      await tester.tap(helperFinder);
+      await tester.pumpAndSettle();
+      expect(find.text('Got it'), findsOneWidget);
+      expect(find.textContaining(expectedHelperText), findsWidgets);
+      await tester.tap(find.text('Got it'));
+      await tester.pumpAndSettle();
     });
 
     testWidgets('Map View explanatory text appears in EditBandInfoScreen directly beneath correct field', (tester) async {
@@ -488,6 +496,14 @@ void main() {
 
       expect(labelY, lessThan(helperY), reason: 'Label must be above explanatory text');
       expect(helperY, lessThan(inputY), reason: 'Explanatory text must be above input field');
+
+      // Tap helper box to open dialog and verify context-specific copy is displayed
+      await tester.tap(helperFinder);
+      await tester.pumpAndSettle();
+      expect(find.text('Got it'), findsOneWidget);
+      expect(find.textContaining(expectedHelperText), findsWidgets);
+      await tester.tap(find.text('Got it'));
+      await tester.pumpAndSettle();
     });
   });
 

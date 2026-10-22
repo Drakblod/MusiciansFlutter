@@ -27,7 +27,7 @@ class MapTargetCandidate {
 
   factory MapTargetCandidate.fromSubRequest(SubRequest req) {
     return MapTargetCandidate(
-      id: req.id ?? req.subRequestId ?? '',
+      id: req.canonicalTargetId ?? '',
       kind: MapTargetKind.subRequest,
       latitude: req.latitude!,
       longitude: req.longitude!,

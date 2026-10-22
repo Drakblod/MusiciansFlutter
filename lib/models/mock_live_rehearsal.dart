@@ -12,6 +12,12 @@ class MockLiveRehearsal {
   final String? venue;
   final String? dateTime;
   final String? description;
+  final DateTime? startDateTime;
+  final DateTime? endDateTime;
+  final String? date;
+  final String? startTime;
+  final String? endTime;
+  final bool isLiveBroadcast;
 
   const MockLiveRehearsal({
     required this.id,
@@ -24,5 +30,11 @@ class MockLiveRehearsal {
     this.venue,
     this.dateTime,
     this.description,
+    this.startDateTime,
+    this.endDateTime,
+    this.date,
+    this.startTime,
+    this.endTime,
+    this.isLiveBroadcast = false,
   });
 }

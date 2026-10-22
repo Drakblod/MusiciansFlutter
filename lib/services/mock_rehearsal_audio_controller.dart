@@ -3,7 +3,6 @@ import 'package:flutter/foundation.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:audioplayers/audioplayers.dart';
 import '../data/mock_live_rehearsals.dart';
-import '../models/mock_live_rehearsal.dart';
 import '../utils/geo_distance.dart';
 
 class MockRehearsalAudioController {
@@ -15,6 +14,7 @@ class MockRehearsalAudioController {
   Timer? _throttleTimer;
   Timer? _fadeTimer;
   LatLng? _pendingCameraTarget;
+  String? _focusedTargetId;
 
   bool _isMuted = false;
   bool _isAudioStopped = false;
@@ -26,6 +26,7 @@ class MockRehearsalAudioController {
   bool get isAudioStopped => _isAudioStopped;
   bool get isWebAutoplayBlocked => _isWebAutoplayBlocked;
   bool get isInitialized => _isInitialized;
+  String? get focusedTargetId => _focusedTargetId;
   Map<String, double> get distancesKm => Map.unmodifiable(_distancesKm);
 
   final ValueNotifier<bool> isMutedNotifier = ValueNotifier<bool>(false);
@@ -78,8 +79,18 @@ class MockRehearsalAudioController {
       }
     }
 
-    // Immediately trigger proximity evaluation for initial camera position
-    _evaluateDistancesAndVolumes(_pendingCameraTarget ?? const LatLng(59.3293, 18.0686));
+    _updateDistances(_pendingCameraTarget ?? const LatLng(59.3293, 18.0686));
+    _evaluateFocusedTargetVolumes();
+  }
+
+  /// Sets the currently focused crosshair target ID.
+  /// Only the targeted rehearsal will have audible volume (>0).
+  /// Passing null or an ID of another target fades all rehearsal audio to 0.
+  void setFocusedTargetId(String? targetId) {
+    if (_isDisposed) return;
+    if (_focusedTargetId == targetId) return;
+    _focusedTargetId = targetId;
+    _evaluateFocusedTargetVolumes();
   }
 
   /// Called when user explicitly taps "Enable rehearsal audio" on Flutter Web if autoplay was blocked.
@@ -100,11 +111,12 @@ class MockRehearsalAudioController {
     }
 
     if (_pendingCameraTarget != null) {
-      _evaluateDistancesAndVolumes(_pendingCameraTarget!);
+      _updateDistances(_pendingCameraTarget!);
     }
+    _evaluateFocusedTargetVolumes();
   }
 
-  /// Receives updated map camera center LatLng. Throttled to ~150ms.
+  /// Receives updated map camera center LatLng to keep distances updated. Throttled to ~150ms.
   void updateCameraTarget(LatLng cameraTarget, {bool immediate = false}) {
     if (_isDisposed) return;
     _pendingCameraTarget = cameraTarget;
@@ -112,7 +124,7 @@ class MockRehearsalAudioController {
 
     if (immediate) {
       _throttleTimer?.cancel();
-      _evaluateDistancesAndVolumes(cameraTarget);
+      _updateDistances(cameraTarget);
       return;
     }
 
@@ -120,35 +132,28 @@ class MockRehearsalAudioController {
 
     _throttleTimer = Timer(const Duration(milliseconds: 150), () {
       if (_isDisposed || _pendingCameraTarget == null) return;
-      _evaluateDistancesAndVolumes(_pendingCameraTarget!);
+      _updateDistances(_pendingCameraTarget!);
     });
   }
 
-  /// Calculates distance from map center to each rehearsal, computes target volume, and triggers smooth fade.
-  void _evaluateDistancesAndVolumes(LatLng cameraTarget) {
+  void _updateDistances(LatLng cameraTarget) {
+    if (_isDisposed) return;
+    for (final rehearsal in mockLiveRehearsals) {
+      _distancesKm[rehearsal.id] = calculateHaversineDistanceKm(cameraTarget, rehearsal.position);
+    }
+  }
+
+  /// Sets target volume to 1.0 strictly for the focused crosshair target and 0.0 for all others, then triggers smooth fade.
+  void _evaluateFocusedTargetVolumes() {
     if (_isDisposed || _isAudioStopped) return;
 
-    String? nearestId;
-    double minDistance = double.infinity;
-
     for (final rehearsal in mockLiveRehearsals) {
-      final dist = calculateHaversineDistanceKm(cameraTarget, rehearsal.position);
-      _distancesKm[rehearsal.id] = dist;
-
-      if (dist < audibleRadiusKm && dist < minDistance) {
-        minDistance = dist;
-        nearestId = rehearsal.id;
-      }
-    }
-
-    for (final rehearsal in mockLiveRehearsals) {
-      final dist = _distancesKm[rehearsal.id] ?? double.infinity;
-      final isNearest = rehearsal.id == nearestId;
-      final targetVol = calculateRehearsalVolume(dist, isNearest: isNearest);
+      final isFocused = rehearsal.id == _focusedTargetId;
+      final double targetVol = isFocused ? 1.0 : 0.0;
       _targetVolumes[rehearsal.id] = targetVol;
 
       final player = _players[rehearsal.id];
-      if (player != null && targetVol > 0.01 && !_isMuted && !_isAudioStopped && player.state != PlayerState.playing) {
+      if (player != null && isFocused && targetVol > 0.01 && !_isMuted && !_isAudioStopped && player.state != PlayerState.playing) {
         player.resume();
       }
     }
@@ -239,8 +244,9 @@ class MockRehearsalAudioController {
     }
 
     if (_pendingCameraTarget != null) {
-      _evaluateDistancesAndVolumes(_pendingCameraTarget!);
+      _updateDistances(_pendingCameraTarget!);
     }
+    _evaluateFocusedTargetVolumes();
   }
 
   /// Toggles between audio playing and completely stopped.
@@ -267,6 +273,7 @@ class MockRehearsalAudioController {
   /// Called on AppLifecycleState pause/inactive.
   void pauseAudio() {
     if (_isDisposed) return;
+    _fadeTimer?.cancel();
     for (final player in _players.values) {
       try {
         player.pause();
@@ -276,19 +283,18 @@ class MockRehearsalAudioController {
     }
   }
 
-  /// Called on AppLifecycleState resume.
+  /// Called on AppLifecycleState resume. Only resumes if a focused target exists and audio is enabled.
   void resumeAudio() {
-    if (_isDisposed || _isWebAutoplayBlocked) return;
-    for (final player in _players.values) {
+    if (_isDisposed || _isWebAutoplayBlocked || _isAudioStopped || _focusedTargetId == null) return;
+    final player = _players[_focusedTargetId!];
+    if (player != null && !_isMuted) {
       try {
         player.resume();
       } catch (e) {
         debugPrint("[MockRehearsalAudio] Error resuming player: $e");
       }
     }
-    if (_pendingCameraTarget != null) {
-      _evaluateDistancesAndVolumes(_pendingCameraTarget!);
-    }
+    _evaluateFocusedTargetVolumes();
   }
 
   /// Cleans up and disposes all players and timers.

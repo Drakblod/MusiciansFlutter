@@ -357,6 +357,9 @@ class _FindGigsScreenState extends State<FindGigsScreen>
         final st = gig.status.toLowerCase();
         if (st == 'cancelled' || st == 'deleted') continue;
 
+        // Defensive exclusion for ordinary Map View pins
+        if (gig.isMapOnlyPin) continue;
+
         final reqId = gig.subRequestId ?? gig.id ?? '';
         final hasApplied = (currentUserId != null && gig.responses.containsKey(currentUserId)) ||
             _appliedGigIds.contains(reqId);

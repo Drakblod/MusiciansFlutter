@@ -353,6 +353,15 @@ exports.sendSubRequestNotification = onValueCreated({
     return null;
   }
 
+  // 1b. Map pin publication skip: ordinary map view pins must produce no notifications
+  if (
+    subRequestData.NotificationMode === 'map_pin' ||
+    subRequestData.notificationMode === 'map_pin'
+  ) {
+    console.log(`Skipping notification for map-only pin ${subRequestId}`);
+    return null;
+  }
+
   const rawVoicePart = subRequestData.VoicePart || subRequestData.voicePart;
   if (!rawVoicePart || typeof rawVoicePart !== 'string' || !rawVoicePart.trim()) {
     console.log(`Skipping legacy notification for subrequest ${subRequestId} due to missing or invalid VoicePart.`);
@@ -4119,6 +4128,185 @@ exports.deleteBand = onCall({ region: 'europe-west1' }, async (request) => {
     console.error(`Error deleting band ${trimmedBandId} by ${callerUid}:`, err);
     throw new HttpsError('internal', `Failed to delete band: ${err.message}`);
   }
+});
+
+/**
+ * MAP-VIEW-FEEDBACK-03: Server-owned Ordinary Map Pin Creation.
+ * Narrowly scoped authenticated callable to persist ordinary Music Map View pins.
+ * Writes exclusively to SubRequests/{generatedId} with NotificationMode: 'map_pin'.
+ * Never writes to BandEvents/PublishedSubRequests or staffing notification feeds.
+ */
+exports.createMapPin = onCall({ region: 'europe-west1' }, async (request) => {
+  const callerUid = request.auth?.uid;
+  if (!callerUid) {
+    throw new HttpsError('unauthenticated', 'User must be authenticated to create a map pin.');
+  }
+
+  const data = request.data;
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    throw new HttpsError('invalid-argument', 'Request data must be an object.');
+  }
+
+  // Helper for scalar string validation
+  function validateOptionalString(val, name, maxLength) {
+    if (val === undefined || val === null) return undefined;
+    if (typeof val !== 'string') {
+      throw new HttpsError('invalid-argument', `${name} must be a string.`);
+    }
+    const trimmed = val.trim();
+    if (trimmed.length > maxLength) {
+      throw new HttpsError('invalid-argument', `${name} exceeds maximum allowed length.`);
+    }
+    return trimmed;
+  }
+
+  // 1. Validate eventType (must be ordinary Music Map View type)
+  const rawEventType = data.eventType || data.EventType || data.extraFields?.eventType || data.extraFields?.EventType;
+  if (!rawEventType || typeof rawEventType !== 'string') {
+    throw new HttpsError('invalid-argument', 'Valid eventType is required.');
+  }
+  const eventType = rawEventType.trim();
+  const ALLOWED_MAP_EVENT_TYPES = ['gigConcert', 'rehearsal', 'jamSession', 'recordedMusic'];
+  if (!ALLOWED_MAP_EVENT_TYPES.includes(eventType)) {
+    throw new HttpsError('invalid-argument', `Invalid event type "${eventType}". Only ordinary music pins are allowed.`);
+  }
+
+  // 2. Reject staffing request types if supplied in requestType
+  const rawRequestType = data.requestType || data.RequestType;
+  if (rawRequestType !== undefined && rawRequestType !== null) {
+    if (typeof rawRequestType !== 'string') {
+      throw new HttpsError('invalid-argument', 'requestType must be a string.');
+    }
+    const lowerType = rawRequestType.trim().toLowerCase();
+    if (lowerType.includes('sub') || lowerType.includes('member') || lowerType.includes('paid')) {
+      throw new HttpsError('invalid-argument', 'Staffing request types are not allowed for map pins.');
+    }
+  }
+
+  // 3. Validate coordinates (numeric, finite, valid ranges)
+  const rawLat = data.latitude !== undefined ? data.latitude : data.Latitude;
+  const rawLng = data.longitude !== undefined ? data.longitude : data.Longitude;
+
+  if (typeof rawLat !== 'number' || typeof rawLng !== 'number' || !Number.isFinite(rawLat) || !Number.isFinite(rawLng)) {
+    throw new HttpsError('invalid-argument', 'Latitude and longitude must be finite numbers.');
+  }
+  if (rawLat < -90 || rawLat > 90) {
+    throw new HttpsError('invalid-argument', 'Latitude must be between -90 and 90.');
+  }
+  if (rawLng < -180 || rawLng > 180) {
+    throw new HttpsError('invalid-argument', 'Longitude must be between -180 and 180.');
+  }
+
+  // 4. Validate scalar string fields with length limits
+  const location = validateOptionalString(data.location !== undefined ? data.location : data.Location, 'location', 300);
+  const description = validateOptionalString(data.description !== undefined ? data.description : data.Description, 'description', 2000);
+  const bandName = validateOptionalString(data.bandName !== undefined ? data.bandName : data.BandName, 'bandName', 200);
+  const style = validateOptionalString(data.style !== undefined ? data.style : data.Style, 'style', 100);
+  const genre = validateOptionalString(data.genre !== undefined ? data.genre : data.Genre, 'genre', 100);
+  const venue = validateOptionalString(data.venue !== undefined ? data.venue : data.Venue, 'venue', 200);
+  const date = validateOptionalString(data.date !== undefined ? data.date : data.Date, 'date', 100);
+  const startTime = validateOptionalString(data.startTime !== undefined ? data.startTime : data.StartTime, 'startTime', 50);
+  const endTime = validateOptionalString(data.endTime !== undefined ? data.endTime : data.EndTime, 'endTime', 50);
+  const audioSnippetUrl = validateOptionalString(data.audioSnippetUrl !== undefined ? data.audioSnippetUrl : data.extraFields?.audioSnippetUrl, 'audioSnippetUrl', 2000);
+  const audioSnippetTitle = validateOptionalString(data.audioSnippetTitle !== undefined ? data.audioSnippetTitle : data.extraFields?.audioSnippetTitle, 'audioSnippetTitle', 200);
+  const infoAudioTrack = validateOptionalString(data.infoAudioTrack !== undefined ? data.infoAudioTrack : data.extraFields?.infoAudioTrack, 'infoAudioTrack', 1000);
+
+  const rawSubCat = data.subCategory !== undefined ? data.subCategory : data.SubCategory;
+  const subCategory = validateOptionalString(rawSubCat, 'subCategory', 100);
+  if (subCategory && subCategory !== 'Music') {
+    throw new HttpsError('invalid-argument', 'Only Music subCategory is allowed for ordinary map pins.');
+  }
+
+  // 5. Band membership verification if bandId provided
+  const bandId = validateOptionalString(data.bandId !== undefined ? data.bandId : data.BandId, 'bandId', 128);
+  const db = admin.database();
+
+  if (bandId) {
+    if (bandId.includes('/') || bandId.includes('.') || bandId.includes('#') || bandId.includes('$') || bandId.includes('[') || bandId.includes(']')) {
+      throw new HttpsError('invalid-argument', 'Invalid bandId format.');
+    }
+    const memberSnap = await db.ref(`Bands/${bandId}/Members_band/${callerUid}`).once('value');
+    if (!memberSnap.exists()) {
+      throw new HttpsError('permission-denied', 'You are not a member of this band.');
+    }
+  }
+
+  // 6. Generate server-owned Firebase push ID
+  const subRequestsRef = db.ref('SubRequests');
+  const newPinRef = subRequestsRef.push();
+  const generatedId = newPinRef.key;
+  if (!generatedId) {
+    throw new HttpsError('internal', 'Failed to generate record key.');
+  }
+
+  const now = Date.now();
+
+  // 7. Assemble sanitized payload with server-controlled authority
+  const persistedPayload = {
+    SubRequestId: generatedId,
+    id: generatedId,
+    subRequestId: generatedId,
+    SlotId: generatedId,
+    CreatorUserId: callerUid,
+    UserId: callerUid,
+    Status: 'published',
+    NotificationMode: 'map_pin',
+    notificationMode: 'map_pin',
+    subCategory: 'Music',
+    eventType: eventType,
+    Latitude: rawLat,
+    Longitude: rawLng,
+    latitude: rawLat,
+    longitude: rawLng,
+    CreatedAt: now,
+    createdAt: now,
+    RequestType: 'Other',
+    IsPaid: false,
+  };
+
+  if (location) persistedPayload.Location = location;
+  if (description) persistedPayload.Description = description;
+  if (bandName) {
+    persistedPayload.BandName = bandName;
+    persistedPayload.bandName = bandName;
+  }
+  if (bandId) {
+    persistedPayload.BandId = bandId;
+    persistedPayload.bandId = bandId;
+  }
+  if (style || genre) {
+    persistedPayload.Style = style || genre;
+    persistedPayload.style = style || genre;
+  }
+  if (genre) persistedPayload.genre = genre;
+  if (venue) persistedPayload.venue = venue;
+  if (date) {
+    persistedPayload.Date = date;
+    persistedPayload.date = date;
+  }
+  if (startTime) {
+    persistedPayload.StartTime = startTime;
+    persistedPayload.startTime = startTime;
+  }
+  if (endTime) {
+    persistedPayload.EndTime = endTime;
+    persistedPayload.endTime = endTime;
+  }
+  if (audioSnippetUrl) persistedPayload.audioSnippetUrl = audioSnippetUrl;
+  if (audioSnippetTitle) persistedPayload.audioSnippetTitle = audioSnippetTitle;
+  if (infoAudioTrack) persistedPayload.infoAudioTrack = infoAudioTrack;
+
+  // 8. Write strictly once to SubRequests/{generatedId}
+  await newPinRef.set(persistedPayload);
+
+  // Safe logging: never log personal address, audio URL or full payload
+  console.log(`[createMapPin] Successfully created map pin ${generatedId} for caller ${callerUid} (type: ${eventType})`);
+
+  return {
+    success: true,
+    id: generatedId,
+    pin: persistedPayload,
+  };
 });
 
 // Live Band Audio Broadcasting (SEND-LIVE-01)

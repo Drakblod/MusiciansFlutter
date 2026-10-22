@@ -3,7 +3,9 @@ import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_theme.dart';
 
 /// Shows the standardized "What is Map View?" guide and explanation dialog.
-void showWhatIsMapViewDialog(BuildContext context) {
+void showWhatIsMapViewDialog(BuildContext context, {String? description}) {
+  final introText = description ??
+      'Move pins towards the centre of the screen (telescopic sight) to hear different bands and their recordings, band info, gig promo, etc.\n';
   showDialog(
     context: context,
     builder: (context) => AlertDialog(
@@ -28,7 +30,7 @@ void showWhatIsMapViewDialog(BuildContext context) {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Move pins towards the centre of the screen (telescopic sight) to hear different bands and their recordings, band info, gig promo, etc.\n',
+              introText.endsWith('\n') ? introText : '$introText\n',
               style: GoogleFonts.inter(
                 color: Colors.white,
                 fontSize: 13,

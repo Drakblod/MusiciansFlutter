@@ -122,8 +122,9 @@ void main() {
       }
 
       // MUSIC tab is selected by default
-      expect(find.text('Gig Promo'), findsOneWidget);
-      expect(find.text('Live Gigs / Rehearsals'), findsOneWidget);
+      expect(find.text('Gig Promo'), findsNothing);
+      expect(find.text('Gigs / Rehearsals'), findsOneWidget);
+      expect(find.text('Live Gigs / Rehearsals'), findsNothing);
       expect(find.text('Jam Sessions'), findsOneWidget);
       expect(find.text('Demos / Recordings'), findsOneWidget);
 
@@ -301,6 +302,71 @@ void main() {
             (rule['stylers'] as List).any((s) => s['visibility'] == 'on'),
       );
       expect(transitStationLabels.isNotEmpty, isTrue);
+    });
+
+    testWidgets('8. MAP-VIEW-FEEDBACK-01: Upload form cleanup, labels and single Description field',
+        (tester) async {
+      tester.view.physicalSize = const Size(800, 1600);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      await tester.pumpWidget(
+        ChangeNotifierProvider<AppState>(
+          create: (_) => MockAppStateForMapTest(),
+          child: const MaterialApp(
+            home: GigMapPage(),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      // Close auto-targeted bottom card if open
+      final closeBtn = find.byIcon(Icons.close);
+      if (closeBtn.evaluate().isNotEmpty) {
+        await tester.tap(closeBtn.first);
+        await tester.pump(const Duration(milliseconds: 300));
+      }
+
+      // Check What is Map View text in bottom bar
+      expect(
+        find.byWidgetPredicate(
+          (w) => (w is Text && (w.data?.contains('Explore Map View') ?? false)) ||
+              (w is RichText && w.text.toPlainText().contains('Move pins towards the centre of the screen (telescopic sight) to hear different bands and their recordings, band info, gig promo, etc')),
+        ),
+        findsWidgets,
+      );
+
+      // Tap Upload Map View Pin / Audio
+      await tester.tap(find.text('Upload Map View Pin / Audio'));
+      await tester.pump(const Duration(milliseconds: 300));
+
+      // Verify Category selector only has 'Music' and 'Sub & Member Search'
+      expect(find.widgetWithText(ChoiceChip, 'Music'), findsOneWidget);
+      expect(find.widgetWithText(ChoiceChip, 'Sub & Member Search'), findsOneWidget);
+      expect(find.widgetWithText(ChoiceChip, 'Gig Promo'), findsNothing);
+
+      // Verify Type selector under Music contains 'Demos / Recordings' and not 'Recorded Music'
+      expect(find.widgetWithText(ChoiceChip, 'Gig / Concert'), findsOneWidget);
+      expect(find.widgetWithText(ChoiceChip, 'Rehearsal'), findsOneWidget);
+      expect(find.widgetWithText(ChoiceChip, 'Jam Session'), findsOneWidget);
+      expect(find.widgetWithText(ChoiceChip, 'Demos / Recordings'), findsOneWidget);
+      expect(find.widgetWithText(ChoiceChip, 'Recorded Music'), findsNothing);
+
+      // Verify Description / Details appears exactly once as an input label
+      expect(find.text('Description / Details'), findsOneWidget);
+      expect(find.textContaining('Event Title / Role'), findsNothing);
+
+      // Verify Map View Pin Location label and hint
+      expect(find.text('Map View Pin Location (Street, City, Country)'), findsOneWidget);
+      expect(find.textContaining('Pin Location (Street, City without postal code)'), findsNothing);
+
+      // Verify Audio Track info (title + info) section header and fields
+      expect(find.text('Audio Track info (title + info)'), findsOneWidget);
+      expect(find.text('Title'), findsOneWidget);
+      expect(find.text('Info'), findsOneWidget);
+
+      expect(tester.takeException(), isNull);
     });
   });
 }

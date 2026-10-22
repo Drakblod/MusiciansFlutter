@@ -1548,7 +1548,11 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
                 button: true,
                 label: 'What is Map View? Click to read full guide.',
                 child: AnimatedTapDetector(
-                  onTap: () => showWhatIsMapViewDialog(context),
+                  onTap: () => showWhatIsMapViewDialog(
+                  context,
+                  description:
+                      'Explore Map View to discover audio snippets from gigs, rehearsals, recordings and gig promos, as well as requests for band members, subs and paid gigs.',
+                ),
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                     decoration: BoxDecoration(
@@ -1577,7 +1581,7 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          'Move pins towards the centre of the screen (telescopic sight) to hear different bands and their recordings, band info, gig promo, etc',
+                          'Explore Map View to discover audio snippets from gigs, rehearsals, recordings and gig promos, as well as requests for band members, subs and paid gigs.',
                           style: GoogleFonts.inter(fontSize: 11.5, color: const Color(0xFFD4CEEB), height: 1.35),
                         ),
                       ],

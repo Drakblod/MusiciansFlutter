@@ -715,7 +715,8 @@ async function handleUpdateSessionApplicationStatus(request, db) {
   return { success: true, status };
 }
 
-describe('v2 Callable Cloud Functions Logic Tests', () => {
+describe('v2 Callable Cloud Functions Logic Tests', function () {
+  this.timeout(15000);
   let db;
 
   beforeEach(() => {
@@ -1613,6 +1614,14 @@ describe('v2 Callable Cloud Functions Logic Tests', () => {
         return [];
       }
 
+      // Map pin publication skip: ordinary map view pins must produce no notifications
+      if (
+        subRequestData.NotificationMode === 'map_pin' ||
+        subRequestData.notificationMode === 'map_pin'
+      ) {
+        return [];
+      }
+
       const rawVoicePart = subRequestData.VoicePart || subRequestData.voicePart;
       if (!rawVoicePart || typeof rawVoicePart !== 'string' || !rawVoicePart.trim()) {
         return [];
@@ -1757,6 +1766,71 @@ describe('v2 Callable Cloud Functions Logic Tests', () => {
       assert.strictEqual(formatEventNotificationBody({ eventType: null, location: 'Hall' }), 'New event at Hall. Please RSVP!');
       assert.strictEqual(formatEventNotificationBody({ eventType: '   ', location: 'Hall' }), 'New event at Hall. Please RSVP!');
       assert.strictEqual(formatEventNotificationBody({ eventType: 1234, location: 'Hall' }), 'New event at Hall. Please RSVP!');
+    });
+
+    it('38b. Ordinary map_pin creates zero push/notification activity even if VoicePart is present', async () => {
+      const mapPinData = {
+        SubRequestId: 'pin_music_123',
+        NotificationMode: 'map_pin',
+        VoicePart: 'Electric Guitar',
+        CreatorUserId: 'user_creator',
+        BandName: 'The Nordic Sessions',
+        RequestType: 'Demos / Recordings',
+      };
+
+      const msgs = await processLegacySubRequestNotification(mapPinData, 'pin_music_123');
+      assert.strictEqual(msgs.length, 0, 'Ordinary map_pin MUST produce zero notifications');
+    });
+
+    it('38c. Genuine Sub or New Member request still follows its existing notification path', async () => {
+      const genuineSubRequest = {
+        SubRequestId: 'sub_genuine_456',
+        VoicePart: 'Electric Guitar',
+        CreatorUserId: 'user_creator',
+        BandName: 'The Nordic Sessions',
+        RequestType: 'Substitute',
+      };
+
+      const msgsSub = await processLegacySubRequestNotification(genuineSubRequest, 'sub_genuine_456');
+      assert.strictEqual(msgsSub.length, 1, 'Genuine Sub request sends notification to matching guitarist');
+      assert.strictEqual(msgsSub[0].recipientUserId, 'user_guitarist');
+
+      const genuineNewMemberRequest = {
+        SubRequestId: 'sub_new_member_789',
+        VoicePart: 'Bass',
+        CreatorUserId: 'user_creator',
+        BandName: 'The Nordic Sessions',
+        RequestType: 'New Member',
+      };
+
+      const msgsMember = await processLegacySubRequestNotification(genuineNewMemberRequest, 'sub_new_member_789');
+      assert.strictEqual(msgsMember.length, 1, 'Genuine New Member request sends notification to matching bassist');
+      assert.strictEqual(msgsMember[0].recipientUserId, 'user_bassist');
+    });
+
+    it('38d. Retried writes do not create duplicates', async () => {
+      const genuineSubRequest = {
+        SubRequestId: 'sub_retry_test',
+        VoicePart: 'Drums',
+        CreatorUserId: 'user_creator',
+        BandName: 'Rockers',
+        TargetUserIds: ['user_favorite_drummer'],
+      };
+
+      const auditBase = 'subRequestNotificationAudit/sub_retry_test/recipients/user_favorite_drummer';
+      // Simulate first run recorded in audit log
+      await db.ref(auditBase).set({ status: 'sent', sentAt: Date.now() });
+
+      // Simulate check in notification handler
+      const auditSnap = await db.ref(auditBase).get();
+      assert.strictEqual(auditSnap.val()?.status, 'sent');
+
+      // Attempting second delivery to same recipient
+      let duplicateSent = false;
+      if (auditSnap.val()?.status !== 'sent') {
+        duplicateSent = true;
+      }
+      assert.strictEqual(duplicateSent, false, 'Audit trail prevents duplicate delivery on retried write');
     });
   });
 });

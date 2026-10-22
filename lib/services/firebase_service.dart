@@ -545,6 +545,7 @@ class FirebaseService {
       description: request.description,
       date: request.date,
       role: request.role,
+      requestType: request.requestType,
       isPaid: request.isPaid,
       bandName: request.bandName,
       rehearsalDayOfWeek: request.rehearsalDayOfWeek,
@@ -553,10 +554,14 @@ class FirebaseService {
       targetUserIds: request.targetUserIds,
       eventId: request.eventId,
       bandId: request.bandId,
+      style: request.style,
+      level: request.level,
+      eventTitle: request.eventTitle,
       payAmount: request.payAmount,
       currency: request.currency,
       requestGroupId: request.requestGroupId,
       status: 'published',
+      extraFields: request.extraFields,
     );
 
     final json = updated.toJson();
@@ -567,6 +572,7 @@ class FirebaseService {
       await _dbRef('BandEvents/CancelledSubRequests/$key').remove();
     } catch (e) {
       debugPrint('[FirebaseService] Error writing BandEvents/PublishedSubRequests: $e');
+      rethrow;
     }
 
     // 2. Save under user's profile SubRequests
@@ -583,6 +589,44 @@ class FirebaseService {
     } catch (_) {}
 
     return key;
+  }
+
+  /// Saves an ordinary Map View music pin via server-owned callable createMapPin.
+  /// Writes exclusively to SubRequests/{generatedId} with NotificationMode: 'map_pin'.
+  /// Does NOT write to BandEvents/PublishedSubRequests or users/{uid}/SubRequests,
+  /// ensuring ordinary music pins never collide with staffing requests or feeds.
+  Future<SubRequest> saveMapPinAsync(SubRequest pin) async {
+    final payload = <String, dynamic>{
+      'latitude': pin.latitude,
+      'longitude': pin.longitude,
+      'eventType': pin.resolvedEventType ?? pin.extraFields['eventType'] ?? pin.extraFields['EventType'] ?? 'gigConcert',
+      if (pin.location != null) 'location': pin.location,
+      if (pin.date != null) 'date': pin.date,
+      if (pin.startTime != null) 'startTime': pin.startTime,
+      if (pin.endTime != null) 'endTime': pin.endTime,
+      if (pin.description != null) 'description': pin.description,
+      if (pin.bandName != null) 'bandName': pin.bandName,
+      if (pin.bandId != null) 'bandId': pin.bandId,
+      if (pin.style != null) 'style': pin.style,
+      if (pin.extraFields['genre'] != null) 'genre': pin.extraFields['genre'],
+      if (pin.extraFields['venue'] != null) 'venue': pin.extraFields['venue'],
+      if (pin.extraFields['subCategory'] != null) 'subCategory': pin.extraFields['subCategory'],
+      if (pin.audioSnippetUrl != null) 'audioSnippetUrl': pin.audioSnippetUrl,
+      if (pin.audioSnippetTitle != null) 'audioSnippetTitle': pin.audioSnippetTitle,
+      if (pin.extraFields['infoAudioTrack'] != null) 'infoAudioTrack': pin.extraFields['infoAudioTrack'],
+    };
+
+    try {
+      final callable = _functions.httpsCallable('createMapPin');
+      final result = await callable.call(payload);
+      final resData = result.data is Map ? Map<dynamic, dynamic>.from(result.data as Map) : <dynamic, dynamic>{};
+      final pinId = resData['id']?.toString() ?? '';
+      final pinPayload = resData['pin'] is Map ? Map<dynamic, dynamic>.from(resData['pin'] as Map) : <dynamic, dynamic>{};
+      return SubRequest.fromJson(pinPayload, pinId);
+    } catch (e) {
+      debugPrint('[FirebaseService] Error creating Map Pin via createMapPin: $e');
+      rethrow;
+    }
   }
 
   Future<List<SubRequest>> getUserSubRequestFeedAsync() async {

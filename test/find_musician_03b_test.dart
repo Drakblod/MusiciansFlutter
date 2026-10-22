@@ -1496,7 +1496,7 @@ void main() {
         role: 'Substitute',
         voicePart: 'Rhythm Guitar',
         description: 'Tour gig',
-        date: '2026-10-21T18:00:00Z',
+        date: DateTime.now().add(const Duration(days: 8)).toIso8601String(),
         eventSequence: 2,
         eventTitle: 'Tour Stop Stockholm',
         requestGroupId: 'grp_tour_distinct',

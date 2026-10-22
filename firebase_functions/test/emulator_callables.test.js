@@ -52,7 +52,7 @@ describe('Real Cloud Functions Emulator Integration Tests (JS Client SDK + Emula
   let appUserC, authUserC, functionsUserC, dbUserC;
   let appUnauth, functionsUnauth;
 
-  before(async () => {
+  before(async function () {
     async function createClientContext(uid) {
       const appName = uid ? `app_${uid}` : 'app_unauth';
       const app = initializeApp({ projectId: PROJECT_ID, apiKey: 'fake-api-key' }, appName);
@@ -1268,6 +1268,265 @@ describe('Real Cloud Functions Emulator Integration Tests (JS Client SDK + Emula
       const uploaderNotifRef = adminDb.ref(`userNotifications/${uploaderUid}/notif_file_${bandId}_${fileId}_${uploaderUid}`);
       const uploaderSnap = await uploaderNotifRef.get();
       assert.strictEqual(uploaderSnap.exists(), false, 'Uploader must not receive own file notification');
+    });
+
+    describe('MAP-VIEW-FEEDBACK-03: Server-owned createMapPin Callable Tests', () => {
+      it('30. Unauthenticated invocation of createMapPin is rejected', async () => {
+        const callable = httpsCallable(functionsUnauth, 'createMapPin');
+        await assert.rejects(
+          callable({
+            eventType: 'gigConcert',
+            latitude: 59.3293,
+            longitude: 18.0686,
+          }),
+          (err) => isAuthError(err)
+        );
+      });
+
+      it('31. Authenticated valid creation succeeds and returns server-generated ID and normalized payload', async () => {
+        const callable = httpsCallable(functionsUserA, 'createMapPin');
+        const result = await callable({
+          eventType: 'gigConcert',
+          latitude: 59.3293,
+          longitude: 18.0686,
+          description: 'Stockholm Jazz Fest',
+          venue: 'Fasching',
+          bandName: 'Stora Stygga',
+          genre: 'Big Band',
+          date: '2026-11-01',
+          startTime: '19:00:00',
+          endTime: '22:00:00',
+        });
+
+        assert.strictEqual(result.data.success, true);
+        assert(result.data.id && typeof result.data.id === 'string');
+        const pin = result.data.pin;
+        assert.strictEqual(pin.SubRequestId, result.data.id);
+        assert.strictEqual(pin.CreatorUserId, 'user_a');
+        assert.strictEqual(pin.UserId, 'user_a');
+        assert.strictEqual(pin.Status, 'published');
+        assert.strictEqual(pin.NotificationMode, 'map_pin');
+        assert.strictEqual(pin.eventType, 'gigConcert');
+        assert.strictEqual(pin.Latitude, 59.3293);
+        assert.strictEqual(pin.Longitude, 18.0686);
+      });
+
+      it('32. Client-supplied record ID is ignored and server-generated key is used', async () => {
+        const callable = httpsCallable(functionsUserA, 'createMapPin');
+        const result = await callable({
+          id: 'forged_client_id_999',
+          subRequestId: 'forged_client_id_999',
+          eventType: 'rehearsal',
+          latitude: 59.33,
+          longitude: 18.07,
+        });
+
+        assert.notStrictEqual(result.data.id, 'forged_client_id_999');
+        const forgedSnap = await adminDb.ref('SubRequests/forged_client_id_999').get();
+        assert.strictEqual(forgedSnap.exists(), false, 'Client-supplied ID must never be written to RTDB');
+
+        const realSnap = await adminDb.ref(`SubRequests/${result.data.id}`).get();
+        assert.strictEqual(realSnap.exists(), true, 'Server-generated key must be used in RTDB');
+      });
+
+      it('33. Server assigns caller UID as creator/user ID even if client supplies different UID', async () => {
+        const callable = httpsCallable(functionsUserA, 'createMapPin');
+        const result = await callable({
+          CreatorUserId: 'user_b',
+          UserId: 'user_c',
+          creatorUserId: 'user_b',
+          userId: 'user_c',
+          eventType: 'jamSession',
+          latitude: 59.34,
+          longitude: 18.08,
+        });
+
+        const pinSnap = await adminDb.ref(`SubRequests/${result.data.id}`).get();
+        const pin = pinSnap.val();
+        assert.strictEqual(pin.CreatorUserId, 'user_a');
+        assert.strictEqual(pin.UserId, 'user_a');
+      });
+
+      it('34. Server writes exactly once to SubRequests/{id} and never to staffing feeds', async () => {
+        const callable = httpsCallable(functionsUserA, 'createMapPin');
+        const result = await callable({
+          eventType: 'recordedMusic',
+          latitude: 59.35,
+          longitude: 18.09,
+        });
+
+        const pinId = result.data.id;
+        const subReqSnap = await adminDb.ref(`SubRequests/${pinId}`).get();
+        assert.strictEqual(subReqSnap.exists(), true);
+
+        const pubSnap = await adminDb.ref(`BandEvents/PublishedSubRequests/${pinId}`).get();
+        assert.strictEqual(pubSnap.exists(), false, 'Must not write to BandEvents/PublishedSubRequests');
+
+        const feedSnap = await adminDb.ref(`userSubRequestFeed/user_b/${pinId}`).get();
+        assert.strictEqual(feedSnap.exists(), false, 'Must not write to userSubRequestFeed');
+
+        const audSnap = await adminDb.ref(`subRequestAudience/${pinId}`).get();
+        assert.strictEqual(audSnap.exists(), false, 'Must not write to subRequestAudience');
+      });
+
+      it('35. Ordinary map_pin triggers zero notifications / push events for users', async () => {
+        await adminDb.ref('users/user_b/info').set({
+          UserType: 'Electric Guitar',
+          Instruments: ['Electric Guitar'],
+          PushToken: 'token_b',
+        });
+
+        const callable = httpsCallable(functionsUserA, 'createMapPin');
+        await callable({
+          eventType: 'gigConcert',
+          latitude: 59.3293,
+          longitude: 18.0686,
+        });
+
+        await new Promise(r => setTimeout(r, 1000));
+
+        const notifSnapB = await adminDb.ref('userNotifications/user_b').get();
+        assert.strictEqual(notifSnapB.exists(), false, 'Candidates must receive zero notifications for ordinary map_pin');
+      });
+
+      it('36. Invalid coordinates (< -90, > 90, non-numeric, NaN) rejected', async () => {
+        const callable = httpsCallable(functionsUserA, 'createMapPin');
+
+        await assert.rejects(
+          callable({ eventType: 'gigConcert', latitude: 95, longitude: 18.0 }),
+          (err) => err.code === 'functions/invalid-argument' || err.code === 'invalid-argument'
+        );
+
+        await assert.rejects(
+          callable({ eventType: 'gigConcert', latitude: -91, longitude: 18.0 }),
+          (err) => err.code === 'functions/invalid-argument' || err.code === 'invalid-argument'
+        );
+
+        await assert.rejects(
+          callable({ eventType: 'gigConcert', latitude: 59.0, longitude: 185 }),
+          (err) => err.code === 'functions/invalid-argument' || err.code === 'invalid-argument'
+        );
+
+        await assert.rejects(
+          callable({ eventType: 'gigConcert', latitude: 'invalid_lat', longitude: 18.0 }),
+          (err) => err.code === 'functions/invalid-argument' || err.code === 'invalid-argument'
+        );
+      });
+
+      it('37. Invalid event types (subs, newMember, paid, unknown) rejected', async () => {
+        const callable = httpsCallable(functionsUserA, 'createMapPin');
+
+        await assert.rejects(
+          callable({ eventType: 'subs', latitude: 59.0, longitude: 18.0 }),
+          (err) => err.code === 'functions/invalid-argument' || err.code === 'invalid-argument'
+        );
+
+        await assert.rejects(
+          callable({ eventType: 'newMember', latitude: 59.0, longitude: 18.0 }),
+          (err) => err.code === 'functions/invalid-argument' || err.code === 'invalid-argument'
+        );
+
+        await assert.rejects(
+          callable({ eventType: 'paid', latitude: 59.0, longitude: 18.0 }),
+          (err) => err.code === 'functions/invalid-argument' || err.code === 'invalid-argument'
+        );
+
+        await assert.rejects(
+          callable({ eventType: 'arbitraryType', latitude: 59.0, longitude: 18.0 }),
+          (err) => err.code === 'functions/invalid-argument' || err.code === 'invalid-argument'
+        );
+      });
+
+      it('38. Staffing and server-controlled fields supplied by client are stripped', async () => {
+        const callable = httpsCallable(functionsUserA, 'createMapPin');
+        const result = await callable({
+          eventType: 'gigConcert',
+          latitude: 59.3293,
+          longitude: 18.0686,
+          Responses: { user_b: true },
+          PublicationId: 'forged_pub_123',
+          Status: 'cancelled',
+          NotificationMode: 'forged_mode',
+          AssignedUserId: 'user_b',
+          TargetUserIds: ['user_b', 'user_c'],
+        });
+
+        const pinSnap = await adminDb.ref(`SubRequests/${result.data.id}`).get();
+        const pin = pinSnap.val();
+        assert.strictEqual(pin.Status, 'published', 'Server must enforce Status: published');
+        assert.strictEqual(pin.NotificationMode, 'map_pin', 'Server must enforce NotificationMode: map_pin');
+        assert.strictEqual(pin.Responses, undefined, 'Responses must be stripped');
+        assert.strictEqual(pin.PublicationId, undefined, 'PublicationId must be stripped');
+        assert.strictEqual(pin.AssignedUserId, undefined, 'AssignedUserId must be stripped');
+        assert.strictEqual(pin.TargetUserIds, undefined, 'TargetUserIds must be stripped');
+      });
+
+      it('39. Band membership verification allows band member and rejects non-member', async () => {
+        const bandId = 'band_membership_pin_test';
+        await adminDb.ref(`Bands/${bandId}`).set({
+          Name: 'Pin Test Band',
+          Members_band: {
+            user_a: { Role: 'Member' },
+          },
+        });
+
+        // user_a is a member -> succeeds
+        const callableA = httpsCallable(functionsUserA, 'createMapPin');
+        const resultA = await callableA({
+          eventType: 'gigConcert',
+          bandId: bandId,
+          latitude: 59.3293,
+          longitude: 18.0686,
+        });
+        assert.strictEqual(resultA.data.success, true);
+
+        // user_b is not a member -> rejected with permission-denied
+        const callableB = httpsCallable(functionsUserB, 'createMapPin');
+        await assert.rejects(
+          callableB({
+            eventType: 'gigConcert',
+            bandId: bandId,
+            latitude: 59.3293,
+            longitude: 18.0686,
+          }),
+          (err) => err.code === 'functions/permission-denied' || err.code === 'permission-denied'
+        );
+      });
+
+      it('40. Genuine staffing request creates expected published record and notification', async () => {
+        await adminDb.ref('users/user_b/info').set({
+          UserType: 'Electric Guitar',
+          Instruments: ['Electric Guitar'],
+          PushToken: 'token_b',
+        });
+        await adminDb.ref('Bands/band_staffing_1').set({
+          Name: 'Staffing Band',
+          Members_band: {
+            user_a: { Role: 'Leader' },
+          },
+        });
+
+        await adminDb.ref('SubRequests/staffing_req_1').set({
+          SubRequestId: 'staffing_req_1',
+          CreatorUserId: 'user_a',
+          bandId: 'band_staffing_1',
+          VoicePart: 'Electric Guitar',
+          Status: 'published',
+          Location: 'Stockholm, Sweden',
+          CreatedAt: Date.now(),
+        });
+
+        let receivedNotif = false;
+        for (let i = 0; i < 20; i++) {
+          const notifSnapB = await adminDb.ref('userNotifications/user_b').get();
+          if (notifSnapB.exists() && notifSnapB.val()) {
+            receivedNotif = true;
+            break;
+          }
+          await new Promise(r => setTimeout(r, 200));
+        }
+        assert.strictEqual(receivedNotif, true, 'Genuine staffing request MUST notify eligible candidates');
+      });
     });
   });
 });

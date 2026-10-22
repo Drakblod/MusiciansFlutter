@@ -463,4 +463,19 @@ class SubRequest {
   String? get venue =>
       (extraFields['venue'] ?? extraFields['Venue'] ?? extraFields['venueName'])
           ?.toString();
+
+  /// Canonical identifier for map targeting, selection, markers, and audio focus.
+  /// Prioritizes [id], falls back to [subRequestId]. Returns null if neither is present or non-empty.
+  String? get canonicalTargetId {
+    final candidateId = id?.trim();
+    if (candidateId != null && candidateId.isNotEmpty) return candidateId;
+    final candidateSub = subRequestId?.trim();
+    if (candidateSub != null && candidateSub.isNotEmpty) return candidateSub;
+    return null;
+  }
+
+  /// Whether this is an ordinary Map View pin that should not appear in staffing flows.
+  bool get isMapOnlyPin =>
+      extraFields['NotificationMode'] == 'map_pin' ||
+      extraFields['notificationMode'] == 'map_pin';
 }
