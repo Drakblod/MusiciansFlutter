@@ -4309,15 +4309,170 @@ exports.createMapPin = onCall({ region: 'europe-west1' }, async (request) => {
   };
 });
 
+/**
+ * Server-owned Cloud Function callable to securely update an existing Map Pin.
+ * Enforces authentication, creator or band leader authorization, validates updated fields,
+ * and updates SubRequests/{id} without writing to staffing indexes.
+ */
+exports.updateMapPin = onCall({ region: 'europe-west1' }, async (request) => {
+  const callerUid = request.auth?.uid;
+  if (!callerUid) {
+    throw new HttpsError('unauthenticated', 'User must be authenticated to update a map pin.');
+  }
+
+  const data = request.data;
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    throw new HttpsError('invalid-argument', 'Request data must be an object.');
+  }
+
+  const pinId = data.id || data.subRequestId;
+  if (!pinId || typeof pinId !== 'string') {
+    throw new HttpsError('invalid-argument', 'Valid pin id is required.');
+  }
+
+  function validateOptionalString(val, name, maxLength) {
+    if (val === undefined || val === null) return undefined;
+    if (typeof val !== 'string') {
+      throw new HttpsError('invalid-argument', `${name} must be a string.`);
+    }
+    const trimmed = val.trim();
+    if (trimmed.length > maxLength) {
+      throw new HttpsError('invalid-argument', `${name} exceeds maximum allowed length.`);
+    }
+    return trimmed;
+  }
+
+  const db = admin.database();
+  const pinRef = db.ref(`SubRequests/${pinId}`);
+  const snap = await pinRef.get();
+  if (!snap.exists()) {
+    throw new HttpsError('not-found', 'Map pin not found.');
+  }
+
+  const existing = snap.val() || {};
+  const creatorUid = existing.CreatorUserId || existing.creatorUserId || existing.UserId || existing.userId;
+
+  let isAuthorized = (creatorUid === callerUid);
+  if (!isAuthorized) {
+    const bandId = existing.bandId || existing.BandId;
+    if (bandId) {
+      const memberRoleSnap = await db.ref(`Bands/${bandId}/Members_band/${callerUid}/Role`).get();
+      const role = memberRoleSnap.val();
+      if (role === 'Leader' || role === 'Admin') {
+        isAuthorized = true;
+      }
+    }
+  }
+
+  if (!isAuthorized) {
+    throw new HttpsError('permission-denied', 'Only the pin creator or band leader may update this pin.');
+  }
+
+  const updates = {};
+  if (data.bandName !== undefined) {
+    const val = validateOptionalString(data.bandName, 'bandName', 200);
+    if (val !== undefined) {
+      updates['BandName'] = val;
+      updates['bandName'] = val;
+    }
+  }
+  if (data.description !== undefined) {
+    const val = validateOptionalString(data.description, 'description', 2000);
+    if (val !== undefined) {
+      updates['Description'] = val;
+      updates['description'] = val;
+    }
+  }
+  if (data.location !== undefined) {
+    const val = validateOptionalString(data.location, 'location', 300);
+    if (val !== undefined) {
+      updates['Location'] = val;
+      updates['location'] = val;
+    }
+  }
+  if (data.genre !== undefined || data.style !== undefined) {
+    const val = validateOptionalString(data.genre || data.style, 'genre', 100);
+    if (val !== undefined) {
+      updates['Style'] = val;
+      updates['style'] = val;
+      updates['genre'] = val;
+    }
+  }
+  if (data.venue !== undefined) {
+    const val = validateOptionalString(data.venue, 'venue', 200);
+    if (val !== undefined) {
+      updates['venue'] = val;
+    }
+  }
+  if (data.date !== undefined) {
+    const val = validateOptionalString(data.date, 'date', 100);
+    if (val !== undefined) {
+      updates['Date'] = val;
+      updates['date'] = val;
+    }
+  }
+  if (data.startTime !== undefined) {
+    const val = validateOptionalString(data.startTime, 'startTime', 50);
+    if (val !== undefined) {
+      updates['StartTime'] = val;
+      updates['startTime'] = val;
+    }
+  }
+  if (data.endTime !== undefined) {
+    const val = validateOptionalString(data.endTime, 'endTime', 50);
+    if (val !== undefined) {
+      updates['EndTime'] = val;
+      updates['endTime'] = val;
+    }
+  }
+  if (data.audioSnippetUrl !== undefined) {
+    const val = validateOptionalString(data.audioSnippetUrl, 'audioSnippetUrl', 2000);
+    if (val !== undefined) updates['audioSnippetUrl'] = val;
+  }
+  if (data.audioSnippetTitle !== undefined) {
+    const val = validateOptionalString(data.audioSnippetTitle, 'audioSnippetTitle', 200);
+    if (val !== undefined) updates['audioSnippetTitle'] = val;
+  }
+  if (data.infoAudioTrack !== undefined) {
+    const val = validateOptionalString(data.infoAudioTrack, 'infoAudioTrack', 1000);
+    if (val !== undefined) updates['infoAudioTrack'] = val;
+  }
+  if (typeof data.latitude === 'number' && Number.isFinite(data.latitude) &&
+      typeof data.longitude === 'number' && Number.isFinite(data.longitude)) {
+    if (data.latitude >= -90 && data.latitude <= 90 && data.longitude >= -180 && data.longitude <= 180) {
+      updates['Latitude'] = data.latitude;
+      updates['latitude'] = data.latitude;
+      updates['Longitude'] = data.longitude;
+      updates['longitude'] = data.longitude;
+    }
+  }
+
+  updates['UpdatedAt'] = Date.now();
+  updates['updatedAt'] = Date.now();
+
+  await pinRef.update(updates);
+
+  console.log(`[updateMapPin] Successfully updated pin ${pinId} for caller ${callerUid}`);
+
+  const updatedSnap = await pinRef.get();
+  return {
+    success: true,
+    id: pinId,
+    pin: updatedSnap.val(),
+  };
+});
+
 // Live Band Audio Broadcasting (SEND-LIVE-01)
 const {
   startLiveBroadcast,
   joinLiveBroadcast,
+  leaveLiveBroadcast,
   stopLiveBroadcast,
 } = require('./live_broadcasts');
 
 exports.startLiveBroadcast = startLiveBroadcast;
 exports.joinLiveBroadcast = joinLiveBroadcast;
+exports.leaveLiveBroadcast = leaveLiveBroadcast;
 exports.stopLiveBroadcast = stopLiveBroadcast;
 exports.KNOWN_FEATURE_IDS = KNOWN_FEATURE_IDS;
 exports.resolveNotificationFeatureId = resolveNotificationFeatureId;

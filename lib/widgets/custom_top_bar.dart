@@ -103,23 +103,7 @@ class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
           child: Stack(
             alignment: Alignment.center,
             children: [
-              Container(
-                width: 20,
-                height: 20,
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: LinearGradient(
-                    colors: [Color(0xFF38BDF8), Color(0xFF0284C7)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                ),
-              ),
-              const Icon(
-                Icons.public_rounded,
-                color: Color(0xFF4ADE80),
-                size: 24,
-              ),
+              const SpinningGlobeIcon(),
             ],
           ),
         ),
@@ -1197,4 +1181,65 @@ class _PulsingNotificationBellState extends State<PulsingNotificationBell>
     ),
   );
 }
+}
+
+
+/// Continuously rotating globe icon for Map View in top navigation bar.
+class SpinningGlobeIcon extends StatefulWidget {
+  const SpinningGlobeIcon({super.key});
+
+  @override
+  State<SpinningGlobeIcon> createState() => _SpinningGlobeIconState();
+}
+
+class _SpinningGlobeIconState extends State<SpinningGlobeIcon> with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 14),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 26,
+      height: 26,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Container(
+            width: 20,
+            height: 20,
+            decoration: const BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                colors: [Color(0xFF38BDF8), Color(0xFF0284C7)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+            ),
+          ),
+          RotationTransition(
+            turns: _controller,
+            child: const Icon(
+              Icons.public_rounded,
+              color: Color(0xFF4ADE80),
+              size: 24,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

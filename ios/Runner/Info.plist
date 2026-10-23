@@ -53,6 +53,8 @@
 	<string>Allow access to photo library to upload instrument images to the marketplace.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Allow access to camera to take photos of your instruments for the marketplace.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Allow access to microphone to broadcast live rehearsals and music sessions.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>We need your location to show nearby rehearsal rooms, musicians, and live proximity audio on the map.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>

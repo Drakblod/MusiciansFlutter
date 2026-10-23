@@ -42,6 +42,10 @@ class LiveKitAudioController {
   final ValueNotifier<bool> isMutedNotifier = ValueNotifier<bool>(false);
   final ValueNotifier<double> volumeNotifier = ValueNotifier<double>(1.0);
   final ValueNotifier<String?> activeSpeakerNotifier = ValueNotifier<String?>(null);
+  final ValueNotifier<bool> hasRemoteAudioTrackNotifier = ValueNotifier<bool>(false);
+  final ValueNotifier<bool> isMicrophonePublishedNotifier = ValueNotifier<bool>(false);
+  final ValueNotifier<bool> audioPlaybackBlockedNotifier = ValueNotifier<bool>(false);
+  final ValueNotifier<int> participantCountNotifier = ValueNotifier<int>(0);
 
   /// Connects as an audio publisher (microphone broadcasting).
   Future<void> connectPublisher(LiveBroadcastSessionToken session) async {
@@ -50,11 +54,23 @@ class LiveKitAudioController {
     }
     await _connectInternal(session);
 
+    // Prefer speakerphone on mobile
+    try {
+      await lk.Hardware.instance.setSpeakerphoneOn(true);
+    } catch (_) {}
+
     // Enable microphone track strictly (audio only)
     try {
-      await _room?.localParticipant?.setMicrophoneEnabled(true);
+      final pub = await _room?.localParticipant?.setMicrophoneEnabled(true);
+      if (pub == null) {
+        throw Exception('Could not publish microphone audio stream. Please check permissions.');
+      }
+      isMicrophonePublishedNotifier.value = true;
+      debugPrint('[LiveKitAudioController] Microphone published successfully: ${pub.sid}');
     } catch (e) {
+      isMicrophonePublishedNotifier.value = false;
       debugPrint('[LiveKitAudioController] Failed to enable microphone: $e');
+      rethrow;
     }
   }
 
@@ -64,6 +80,31 @@ class LiveKitAudioController {
       throw ArgumentError('Session role must be listener, received ${session.role}');
     }
     await _connectInternal(session);
+
+    // Route audio to loudspeaker instead of phone call earpiece on mobile devices
+    try {
+      await lk.Hardware.instance.setSpeakerphoneOn(true);
+    } catch (e) {
+      debugPrint('[LiveKitAudioController] Failed to set speakerphone on: $e');
+    }
+
+    // Unlock browser WebRTC audio autoplay policy
+    try {
+      await _room?.startAudio();
+      audioPlaybackBlockedNotifier.value = false;
+    } catch (e) {
+      debugPrint('[LiveKitAudioController] Failed startAudio: $e');
+    }
+  }
+
+  /// Retries unlocking audio playback if browser blocked autoplay.
+  Future<void> unlockAudioPlayback() async {
+    try {
+      await _room?.startAudio();
+      audioPlaybackBlockedNotifier.value = false;
+    } catch (e) {
+      debugPrint('[LiveKitAudioController] Unlock audio error: $e');
+    }
   }
 
   Future<void> _connectInternal(LiveBroadcastSessionToken session) async {
@@ -92,15 +133,19 @@ class LiveKitAudioController {
       _listener!
         ..on<lk.RoomConnectedEvent>((event) {
           _updateStatus(LiveKitConnectionStatus.connected);
+          _updateParticipantCount();
         })
         ..on<lk.RoomDisconnectedEvent>((event) {
           _updateStatus(LiveKitConnectionStatus.disconnected);
+          hasRemoteAudioTrackNotifier.value = false;
+          _updateParticipantCount();
         })
         ..on<lk.RoomReconnectingEvent>((event) {
           _updateStatus(LiveKitConnectionStatus.reconnecting);
         })
         ..on<lk.RoomReconnectedEvent>((event) {
           _updateStatus(LiveKitConnectionStatus.connected);
+          _updateParticipantCount();
         })
         ..on<lk.ActiveSpeakersChangedEvent>((event) {
           if (event.speakers.isNotEmpty) {
@@ -108,6 +153,39 @@ class LiveKitAudioController {
           } else {
             activeSpeakerNotifier.value = null;
           }
+        })
+        ..on<lk.TrackSubscribedEvent>((event) {
+          if (event.track is lk.RemoteAudioTrack) {
+            debugPrint('[LiveKitAudioController] Remote audio track subscribed: ${event.track.sid}');
+            hasRemoteAudioTrackNotifier.value = true;
+            // Ensure audio is unblocked on web
+            _room?.startAudio();
+          }
+        })
+        ..on<lk.TrackUnsubscribedEvent>((event) {
+          if (event.track is lk.RemoteAudioTrack) {
+            debugPrint('[LiveKitAudioController] Remote audio track unsubscribed: ${event.track.sid}');
+            final hasOther = _room?.remoteParticipants.values
+                .any((p) => p.audioTrackPublications.any((pub) => pub.track != null)) ?? false;
+            hasRemoteAudioTrackNotifier.value = hasOther;
+          }
+        })
+        ..on<lk.AudioPlaybackStatusChanged>((event) async {
+          debugPrint('[LiveKitAudioController] AudioPlaybackStatusChanged isPlaying=${event.isPlaying}');
+          if (!event.isPlaying) {
+            audioPlaybackBlockedNotifier.value = true;
+            try {
+              await _room?.startAudio();
+            } catch (_) {}
+          } else {
+            audioPlaybackBlockedNotifier.value = false;
+          }
+        })
+        ..on<lk.ParticipantConnectedEvent>((event) {
+          _updateParticipantCount();
+        })
+        ..on<lk.ParticipantDisconnectedEvent>((event) {
+          _updateParticipantCount();
         });
 
       await room.connect(
@@ -116,11 +194,17 @@ class LiveKitAudioController {
       );
 
       _updateStatus(LiveKitConnectionStatus.connected);
+      _updateParticipantCount();
     } catch (e) {
       debugPrint('[LiveKitAudioController] Connection error: $e');
       _updateStatus(LiveKitConnectionStatus.failed);
       rethrow;
     }
+  }
+
+  void _updateParticipantCount() {
+    final count = _room?.remoteParticipants.length ?? 0;
+    participantCountNotifier.value = count;
   }
 
   /// Toggles mute state:
@@ -188,6 +272,9 @@ class LiveKitAudioController {
       _currentRole = null;
       _currentRoomName = null;
       _currentBroadcastId = null;
+      hasRemoteAudioTrackNotifier.value = false;
+      isMicrophonePublishedNotifier.value = false;
+      participantCountNotifier.value = 0;
       _updateStatus(LiveKitConnectionStatus.disconnected);
     }
   }
@@ -201,5 +288,9 @@ class LiveKitAudioController {
     isMutedNotifier.dispose();
     volumeNotifier.dispose();
     activeSpeakerNotifier.dispose();
+    hasRemoteAudioTrackNotifier.dispose();
+    isMicrophonePublishedNotifier.dispose();
+    audioPlaybackBlockedNotifier.dispose();
+    participantCountNotifier.dispose();
   }
 }

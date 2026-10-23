@@ -14,6 +14,8 @@ class MapPinDetailsCard extends StatelessWidget {
   final VoidCallback? onClose;
   final String? focusedTargetId;
   final void Function(BuildContext context, String bandId)? onOpenBandProfile;
+  final void Function(SubRequest gig)? onEditPin;
+  final void Function(SubRequest gig)? onDeletePin;
 
   const MapPinDetailsCard({
     super.key,
@@ -22,11 +24,19 @@ class MapPinDetailsCard extends StatelessWidget {
     this.onClose,
     this.focusedTargetId,
     this.onOpenBandProfile,
+    this.onEditPin,
+    this.onDeletePin,
   });
 
   @override
   Widget build(BuildContext context) {
     final details = resolveMapPinDetails(gig);
+    final currentUserId = appState.currentUserId;
+    final isOwner = currentUserId != null &&
+        (gig.creatorUserId == currentUserId ||
+            gig.userId == currentUserId ||
+            gig.extraFields['creatorUserId'] == currentUserId ||
+            gig.extraFields['CreatorUserId'] == currentUserId);
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
@@ -263,6 +273,57 @@ class MapPinDetailsCard extends StatelessWidget {
               AudioSnippetPlayer(
                 audioUrl: details.audioSnippetUrl!,
                 autoPlay: details.id.isNotEmpty && focusedTargetId == details.id,
+              ),
+            ],
+
+            // 7. Owner actions: Edit & Delete Pin
+            if (isOwner && (onEditPin != null || onDeletePin != null)) ...[
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  if (onEditPin != null)
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () => onEditPin!(gig),
+                        icon: const Icon(Icons.edit_rounded, size: 14, color: Color(0xFF60A5FA)),
+                        label: Text(
+                          'Edit Pin',
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: const Color(0xFF60A5FA),
+                          ),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: Color(0xFF60A5FA), width: 1),
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                      ),
+                    ),
+                  if (onEditPin != null && onDeletePin != null)
+                    const SizedBox(width: 8),
+                  if (onDeletePin != null)
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () => onDeletePin!(gig),
+                        icon: const Icon(Icons.delete_outline_rounded, size: 14, color: AppTheme.dangerRed),
+                        label: Text(
+                          'Delete Pin',
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: AppTheme.dangerRed,
+                          ),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          side: BorderSide(color: AppTheme.dangerRed.withOpacity(0.7), width: 1),
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                      ),
+                    ),
+                ],
               ),
             ],
           ],

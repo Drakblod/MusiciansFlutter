@@ -178,6 +178,47 @@ class LiveListenerSheet extends StatelessWidget {
               ),
               child: Column(
                 children: [
+                  ValueListenableBuilder<bool>(
+                    valueListenable: audioController.audioPlaybackBlockedNotifier,
+                    builder: (context, isBlocked, _) {
+                      if (isBlocked) {
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(backgroundColor: AppTheme.warningYellow),
+                              onPressed: () => audioController.unlockAudioPlayback(),
+                              icon: const Icon(Icons.volume_up_rounded, color: Colors.black87),
+                              label: Text(
+                                'Tap to Unmute Audio',
+                                style: GoogleFonts.inter(color: Colors.black87, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ),
+                        );
+                      }
+                      return ValueListenableBuilder<bool>(
+                        valueListenable: audioController.hasRemoteAudioTrackNotifier,
+                        builder: (context, hasAudio, _) {
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.circle, size: 8, color: hasAudio ? AppTheme.success : Colors.white38),
+                                const SizedBox(width: 6),
+                                Text(
+                                  hasAudio ? 'Live Audio Stream Connected' : 'Waiting for audio stream...',
+                                  style: GoogleFonts.inter(fontSize: 12, color: hasAudio ? AppTheme.success : Colors.white60),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  ),
                   Row(
                     children: [
                       ValueListenableBuilder<bool>(

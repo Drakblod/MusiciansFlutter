@@ -17,6 +17,7 @@ import '../models/user_profile.dart';
 import '../config/feature_flags.dart';
 import '../models/mock_live_rehearsal.dart';
 import '../data/mock_live_rehearsals.dart';
+import '../data/stockholm_demo_pins.dart';
 import '../data/genres_taxonomy.dart';
 import '../data/skills_taxonomy.dart';
 import '../services/mock_rehearsal_audio_controller.dart';
@@ -34,6 +35,7 @@ import '../services/livekit_audio_controller.dart';
 import '../widgets/start_live_broadcast_dialog.dart';
 import '../widgets/live_broadcaster_bar.dart';
 import '../widgets/live_listener_sheet.dart';
+import '../widgets/live_listener_bar.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 enum MapCategory {
@@ -171,21 +173,21 @@ class MapEventTypeHelper {
     final canvas = Canvas(pictureRecorder);
 
     // Canvas size (2x resolution for retina / crisp display)
-    const double canvasWidth = 68.0;
-    const double canvasHeight = 92.0;
+    const double canvasWidth = 56.0;
+    const double canvasHeight = 74.0;
 
     // Egg-shaped notehead center in canvas
-    const double headCenterX = 24.0;
-    const double headCenterY = 66.0;
-    const double headRadiusX = 14.5; // Egg width radius
-    const double headRadiusY = 10.0; // Egg height radius
-    const double tiltAngle = -22.0 * (math.pi / 180.0); // Tilted ~ -22°
+    const double headCenterX = 18.0;
+    const double headCenterY = 53.0;
+    const double headRadiusX = 11.5; // Thinner notehead
+    const double headRadiusY = 8.0; // Thinner notehead
+    const double tiltAngle = -24.0 * (math.pi / 180.0); // Tilted ~ -24°
 
-    // Stem: vertical shaft rising from right edge of notehead
-    const double stemX = headCenterX + 11.2;
-    const double stemTopY = 14.0;
-    const double stemBottomY = headCenterY + 2.0;
-    const double stemWidth = 3.6;
+    // Stem: thinner vertical shaft rising from right edge of notehead
+    const double stemX = headCenterX + 9.2;
+    const double stemTopY = 10.0;
+    const double stemBottomY = headCenterY + 1.5;
+    const double stemWidth = 2.2; // Thinner skaft (was 3.6)
 
     final noteColor = color.withValues(alpha: opacity);
 
@@ -228,7 +230,7 @@ class MapEventTypeHelper {
     final outlinePaint = Paint()
       ..color = Colors.black.withValues(alpha: 0.40 * opacity)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.4;
+      ..strokeWidth = 0.9;
 
     final notePaint = Paint()
       ..color = noteColor
@@ -258,12 +260,12 @@ class MapEventTypeHelper {
       canvas.drawOval(outerHeadRect, outlinePaint);
       canvas.drawOval(outerHeadRect, notePaint);
 
-      // Inner cutout: tilted steeper (-18 deg relative to note angle)
-      canvas.rotate(-18.0 * (math.pi / 180.0));
+      // Inner cutout: calligraphically wider horizontally so top/bottom ring lines are thicker than left/right
+      canvas.rotate(-16.0 * (math.pi / 180.0));
       final innerHeadRect = Rect.fromCenter(
         center: Offset.zero,
-        width: headRadiusX * 1.08,
-        height: headRadiusY * 0.70,
+        width: headRadiusX * 1.35,
+        height: headRadiusY * 0.65,
       );
 
       final clearPaint = Paint()..blendMode = BlendMode.clear;
@@ -282,8 +284,8 @@ class MapEventTypeHelper {
     final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
     final bytes = byteData!.buffer.asUint8List();
 
-    // Rendered on map at 34x46 points
-    return BitmapDescriptor.bytes(bytes, width: 34, height: 46);
+    // Rendered on map at 28x37 points
+    return BitmapDescriptor.bytes(bytes, width: 28, height: 37);
   }
 
   static Future<BitmapDescriptor> createWebPinBitmap(Color color) async {
@@ -528,6 +530,76 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
   {
     "featureType": "road",
     "elementType": "labels",
+    "stylers": [
+      {
+        "visibility": "off"
+      }
+    ]
+  },
+  {
+    "featureType": "road",
+    "elementType": "labels.icon",
+    "stylers": [
+      {
+        "visibility": "off"
+      }
+    ]
+  },
+  {
+    "featureType": "road.highway",
+    "elementType": "labels",
+    "stylers": [
+      {
+        "visibility": "off"
+      }
+    ]
+  },
+  {
+    "featureType": "road.highway",
+    "elementType": "labels",
+    "stylers": [
+      {
+        "visibility": "off"
+      }
+    ]
+  },
+  {
+    "featureType": "road.highway",
+    "elementType": "labels.icon",
+    "stylers": [
+      {
+        "visibility": "off"
+      }
+    ]
+  },
+  {
+    "featureType": "road.arterial",
+    "elementType": "labels.icon",
+    "stylers": [
+      {
+        "visibility": "off"
+      }
+    ]
+  },
+  {
+    "featureType": "transit",
+    "stylers": [
+      {
+        "visibility": "off"
+      }
+    ]
+  },
+  {
+    "featureType": "road.arterial",
+    "elementType": "labels.icon",
+    "stylers": [
+      {
+        "visibility": "off"
+      }
+    ]
+  },
+  {
+    "featureType": "transit",
     "stylers": [
       {
         "visibility": "off"
@@ -1030,6 +1102,9 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
       _liveBroadcastsSubscription?.cancel();
       if (_liveKitAudioController != null) {
         if (_liveKitAudioController!.isListener || _currentlyListeningBroadcast != null) {
+          if (_currentlyListeningBroadcast != null) {
+            _liveBroadcastService?.leaveLiveBroadcast(broadcastId: _currentlyListeningBroadcast!.id);
+          }
           _liveKitAudioController!.disconnect();
           _currentlyListeningBroadcast = null;
         }
@@ -1695,7 +1770,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
         markerId: MarkerId(gig.canonicalTargetId ?? UniqueKey().toString()),
         position: LatLng(gig.latitude!, gig.longitude!),
         icon: _getMarkerColor(gig),
-        anchor: const Offset(0.353, 0.717),
+        anchor: const Offset(0.321, 0.716),
         infoWindow: InfoWindow(
           title: title,
           snippet: '$standardizedType · ${gig.location ?? ""}',
@@ -1727,7 +1802,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
             markerId: MarkerId('real_live_${broadcast.id}'),
             position: LatLng(broadcast.latitude, broadcast.longitude),
             icon: _getNoteDescriptor(MapEventType.gigConcert),
-            anchor: const Offset(0.353, 0.717),
+            anchor: const Offset(0.321, 0.716),
             infoWindow: InfoWindow(
               title: '🔴 LIVE: ${broadcast.bandName}',
               snippet: '${broadcast.title} · ${broadcast.listenerCount} listeners',
@@ -1750,7 +1825,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
         markerId: MarkerId(rehearsal.id),
         position: rehearsal.position,
         icon: _getNoteDescriptor(MapEventType.rehearsal, isLive: isLive),
-        anchor: const Offset(0.353, 0.717),
+        anchor: const Offset(0.321, 0.716),
         infoWindow: InfoWindow(
           title: rehearsal.genre.isNotEmpty ? '${rehearsal.bandName} - ${rehearsal.genre}' : rehearsal.bandName,
           snippet: 'Rehearsal · ${rehearsal.city}',
@@ -2037,7 +2112,9 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
         }
       },
       onStopListening: () async {
+        final bId = broadcast.id;
         await _liveKitAudioController?.disconnect();
+        await _liveBroadcastService?.leaveLiveBroadcast(broadcastId: bId);
         if (mounted) {
           setState(() {
             _currentlyListeningBroadcast = null;
@@ -2047,21 +2124,161 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
     );
   }
 
-  void _showUploadEventSheet() {
-    String selectedCategory = 'Music';
-    String selectedType = 'Gig / Concert';
-    List<String> selectedGenres = ['Big Band Contemporary'];
-    DateTime selectedDate = DateTime.now().add(const Duration(days: 7));
+  bool get _hasStockholmDemoPins => _allGigs.any((g) => g.extraFields['isDemoStockholm'] == true);
+
+  void _loadStockholmDemoPins() {
+    final appState = Provider.of<AppState>(context, listen: false);
+    final myUid = appState.currentUserId ?? 'demo_user';
+    final demoPins = getStockholmDemoPins(myUid);
+
+    setState(() {
+      _allGigs.removeWhere((g) => g.extraFields['isDemoStockholm'] == true);
+      _allGigs.insertAll(0, demoPins);
+      if (demoPins.isNotEmpty) {
+        _selectedGig = demoPins.first;
+        _focusedTargetId = demoPins.first.canonicalTargetId;
+      }
+    });
+
+    _mapController?.animateCamera(
+      CameraUpdate.newLatLngZoom(const LatLng(59.3293, 18.0686), 13.0),
+    );
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('20 Stockholm demo pins loaded! Tap "Clear Sthlm Pins" anytime to remove.'),
+        backgroundColor: AppTheme.success,
+      ),
+    );
+  }
+
+  void _clearStockholmDemoPins() {
+    setState(() {
+      _allGigs.removeWhere((g) => g.extraFields['isDemoStockholm'] == true);
+      if (_selectedGig?.extraFields['isDemoStockholm'] == true) {
+        _selectedGig = null;
+        _focusedTargetId = null;
+      }
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('All Stockholm demo pins removed cleanly.'),
+        backgroundColor: Colors.blueGrey,
+      ),
+    );
+  }
+
+  void _confirmDeletePin(SubRequest pin) {
+    final appState = Provider.of<AppState>(context, listen: false);
+    final pinId = pin.canonicalTargetId ?? pin.id;
+    if (pinId == null || pinId.isEmpty) return;
+
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        backgroundColor: const Color(0xFF0F0C20),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: Color(0xFF2E2A4E)),
+        ),
+        title: Text(
+          'Delete Map Pin',
+          style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
+        content: Text(
+          'Are you sure you want to delete this map pin? This action cannot be undone.',
+          style: GoogleFonts.inter(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx),
+            child: Text('Cancel', style: GoogleFonts.inter(color: Colors.white60)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.dangerRed,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () async {
+              Navigator.pop(dialogCtx);
+              try {
+                final myUid = appState.currentUserId ?? '';
+                final ok = await appState.firebaseService.deleteSubRequestAsync(myUid, pinId);
+                if (ok && mounted) {
+                  setState(() {
+                    _allGigs.removeWhere((g) => g.canonicalTargetId == pinId || g.id == pinId);
+                    if (_selectedGig?.canonicalTargetId == pinId || _selectedGig?.id == pinId) {
+                      _selectedGig = null;
+                      _focusedTargetId = null;
+                    }
+                  });
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Map pin deleted successfully.'),
+                      backgroundColor: AppTheme.success,
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Failed to delete pin: $e'),
+                      backgroundColor: Colors.redAccent,
+                    ),
+                  );
+                }
+              }
+            },
+            child: Text('Delete', style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showUploadEventSheet({SubRequest? editingPin}) {
+    final isEditing = editingPin != null;
+    String selectedCategory = editingPin?.extraFields['subCategory']?.toString() ?? 'Music';
+    String selectedType = editingPin?.requestType ?? (selectedCategory == 'Music' ? 'Gig / Concert' : 'Substitute');
+    List<String> selectedGenres = [
+      editingPin?.extraFields['genre']?.toString() ?? editingPin?.style ?? 'Big Band Contemporary'
+    ];
+    DateTime selectedDate = editingPin?.date != null
+        ? (DateTime.tryParse(editingPin!.date!) ?? DateTime.now().add(const Duration(days: 7)))
+        : DateTime.now().add(const Duration(days: 7));
     TimeOfDay selectedStartTime = const TimeOfDay(hour: 18, minute: 0);
     TimeOfDay selectedEndTime = const TimeOfDay(hour: 21, minute: 0);
-    final bandNameController = TextEditingController();
-    final venueController = TextEditingController();
-    final locationController = TextEditingController();
-    final descriptionController = TextEditingController();
-    final audioTrackController = TextEditingController();
-    final infoAudioTrackController = TextEditingController();
+    if (editingPin?.startTime != null) {
+      final parts = editingPin!.startTime!.split(':');
+      if (parts.length >= 2) {
+        final h = int.tryParse(parts[0]);
+        final m = int.tryParse(parts[1]);
+        if (h != null && m != null) selectedStartTime = TimeOfDay(hour: h, minute: m);
+      }
+    }
+    if (editingPin?.endTime != null) {
+      final parts = editingPin!.endTime!.split(':');
+      if (parts.length >= 2) {
+        final h = int.tryParse(parts[0]);
+        final m = int.tryParse(parts[1]);
+        if (h != null && m != null) selectedEndTime = TimeOfDay(hour: h, minute: m);
+      }
+    }
+
+    final bandNameController = TextEditingController(text: editingPin?.bandName ?? '');
+    final venueController = TextEditingController(text: editingPin?.extraFields['venue']?.toString() ?? '');
+    final locationController = TextEditingController(text: editingPin?.location ?? '');
+    final descriptionController = TextEditingController(text: editingPin?.description ?? '');
+    final audioTrackController = TextEditingController(
+      text: editingPin?.extraFields['audioSnippetTitle']?.toString() ??
+          editingPin?.extraFields['infoAudioTrack']?.toString() ??
+          '',
+    );
     PlatformFile? pickedAudioFile;
     bool isPublishing = false;
+    String? uploadErrorMessage;
 
     showModalBottomSheet(
       context: context,
@@ -2114,7 +2331,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    'Post a pin to Map View and attach an audio track for other musicians and audiences to discover.',
+                    isEditing ? 'Update pin details, venue or audio track info.' : 'Post a pin to Map View and attach an audio track for other musicians and audiences to discover.',
                     style: GoogleFonts.inter(fontSize: 12, color: Colors.white70),
                   ),
                   const SizedBox(height: 16),
@@ -2244,8 +2461,8 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                     controller: venueController,
                     style: GoogleFonts.inter(fontSize: 13, color: Colors.white),
                     decoration: InputDecoration(
-                      labelText: 'Venue / Spelställe (e.g. Fasching, Stampen)',
-                      hintText: 'e.g. Fasching, Stampen, Nefertiti',
+                      labelText: 'Venue (e.g. Ronnie Scott\'s, Blue Note)',
+                      hintText: 'e.g. Ronnie Scott\'s, Blue Note, Village Vanguard',
                       hintStyle: GoogleFonts.inter(fontSize: 12, color: Colors.white38),
                       labelStyle: GoogleFonts.inter(fontSize: 12, color: Colors.white60),
                       filled: true,
@@ -2275,8 +2492,9 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                     controller: locationController,
                     style: GoogleFonts.inter(fontSize: 13, color: Colors.white),
                     decoration: InputDecoration(
-                      labelText: 'Map View Pin Location (Street, City, Country)',
-                      hintText: 'e.g. Kungsgatan 44, Stockholm, Sweden',
+                      labelText: 'Street Address (Optional)',
+                      hintText: 'e.g. 123 Main Street, Stockholm (or leave blank)',
+                      helperText: 'Optional. Leave blank to place the pin at crosshair map centre.',
                       hintStyle: GoogleFonts.inter(fontSize: 12, color: Colors.white38),
                       labelStyle: GoogleFonts.inter(fontSize: 12, color: Colors.white60),
                       filled: true,
@@ -2362,7 +2580,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
                                       Text(
-                                        'Start (Från tid)',
+                                        'Start Time',
                                         style: GoogleFonts.inter(fontSize: 10, color: Colors.white54),
                                       ),
                                       const SizedBox(height: 2),
@@ -2410,7 +2628,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
                                       Text(
-                                        'End (Till tid)',
+                                        'End Time',
                                         style: GoogleFonts.inter(fontSize: 10, color: Colors.white54),
                                       ),
                                       const SizedBox(height: 2),
@@ -2438,25 +2656,8 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                     controller: audioTrackController,
                     style: GoogleFonts.inter(fontSize: 13, color: Colors.white),
                     decoration: InputDecoration(
-                      labelText: 'Title',
-                      hintText: 'Track name or audio URL (e.g. Sommarkonsert Demo)',
-                      hintStyle: GoogleFonts.inter(fontSize: 12, color: Colors.white38),
-                      labelStyle: GoogleFonts.inter(fontSize: 12, color: Colors.white60),
-                      filled: true,
-                      fillColor: const Color(0xFF1A1633),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-
-                  // Info Audio Track (Fritext)
-                  TextField(
-                    controller: infoAudioTrackController,
-                    maxLines: 2,
-                    style: GoogleFonts.inter(fontSize: 13, color: Colors.white),
-                    decoration: InputDecoration(
-                      labelText: 'Info',
-                      hintText: 'e.g. Recorded live at Fasching with rough horn mix',
+                      labelText: 'Audio Track info (title + info)',
+                      hintText: 'e.g. Live at Montreux, rough horn mix',
                       hintStyle: GoogleFonts.inter(fontSize: 12, color: Colors.white38),
                       labelStyle: GoogleFonts.inter(fontSize: 12, color: Colors.white60),
                       filled: true,
@@ -2552,6 +2753,32 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                   ),
                   const SizedBox(height: 18),
 
+                  // In-modal error banner (visible inside sheet)
+                  if (uploadErrorMessage != null) ...[
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: AppTheme.dangerRed.withOpacity(0.18),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: AppTheme.dangerRed.withOpacity(0.55)),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(Icons.error_outline_rounded, color: AppTheme.dangerRed, size: 18),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              uploadErrorMessage!,
+                              style: GoogleFonts.inter(fontSize: 11.5, color: Colors.white, height: 1.3),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+
                   // Publish Button
                   SizedBox(
                     width: double.infinity,
@@ -2576,15 +2803,10 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                                 final geocoded = await _geocodeAddress(addressText);
                                 if (geocoded == null || !_isValidCoordinate(geocoded.latitude, geocoded.longitude)) {
                                   if (ctx.mounted) {
-                                    setSheetState(() => isPublishing = false);
-                                  }
-                                  if (context.mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text('Could not resolve the entered address. Please check spelling or leave blank to pin at map center.'),
-                                        backgroundColor: Colors.redAccent,
-                                      ),
-                                    );
+                                    setSheetState(() {
+                                      isPublishing = false;
+                                      uploadErrorMessage = 'Could not resolve the entered address. Please check spelling or leave blank to pin at map centre.';
+                                    });
                                   }
                                   return;
                                 }
@@ -2637,15 +2859,10 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                                 } catch (e) {
                                   debugPrint('[UploadPin] Storage upload failed: $e');
                                   if (ctx.mounted) {
-                                    setSheetState(() => isPublishing = false);
-                                  }
-                                  if (context.mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text('Failed to upload audio: $e'),
-                                        backgroundColor: Colors.redAccent,
-                                      ),
-                                    );
+                                    setSheetState(() {
+                                      isPublishing = false;
+                                      uploadErrorMessage = 'Failed to upload audio file: $e';
+                                    });
                                   }
                                   return;
                                 }
@@ -2688,7 +2905,14 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
 
                               SubRequest publishedGig;
                               try {
-                                if (isStaffingSearch) {
+                                if (isEditing) {
+                                  final pinId = editingPin.canonicalTargetId ?? editingPin.id;
+                                  final updateDraft = draftGig.copyWith(
+                                    id: pinId,
+                                    subRequestId: pinId,
+                                  );
+                                  publishedGig = await appState.firebaseService.updateMapPinAsync(updateDraft);
+                                } else if (isStaffingSearch) {
                                   final savedKey = await appState.firebaseService.saveSubRequestAsync(draftGig);
                                   if (savedKey == null || savedKey.isEmpty) {
                                     throw Exception('Database write did not return a valid key.');
@@ -2703,15 +2927,10 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                               } catch (e) {
                                 debugPrint('[UploadPin] Database write failed: $e');
                                 if (ctx.mounted) {
-                                  setSheetState(() => isPublishing = false);
-                                }
-                                if (context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text('Failed to publish pin: $e'),
-                                      backgroundColor: Colors.redAccent,
-                                    ),
-                                  );
+                                  setSheetState(() {
+                                    isPublishing = false;
+                                    uploadErrorMessage = 'Failed to save pin: $e';
+                                  });
                                 }
                                 return;
                               }
@@ -2757,7 +2976,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                               child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                             )
                           : Text(
-                              'Publish Map View Pin / Audio',
+                              isEditing ? 'Save Changes' : 'Publish Map View Pin / Audio',
                               style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
                             ),
                     ),
@@ -2858,6 +3077,29 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                       audioController: _liveKitAudioController!,
                       onStopBroadcast: _stopPublishingBroadcast,
                       margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                    ),
+
+                  // Listener sticky bar (when local user is tuned into a live stream)
+                  if (_currentlyListeningBroadcast != null && _liveKitAudioController != null)
+                    LiveListenerBar(
+                      broadcast: _currentlyListeningBroadcast!,
+                      audioController: _liveKitAudioController!,
+                      margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                      onLeave: () async {
+                        final bId = _currentlyListeningBroadcast!.id;
+                        await _liveKitAudioController?.disconnect();
+                        await _liveBroadcastService?.leaveLiveBroadcast(broadcastId: bId);
+                        if (mounted) {
+                          setState(() {
+                            _currentlyListeningBroadcast = null;
+                          });
+                        }
+                      },
+                      onTap: () {
+                        if (_currentlyListeningBroadcast != null) {
+                          _showLiveBroadcastDetails(_currentlyListeningBroadcast!);
+                        }
+                      },
                     ),
 
                   // Row 1 (TOP): Clickable "What is Map View?" Box
@@ -3000,14 +3242,18 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                 bottom: 20,
                 left: 16,
                 right: 16,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _buildLiveAudioBar(isDocked: true),
-                    const SizedBox(height: 8),
-                    _buildRehearsalBottomCardContent(_selectedRehearsal!),
-                  ],
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () {},
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _buildLiveAudioBar(isDocked: true),
+                      const SizedBox(height: 8),
+                      _buildRehearsalBottomCardContent(_selectedRehearsal!),
+                    ],
+                  ),
                 ),
               ),
 
@@ -3090,6 +3336,54 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                         ),
                       ),
                     ],
+                    const SizedBox(width: 8),
+                    // 20 Stockholm Demo Pins Quick Loader / Clearer
+                    GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: _hasStockholmDemoPins ? _clearStockholmDemoPins : _loadStockholmDemoPins,
+                      child: Container(
+                        height: 38,
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        decoration: BoxDecoration(
+                          color: _hasStockholmDemoPins
+                              ? AppTheme.dangerRed.withOpacity(0.25)
+                              : const Color(0xFF1A1633),
+                          borderRadius: BorderRadius.circular(19),
+                          border: Border.all(
+                            color: _hasStockholmDemoPins
+                                ? AppTheme.dangerRed.withOpacity(0.7)
+                                : const Color(0xFF38BDF8),
+                            width: 1.2,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: (_hasStockholmDemoPins ? AppTheme.dangerRed : const Color(0xFF38BDF8)).withOpacity(0.2),
+                              blurRadius: 6,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              _hasStockholmDemoPins ? Icons.delete_sweep_rounded : Icons.location_city_rounded,
+                              size: 15,
+                              color: _hasStockholmDemoPins ? AppTheme.dangerRed : const Color(0xFF38BDF8),
+                            ),
+                            const SizedBox(width: 5),
+                            Text(
+                              _hasStockholmDemoPins ? 'Clear Sthlm Pins' : '20 Sthlm Pins',
+                              style: GoogleFonts.inter(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -3290,6 +3584,9 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                     GestureDetector(
                       behavior: HitTestBehavior.opaque,
                       onTap: () {
+                        setState(() {
+                          _isAutoSelected = false;
+                        });
                         _audioController?.toggleAudioPower();
                       },
                       child: Container(
@@ -3334,6 +3631,9 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                       onTap: isStopped
                           ? null
                           : () {
+                              setState(() {
+                                _isAutoSelected = false;
+                              });
                               _audioController?.toggleMute();
                             },
                       child: Container(
@@ -3411,6 +3711,12 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
           context: ctx,
           bandId: bandId,
         );
+      },
+      onEditPin: (pin) {
+        _showUploadEventSheet(editingPin: pin);
+      },
+      onDeletePin: (pin) {
+        _confirmDeletePin(pin);
       },
     );
   }

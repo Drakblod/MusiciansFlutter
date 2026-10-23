@@ -186,11 +186,6 @@ const joinLiveBroadcast = onCall({ region: 'europe-west1' }, async (request) => 
     throw new HttpsError('failed-precondition', 'This live broadcast is no longer active.');
   }
 
-  // Increment listener count
-  await db.ref(`/LiveBroadcasts/${broadcastId}/listenerCount`).transaction((count) => {
-    return (count || 0) + 1;
-  });
-
   // Resolve listener user name
   let userName = 'Listener';
   const userSnap = await db.ref(`/users/${callerUid}`).once('value');
@@ -198,6 +193,17 @@ const joinLiveBroadcast = onCall({ region: 'europe-west1' }, async (request) => 
     const uVal = userSnap.val() || {};
     userName = uVal.name || uVal.username || 'Listener';
   }
+
+  // Register unique active listener and update authoritative listener count
+  const now = Date.now();
+  await db.ref(`/LiveBroadcasts/${broadcastId}/activeListeners/${callerUid}`).set({
+    joinedAt: now,
+    userName,
+  });
+
+  const listenersSnap = await db.ref(`/LiveBroadcasts/${broadcastId}/activeListeners`).once('value');
+  const activeCount = listenersSnap.exists() ? Object.keys(listenersSnap.val() || {}).length : 1;
+  await db.ref(`/LiveBroadcasts/${broadcastId}/listenerCount`).set(activeCount);
 
   const roomName = bVal.livekitRoomName || `room_${broadcastId}`;
   const tokenResult = createAuthoritativeLiveKitToken({
@@ -213,6 +219,38 @@ const joinLiveBroadcast = onCall({ region: 'europe-west1' }, async (request) => 
     token: tokenResult.token,
     serverUrl: tokenResult.serverUrl,
     role: 'listener',
+    listenerCount: activeCount,
+  };
+});
+
+/**
+ * Callable: leaveLiveBroadcast
+ *
+ * Authoritatively removes caller from activeListeners and updates listener count.
+ */
+const leaveLiveBroadcast = onCall({ region: 'europe-west1' }, async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'User must be signed in to leave a live broadcast.');
+  }
+
+  const callerUid = request.auth.uid;
+  const { broadcastId } = request.data || {};
+
+  if (!broadcastId || typeof broadcastId !== 'string') {
+    throw new HttpsError('invalid-argument', 'Valid broadcastId is required.');
+  }
+
+  const db = admin.database();
+  await db.ref(`/LiveBroadcasts/${broadcastId}/activeListeners/${callerUid}`).remove();
+
+  const listenersSnap = await db.ref(`/LiveBroadcasts/${broadcastId}/activeListeners`).once('value');
+  const activeCount = listenersSnap.exists() ? Object.keys(listenersSnap.val() || {}).length : 0;
+  await db.ref(`/LiveBroadcasts/${broadcastId}/listenerCount`).set(activeCount);
+
+  return {
+    success: true,
+    broadcastId,
+    activeCount,
   };
 });
 
@@ -268,6 +306,8 @@ const stopLiveBroadcast = onCall({ region: 'europe-west1' }, async (request) => 
   await db.ref(`/LiveBroadcasts/${broadcastId}`).update({
     status: 'ended',
     endedAt: now,
+    listenerCount: 0,
+    activeListeners: null,
   });
 
   return {
@@ -281,6 +321,7 @@ const stopLiveBroadcast = onCall({ region: 'europe-west1' }, async (request) => 
 module.exports = {
   startLiveBroadcast,
   joinLiveBroadcast,
+  leaveLiveBroadcast,
   stopLiveBroadcast,
   createAuthoritativeLiveKitToken,
 };

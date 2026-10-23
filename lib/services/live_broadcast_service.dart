@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'dart:async';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_database/firebase_database.dart';
@@ -54,6 +55,11 @@ abstract class ILiveBroadcastService {
 
   /// Request a subscriber-only listener token to join an ongoing broadcast.
   Future<LiveBroadcastSessionToken> joinLiveBroadcast({
+    required String broadcastId,
+  });
+
+  /// Authoritatively leaves an ongoing live broadcast.
+  Future<void> leaveLiveBroadcast({
     required String broadcastId,
   });
 
@@ -120,6 +126,20 @@ class LiveBroadcastService implements ILiveBroadcastService {
 
     final data = response.data;
     return LiveBroadcastSessionToken.fromMap(data);
+  }
+
+  @override
+  Future<void> leaveLiveBroadcast({
+    required String broadcastId,
+  }) async {
+    try {
+      final callable = _functions.httpsCallable('leaveLiveBroadcast');
+      await callable.call<void>({
+        'broadcastId': broadcastId,
+      });
+    } catch (e) {
+      debugPrint('[LiveBroadcastService] Error leaving live broadcast: $e');
+    }
   }
 
   @override

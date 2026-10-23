@@ -629,6 +629,43 @@ class FirebaseService {
     }
   }
 
+  /// Updates an ordinary Map View music pin via server-owned callable updateMapPin.
+  Future<SubRequest> updateMapPinAsync(SubRequest pin) async {
+    final pinId = pin.canonicalTargetId ?? pin.id;
+    if (pinId == null || pinId.isEmpty) {
+      throw Exception('Valid pin id is required to update a map pin.');
+    }
+
+    final payload = <String, dynamic>{
+      'id': pinId,
+      if (pin.latitude != null) 'latitude': pin.latitude,
+      if (pin.longitude != null) 'longitude': pin.longitude,
+      if (pin.location != null) 'location': pin.location,
+      if (pin.date != null) 'date': pin.date,
+      if (pin.startTime != null) 'startTime': pin.startTime,
+      if (pin.endTime != null) 'endTime': pin.endTime,
+      if (pin.description != null) 'description': pin.description,
+      if (pin.bandName != null) 'bandName': pin.bandName,
+      if (pin.style != null) 'style': pin.style,
+      if (pin.extraFields['genre'] != null) 'genre': pin.extraFields['genre'],
+      if (pin.extraFields['venue'] != null) 'venue': pin.extraFields['venue'],
+      if (pin.audioSnippetUrl != null) 'audioSnippetUrl': pin.audioSnippetUrl,
+      if (pin.audioSnippetTitle != null) 'audioSnippetTitle': pin.audioSnippetTitle,
+      if (pin.extraFields['infoAudioTrack'] != null) 'infoAudioTrack': pin.extraFields['infoAudioTrack'],
+    };
+
+    try {
+      final callable = _functions.httpsCallable('updateMapPin');
+      final result = await callable.call(payload);
+      final resData = result.data is Map ? Map<dynamic, dynamic>.from(result.data as Map) : <dynamic, dynamic>{};
+      final pinPayload = resData['pin'] is Map ? Map<dynamic, dynamic>.from(resData['pin'] as Map) : <dynamic, dynamic>{};
+      return SubRequest.fromJson(pinPayload, pinId);
+    } catch (e) {
+      debugPrint('[FirebaseService] Error updating Map Pin via updateMapPin: $e');
+      rethrow;
+    }
+  }
+
   Future<List<SubRequest>> getUserSubRequestFeedAsync() async {
     final selfId = currentUserId;
     if (selfId == null) return [];
