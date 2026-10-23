@@ -2842,7 +2842,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                               if (selectedType == 'Paid Gigs') mappedType = 'paid';
 
                               final audioText = audioTrackController.text.trim();
-                              final audioInfo = infoAudioTrackController.text.trim();
+                              final audioInfo = audioText;
 
                               String? audioUrl;
                               if (pickedAudioFile != null) {
