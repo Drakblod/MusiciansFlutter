@@ -50,12 +50,14 @@ class EventDetailsPage extends StatefulWidget {
   final String bandId;
   final String eventId;
   final BandEvent initialEvent;
+  final bool? isFromNewEvents;
 
   const EventDetailsPage({
     super.key,
     required this.bandId,
     required this.eventId,
     required this.initialEvent,
+    this.isFromNewEvents,
   });
 
   @override
@@ -71,6 +73,7 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
   Map<String, UserProfile> _cachedProfiles = {};
   bool _isLoadingMembers = true;
   String? _currentUserRole;
+  bool _isDescriptionExpanded = false;
 
   // Sequential RSVP state
   int? _expandedEventIndex;
@@ -537,6 +540,7 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
     final endLocal = DateTime.tryParse(event.endDateTime)?.toLocal() ?? startLocal;
     final isEventPast = endLocal != null ? endLocal.isBefore(DateTime.now()) : (startLocal != null && startLocal.isBefore(DateTime.now()));
     final isRsvpDisabled = event.isLocked || isEventPast;
+    final isNewEvent = widget.isFromNewEvents ?? (!isEventPast && event.requireResponse && !event.isLocked);
 
     final appState = Provider.of<AppState>(context);
     final currentUserId = appState.currentUserId;
@@ -663,11 +667,11 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    '"${event.title}"',
+                    '”${event.title}”',
                     style: GoogleFonts.outfit(
                       fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white.withOpacity(0.7),
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white70,
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -699,10 +703,81 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                     ),
                   ],
                   if (event.description.isNotEmpty) ...[
-                    const SizedBox(height: 10),
-                    Text(
-                      event.description,
-                      style: GoogleFonts.inter(fontSize: 13, color: AppTheme.textSecondary, height: 1.4),
+                    const SizedBox(height: 14),
+                    const Divider(height: 1, color: Color(0xFF2E2A4E)),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Text(
+                          'FULL EVENT DESCRIPTION',
+                          style: GoogleFonts.outfit(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: AppTheme.primaryAccent,
+                            letterSpacing: 0.8,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            '(for ALL parts of Main Event)',
+                            style: GoogleFonts.inter(
+                              fontSize: 11,
+                              color: AppTheme.textSecondary,
+                              fontStyle: FontStyle.italic,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    InkWell(
+                      borderRadius: BorderRadius.circular(8),
+                      onTap: () {
+                        setState(() {
+                          _isDescriptionExpanded = !_isDescriptionExpanded;
+                        });
+                      },
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            event.description,
+                            style: GoogleFonts.inter(
+                              fontSize: 13,
+                              color: Colors.white.withOpacity(0.85),
+                              height: 1.45,
+                            ),
+                            maxLines: _isDescriptionExpanded ? null : 4,
+                            overflow: _isDescriptionExpanded ? TextOverflow.visible : TextOverflow.ellipsis,
+                          ),
+                          if (event.description.length > 160) ...[
+                            const SizedBox(height: 6),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  _isDescriptionExpanded ? 'Show less' : 'Show more...',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppTheme.primaryAccent,
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                Icon(
+                                  _isDescriptionExpanded
+                                      ? Icons.keyboard_arrow_up_rounded
+                                      : Icons.keyboard_arrow_down_rounded,
+                                  size: 16,
+                                  color: AppTheme.primaryAccent,
+                                ),
+                              ],
+                            ),
+                          ],
+                        ],
+                      ),
                     ),
                   ],
                 ],
@@ -933,7 +1008,7 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                 }),
               ] else ...[
                 // Multi-Event Sequential RSVP Accordion
-                if (allEventsAnswered) ...[
+                if (allEventsAnswered && !isNewEvent) ...[
                   Container(
                     margin: const EdgeInsets.only(bottom: 16),
                     padding: const EdgeInsets.all(14),
@@ -1654,8 +1729,8 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
               ),
             ],
 
-            // Open Event Chat (Single Button Near Bottom)
-            if (event.temporaryRoomId != null && event.temporaryRoomId!.isNotEmpty) ...[
+            // Open Event Chat (Single Button Near Bottom - Hidden for Past Events)
+            if (!isEventPast && event.temporaryRoomId != null && event.temporaryRoomId!.isNotEmpty) ...[
               AnimatedTapDetector(
                 onTap: () {
                   final eventRoom = EventRoom(

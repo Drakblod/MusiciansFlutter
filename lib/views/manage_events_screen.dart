@@ -567,21 +567,6 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> with SingleTick
   }) {
     final String timeOrDateStr = formatBandEventDateRange(event);
 
-    // Count responses
-    int yesCount = 0;
-    int noCount = 0;
-    int maybeCount = 0;
-    for (final r in event.responses.values) {
-      final s = r.status.toLowerCase();
-      if (s == 'yes' || s == 'attending') {
-        yesCount++;
-      } else if (s == 'no' || s == 'declined') {
-        noCount++;
-      } else if (s == 'uncertain' || s == 'maybe') {
-        maybeCount++;
-      }
-    }
-
     final sessionType = event.eventType.isNotEmpty ? event.eventType : 'Event';
     final iconData = _getEventTypeIcon(sessionType);
 
@@ -612,6 +597,7 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> with SingleTick
                 bandId: bandId,
                 eventId: event.id!,
                 initialEvent: event,
+                isFromNewEvents: tabType == EventTabType.newEvents,
               ),
             ),
           );
@@ -672,7 +658,7 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> with SingleTick
                           Text(
                             bandName,
                             style: GoogleFonts.outfit(
-                              fontSize: 18,
+                              fontSize: 19,
                               fontWeight: FontWeight.bold,
                               color: Colors.white,
                             ),
@@ -680,11 +666,11 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> with SingleTick
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            '"${event.title}"',
+                            '”${event.title}”',
                             style: GoogleFonts.inter(
-                              fontSize: 13,
+                              fontSize: 15,
                               fontWeight: FontWeight.w600,
-                              color: AppTheme.textSecondary,
+                              color: Colors.white.withOpacity(0.9),
                             ),
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -796,7 +782,7 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> with SingleTick
                                 color: Colors.white70,
                                 height: 1.3,
                               ),
-                              maxLines: 3,
+                              maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
@@ -810,156 +796,71 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> with SingleTick
               const SizedBox(height: 12),
               const Divider(height: 1, color: Color(0xFF231F45)),
 
-              // Bottom Stats & Action Bar
+              // Bottom Action Bar: Only RSVPs and Event Details buttons
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
-                child: Wrap(
-                  alignment: WrapAlignment.spaceBetween,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  spacing: 8,
-                  runSpacing: 8,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
                   children: [
-                    // RSVP Attendance Summary (Hidden for New Events)
-                    if (tabType != EventTabType.newEvents)
-                      Wrap(
-                        spacing: 6,
-                        runSpacing: 4,
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: AppTheme.success.withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(Icons.check, color: AppTheme.success, size: 13),
-                                const SizedBox(width: 4),
-                                Text(
-                                  '$yesCount Yes',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 11,
-                                    color: AppTheme.success,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          if (noCount > 0)
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: AppTheme.danger.withValues(alpha: 0.15),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Icon(Icons.close, color: AppTheme.danger, size: 13),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    '$noCount No',
-                                    style: GoogleFonts.inter(
-                                      fontSize: 11,
-                                      color: AppTheme.danger,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          if (maybeCount > 0)
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: AppTheme.warning.withValues(alpha: 0.15),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Icon(Icons.help_outline, color: AppTheme.warning, size: 13),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    '$maybeCount ?',
-                                    style: GoogleFonts.inter(
-                                      fontSize: 11,
-                                      color: AppTheme.warning,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                        ],
+                    TextButton.icon(
+                      style: TextButton.styleFrom(
+                        foregroundColor: AppTheme.primaryAccent,
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       ),
-
-                    // Details Buttons
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        TextButton.icon(
-                          style: TextButton.styleFrom(
-                            foregroundColor: AppTheme.primaryAccent,
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                            minimumSize: Size.zero,
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          ),
-                          icon: const Icon(Icons.analytics_outlined, size: 15),
-                          label: Text(
-                            'RSVPs',
-                            style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w600),
-                          ),
-                          onPressed: () {
-                            if (event.id != null) {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => EventResultsPage(
-                                    bandId: bandId,
-                                    eventId: event.id!,
-                                    initialEvent: event,
-                                  ),
-                                ),
-                              );
-                            }
-                          },
-                        ),
-                        const SizedBox(width: 4),
-                        ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppTheme.primaryAccent,
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                            minimumSize: Size.zero,
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          ),
-                          onPressed: () {
-                            if (event.id != null) {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => EventDetailsPage(
-                                    bandId: bandId,
-                                    eventId: event.id!,
-                                    initialEvent: event,
-                                  ),
-                                ),
-                              );
-                            }
-                          },
-                          child: Text(
-                            'View Event',
-                            style: GoogleFonts.inter(
-                              fontSize: 11,
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
+                      icon: const Icon(Icons.analytics_outlined, size: 15),
+                      label: Text(
+                        'RSVPs',
+                        style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600),
+                      ),
+                      onPressed: () {
+                        if (event.id != null) {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => EventResultsPage(
+                                bandId: bandId,
+                                eventId: event.id!,
+                                initialEvent: event,
+                              ),
                             ),
-                          ),
+                          );
+                        }
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.primaryAccent,
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      onPressed: () {
+                        if (event.id != null) {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => EventDetailsPage(
+                                bandId: bandId,
+                                eventId: event.id!,
+                                initialEvent: event,
+                                isFromNewEvents: tabType == EventTabType.newEvents,
+                              ),
+                            ),
+                          );
+                        }
+                      },
+                      child: Text(
+                        'Event Details',
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
                         ),
-                      ],
+                      ),
                     ),
                   ],
                 ),

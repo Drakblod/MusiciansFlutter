@@ -30,6 +30,34 @@ class _PublicEventDetailsScreenState extends State<PublicEventDetailsScreen> {
   PublicCalendarEvent? _activeEvent;
   bool _hasChanges = false;
   bool _initialized = false;
+  bool _canUserCreateOrManage = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkPermissions();
+  }
+
+  Future<void> _checkPermissions() async {
+    final appState = Provider.of<AppState>(context, listen: false);
+    final userId = appState.currentUserId;
+    if (userId == null) return;
+    try {
+      final userBands = await appState.firebaseService.getUserBandsAsync(userId);
+      for (final bandId in userBands.keys) {
+        final role = await appState.firebaseService.getUserBandRoleAsync(bandId, userId);
+        final r = (role ?? '').trim().toLowerCase();
+        if (r == 'leader' || r == 'admin' || r == 'mod') {
+          if (mounted) {
+            setState(() {
+              _canUserCreateOrManage = true;
+            });
+          }
+          break;
+        }
+      }
+    } catch (_) {}
+  }
 
   @override
   void didChangeDependencies() {
@@ -52,7 +80,8 @@ class _PublicEventDetailsScreenState extends State<PublicEventDetailsScreen> {
         activeEvent.createdBy != null &&
         activeEvent.createdBy!.isNotEmpty &&
         currentUserId == activeEvent.createdBy;
-    if (!isCreator) return;
+    final canManage = isCreator || _canUserCreateOrManage;
+    if (!canManage) return;
 
     final result = await Navigator.push(
       context,
@@ -81,6 +110,15 @@ class _PublicEventDetailsScreenState extends State<PublicEventDetailsScreen> {
     PublicCalendarEvent activeEvent,
     PublicEventRepository repo,
   ) async {
+    final appState = Provider.of<AppState>(context, listen: false);
+    final currentUserId = appState.currentUserId;
+    final isCreator = currentUserId != null &&
+        activeEvent.createdBy != null &&
+        activeEvent.createdBy!.isNotEmpty &&
+        currentUserId == activeEvent.createdBy;
+    final canManage = isCreator || _canUserCreateOrManage;
+    if (!canManage) return;
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -224,6 +262,7 @@ class _PublicEventDetailsScreenState extends State<PublicEventDetailsScreen> {
         activeEvent.createdBy != null &&
         activeEvent.createdBy!.isNotEmpty &&
         currentUserId == activeEvent.createdBy;
+    final canManage = isCreator || _canUserCreateOrManage;
 
     return PopScope(
       canPop: false,
@@ -267,60 +306,12 @@ class _PublicEventDetailsScreenState extends State<PublicEventDetailsScreen> {
                         letterSpacing: 1.5,
                       ),
                     ),
-                    const SizedBox(height: 12),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            // Event Type Badge
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: AppTheme.primaryAccent.withValues(alpha: 0.2),
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(
-                                  color: AppTheme.primaryAccent.withValues(alpha: 0.5),
-                                  width: 1.0,
-                                ),
-                              ),
-                              child: Text(
-                                activeEvent.eventTypeDisplayLabel,
-                                style: GoogleFonts.inter(
-                                  color: AppTheme.primaryAccent,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                            // Demo indicator
-                            if (activeEvent.isMock) ...[
-                              const SizedBox(width: 8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: Colors.amber.withValues(alpha: 0.15),
-                                  borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(color: Colors.amber.withValues(alpha: 0.4)),
-                                ),
-                                child: Text(
-                                  'DEMO EVENT',
-                                  style: GoogleFonts.inter(
-                                    color: Colors.amber,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
-                                    letterSpacing: 0.8,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                        // Quick Edit Button in Header
-                        if (isCreator)
-                          AnimatedTapDetector(
-                            onTap: () => _editEvent(context, activeEvent, effectiveRepo),
+                    if (canManage) ...[
+                      const SizedBox(height: 8),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: AnimatedTapDetector(
+                          onTap: () => _editEvent(context, activeEvent, effectiveRepo),
                           child: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                             decoration: BoxDecoration(
@@ -345,8 +336,8 @@ class _PublicEventDetailsScreenState extends State<PublicEventDetailsScreen> {
                             ),
                           ),
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   const SizedBox(height: 14),
                   Text(
                     activeEvent.title,
@@ -420,7 +411,7 @@ class _PublicEventDetailsScreenState extends State<PublicEventDetailsScreen> {
                                 children: [
                                   Image.network(
                                     activeEvent.imageUrl!.trim(),
-                                    fit: BoxFit.cover,
+                                    fit: activeEvent.imageFitMode == 'contain' ? BoxFit.contain : BoxFit.cover,
                                     loadingBuilder: (context, child, loadingProgress) {
                                       if (loadingProgress == null) return child;
                                       return Container(
@@ -733,7 +724,7 @@ class _PublicEventDetailsScreenState extends State<PublicEventDetailsScreen> {
                           ),
                         ),
                       ),
-                      if (isCreator) ...[
+                      if (canManage) ...[
                         const SizedBox(width: 10),
                         AnimatedTapDetector(
                           onTap: () => _editEvent(context, activeEvent, effectiveRepo),
@@ -762,35 +753,35 @@ class _PublicEventDetailsScreenState extends State<PublicEventDetailsScreen> {
                             ),
                           ),
                         ),
-                      ],
-                      const SizedBox(width: 10),
-                      AnimatedTapDetector(
-                        onTap: () => _deleteEvent(context, activeEvent, effectiveRepo),
-                        child: Container(
-                          height: 48,
-                          padding: const EdgeInsets.symmetric(horizontal: 14),
-                          decoration: BoxDecoration(
-                            color: AppTheme.danger.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: AppTheme.danger.withValues(alpha: 0.5)),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.delete_outline_rounded, color: AppTheme.danger, size: 18),
-                              const SizedBox(width: 6),
-                              Text(
-                                'Delete',
-                                style: GoogleFonts.inter(
-                                  color: AppTheme.danger,
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 14,
+                        const SizedBox(width: 10),
+                        AnimatedTapDetector(
+                          onTap: () => _deleteEvent(context, activeEvent, effectiveRepo),
+                          child: Container(
+                            height: 48,
+                            padding: const EdgeInsets.symmetric(horizontal: 14),
+                            decoration: BoxDecoration(
+                              color: AppTheme.danger.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: AppTheme.danger.withValues(alpha: 0.5)),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.delete_outline_rounded, color: AppTheme.danger, size: 18),
+                                const SizedBox(width: 6),
+                                Text(
+                                  'Delete',
+                                  style: GoogleFonts.inter(
+                                    color: AppTheme.danger,
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 14,
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
-                      ),
+                      ],
                     ],
                   ),
                   const SizedBox(height: 24),

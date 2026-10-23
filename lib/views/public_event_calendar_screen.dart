@@ -50,6 +50,7 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
   bool _isOpeningPicker = false;
   bool _hasOpenedCategoryPickerOnSearchTap = false;
   bool _initialized = false;
+  bool _canUserCreateOrManage = false;
 
   @override
   void initState() {
@@ -57,11 +58,33 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
     _searchFocusNode.addListener(_handleSearchFocusChange);
   }
 
+  Future<void> _checkPermissions() async {
+    final appState = Provider.of<AppState>(context, listen: false);
+    final userId = appState.currentUserId;
+    if (userId == null) return;
+    try {
+      final userBands = await appState.firebaseService.getUserBandsAsync(userId);
+      for (final bandId in userBands.keys) {
+        final role = await appState.firebaseService.getUserBandRoleAsync(bandId, userId);
+        final r = (role ?? '').trim().toLowerCase();
+        if (r == 'leader' || r == 'admin' || r == 'mod') {
+          if (mounted) {
+            setState(() {
+              _canUserCreateOrManage = true;
+            });
+          }
+          break;
+        }
+      }
+    } catch (_) {}
+  }
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (!_initialized) {
       _initialized = true;
+      _checkPermissions();
       if (widget.repository != null) {
         _repository = widget.repository;
       } else {
@@ -199,6 +222,34 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
   }
 
   Future<void> _navigateToAddEvent() async {
+    final appState = Provider.of<AppState>(context, listen: false);
+    final userId = appState.currentUserId;
+    if (userId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please log in to add events.'),
+          backgroundColor: AppTheme.danger,
+        ),
+      );
+      return;
+    }
+
+    if (!_canUserCreateOrManage) {
+      await _checkPermissions();
+      if (!_canUserCreateOrManage) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Only Band Leaders and Admins can create public calendar events.'),
+              backgroundColor: AppTheme.warning,
+              duration: Duration(seconds: 4),
+            ),
+          );
+        }
+        return;
+      }
+    }
+
     final result = await Navigator.push(
       context,
       MaterialPageRoute(
@@ -247,7 +298,6 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
     final filteredEvents = _getFilteredEvents();
     final visibleEvents = filteredEvents.take(_visibleCount).toList();
     final hasMore = filteredEvents.length > _visibleCount;
-    final hasMockEvents = _allEvents.any((e) => e.isMock);
 
     return GradientScaffold(
       appBar: const CustomTopBar(showBack: true),
@@ -302,26 +352,6 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
                               ),
                             ),
                           ),
-                          if (hasMockEvents) ...[
-                            const SizedBox(width: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: Colors.amber.withValues(alpha: 0.15),
-                                borderRadius: BorderRadius.circular(6),
-                                border: Border.all(color: Colors.amber.withValues(alpha: 0.4)),
-                              ),
-                              child: Text(
-                                'DEMO EVENTS',
-                                style: GoogleFonts.inter(
-                                  color: Colors.amber,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                  letterSpacing: 0.8,
-                                ),
-                              ),
-                            ),
-                          ],
                         ],
                       ),
                       const SizedBox(height: 6),
@@ -748,7 +778,8 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
         event.createdBy != null &&
         event.createdBy!.isNotEmpty &&
         currentUserId == event.createdBy;
-    if (!isCreator) return;
+    final canManage = isCreator || _canUserCreateOrManage;
+    if (!canManage) return;
 
     final result = await Navigator.push(
       context,
@@ -772,16 +803,18 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
         event.createdBy != null &&
         event.createdBy!.isNotEmpty &&
         currentUserId == event.createdBy;
+    final canManage = isCreator || _canUserCreateOrManage;
 
     final monthShort = DateFormat('MMM').format(event.startDateTime).toUpperCase();
     final dayStr = DateFormat('dd').format(event.startDateTime);
+    final dateFormatted = DateFormat('EEE, d MMM').format(event.startDateTime);
     final timeStr =
         '${DateFormat('HH:mm').format(event.startDateTime)} – ${DateFormat('HH:mm').format(event.endDateTime)}';
     final imageWidget = _buildEventCardImage(event);
 
     return Semantics(
       button: true,
-      label: '${event.title}, ${event.eventTypeDisplayLabel}, ${event.venueName}, $dayStr $monthShort, ${event.formattedPrice}',
+      label: '${event.title}, ${event.venueName}, $dayStr $monthShort, ${event.formattedPrice}',
       child: FocusableActionDetector(
         mouseCursor: SystemMouseCursors.click,
         shortcuts: {
@@ -894,9 +927,28 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
+                            // Alternativ 5: Datum & Tid överst på kortet
                             Row(
-                              mainAxisAlignment: MainAxisAlignment.end,
                               children: [
+                                const Icon(
+                                  Icons.calendar_today_outlined,
+                                  size: 12,
+                                  color: AppTheme.primaryAccent,
+                                ),
+                                const SizedBox(width: 4),
+                                Expanded(
+                                  child: Text(
+                                    '$dateFormatted · $timeStr',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppTheme.primaryAccent,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                                   decoration: BoxDecoration(
@@ -914,7 +966,7 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
                                     ),
                                   ),
                                 ),
-                                if (isCreator) ...[
+                                if (canManage) ...[
                                   const SizedBox(width: 6),
                                   Semantics(
                                     button: true,
@@ -949,7 +1001,7 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
                             Text(
                               event.title,
                               style: GoogleFonts.outfit(
-                                fontSize: 15,
+                                fontSize: 16,
                                 fontWeight: FontWeight.bold,
                                 color: Colors.white,
                                 height: 1.2,
@@ -980,29 +1032,6 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
                                 Expanded(
                                   child: Text(
                                     '${event.venueName}, ${event.city}',
-                                    style: GoogleFonts.inter(
-                                      fontSize: 11,
-                                      color: const Color(0xFFD4CEEB),
-                                      fontWeight: FontWeight.w400,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 3),
-                            Row(
-                              children: [
-                                const Icon(
-                                  Icons.access_time_rounded,
-                                  size: 13,
-                                  color: Color(0xFFA899E6),
-                                ),
-                                const SizedBox(width: 4),
-                                Expanded(
-                                  child: Text(
-                                    timeStr,
                                     style: GoogleFonts.inter(
                                       fontSize: 11,
                                       color: const Color(0xFFD4CEEB),
@@ -1130,6 +1159,8 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
     final monthShort = DateFormat('MMM').format(event.startDateTime).toUpperCase();
     final dayStr = DateFormat('dd').format(event.startDateTime);
 
+    final fit = event.imageFitMode == 'contain' ? BoxFit.contain : BoxFit.cover;
+
     return Container(
       width: 110,
       constraints: const BoxConstraints(minHeight: 155),
@@ -1140,7 +1171,7 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
               ? Image.network(
                   imageSource,
                   width: 110,
-                  fit: BoxFit.cover,
+                  fit: fit,
                   errorBuilder: (context, error, stackTrace) =>
                       _buildImageErrorFallback(),
                   loadingBuilder: (context, child, loadingProgress) {
@@ -1159,7 +1190,7 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
               : Image.asset(
                   imageSource,
                   width: 110,
-                  fit: BoxFit.cover,
+                  fit: fit,
                   errorBuilder: (context, error, stackTrace) =>
                       _buildImageErrorFallback(),
                 ),

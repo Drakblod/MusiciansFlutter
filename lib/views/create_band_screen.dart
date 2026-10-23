@@ -975,9 +975,9 @@ class _CreateBandScreenState extends State<CreateBandScreen> {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF0F0C20).withOpacity(0.95),
+                      color: const Color(0xFF0F0C20).withValues(alpha: 0.95),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.5), width: 1.2),
+                      border: Border.all(color: AppTheme.primaryAccent.withValues(alpha: 0.5), width: 1.2),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,

@@ -79,6 +79,7 @@ class _CreatePublicEventScreenState extends State<CreatePublicEventScreen> {
       if (e.imageUrl != null && e.imageUrl!.isNotEmpty) {
         _imageUrlController.text = e.imageUrl!;
       }
+      _posterFit = e.imageFitMode == 'contain' ? BoxFit.contain : BoxFit.cover;
       _selectedType = e.eventType;
       _selectedDate = e.startDateTime;
       _startTime = TimeOfDay(hour: e.startDateTime.hour, minute: e.startDateTime.minute);
@@ -402,6 +403,7 @@ class _CreatePublicEventScreenState extends State<CreatePublicEventScreen> {
           priceAmount: price,
           isFree: _isFree,
           imageUrl: resolvedImageUrl ?? widget.eventToEdit!.imageUrl,
+          imageFitMode: _posterFit == BoxFit.contain ? 'contain' : 'cover',
         );
 
         await repo.updateEvent(updatedEvent);
@@ -439,6 +441,7 @@ class _CreatePublicEventScreenState extends State<CreatePublicEventScreen> {
           status: PublicEventStatus.published,
           isMock: false,
           imageUrl: resolvedImageUrl,
+          imageFitMode: _posterFit == BoxFit.contain ? 'contain' : 'cover',
           createdBy: currentUid,
           createdAt: DateTime.now().millisecondsSinceEpoch,
         );

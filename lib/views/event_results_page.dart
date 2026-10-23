@@ -672,7 +672,7 @@ class _EventResultsPageState extends State<EventResultsPage> {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            '"${event.title}"',
+                            '”${event.title}”',
                             style: GoogleFonts.outfit(
                               fontSize: 16,
                               fontWeight: FontWeight.w600,
@@ -751,48 +751,6 @@ class _EventResultsPageState extends State<EventResultsPage> {
                     ],
                   ),
                 ],
-                const SizedBox(height: 12),
-
-                // Event Description Card (Preserved exactly as-is)
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF16132D),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: const Color(0xFF2E2A4E), width: 1),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Event Description',
-                        style: GoogleFonts.outfit(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          color: AppTheme.primaryAccent,
-                          letterSpacing: 1.0,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        event.description.trim().isNotEmpty
-                            ? event.description.trim()
-                            : 'No event description provided.',
-                        style: GoogleFonts.inter(
-                          fontSize: 13,
-                          color: event.description.trim().isNotEmpty
-                              ? Colors.white70
-                              : AppTheme.textSecondary,
-                          fontStyle: event.description.trim().isNotEmpty
-                              ? FontStyle.normal
-                              : FontStyle.italic,
-                          height: 1.35,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
               ],
             ),
           ),

@@ -29,6 +29,7 @@ class PublicCalendarEvent {
   final PublicEventStatus status;
   final bool isMock;
   final String? imageUrl;
+  final String? imageFitMode; // 'cover' or 'contain'
   final String? createdBy;
   final int? createdAt;
 
@@ -51,6 +52,7 @@ class PublicCalendarEvent {
     this.status = PublicEventStatus.published,
     this.isMock = true,
     this.imageUrl,
+    this.imageFitMode = 'cover',
     this.createdBy,
     this.createdAt,
   });
@@ -113,6 +115,7 @@ class PublicCalendarEvent {
       status: parseStatus(json['status']?.toString()),
       isMock: json['isMock'] == true,
       imageUrl: json['imageUrl']?.toString(),
+      imageFitMode: json['imageFitMode']?.toString() ?? 'cover',
       createdBy: json['createdBy']?.toString(),
       createdAt: json['createdAt'] is int
           ? json['createdAt'] as int
@@ -140,6 +143,7 @@ class PublicCalendarEvent {
       'status': status.name,
       'isMock': isMock,
       if (imageUrl != null && imageUrl!.isNotEmpty) 'imageUrl': imageUrl,
+      if (imageFitMode != null) 'imageFitMode': imageFitMode,
       if (createdBy != null && createdBy!.isNotEmpty) 'createdBy': createdBy,
       if (createdAt != null) 'createdAt': createdAt,
     };
@@ -164,6 +168,7 @@ class PublicCalendarEvent {
     PublicEventStatus? status,
     bool? isMock,
     String? imageUrl,
+    String? imageFitMode,
     String? createdBy,
     int? createdAt,
   }) {
@@ -186,6 +191,7 @@ class PublicCalendarEvent {
       status: status ?? this.status,
       isMock: isMock ?? this.isMock,
       imageUrl: imageUrl ?? this.imageUrl,
+      imageFitMode: imageFitMode ?? this.imageFitMode,
       createdBy: createdBy ?? this.createdBy,
       createdAt: createdAt ?? this.createdAt,
     );
