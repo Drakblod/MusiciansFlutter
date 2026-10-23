@@ -3227,167 +3227,163 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
               ),
             ),
 
-            // Bottom drawer details card for Gigs
-            if (_selectedGig != null)
-              Positioned(
-                bottom: 20,
-                left: 16,
-                right: 16,
-                child: _buildBottomCardContent(_selectedGig!, appState),
-              ),
-
-            // Bottom drawer details card for Mock Live Rehearsals (with Live Audio bar docked directly above it)
-            if (_selectedRehearsal != null)
-              Positioned(
-                bottom: 20,
-                left: 16,
-                right: 16,
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () {},
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      _buildLiveAudioBar(isDocked: true),
-                      const SizedBox(height: 8),
-                      _buildRehearsalBottomCardContent(_selectedRehearsal!),
-                    ],
-                  ),
-                ),
-              ),
-
-            // When no event card is selected: Action buttons at bottom-left
-            if (_selectedGig == null && _selectedRehearsal == null) ...[
-              Positioned(
-                bottom: 16,
-                left: 16,
-                child: Row(
+            // Unified Persistent Bottom Area: Live Audio Bar ("Turn ON/OFF & Mute") is ALWAYS visible!
+            Positioned(
+              bottom: 16,
+              left: 16,
+              right: 16,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () {},
+                child: Column(
                   mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: _showUploadEventSheet,
-                      child: Container(
-                        height: 38,
-                        padding: const EdgeInsets.symmetric(horizontal: 14),
-                        decoration: BoxDecoration(
-                          gradient: AppTheme.primaryGradient,
-                          borderRadius: BorderRadius.circular(19),
-                          boxShadow: [
-                            BoxShadow(
-                              color: AppTheme.primaryAccent.withOpacity(0.35),
-                              blurRadius: 8,
-                              offset: const Offset(0, 3),
-                            ),
-                          ],
-                        ),
+                    // Live Audio Bar ("Turn ON/OFF & Mute") - ALWAYS VISIBLE
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: _buildLiveAudioBar(isDocked: true),
+                    ),
+                    const SizedBox(height: 8),
+
+                    // Active content card or default action buttons
+                    if (_selectedGig != null)
+                      _buildBottomCardContent(_selectedGig!, appState)
+                    else if (_selectedRehearsal != null)
+                      _buildRehearsalBottomCardContent(_selectedRehearsal!)
+                    else
+                      // Default Action buttons (Upload, Go Live, 20 Sthlm Pins)
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(Icons.add_location_alt_rounded, color: Colors.white, size: 16),
-                            const SizedBox(width: 6),
-                            Text(
-                              'Upload Map View Pin / Audio',
-                              style: GoogleFonts.inter(
-                                fontSize: 11.5,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
+                            GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTap: _showUploadEventSheet,
+                              child: Container(
+                                height: 38,
+                                padding: const EdgeInsets.symmetric(horizontal: 14),
+                                decoration: BoxDecoration(
+                                  gradient: AppTheme.primaryGradient,
+                                  borderRadius: BorderRadius.circular(19),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: AppTheme.primaryAccent.withOpacity(0.35),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 3),
+                                    ),
+                                  ],
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(Icons.add_location_alt_rounded, color: Colors.white, size: 16),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      'Upload Map View Pin / Audio',
+                                      style: GoogleFonts.inter(
+                                        fontSize: 11.5,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    if (FeatureFlags.enableRealLiveBroadcasts && _currentPublishingBroadcast == null) ...[
-                      const SizedBox(width: 8),
-                      GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onTap: _openStartLiveBroadcastDialog,
-                        child: Container(
-                          height: 38,
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
-                          decoration: BoxDecoration(
-                            color: AppTheme.dangerRed,
-                            borderRadius: BorderRadius.circular(19),
-                            boxShadow: [
-                              BoxShadow(
-                                color: AppTheme.dangerRed.withOpacity(0.35),
-                                blurRadius: 8,
-                                offset: const Offset(0, 3),
-                              ),
-                            ],
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.podcasts_rounded, color: Colors.white, size: 15),
-                              const SizedBox(width: 5),
-                              Text(
-                                'Go Live',
-                                style: GoogleFonts.inter(
-                                  fontSize: 11.5,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
+                            if (FeatureFlags.enableRealLiveBroadcasts && _currentPublishingBroadcast == null) ...[
+                              const SizedBox(width: 8),
+                              GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onTap: _openStartLiveBroadcastDialog,
+                                child: Container(
+                                  height: 38,
+                                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.dangerRed,
+                                    borderRadius: BorderRadius.circular(19),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: AppTheme.dangerRed.withOpacity(0.35),
+                                        blurRadius: 8,
+                                        offset: const Offset(0, 3),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(Icons.podcasts_rounded, color: Colors.white, size: 15),
+                                      const SizedBox(width: 5),
+                                      Text(
+                                        'Go Live',
+                                        style: GoogleFonts.inter(
+                                          fontSize: 11.5,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
                             ],
-                          ),
-                        ),
-                      ),
-                    ],
-                    const SizedBox(width: 8),
-                    // 20 Stockholm Demo Pins Quick Loader / Clearer
-                    GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: _hasStockholmDemoPins ? _clearStockholmDemoPins : _loadStockholmDemoPins,
-                      child: Container(
-                        height: 38,
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        decoration: BoxDecoration(
-                          color: _hasStockholmDemoPins
-                              ? AppTheme.dangerRed.withOpacity(0.25)
-                              : const Color(0xFF1A1633),
-                          borderRadius: BorderRadius.circular(19),
-                          border: Border.all(
-                            color: _hasStockholmDemoPins
-                                ? AppTheme.dangerRed.withOpacity(0.7)
-                                : const Color(0xFF38BDF8),
-                            width: 1.2,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: (_hasStockholmDemoPins ? AppTheme.dangerRed : const Color(0xFF38BDF8)).withOpacity(0.2),
-                              blurRadius: 6,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              _hasStockholmDemoPins ? Icons.delete_sweep_rounded : Icons.location_city_rounded,
-                              size: 15,
-                              color: _hasStockholmDemoPins ? AppTheme.dangerRed : const Color(0xFF38BDF8),
-                            ),
-                            const SizedBox(width: 5),
-                            Text(
-                              _hasStockholmDemoPins ? 'Clear Sthlm Pins' : '20 Sthlm Pins',
-                              style: GoogleFonts.inter(
-                                fontSize: 11,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
+                            const SizedBox(width: 8),
+                            // 20 Stockholm Demo Pins Quick Loader / Clearer
+                            GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTap: _hasStockholmDemoPins ? _clearStockholmDemoPins : _loadStockholmDemoPins,
+                              child: Container(
+                                height: 38,
+                                padding: const EdgeInsets.symmetric(horizontal: 12),
+                                decoration: BoxDecoration(
+                                  color: _hasStockholmDemoPins
+                                      ? AppTheme.dangerRed.withOpacity(0.25)
+                                      : const Color(0xFF1A1633),
+                                  borderRadius: BorderRadius.circular(19),
+                                  border: Border.all(
+                                    color: _hasStockholmDemoPins
+                                        ? AppTheme.dangerRed.withOpacity(0.7)
+                                        : const Color(0xFF38BDF8),
+                                    width: 1.2,
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: (_hasStockholmDemoPins ? AppTheme.dangerRed : const Color(0xFF38BDF8)).withOpacity(0.2),
+                                      blurRadius: 6,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      _hasStockholmDemoPins ? Icons.delete_sweep_rounded : Icons.location_city_rounded,
+                                      size: 15,
+                                      color: _hasStockholmDemoPins ? AppTheme.dangerRed : const Color(0xFF38BDF8),
+                                    ),
+                                    const SizedBox(width: 5),
+                                    Text(
+                                      _hasStockholmDemoPins ? 'Clear Sthlm Pins' : '20 Sthlm Pins',
+                                      style: GoogleFonts.inter(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           ],
                         ),
                       ),
-                    ),
                   ],
                 ),
               ),
-            ],
+            ),
           ],
         ),
       ),
