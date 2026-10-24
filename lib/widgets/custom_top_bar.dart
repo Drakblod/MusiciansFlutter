@@ -8,6 +8,7 @@ import 'animated_tap_detector.dart';
 import '../config/feature_toggles.dart';
 import '../views/edit_band_info_screen.dart';
 import '../views/notification_center_screen.dart';
+import '../services/mock_rehearsal_audio_controller.dart';
 
 class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
   final String title;
@@ -67,13 +68,13 @@ class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
                   Expanded(
                     child: _buildHomeLogo(context, appState),
                   ),
-                  // Column 3: Inbox / Direct Messages
-                  Expanded(
-                    child: _buildInbox(context, appState),
-                  ),
-                  // Column 4: Map View (Globe Icon)
+                  // Column 3: Map View (Globe Icon)
                   Expanded(
                     child: _buildMapGlobe(context, appState),
+                  ),
+                  // Column 4: Inbox / Direct Messages
+                  Expanded(
+                    child: _buildInbox(context, appState),
                   ),
                   // Column 5: Settings Menu
                   Expanded(
@@ -128,6 +129,7 @@ class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
     } else {
       return AnimatedTapDetector(
         onTap: () {
+          MockRehearsalAudioController.pauseActiveAudio();
           Navigator.pushNamed(context, '/profile');
         },
         child: Center(
@@ -187,6 +189,7 @@ class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
   Widget _buildInbox(BuildContext context, AppState appState) {
     return AnimatedTapDetector(
       onTap: () {
+        MockRehearsalAudioController.pauseActiveAudio();
         Navigator.pushNamed(context, '/inbox');
       },
       child: Center(

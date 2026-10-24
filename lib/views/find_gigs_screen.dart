@@ -944,25 +944,25 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                   Tab(
                     child: FittedBox(
                       fit: BoxFit.scaleDown,
-                      child: Text('Substitute Requests', maxLines: 1),
+                      child: Text('1. Substitute Requests', maxLines: 1),
                     ),
                   ),
                   Tab(
                     child: FittedBox(
                       fit: BoxFit.scaleDown,
-                      child: Text('New Member Requests', maxLines: 1),
+                      child: Text('2. New Member Requests', maxLines: 1),
                     ),
                   ),
                   Tab(
                     child: FittedBox(
                       fit: BoxFit.scaleDown,
-                      child: Text('Applied', maxLines: 1),
+                      child: Text('3. Applied', maxLines: 1),
                     ),
                   ),
                   Tab(
                     child: FittedBox(
                       fit: BoxFit.scaleDown,
-                      child: Text('Saved', maxLines: 1),
+                      child: Text('4. Saved', maxLines: 1),
                     ),
                   ),
                 ],

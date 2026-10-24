@@ -179,8 +179,8 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> with SingleTick
 
     // Sort: newEvents & upcoming ascending (closest first), past descending (most recent past first)
     result.sort((a, b) {
-      final aDate = DateTime.tryParse(a.value.startDateTime)?.toLocal() ?? DateTime.now();
-      final bDate = DateTime.tryParse(b.value.startDateTime)?.toLocal() ?? DateTime.now();
+      final aDate = a.value.parsedStartDateTime;
+      final bDate = b.value.parsedStartDateTime;
       return tabType == EventTabType.past ? bDate.compareTo(aDate) : aDate.compareTo(bDate);
     });
 
@@ -352,9 +352,9 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> with SingleTick
                     unselectedLabelColor: AppTheme.textSecondary,
                     labelStyle: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.bold),
                     tabs: const [
-                      Tab(text: 'NEW EVENTS (Needs RSVP)'),
-                      Tab(text: 'UPCOMING (Finalized)'),
-                      Tab(text: 'PAST EVENTS'),
+                      Tab(text: '1. NEW EVENTS (Needs RSVP)'),
+                      Tab(text: '2. UPCOMING (Finalized)'),
+                      Tab(text: '3. PAST EVENTS'),
                     ],
                   ),
                 ],

@@ -21,6 +21,7 @@ import '../data/stockholm_demo_pins.dart';
 import '../data/genres_taxonomy.dart';
 import '../data/skills_taxonomy.dart';
 import '../services/mock_rehearsal_audio_controller.dart';
+import '../services/route_observer.dart';
 import '../widgets/map_crosshair.dart';
 import '../widgets/custom_top_bar.dart';
 import '../widgets/animated_tap_detector.dart';
@@ -411,7 +412,7 @@ class GigMapPage extends StatefulWidget {
   State<GigMapPage> createState() => _GigMapPageState();
 }
 
-class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
+class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, RouteAware {
   GoogleMapController? _mapController;
   List<SubRequest> _allGigs = [];
   final Set<String> _appliedGigIds = {};
@@ -1068,6 +1069,45 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final modalRoute = ModalRoute.of(context);
+    if (modalRoute is PageRoute) {
+      appRouteObserver.subscribe(this, modalRoute);
+    }
+  }
+
+  @override
+  void didPushNext() {
+    // Another screen was pushed on top of GigMapPage (e.g. Edit Band, Inbox, Profile, Settings)
+    if (FeatureFlags.enableMockLiveRehearsals) {
+      _audioController?.pauseAudio();
+    }
+    if (FeatureFlags.enableRealLiveBroadcasts && _liveKitAudioController != null) {
+      if (_currentlyListeningBroadcast != null) {
+        _liveBroadcastService?.leaveLiveBroadcast(broadcastId: _currentlyListeningBroadcast!.id);
+        _liveKitAudioController!.disconnect();
+        _currentlyListeningBroadcast = null;
+      }
+    }
+  }
+
+  @override
+  void didPopNext() {
+    // User popped the screen that was covering GigMapPage and returned back
+    if (FeatureFlags.enableMockLiveRehearsals && _audioController != null) {
+      if (!_audioController!.isAudioStopped && !_audioController!.isMuted) {
+        _audioController!.resumeAudio();
+        _audioController!.updateCameraTarget(
+          _currentCameraPosition.target,
+          immediate: true,
+          zoom: _currentCameraPosition.zoom,
+        );
+      }
+    }
+  }
+
+  @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
       _liveBlinkTimer?.cancel();
@@ -1092,6 +1132,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    appRouteObserver.unsubscribe(this);
     _liveBlinkTimer?.cancel();
     _instrumentSearchController.dispose();
     WidgetsBinding.instance.removeObserver(this);
@@ -3018,18 +3059,30 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver {
                       _mapController = controller;
                       _mapController?.setMapStyle(_isWhiteMap ? _whiteMapStyle : _darkMapStyle);
                       if (FeatureFlags.enableMockLiveRehearsals) {
-                        _audioController?.updateCameraTarget(const LatLng(59.3293, 18.0686), immediate: true);
+                        _audioController?.updateCameraTarget(
+                          _currentCameraPosition.target,
+                          immediate: true,
+                          zoom: _currentCameraPosition.zoom,
+                        );
                       }
                     },
                     onCameraMove: (position) {
                       _currentCameraPosition = position;
                       if (FeatureFlags.enableMockLiveRehearsals) {
-                        _audioController?.updateCameraTarget(position.target);
+                        _audioController?.updateCameraTarget(
+                          position.target,
+                          zoom: position.zoom,
+                        );
                       }
                     },
                     onCameraIdle: () {
                       if (FeatureFlags.enableMockLiveRehearsals && _mapController != null) {
                         _mapController?.getVisibleRegion();
+                        _audioController?.updateCameraTarget(
+                          _currentCameraPosition.target,
+                          immediate: true,
+                          zoom: _currentCameraPosition.zoom,
+                        );
                       }
                       _evaluateCrosshairTargeting(filteredGigs);
                     },

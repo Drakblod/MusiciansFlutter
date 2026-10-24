@@ -351,6 +351,27 @@ class BandEvent {
     this.excludedMemberIds = const [],
   });
 
+  /// Robust parsed start DateTime for strict chronological sorting across the app.
+  DateTime get parsedStartDateTime {
+    final parsed = DateTime.tryParse(startDateTime);
+    if (parsed != null) return parsed.toLocal();
+    if (rehearsals.isNotEmpty) {
+      for (final reh in rehearsals) {
+        if (reh.date.isNotEmpty) {
+          final timeStr = reh.startTime.isNotEmpty ? reh.startTime : '00:00:00';
+          final rehParsed = DateTime.tryParse('${reh.date}T$timeStr');
+          if (rehParsed != null) return rehParsed.toLocal();
+          final dateOnly = DateTime.tryParse(reh.date);
+          if (dateOnly != null) return dateOnly.toLocal();
+        }
+      }
+    }
+    if (createdAt > 0) {
+      return DateTime.fromMillisecondsSinceEpoch(createdAt).toLocal();
+    }
+    return DateTime.fromMillisecondsSinceEpoch(0);
+  }
+
   factory BandEvent.fromJson(Map<dynamic, dynamic> json, String keyId) {
     final Map<String, EventResponse> parsedResponses = {};
     final responsesRaw = json['Responses'];

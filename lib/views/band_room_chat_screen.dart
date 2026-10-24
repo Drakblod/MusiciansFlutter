@@ -942,21 +942,15 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'BAND ROOM',
-                    style: GoogleFonts.outfit(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: AppTheme.primaryAccent,
-                      letterSpacing: 1.5,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  GestureDetector(
-                    onTap: () async {
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: GestureDetector(
+                            onTap: () async {
                       final userId = appState.currentUserId;
                       if (userId == null) return;
 
@@ -997,32 +991,60 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                         }
                       }
                     },
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          bandName,
-                          style: GoogleFonts.outfit(
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    bandName,
+                                    style: GoogleFonts.outfit(
+                                      fontSize: 22,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                const Icon(
+                                  Icons.keyboard_arrow_down_rounded,
+                                  color: AppTheme.primaryAccent,
+                                  size: 20,
+                                ),
+                              ],
+                            ),
                           ),
                         ),
-                        const SizedBox(width: 6),
-                        const Icon(
-                          Icons.keyboard_arrow_down_rounded,
-                          color: AppTheme.primaryAccent,
-                          size: 20,
+                        const SizedBox(width: 10),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: AppTheme.primaryAccent.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(
+                              color: AppTheme.primaryAccent.withValues(alpha: 0.4),
+                              width: 1,
+                            ),
+                          ),
+                          child: Text(
+                            'BAND ROOM',
+                            style: GoogleFonts.outfit(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: AppTheme.primaryAccent,
+                              letterSpacing: 1.0,
+                            ),
+                          ),
                         ),
                       ],
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '${_members.length} members online',
-                    style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
-                  ),
-                ],
+                    const SizedBox(height: 4),
+                    Text(
+                      '${_members.length} members online',
+                      style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -1036,11 +1058,11 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
           unselectedLabelColor: AppTheme.textSecondary,
           labelStyle: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 13),
           tabs: const [
-            Tab(text: 'Chat'),
-            Tab(text: 'Files'),
-            Tab(text: 'Events'),
-            Tab(text: 'Gigs/Info'),
-            Tab(text: 'Members'),
+            Tab(text: '1. Chat'),
+            Tab(text: '2. Files'),
+            Tab(text: '3. Events'),
+            Tab(text: '4. Gigs / Info'),
+            Tab(text: '5. Members'),
           ],
         ),
 
@@ -2359,8 +2381,8 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
 
       // Sort: newEvents & upcoming ascending (closest first), past descending (most recent past first)
       filteredEvents.sort((a, b) {
-        final aDate = DateTime.tryParse(a.startDateTime)?.toLocal() ?? DateTime.now();
-        final bDate = DateTime.tryParse(b.startDateTime)?.toLocal() ?? DateTime.now();
+        final aDate = a.parsedStartDateTime;
+        final bDate = b.parsedStartDateTime;
         return _eventsSubFilter.startsWith('Past') ? bDate.compareTo(aDate) : aDate.compareTo(bDate);
       });
 
@@ -3311,11 +3333,20 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        event.title,
+                        _activeBand?.name ?? 'Band',
                         style: GoogleFonts.outfit(
-                          fontSize: 17,
+                          fontSize: 18,
                           fontWeight: FontWeight.bold,
                           color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '”${event.title}”',
+                        style: GoogleFonts.inter(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: AppTheme.primaryAccent,
                         ),
                       ),
                     ],

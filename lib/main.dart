@@ -9,6 +9,7 @@ import 'providers/app_state.dart';
 import 'theme/app_theme.dart';
 import 'models/user_profile.dart';
 import 'models/sub_request.dart';
+import 'services/route_observer.dart';
 
 import 'views/login_screen.dart';
 import 'views/register_screen.dart';
@@ -104,7 +105,61 @@ class MyApp extends StatelessWidget {
       create: (_) => AppState(),
       child: MaterialApp(
         navigatorKey: navigatorKey,
+        navigatorObservers: [appRouteObserver],
         title: 'Musicians Only',
+        builder: (context, child) {
+          if (child == null) return const SizedBox.shrink();
+
+          final screenWidth = MediaQuery.of(context).size.width;
+          if (screenWidth <= 500) {
+            return child;
+          }
+
+          // Responsive Desktop Web: Keep mobile viewport centered with modern frame
+          const double maxAppWidth = 460.0;
+          final double mediaHeight = MediaQuery.of(context).size.height;
+          return Container(
+            color: const Color(0xFF070512),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(
+                  maxWidth: maxAppWidth,
+                ),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0F0C20),
+                    border: const Border.symmetric(
+                      vertical: BorderSide(color: Color(0xFF28234D), width: 1.5),
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.7),
+                        blurRadius: 35,
+                        spreadRadius: 4,
+                        offset: const Offset(0, 10),
+                      ),
+                      BoxShadow(
+                        color: const Color(0xFF6C5CE7).withValues(alpha: 0.12),
+                        blurRadius: 50,
+                      ),
+                    ],
+                  ),
+                  child: ClipRect(
+                    child: MediaQuery(
+                      data: MediaQuery.of(context).copyWith(
+                        size: Size(
+                          screenWidth > maxAppWidth ? maxAppWidth : screenWidth,
+                          mediaHeight,
+                        ),
+                      ),
+                      child: child,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
         theme: AppTheme.darkTheme,
         debugShowCheckedModeBanner: false,
         initialRoute: '/',

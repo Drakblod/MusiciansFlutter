@@ -279,7 +279,7 @@ class _SubRequestResponsesScreenState extends State<SubRequestResponsesScreen>
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Text('Substitutes'),
+                        const Text('1. Substitutes'),
                         if (_hasSubstituteActivity) ...[
                           const SizedBox(width: 6),
                           Container(
@@ -298,7 +298,7 @@ class _SubRequestResponsesScreenState extends State<SubRequestResponsesScreen>
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Text('Members'),
+                        const Text('2. Members'),
                         if (_hasMemberActivity) ...[
                           const SizedBox(width: 6),
                           Container(
@@ -403,20 +403,20 @@ class _SubRequestResponsesScreenState extends State<SubRequestResponsesScreen>
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          req.role ?? req.voicePart ?? 'Substitute Request',
+                          req.bandName ?? 'Unknown Band',
                           style: GoogleFonts.outfit(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
                             color: Colors.white,
                           ),
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 3),
                         Text(
-                          req.bandName ?? 'Unknown Band',
+                          '”${req.role ?? req.voicePart ?? "Substitute Request"}”',
                           style: GoogleFonts.inter(
                             fontSize: 14,
                             color: AppTheme.primaryAccent,
-                            fontWeight: FontWeight.w500,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                         const SizedBox(height: 2),
