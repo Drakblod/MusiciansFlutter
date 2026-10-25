@@ -485,24 +485,33 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
   Set<Circle> _buildPinRipples() {
     if (_newPinRippleLocation == null) return {};
     final wave1 = _rippleWavePhase;
-    final wave2 = (_rippleWavePhase + 0.5) % 1.0;
+    final wave2 = (_rippleWavePhase + 0.33) % 1.0;
+    final wave3 = (_rippleWavePhase + 0.67) % 1.0;
 
     return {
       Circle(
         circleId: const CircleId('new_pin_ripple_1'),
         center: _newPinRippleLocation!,
-        radius: 30.0 + (wave1 * 180.0),
+        radius: 20.0 + (wave1 * 180.0),
         strokeWidth: 2,
-        strokeColor: AppTheme.primaryAccent.withValues(alpha: (1.0 - wave1) * 0.75),
-        fillColor: AppTheme.primaryAccent.withValues(alpha: (1.0 - wave1) * 0.20),
+        strokeColor: AppTheme.primaryAccent.withValues(alpha: ((1.0 - wave1) * 0.85).clamp(0.0, 1.0)),
+        fillColor: AppTheme.primaryAccent.withValues(alpha: ((1.0 - wave1) * 0.18).clamp(0.0, 1.0)),
       ),
       Circle(
         circleId: const CircleId('new_pin_ripple_2'),
         center: _newPinRippleLocation!,
-        radius: 30.0 + (wave2 * 180.0),
+        radius: 20.0 + (wave2 * 180.0),
         strokeWidth: 2,
-        strokeColor: AppTheme.primaryAccent.withValues(alpha: (1.0 - wave2) * 0.75),
-        fillColor: AppTheme.primaryAccent.withValues(alpha: (1.0 - wave2) * 0.20),
+        strokeColor: AppTheme.primaryAccent.withValues(alpha: ((1.0 - wave2) * 0.85).clamp(0.0, 1.0)),
+        fillColor: AppTheme.primaryAccent.withValues(alpha: ((1.0 - wave2) * 0.18).clamp(0.0, 1.0)),
+      ),
+      Circle(
+        circleId: const CircleId('new_pin_ripple_3'),
+        center: _newPinRippleLocation!,
+        radius: 20.0 + (wave3 * 180.0),
+        strokeWidth: 2,
+        strokeColor: AppTheme.primaryAccent.withValues(alpha: ((1.0 - wave3) * 0.85).clamp(0.0, 1.0)),
+        fillColor: AppTheme.primaryAccent.withValues(alpha: ((1.0 - wave3) * 0.18).clamp(0.0, 1.0)),
       ),
     };
   }
@@ -960,6 +969,18 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
     final deltaLat = deltaMetersNorth / 111320.0;
     final crosshairLat = (cameraCenter.latitude + deltaLat).clamp(-85.0, 85.0);
     return LatLng(crosshairLat, cameraCenter.longitude);
+  }
+
+  /// Calculates the camera center needed so that [crosshairTarget] is positioned under the elevated crosshair.
+  LatLng _getCameraCenterForCrosshair(LatLng crosshairTarget, double zoom) {
+    if (!mounted) return crosshairTarget;
+    final screenHeight = MediaQuery.of(context).size.height;
+    final pixelOffsetFromCenter = -0.22 * (screenHeight / 2.0);
+    final mpp = MapCrosshairTargeting.metersPerPixel(crosshairTarget.latitude, zoom);
+    final deltaMetersNorth = -pixelOffsetFromCenter * mpp;
+    final deltaLat = deltaMetersNorth / 111320.0;
+    final cameraLat = (crosshairTarget.latitude - deltaLat).clamp(-85.0, 85.0);
+    return LatLng(cameraLat, crosshairTarget.longitude);
   }
 
   static final Map<String, BitmapDescriptor> _notePinCache = {};
@@ -2374,6 +2395,11 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
                     if (_selectedGig?.canonicalTargetId == pinId || _selectedGig?.id == pinId) {
                       _selectedGig = null;
                       _focusedTargetId = null;
+                      if (_newPinRippleLocation != null) {
+                        _newPinRippleTimer?.cancel();
+                        _newPinRippleLocation = null;
+                        _newPinRippleStartTime = null;
+                      }
                     }
                   });
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -3146,8 +3172,9 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
                                 _manuallyClosedTargetId = null;
                               });
 
+                               final camCenter = _getCameraCenterForCrosshair(targetLatLng, 15.0);
                               _mapController?.animateCamera(
-                                CameraUpdate.newLatLngZoom(targetLatLng, 15.0),
+                                CameraUpdate.newLatLngZoom(camCenter, 15.0),
                               );
                               _triggerNewPinRipple(targetLatLng);
 
