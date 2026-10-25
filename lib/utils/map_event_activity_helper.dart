@@ -22,8 +22,8 @@ bool isMapItemActive({
   String? timeRange,
   DateTime? now,
 }) {
-  // Only Gig/Concert and Rehearsal are eligible for active state.
-  if (type != MapEventType.gigConcert && type != MapEventType.rehearsal) {
+  // Only Gig, Concert and Rehearsal are eligible for active state.
+  if (type != MapEventType.gigConcert && type != MapEventType.concert && type != MapEventType.rehearsal) {
     return false;
   }
 
@@ -87,7 +87,7 @@ bool isMapItemActive({
 /// Evaluates whether a [SubRequest] gig or rehearsal is currently active.
 bool isSubRequestActive(SubRequest gig, {DateTime? now}) {
   final eventType = _resolveMapEventType(gig);
-  if (eventType != MapEventType.gigConcert && eventType != MapEventType.rehearsal) {
+  if (eventType != MapEventType.gigConcert && eventType != MapEventType.concert && eventType != MapEventType.rehearsal) {
     return false;
   }
 
@@ -137,7 +137,8 @@ bool isMockLiveRehearsalActive(MockLiveRehearsal rehearsal, {DateTime? now}) {
 
 MapEventType _resolveMapEventType(SubRequest gig) {
   final explicitType = gig.extraFields["eventType"]?.toString().toLowerCase();
-  if (explicitType == 'gigconcert' || explicitType == 'gig_concert') return MapEventType.gigConcert;
+  if (explicitType == 'concert') return MapEventType.concert;
+  if (explicitType == 'gig' || explicitType == 'gigconcert' || explicitType == 'gig_concert') return MapEventType.gigConcert;
   if (explicitType == 'rehearsal') return MapEventType.rehearsal;
   if (explicitType == 'jamsession' || explicitType == 'jam_session') return MapEventType.jamSession;
   if (explicitType == 'recordedmusic' || explicitType == 'recorded_music' || explicitType == 'studio') return MapEventType.recordedMusic;
@@ -149,6 +150,7 @@ MapEventType _resolveMapEventType(SubRequest gig) {
   final text = '${gig.requestType ?? ""} ${gig.role ?? ""} ${gig.eventTitle ?? ""} ${gig.description ?? ""}'.toLowerCase();
 
   if (text.contains('gig promo') || text.contains('promo')) return MapEventType.gigPromo;
+  if (text.contains('concert') || text.contains('konsert')) return MapEventType.concert;
   if (text.contains('new member') || text.contains('ny medlem') || text.contains('audition') || text.contains('permanent') || text.contains('join the band') || text.contains('söker musiker')) {
     return MapEventType.newMember;
   }

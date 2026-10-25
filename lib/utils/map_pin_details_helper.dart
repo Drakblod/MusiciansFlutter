@@ -69,11 +69,14 @@ MapPinDetails resolveMapPinDetails(SubRequest gig) {
       rawType.toLowerCase() == 'recorded music' ||
       eventType == MapEventType.recordedMusic) {
     typeDisplayLabel = 'Demos / Recordings';
+  } else if (rawType.toLowerCase() == 'concert' || eventType == MapEventType.concert) {
+    typeDisplayLabel = 'Concert';
   } else if (rawType.toLowerCase() == 'live gigs / rehearsals' ||
       rawType.toLowerCase() == 'gigs / rehearsals' ||
       rawType.toLowerCase() == 'gig / concert' ||
+      rawType.toLowerCase() == 'gig' ||
       eventType == MapEventType.gigConcert) {
-    typeDisplayLabel = 'Gig / Concert';
+    typeDisplayLabel = 'Gig';
   } else if (rawType.toLowerCase() == 'rehearsal' || eventType == MapEventType.rehearsal) {
     typeDisplayLabel = 'Rehearsal';
   } else if (rawType.toLowerCase() == 'jam session' || eventType == MapEventType.jamSession) {

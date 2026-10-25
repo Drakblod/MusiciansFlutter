@@ -48,8 +48,9 @@ enum MapCategory {
 
 enum MapEventType {
   // Category: Music
-  gigConcert, // Orange (#F97316)
-  rehearsal,  // Röd (#EF4444)
+  gigConcert, // Gig (Orange #F97316)
+  concert,    // Concert (Lila #A855F7)
+  rehearsal,  // Rehearsal (Röd #EF4444)
   jamSession, // Turkos (#06B6D4)
   recordedMusic, // Mörkblå (#2563EB)
 
@@ -70,6 +71,7 @@ class MapEventTypeHelper {
   static MapCategory getCategory(MapEventType type) {
     switch (type) {
       case MapEventType.gigConcert:
+      case MapEventType.concert:
       case MapEventType.rehearsal:
       case MapEventType.jamSession:
       case MapEventType.recordedMusic:
@@ -85,7 +87,8 @@ class MapEventTypeHelper {
 
   static MapEventType getEventType(SubRequest gig) {
     final explicitType = gig.extraFields["eventType"]?.toString().toLowerCase();
-    if (explicitType == 'gigconcert' || explicitType == 'gig_concert') return MapEventType.gigConcert;
+    if (explicitType == 'concert') return MapEventType.concert;
+    if (explicitType == 'gig' || explicitType == 'gigconcert' || explicitType == 'gig_concert') return MapEventType.gigConcert;
     if (explicitType == 'rehearsal') return MapEventType.rehearsal;
     if (explicitType == 'jamsession' || explicitType == 'jam_session') return MapEventType.jamSession;
     if (explicitType == 'recordedmusic' || explicitType == 'recorded_music' || explicitType == 'studio') return MapEventType.recordedMusic;
@@ -96,7 +99,12 @@ class MapEventTypeHelper {
 
     final text = '${gig.requestType ?? ""} ${gig.role ?? ""} ${gig.eventTitle ?? ""} ${gig.description ?? ""}'.toLowerCase();
 
-    // 1. Gig Promo (Lila)
+    // 1. Concert (Lila)
+    if (text.contains('concert') || text.contains('konsert')) {
+      return MapEventType.concert;
+    }
+
+    // 2. Gig Promo (Lila)
     if (text.contains('gig promo') || text.contains('promo')) {
       return MapEventType.gigPromo;
     }
@@ -313,6 +321,8 @@ class MapEventTypeHelper {
     switch (type) {
       case MapEventType.gigConcert:
         return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueOrange);
+      case MapEventType.concert:
+        return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueViolet);
       case MapEventType.rehearsal:
         return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed);
       case MapEventType.jamSession:
@@ -333,9 +343,11 @@ class MapEventTypeHelper {
   static Color getColor(MapEventType type) {
     switch (type) {
       case MapEventType.gigConcert:
-        return const Color(0xFFF97316); // Orange
+        return const Color(0xFFF97316); // Orange (Gig)
+      case MapEventType.concert:
+        return const Color(0xFFA855F7); // Lila (Concert)
       case MapEventType.rehearsal:
-        return const Color(0xFFEF4444); // Röd
+        return const Color(0xFFEF4444); // Röd (Rehearsal)
       case MapEventType.jamSession:
         return const Color(0xFF06B6D4); // Turkos
       case MapEventType.recordedMusic:
@@ -354,7 +366,9 @@ class MapEventTypeHelper {
   static String getLabel(MapEventType type) {
     switch (type) {
       case MapEventType.gigConcert:
-        return 'Gig / Concert';
+        return 'Gig';
+      case MapEventType.concert:
+        return 'Concert';
       case MapEventType.rehearsal:
         return 'Rehearsal';
       case MapEventType.jamSession:
@@ -375,7 +389,9 @@ class MapEventTypeHelper {
   static String getShortLabel(MapEventType type) {
     switch (type) {
       case MapEventType.gigConcert:
-        return 'Gig / Concert';
+        return 'Gig';
+      case MapEventType.concert:
+        return 'Concert';
       case MapEventType.rehearsal:
         return 'Rehearsal';
       case MapEventType.jamSession:
@@ -396,9 +412,11 @@ class MapEventTypeHelper {
   static IconData getIcon(MapEventType type) {
     switch (type) {
       case MapEventType.gigConcert:
+        return Icons.music_note_rounded;
+      case MapEventType.concert:
         return Icons.stadium_rounded;
       case MapEventType.rehearsal:
-        return Icons.music_note_rounded;
+        return Icons.groups_rounded;
       case MapEventType.jamSession:
         return Icons.groups_rounded;
       case MapEventType.recordedMusic:
@@ -493,7 +511,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
   List<SubRequest> _allGigs = [];
   final Set<String> _appliedGigIds = {};
   bool _isLoading = true;
-  String _selectedMainCategory = 'Music';
+  String? _selectedMainCategory;
   String? _selectedSubCategory;
   String _instrumentQuery = '';
   final TextEditingController _instrumentSearchController = TextEditingController();
@@ -931,16 +949,6 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
     } catch (_) {}
   }
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final appState = Provider.of<AppState>(context);
-    if (_isWhiteMap != appState.isWhiteMapTheme) {
-      _isWhiteMap = appState.isWhiteMapTheme;
-      _mapController?.setMapStyle(_isWhiteMap ? _whiteMapStyle : _darkMapStyle);
-    }
-  }
-
   /// Calculates the geographical LatLng point directly under the elevated crosshair overlay.
   LatLng _getCrosshairMapCoordinate(LatLng cameraCenter, double zoom) {
     if (!mounted) return cameraCenter;
@@ -961,7 +969,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
   Future<void> _initNotePins() async {
     for (final type in MapEventType.values) {
       final color = MapEventTypeHelper.getColor(type);
-      final isLiveEligible = type == MapEventType.gigConcert || type == MapEventType.rehearsal;
+      final isLiveEligible = type == MapEventType.gigConcert || type == MapEventType.concert || type == MapEventType.rehearsal;
 
       // Always generate and cache a base static pin for every type
       final keyStatic = type.name;
@@ -1014,7 +1022,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
   }
 
   BitmapDescriptor _getNoteDescriptor(MapEventType eventType, {bool isLive = false}) {
-    if (isLive && (eventType == MapEventType.gigConcert || eventType == MapEventType.rehearsal)) {
+    if (isLive && (eventType == MapEventType.gigConcert || eventType == MapEventType.concert || eventType == MapEventType.rehearsal)) {
       final key = '${eventType.name}_${_liveNoteBlinkOn ? 'on' : 'dim'}';
       if (_notePinCache.containsKey(key)) {
         return _notePinCache[key]!;
@@ -1136,6 +1144,11 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
     final modalRoute = ModalRoute.of(context);
     if (modalRoute is PageRoute) {
       appRouteObserver.subscribe(this, modalRoute);
+    }
+    final appState = Provider.of<AppState>(context);
+    if (_isWhiteMap != appState.isWhiteMapTheme) {
+      _isWhiteMap = appState.isWhiteMapTheme;
+      _mapController?.setMapStyle(_isWhiteMap ? _whiteMapStyle : _darkMapStyle);
     }
   }
 
@@ -1644,9 +1657,13 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
           return t == MapEventType.gigConcert || t == MapEventType.rehearsal;
         }).length +
             (FeatureFlags.enableMockLiveRehearsals ? mockLiveRehearsals.length : 0);
-      case 'Gig / Concert':
+      case 'Gig':
       case 'Gigs':
+      case 'Gig / Concert':
         return _allGigs.where((g) => MapEventTypeHelper.getEventType(g) == MapEventType.gigConcert).length;
+      case 'Concert':
+      case 'Concerts':
+        return _allGigs.where((g) => MapEventTypeHelper.getEventType(g) == MapEventType.concert).length;
       case 'Rehearsal':
       case 'Rehearsals':
         return _allGigs.where((g) => MapEventTypeHelper.getEventType(g) == MapEventType.rehearsal).length +
@@ -1706,12 +1723,15 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
     }
 
     final showRehearsals = FeatureFlags.enableMockLiveRehearsals &&
-        (_selectedMainCategory == 'All' ||
+        (_selectedMainCategory == null ||
+            _selectedMainCategory == 'All' ||
             (_selectedMainCategory == 'Music' &&
                 (_selectedSubCategory == null ||
                     _selectedSubCategory == 'All Music' ||
                     _selectedSubCategory == 'Rehearsal' ||
-                    (_selectedSubCategory == 'Gigs / Rehearsals' || _selectedSubCategory == 'Live Gigs / Rehearsals'))));
+                    _selectedSubCategory == 'Rehearsals' ||
+                    _selectedSubCategory == 'Gigs / Rehearsals' ||
+                    _selectedSubCategory == 'Live Gigs / Rehearsals')));
 
     if (showRehearsals) {
       for (final reh in mockLiveRehearsals) {
@@ -1819,8 +1839,17 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
         if (_selectedSubCategory == 'Gig Promo') {
           return type == MapEventType.gigPromo;
         }
+        if (_selectedSubCategory == 'Gig' || _selectedSubCategory == 'Gigs') {
+          return type == MapEventType.gigConcert;
+        }
+        if (_selectedSubCategory == 'Concert' || _selectedSubCategory == 'Concerts') {
+          return type == MapEventType.concert;
+        }
+        if (_selectedSubCategory == 'Rehearsal' || _selectedSubCategory == 'Rehearsals') {
+          return type == MapEventType.rehearsal;
+        }
         if ((_selectedSubCategory == 'Gigs / Rehearsals' || _selectedSubCategory == 'Live Gigs / Rehearsals')) {
-          return type == MapEventType.gigConcert || type == MapEventType.rehearsal;
+          return type == MapEventType.gigConcert || type == MapEventType.concert || type == MapEventType.rehearsal;
         }
         if (_selectedSubCategory == 'Jam Sessions' || _selectedSubCategory == 'Jam Session') {
           return type == MapEventType.jamSession;
@@ -1892,12 +1921,15 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
     }).toSet();
 
     final showRehearsals = FeatureFlags.enableMockLiveRehearsals &&
-        (_selectedMainCategory == 'All' ||
+        (_selectedMainCategory == null ||
+            _selectedMainCategory == 'All' ||
             (_selectedMainCategory == 'Music' &&
                 (_selectedSubCategory == null ||
                     _selectedSubCategory == 'All Music' ||
                     _selectedSubCategory == 'Rehearsal' ||
-                    (_selectedSubCategory == 'Gigs / Rehearsals' || _selectedSubCategory == 'Live Gigs / Rehearsals'))));
+                    _selectedSubCategory == 'Rehearsals' ||
+                    _selectedSubCategory == 'Gigs / Rehearsals' ||
+                    _selectedSubCategory == 'Live Gigs / Rehearsals')));
 
     final Set<Marker> realLiveMarkers = {};
     if (FeatureFlags.enableRealLiveBroadcasts && _activeRealBroadcasts.isNotEmpty) {
@@ -3315,9 +3347,9 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: Row(
                       children: [
-                        _buildMainFilterChip('Music', _getFilterCount('Music', appState.currentUserProfile), displayLabel: 'MUSIC'),
-                        _buildMainFilterChip('Sub & Member Search', _getFilterCount('Sub & Member Search', appState.currentUserProfile), displayLabel: 'SUB & MEMBER SEARCH'),
-                        _buildMainFilterChip('This Week', _getFilterCount('This Week', appState.currentUserProfile), displayLabel: 'THIS WEEK'),
+                        _buildMainFilterChip('Music', _getFilterCount('Music', appState.currentUserProfile), displayLabel: 'Music'),
+                        _buildMainFilterChip('Sub & Member Search', _getFilterCount('Sub & Member Search', appState.currentUserProfile), displayLabel: 'Sub...'),
+                        _buildMainFilterChip('This Week', _getFilterCount('This Week', appState.currentUserProfile), displayLabel: 'This week'),
                       ],
                     ),
                   ),
@@ -3330,7 +3362,9 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       child: Row(
                         children: [
-                          _buildSubFilterChip('Gigs / Rehearsals', MapEventType.gigConcert),
+                          _buildSubFilterChip('Gig', MapEventType.gigConcert),
+                          _buildSubFilterChip('Concert', MapEventType.concert),
+                          _buildSubFilterChip('Rehearsal', MapEventType.rehearsal),
                           _buildSubFilterChip('Jam Sessions', MapEventType.jamSession),
                           _buildSubFilterChip('Demos / Recordings', MapEventType.recordedMusic),
                         ],
@@ -4100,9 +4134,13 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
             _audioController?.setFocusedTargetId(null);
           }
           setState(() {
-            _selectedMainCategory = label;
+            if (_selectedMainCategory == label) {
+              _selectedMainCategory = null;
+            } else {
+              _selectedMainCategory = label;
+            }
             _selectedSubCategory = null;
-            if (label != 'Sub & Member Search') {
+            if (_selectedMainCategory != 'Sub & Member Search') {
               _instrumentQuery = '';
               _instrumentSearchController.clear();
               _showInstrumentSearch = false;

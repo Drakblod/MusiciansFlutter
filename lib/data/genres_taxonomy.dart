@@ -14,6 +14,7 @@ class GenresTaxonomy {
       'Reggae',
       'Latin',
       'Indie / Alternative',
+      'Contemporary',
     ],
     '🗣️ Choir': [
       'Choir',
