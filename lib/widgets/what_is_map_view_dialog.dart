@@ -6,7 +6,7 @@ import '../theme/app_theme.dart';
 /// Shows the standardized "What is Map View?" guide and explanation dialog.
 void showWhatIsMapViewDialog(BuildContext context, {String? description}) {
   final introText = description ??
-      'Move pins towards the centre of the screen (telescopic sight) to hear different bands and their recordings, band info, gig promo, etc.\n';
+      'Move notes / pins towards the centre of the screen (telescopic sight) to hear different bands and their recordings, band info, gig promo, etc.\n';
   showDialog(
     context: context,
     builder: (context) => AlertDialog(
@@ -50,14 +50,14 @@ void showWhatIsMapViewDialog(BuildContext context, {String? description}) {
             ),
             const SizedBox(height: 4),
             Text(
-              '• Crosshair / Centre: Move pins towards the centre of the screen (telescopic sight) to hear different bands and preview attached audio, band info, gig promo, etc.\n'
-              '• Audio Snippets: Tap any pin or target with crosshair to preview attached recordings, band demos, and gig promos.\n'
+              '• Crosshair / Centre: Move notes / pins towards the centre of the screen (telescopic sight) to hear different bands and preview attached audio, band info, gig promo, etc.\n'
+              '• Audio Snippets: Target any note / pin with the crosshair or tap to preview attached recordings, band demos, and gig promos.\n'
               '• City Jumpers: Tap quick city buttons (Stockholm, Göteborg, Malmö, etc.) to immediately fly across Sweden.\n'
-              '• Filters: Filter by Music, Sub & Member Search, or "This Week".\n',
+              '• Filters: Filter by Music, Sub..., or "This week".\n',
               style: GoogleFonts.inter(color: Colors.white70, fontSize: 13, height: 1.4),
             ),
             Text(
-              'PIN NOTER & FÄRGER:',
+              'NOTE / PIN COLORS & EVENT TYPES:',
               style: GoogleFonts.outfit(
                 color: AppTheme.primaryAccent,
                 fontSize: 12,
@@ -66,21 +66,23 @@ void showWhatIsMapViewDialog(BuildContext context, {String? description}) {
               ),
             ),
             const SizedBox(height: 8),
-            _buildDialogColorItem('Live Gig / Concert (Blinkande halvnot)', const Color(0xFFF97316), isHalfNote: true),
+            _buildDialogColorItem('Concert (Purple Note / Pin)', const Color(0xFFA855F7), isHalfNote: true),
             const SizedBox(height: 6),
-            _buildDialogColorItem('Live Rehearsal (Blinkande halvnot)', const Color(0xFFEF4444), isHalfNote: true),
+            _buildDialogColorItem('Gig (Orange Note / Pin)', const Color(0xFFF97316), isHalfNote: true),
             const SizedBox(height: 6),
-            _buildDialogColorItem('Jam Session (Turkos not)', const Color(0xFF06B6D4)),
+            _buildDialogColorItem('Rehearsal (Red Note / Pin)', const Color(0xFFEF4444), isHalfNote: true),
             const SizedBox(height: 6),
-            _buildDialogColorItem('Demos / Recordings (Mörkblå not)', const Color(0xFF2563EB)),
+            _buildDialogColorItem('Jam Session (Cyan Note / Pin)', const Color(0xFF06B6D4)),
             const SizedBox(height: 6),
-            _buildDialogColorItem('Gig Promo (Lila not)', const Color(0xFFA855F7)),
+            _buildDialogColorItem('Demos / Recordings (Dark Blue Note / Pin)', const Color(0xFF2563EB)),
             const SizedBox(height: 6),
-            _buildDialogColorItem('New Member (Mörkgrön not)', const Color(0xFF047857)),
+            _buildDialogColorItem('Gig Promo (Purple Note / Pin)', const Color(0xFFA855F7)),
             const SizedBox(height: 6),
-            _buildDialogColorItem('Subs (Limegrön not)', const Color(0xFF84CC16)),
+            _buildDialogColorItem('New Member (Dark Green Note / Pin)', const Color(0xFF047857)),
             const SizedBox(height: 6),
-            _buildDialogColorItem('Paid Gigs (Gul not)', const Color(0xFFEAB308)),
+            _buildDialogColorItem('Subs (Lime Green Note / Pin)', const Color(0xFF84CC16)),
+            const SizedBox(height: 6),
+            _buildDialogColorItem('Paid Gigs (Yellow Note / Pin)', const Color(0xFFEAB308)),
           ],
         ),
       ),

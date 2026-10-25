@@ -2379,13 +2379,13 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
   void _showUploadEventSheet({SubRequest? editingPin}) {
     final isEditing = editingPin != null;
     String selectedCategory = editingPin?.extraFields['subCategory']?.toString() ?? 'Music';
-    String selectedType = editingPin?.requestType ?? (selectedCategory == 'Music' ? 'Gig / Concert' : 'Substitute');
+    String selectedType = editingPin?.requestType ?? (selectedCategory == 'Music' ? 'Gig' : 'Substitute');
     List<String> selectedGenres = [
       editingPin?.extraFields['genre']?.toString() ?? editingPin?.style ?? 'Big Band Contemporary'
     ];
     DateTime selectedDate = editingPin?.date != null
-        ? (DateTime.tryParse(editingPin!.date!) ?? DateTime.now().add(const Duration(days: 7)))
-        : DateTime.now().add(const Duration(days: 7));
+        ? (DateTime.tryParse(editingPin!.date!) ?? DateTime.now())
+        : DateTime.now();
     TimeOfDay selectedStartTime = const TimeOfDay(hour: 18, minute: 0);
     TimeOfDay selectedEndTime = const TimeOfDay(hour: 21, minute: 0);
     if (editingPin?.startTime != null) {
@@ -2513,8 +2513,8 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
                             if (val) {
                               setSheetState(() {
                                 selectedCategory = cat;
-                                if (cat == 'Music') selectedType = 'Gig / Concert';
-                                                                if (cat == 'Sub & Member Search') selectedType = 'Substitute';
+                                if (cat == 'Music') selectedType = 'Gig';
+                                if (cat == 'Sub & Member Search') selectedType = 'Substitute';
                               });
                             }
                           },
@@ -2567,8 +2567,6 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
                     style: GoogleFonts.inter(fontSize: 13, color: Colors.white),
                     decoration: InputDecoration(
                       labelText: 'Band Name / Artist',
-                      helperText: 'Leave blank to place the pin at the current map centre.',
-                      helperStyle: GoogleFonts.inter(fontSize: 11, color: Colors.white54),
                       labelStyle: GoogleFonts.inter(fontSize: 12, color: Colors.white60),
                       filled: true,
                       fillColor: const Color(0xFF1A1633),
@@ -2577,14 +2575,14 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
                   ),
                   const SizedBox(height: 10),
 
-                  // Genre / Band Type (Strictly from GenresTaxonomy)
-                  Text('Genre / Band Type', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white)),
+                  // Genre (Strictly from GenresTaxonomy)
+                  Text('Genre', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white)),
                   const SizedBox(height: 6),
                   InkWell(
                     onTap: () async {
                       final result = await SearchableCategoryMultiSelectSheet.show(
                         context: context,
-                        title: 'Select Genre / Band Type',
+                        title: 'Select Genre',
                         categoryMap: GenresTaxonomy.categoryMap,
                         initialSelected: selectedGenres,
                       );
@@ -2608,7 +2606,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
                           const SizedBox(width: 10),
                           Expanded(
                             child: Text(
-                              selectedGenres.isNotEmpty ? selectedGenres.join(', ') : 'Select Genre / Band Type (from list)',
+                              selectedGenres.isNotEmpty ? selectedGenres.join(', ') : 'Select Genre (from list)',
                               style: GoogleFonts.inter(
                                 fontSize: 13,
                                 color: selectedGenres.isNotEmpty ? Colors.white : Colors.white54,
@@ -2969,29 +2967,36 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
                               String effectiveLocation;
 
                               if (addressText.isEmpty) {
-                                if (ctx.mounted) {
-                                  setSheetState(() {
-                                    isPublishing = false;
-                                    uploadErrorMessage = 'Please enter a street address and city (e.g. "Kungsgatan 12, Stockholm") so musicians can locate your pin.';
-                                  });
+                                targetLatLng = _getCrosshairMapCoordinate(_currentCameraPosition.target, _currentCameraPosition.zoom);
+                                effectiveLocation = venueText.isNotEmpty ? venueText : 'Map Center Location';
+                              } else {
+                                if (addressText.length < 5 || (!addressText.contains(' ') && !addressText.contains(','))) {
+                                  if (ctx.mounted) {
+                                    setSheetState(() {
+                                      isPublishing = false;
+                                      uploadErrorMessage = 'The address appears incomplete. Please specify street and city (e.g. "Sveavägen 45, Stockholm").';
+                                    });
+                                  }
+                                  return;
                                 }
-                                return;
-                              }
 
-                              final geocoded = await _geocodeAddress(addressText);
-                              if (geocoded == null || !_isValidCoordinate(geocoded.latitude, geocoded.longitude)) {
-                                if (ctx.mounted) {
-                                  setSheetState(() {
-                                    isPublishing = false;
-                                    uploadErrorMessage = 'Could not locate address "$addressText". Please specify street, house number and city.';
-                                  });
+                                final geocoded = await _geocodeAddress(addressText);
+                                if (geocoded == null || !_isValidCoordinate(geocoded.latitude, geocoded.longitude)) {
+                                  if (ctx.mounted) {
+                                    setSheetState(() {
+                                      isPublishing = false;
+                                      uploadErrorMessage = 'Could not locate address "$addressText". Please check spelling or specify street, house number and city.';
+                                    });
+                                  }
+                                  return;
                                 }
-                                return;
+                                targetLatLng = geocoded;
+                                effectiveLocation = addressText;
                               }
-                              targetLatLng = geocoded;
-                              effectiveLocation = addressText;
 
                               String mappedType = 'gigConcert';
+                              if (selectedType == 'Concert') mappedType = 'concert';
+                              if (selectedType == 'Gig') mappedType = 'gigConcert';
                               if (selectedType == 'Rehearsal') mappedType = 'rehearsal';
                               if (selectedType == 'Jam Session') mappedType = 'jamSession';
                               if (selectedType == 'Recorded Music' || selectedType == 'Demos / Recordings') mappedType = 'recordedMusic';
@@ -3616,7 +3621,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
                       ),
                       TextSpan(
                         text:
-                            'Move pins towards the centre of the screen (telescopic sight) to hear different bands and their recordings, band info, gig promo, etc',
+                            'Move notes / pins towards the centre of the screen (telescopic sight) to hear different bands and their recordings, band info, gig promo, etc',
                         style: GoogleFonts.inter(
                           fontSize: 11.5,
                           color: const Color(0xFFD4CEEB),
