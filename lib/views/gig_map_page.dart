@@ -250,25 +250,34 @@ class MapEventTypeHelper {
     canvas.drawRRect(stemRRect, outlinePaint);
     canvas.drawRRect(stemRRect, notePaint);
 
-    // 5. Draw Eighth Note Flag (Åttondels-fana/flagga sweeping out and downward)
-    final flagPath = Path();
-    flagPath.moveTo(stemX, stemTopY);
-    // Outer wave curving to the right and down
-    flagPath.cubicTo(
-      stemX + 8.0, stemTopY + 1.5,
-      stemX + 13.5, stemTopY + 6.0,
-      stemX + 13.0, stemTopY + 16.5,
-    );
-    // Tapering hook point returning inwards to stem
-    flagPath.cubicTo(
-      stemX + 12.0, stemTopY + 23.0,
-      stemX + 7.5, stemTopY + 21.0,
-      stemX, stemTopY + 17.5,
-    );
-    flagPath.close();
+    // 5. Draw Eighth Note Flag (Åttondels-fana/flagga: slender, calligraphic profile)
+    // Per Wikipedia classical music notation, eighth notes have an elegant fana, while half notes (halvnot) have no fana.
+    if (!isHalfNote) {
+      final flagPath = Path();
+      flagPath.moveTo(stemX, stemTopY);
+      // Outer arc curving smoothly to the right and down (narrow, slender calligraphic profile)
+      flagPath.cubicTo(
+        stemX + 4.5, stemTopY + 1.0,
+        stemX + 8.5, stemTopY + 5.0,
+        stemX + 8.2, stemTopY + 13.5,
+      );
+      // Tapering tip curving gently down and inward
+      flagPath.cubicTo(
+        stemX + 8.0, stemTopY + 18.0,
+        stemX + 5.0, stemTopY + 16.5,
+        stemX + 1.2, stemTopY + 14.0,
+      );
+      // Calligraphic inner scoop returning gracefully to the stem
+      flagPath.cubicTo(
+        stemX + 4.0, stemTopY + 12.0,
+        stemX + 3.5, stemTopY + 6.5,
+        stemX, stemTopY + 4.0,
+      );
+      flagPath.close();
 
-    canvas.drawPath(flagPath, outlinePaint);
-    canvas.drawPath(flagPath, notePaint);
+      canvas.drawPath(flagPath, outlinePaint);
+      canvas.drawPath(flagPath, notePaint);
+    }
 
     // 6. Draw Egg-Shaped Notehead
     canvas.save();
