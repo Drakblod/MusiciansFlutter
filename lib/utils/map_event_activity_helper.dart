@@ -91,6 +91,10 @@ bool isSubRequestActive(SubRequest gig, {DateTime? now}) {
     return false;
   }
 
+  if (gig.extraFields['isLive'] == false || gig.extraFields['isLiveBroadcast'] == false) {
+    return false;
+  }
+
   DateTime? startDt;
   DateTime? endDt;
 
@@ -115,6 +119,10 @@ bool isSubRequestActive(SubRequest gig, {DateTime? now}) {
 
 /// Evaluates whether a [MockLiveRehearsal] broadcast is currently active.
 bool isMockLiveRehearsalActive(MockLiveRehearsal rehearsal, {DateTime? now}) {
+  if (!rehearsal.isLiveBroadcast) {
+    return false;
+  }
+
   if (rehearsal.startDateTime != null) {
     return isMapItemActive(
       type: MapEventType.rehearsal,

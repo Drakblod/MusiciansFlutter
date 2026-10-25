@@ -977,7 +977,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
         try {
           _notePinCache[keyStatic] = await MapEventTypeHelper.createNoteBitmap(
             color: color,
-            isHalfNote: isLiveEligible,
+            isHalfNote: false,
             opacity: 1.0,
             hasGlow: false,
           );
@@ -1101,9 +1101,14 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
     WidgetsBinding.instance.addObserver(this);
     _liveBlinkTimer = Timer.periodic(const Duration(milliseconds: 750), (timer) {
       if (mounted) {
-        setState(() {
-          _liveNoteBlinkOn = !_liveNoteBlinkOn;
-        });
+        final hasAnyLive = _allGigs.any(isSubRequestActive) ||
+            (FeatureFlags.enableMockLiveRehearsals && mockLiveRehearsals.any(isMockLiveRehearsalActive)) ||
+            _activeRealBroadcasts.isNotEmpty;
+        if (hasAnyLive) {
+          setState(() {
+            _liveNoteBlinkOn = !_liveNoteBlinkOn;
+          });
+        }
       }
     });
     if (FeatureFlags.enableMockLiveRehearsals) {
@@ -1190,9 +1195,14 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
     } else if (state == AppLifecycleState.resumed && _liveBlinkTimer == null) {
       _liveBlinkTimer = Timer.periodic(const Duration(milliseconds: 750), (timer) {
         if (mounted) {
-          setState(() {
-            _liveNoteBlinkOn = !_liveNoteBlinkOn;
-          });
+          final hasAnyLive = _allGigs.any(isSubRequestActive) ||
+              (FeatureFlags.enableMockLiveRehearsals && mockLiveRehearsals.any(isMockLiveRehearsalActive)) ||
+              _activeRealBroadcasts.isNotEmpty;
+          if (hasAnyLive) {
+            setState(() {
+              _liveNoteBlinkOn = !_liveNoteBlinkOn;
+            });
+          }
         }
       });
     }
@@ -1651,12 +1661,17 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
       case 'All Music':
         return _getFilterCount('Music', profile);
       case 'Gigs / Rehearsals':
+        return _allGigs.where((g) {
+          final t = MapEventTypeHelper.getEventType(g);
+          return t == MapEventType.gigConcert || t == MapEventType.concert || t == MapEventType.rehearsal;
+        }).length +
+            (FeatureFlags.enableMockLiveRehearsals ? mockLiveRehearsals.length : 0);
       case 'Live Gigs / Rehearsals':
         return _allGigs.where((g) {
           final t = MapEventTypeHelper.getEventType(g);
-          return t == MapEventType.gigConcert || t == MapEventType.rehearsal;
+          return (t == MapEventType.gigConcert || t == MapEventType.concert || t == MapEventType.rehearsal) && isSubRequestActive(g);
         }).length +
-            (FeatureFlags.enableMockLiveRehearsals ? mockLiveRehearsals.length : 0);
+            (FeatureFlags.enableMockLiveRehearsals ? mockLiveRehearsals.where(isMockLiveRehearsalActive).length : 0);
       case 'Gig':
       case 'Gigs':
       case 'Gig / Concert':
@@ -1848,8 +1863,11 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
         if (_selectedSubCategory == 'Rehearsal' || _selectedSubCategory == 'Rehearsals') {
           return type == MapEventType.rehearsal;
         }
-        if ((_selectedSubCategory == 'Gigs / Rehearsals' || _selectedSubCategory == 'Live Gigs / Rehearsals')) {
+        if (_selectedSubCategory == 'Gigs / Rehearsals') {
           return type == MapEventType.gigConcert || type == MapEventType.concert || type == MapEventType.rehearsal;
+        }
+        if (_selectedSubCategory == 'Live Gigs / Rehearsals') {
+          return (type == MapEventType.gigConcert || type == MapEventType.concert || type == MapEventType.rehearsal) && isSubRequestActive(g);
         }
         if (_selectedSubCategory == 'Jam Sessions' || _selectedSubCategory == 'Jam Session') {
           return type == MapEventType.jamSession;
@@ -1938,7 +1956,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
           Marker(
             markerId: MarkerId('real_live_${broadcast.id}'),
             position: LatLng(broadcast.latitude, broadcast.longitude),
-            icon: _getNoteDescriptor(MapEventType.gigConcert),
+            icon: _getNoteDescriptor(MapEventType.gigConcert, isLive: true),
             anchor: const Offset(0.321, 0.716),
             infoWindow: InfoWindow(
               title: '🔴 LIVE: ${broadcast.bandName}',
@@ -1956,13 +1974,20 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
       return {...gigMarkers, ...realLiveMarkers};
     }
 
-    final rehearsalMarkers = mockLiveRehearsals.map((rehearsal) {
-      final isLive = isMockLiveRehearsalActive(rehearsal);
-      return Marker(
-        markerId: MarkerId(rehearsal.id),
-        position: rehearsal.position,
-        icon: _getNoteDescriptor(MapEventType.rehearsal, isLive: isLive),
-        anchor: const Offset(0.321, 0.716),
+    final rehearsalMarkers = mockLiveRehearsals
+        .where((rehearsal) {
+          if (_selectedSubCategory == 'Live Gigs / Rehearsals') {
+            return isMockLiveRehearsalActive(rehearsal);
+          }
+          return true;
+        })
+        .map((rehearsal) {
+          final isLive = isMockLiveRehearsalActive(rehearsal);
+          return Marker(
+            markerId: MarkerId(rehearsal.id),
+            position: rehearsal.position,
+            icon: _getNoteDescriptor(MapEventType.rehearsal, isLive: isLive),
+            anchor: const Offset(0.321, 0.716),
         infoWindow: InfoWindow(
           title: rehearsal.genre.isNotEmpty ? '${rehearsal.bandName} - ${rehearsal.genre}' : rehearsal.bandName,
           snippet: 'Rehearsal · ${rehearsal.city}',
