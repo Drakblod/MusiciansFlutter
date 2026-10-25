@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -2942,10 +2943,18 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
                               if (pickedAudioFile != null) {
                                 try {
                                   final userId = appState.currentUserId ?? 'map_user';
+                                  Uint8List? audioBytes = pickedAudioFile!.bytes;
+                                  String? audioPath;
+                                  if (!kIsWeb) {
+                                    try {
+                                      audioPath = pickedAudioFile!.path;
+                                    } catch (_) {}
+                                  }
+
                                   audioUrl = await appState.firebaseService.uploadAudioSnippetAsync(
                                     userId,
-                                    pickedAudioFile!.bytes,
-                                    pickedAudioFile!.path,
+                                    audioBytes,
+                                    audioPath,
                                   );
                                   if (audioUrl.isEmpty) {
                                     throw Exception('Audio upload returned an empty URL.');
