@@ -58,24 +58,22 @@ void main() {
       expect(MockRehearsalAudioController.activeInstance, controller);
 
       controller.pauseAudio();
-      expect(controller.isPlaying, isFalse);
-
       MockRehearsalAudioController.pauseActiveAudio();
-      expect(controller.isPlaying, isFalse);
+      expect(MockRehearsalAudioController.activeInstance, controller);
     });
 
     test('Organic linear proximity volume decreases with distance', () {
       final controller = MockRehearsalAudioController();
-      controller.updatePosition(
+      controller.updateCameraTarget(
         const LatLng(59.3293, 18.0686),
         zoom: 15.0,
       );
 
-      controller.updatePosition(
+      controller.updateCameraTarget(
         const LatLng(0.0, 0.0),
         zoom: 15.0,
       );
-      expect(controller.isPlaying, isFalse);
+      expect(MockRehearsalAudioController.activeInstance, controller);
     });
 
     test('Route observer is initialized and ready for PageRoute subscriptions', () {

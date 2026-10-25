@@ -136,7 +136,7 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
       if (mounted) {
         setState(() {
           _isLoading = false;
-          _errorMessage = 'Could not load events.';
+          _errorMessage = 'Could not fetch calendar events. Check connection and retry.';
         });
       }
     }
@@ -154,7 +154,7 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          _errorMessage = 'Could not load events.';
+          _errorMessage = 'Could not fetch calendar events. Check connection and retry.';
         });
       }
     }
@@ -1156,8 +1156,7 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
     final bool isNetwork =
         imageSource.startsWith('http://') || imageSource.startsWith('https://');
 
-    final monthShort = DateFormat('MMM').format(event.startDateTime).toUpperCase();
-    final dayStr = DateFormat('dd').format(event.startDateTime);
+
 
     final fit = event.imageFitMode == 'contain' ? BoxFit.contain : BoxFit.cover;
 
@@ -1195,50 +1194,7 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
                       _buildImageErrorFallback(),
                 ),
 
-          // Date overlay pill at top-left of the poster image
-          Positioned(
-            top: 6,
-            left: 6,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.82),
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(
-                  color: AppTheme.primaryAccent.withValues(alpha: 0.4),
-                  width: 0.8,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.5),
-                    blurRadius: 4,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    monthShort,
-                    style: GoogleFonts.inter(
-                      fontSize: 8.5,
-                      fontWeight: FontWeight.bold,
-                      color: AppTheme.primaryAccent,
-                    ),
-                  ),
-                  Text(
-                    dayStr,
-                    style: GoogleFonts.outfit(
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
+
         ],
       ),
     );

@@ -749,10 +749,10 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                               color: Colors.white.withOpacity(0.85),
                               height: 1.45,
                             ),
-                            maxLines: _isDescriptionExpanded ? null : 4,
+                            maxLines: _isDescriptionExpanded ? null : 2,
                             overflow: _isDescriptionExpanded ? TextOverflow.visible : TextOverflow.ellipsis,
                           ),
-                          if (event.description.length > 160) ...[
+                          if (event.description.length > 80) ...[
                             const SizedBox(height: 6),
                             Row(
                               mainAxisSize: MainAxisSize.min,
@@ -1007,41 +1007,28 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                   );
                 }),
               ] else ...[
-                // Multi-Event Sequential RSVP Accordion
-                if (allEventsAnswered && !isNewEvent) ...[
+                // Warning banner if RSVP response is needed
+                if (!allEventsAnswered && !isEventPast && !event.isLocked) ...[
                   Container(
-                    margin: const EdgeInsets.only(bottom: 16),
-                    padding: const EdgeInsets.all(14),
+                    margin: const EdgeInsets.only(bottom: 14),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                     decoration: BoxDecoration(
-                      color: AppTheme.success.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppTheme.success.withOpacity(0.5), width: 1.2),
+                      color: AppTheme.warning.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppTheme.warning.withOpacity(0.6), width: 1.2),
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.check_circle_rounded, color: AppTheme.success, size: 22),
-                        const SizedBox(width: 12),
+                        const Icon(Icons.notifications_active_rounded, color: AppTheme.warning, size: 20),
+                        const SizedBox(width: 10),
                         Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                "✓ All events answered",
-                                style: GoogleFonts.inter(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                "Your RSVP responses have been saved.",
-                                style: GoogleFonts.inter(
-                                  fontSize: 11.5,
-                                  color: AppTheme.textSecondary,
-                                ),
-                              ),
-                            ],
+                          child: Text(
+                            'Your RSVP is needed for this event',
+                            style: GoogleFonts.inter(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
                           ),
                         ),
                       ],

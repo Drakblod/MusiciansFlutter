@@ -1,4 +1,5 @@
 import 'dart:ui';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -1203,7 +1204,7 @@ class _SpinningGlobeIconState extends State<SpinningGlobeIcon> with SingleTicker
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 14),
+      duration: const Duration(seconds: 8),
     )..repeat();
   }
 
@@ -1233,8 +1234,18 @@ class _SpinningGlobeIconState extends State<SpinningGlobeIcon> with SingleTicker
               ),
             ),
           ),
-          RotationTransition(
-            turns: _controller,
+          AnimatedBuilder(
+            animation: _controller,
+            builder: (context, child) {
+              final angle = _controller.value * 2.0 * math.pi;
+              return Transform(
+                alignment: Alignment.center,
+                transform: Matrix4.identity()
+                  ..setEntry(3, 2, 0.001)
+                  ..rotateY(angle),
+                child: child,
+              );
+            },
             child: const Icon(
               Icons.public_rounded,
               color: Color(0xFF4ADE80),

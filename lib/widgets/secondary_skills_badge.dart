@@ -143,19 +143,25 @@ class SecondarySkillsBadge extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(
-                Icons.touch_app_rounded,
+                Icons.stars_rounded,
                 size: isCompact ? 11 : 13,
                 color: AppTheme.secondaryAccent,
               ),
               const SizedBox(width: 4),
               Text(
-                'SECONDARY SKILLS',
+                '+${secondarySkills.length} skills',
                 style: GoogleFonts.outfit(
-                  fontSize: isCompact ? 8.5 : 10.5,
+                  fontSize: isCompact ? 9.0 : 10.5,
                   fontWeight: FontWeight.bold,
                   color: AppTheme.secondaryAccent,
-                  letterSpacing: 0.8,
+                  letterSpacing: 0.4,
                 ),
+              ),
+              const SizedBox(width: 2),
+              Icon(
+                Icons.keyboard_arrow_down_rounded,
+                size: isCompact ? 11 : 13,
+                color: AppTheme.secondaryAccent,
               ),
             ],
           ),

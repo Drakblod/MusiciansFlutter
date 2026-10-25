@@ -174,78 +174,94 @@ class MapEventTypeHelper {
     final canvas = Canvas(pictureRecorder);
 
     // Canvas size (2x resolution for retina / crisp display)
-    const double canvasWidth = 56.0;
+    const double canvasWidth = 60.0;
     const double canvasHeight = 74.0;
 
-    // Egg-shaped notehead center in canvas
-    const double headCenterX = 18.0;
-    const double headCenterY = 53.0;
-    const double headRadiusX = 11.5; // Thinner notehead
-    const double headRadiusY = 8.0; // Thinner notehead
-    const double tiltAngle = -24.0 * (math.pi / 180.0); // Tilted ~ -24°
+    // Outer badge: Rectangle with crisp black border and subtle rounded corners
+    const double badgeLeft = 4.0;
+    const double badgeTop = 4.0;
+    const double badgeWidth = 52.0;
+    const double badgeHeight = 66.0;
+    final badgeRRect = RRect.fromRectAndRadius(
+      const Rect.fromLTWH(badgeLeft, badgeTop, badgeWidth, badgeHeight),
+      const Radius.circular(9.0),
+    );
 
-    // Stem: thinner vertical shaft rising from right edge of notehead
-    const double stemX = headCenterX + 9.2;
-    const double stemTopY = 10.0;
-    const double stemBottomY = headCenterY + 1.5;
-    const double stemWidth = 2.2; // Thinner skaft (was 3.6)
+    // 1. Drop Shadow for badge
+    final shadowPaint = Paint()
+      ..color = hasGlow
+          ? color.withValues(alpha: 0.70 * opacity)
+          : Colors.black.withValues(alpha: 0.40 * opacity)
+      ..maskFilter = MaskFilter.blur(BlurStyle.normal, hasGlow ? 5.0 : 3.0);
+    canvas.drawRRect(badgeRRect.shift(const Offset(1.0, 2.0)), shadowPaint);
+
+    // 2. Badge Fill (clean high-contrast white / subtle warm ivory backing)
+    final badgeFillPaint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.95 * opacity)
+      ..style = PaintingStyle.fill;
+    canvas.drawRRect(badgeRRect, badgeFillPaint);
+
+    // 3. Crisp Black Outer Frame (2.2px black border per owner requirement)
+    final badgeBorderPaint = Paint()
+      ..color = Colors.black.withValues(alpha: opacity)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.2;
+    canvas.drawRRect(badgeRRect, badgeBorderPaint);
+
+    // Eighth Note (Åttondelsnot ♪) Geometry inside badge
+    // Head center
+    const double headCenterX = 23.0;
+    const double headCenterY = 50.0;
+    const double headRadiusX = 9.5;
+    const double headRadiusY = 6.5;
+    const double tiltAngle = -26.0 * (math.pi / 180.0);
+
+    // Stem: vertical shaft rising from right edge of notehead
+    const double stemX = headCenterX + 7.6; // ~30.6
+    const double stemTopY = 14.0;
+    const double stemBottomY = headCenterY + 1.0;
+    const double stemWidth = 2.4;
 
     final noteColor = color.withValues(alpha: opacity);
 
-    // 1. Shadow / Glow for high contrast on both white and dark maps
-    final shadowPaint = Paint()
-      ..color = hasGlow
-          ? color.withValues(alpha: 0.65 * opacity)
-          : Colors.black.withValues(alpha: 0.35 * opacity)
-      ..maskFilter = MaskFilter.blur(BlurStyle.normal, hasGlow ? 4.5 : 2.5);
-
-    // Draw shadow under notehead
-    canvas.save();
-    canvas.translate(headCenterX, headCenterY);
-    canvas.rotate(tiltAngle);
-    canvas.drawOval(
-      Rect.fromCenter(
-        center: const Offset(1.0, 1.5),
-        width: headRadiusX * 2 + (hasGlow ? 4.0 : 2.0),
-        height: headRadiusY * 2 + (hasGlow ? 4.0 : 2.0),
-      ),
-      shadowPaint,
-    );
-    canvas.restore();
-
-    // Draw shadow under stem
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(
-          stemX - stemWidth / 2 + 1.0,
-          stemTopY + 1.0,
-          stemWidth + (hasGlow ? 2.0 : 0.0),
-          (stemBottomY - stemTopY) + (hasGlow ? 2.0 : 0.0),
-        ),
-        const Radius.circular(2.0),
-      ),
-      shadowPaint,
-    );
-
-    // 2. Outlines & Note Paints
     final outlinePaint = Paint()
-      ..color = Colors.black.withValues(alpha: 0.40 * opacity)
+      ..color = Colors.black.withValues(alpha: 0.85 * opacity)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 0.9;
+      ..strokeWidth = 1.0;
 
     final notePaint = Paint()
       ..color = noteColor
       ..style = PaintingStyle.fill;
 
-    // 3. Draw Stem
+    // 4. Draw Stem
     final stemRRect = RRect.fromRectAndRadius(
       Rect.fromLTWH(stemX - stemWidth / 2, stemTopY, stemWidth, stemBottomY - stemTopY),
-      const Radius.circular(1.8),
+      const Radius.circular(1.2),
     );
     canvas.drawRRect(stemRRect, outlinePaint);
     canvas.drawRRect(stemRRect, notePaint);
 
-    // 4. Draw Egg-Shaped Notehead
+    // 5. Draw Eighth Note Flag (Åttondels-fana/flagga sweeping out and downward)
+    final flagPath = Path();
+    flagPath.moveTo(stemX, stemTopY);
+    // Outer wave curving to the right and down
+    flagPath.cubicTo(
+      stemX + 8.0, stemTopY + 1.5,
+      stemX + 13.5, stemTopY + 6.0,
+      stemX + 13.0, stemTopY + 16.5,
+    );
+    // Tapering hook point returning inwards to stem
+    flagPath.cubicTo(
+      stemX + 12.0, stemTopY + 23.0,
+      stemX + 7.5, stemTopY + 21.0,
+      stemX, stemTopY + 17.5,
+    );
+    flagPath.close();
+
+    canvas.drawPath(flagPath, outlinePaint);
+    canvas.drawPath(flagPath, notePaint);
+
+    // 6. Draw Egg-Shaped Notehead
     canvas.save();
     canvas.translate(headCenterX, headCenterY);
     canvas.rotate(tiltAngle);
@@ -257,11 +273,10 @@ class MapEventTypeHelper {
     );
 
     if (isHalfNote) {
-      // Halvnot: Open / hollow egg-shaped notehead
+      // Halvnot: Open egg-shaped notehead
       canvas.drawOval(outerHeadRect, outlinePaint);
       canvas.drawOval(outerHeadRect, notePaint);
 
-      // Inner cutout: calligraphically wider horizontally so top/bottom ring lines are thicker than left/right
       canvas.rotate(-16.0 * (math.pi / 180.0));
       final innerHeadRect = Rect.fromCenter(
         center: Offset.zero,
@@ -273,7 +288,7 @@ class MapEventTypeHelper {
       canvas.drawOval(innerHeadRect, clearPaint);
       canvas.drawOval(innerHeadRect, outlinePaint);
     } else {
-      // Fjärdedelsnot: Solid filled egg-shaped notehead
+      // Åttondelsnot: Solid filled egg-shaped notehead
       canvas.drawOval(outerHeadRect, outlinePaint);
       canvas.drawOval(outerHeadRect, notePaint);
     }
@@ -285,8 +300,8 @@ class MapEventTypeHelper {
     final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
     final bytes = byteData!.buffer.asUint8List();
 
-    // Rendered on map at 28x37 points
-    return BitmapDescriptor.bytes(bytes, width: 28, height: 37);
+    // Rendered on map at 30x37 points
+    return BitmapDescriptor.bytes(bytes, width: 30, height: 37);
   }
 
   static Future<BitmapDescriptor> createWebPinBitmap(Color color) async {
@@ -413,6 +428,66 @@ class GigMapPage extends StatefulWidget {
 }
 
 class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, RouteAware {
+
+  // --- New Pin Ripple Wave Spotter ---
+  LatLng? _newPinRippleLocation;
+  DateTime? _newPinRippleStartTime;
+  Timer? _newPinRippleTimer;
+  double _rippleWavePhase = 0.0;
+
+  void _triggerNewPinRipple(LatLng position) {
+    _newPinRippleLocation = position;
+    _newPinRippleStartTime = DateTime.now();
+    _newPinRippleTimer?.cancel();
+    _newPinRippleTimer = Timer.periodic(const Duration(milliseconds: 100), (timer) {
+      if (!mounted || _newPinRippleLocation == null || _newPinRippleStartTime == null) {
+        timer.cancel();
+        return;
+      }
+      final elapsed = DateTime.now().difference(_newPinRippleStartTime!).inSeconds;
+      if (elapsed >= 30) {
+        timer.cancel();
+        if (mounted) {
+          setState(() {
+            _newPinRippleLocation = null;
+            _newPinRippleStartTime = null;
+          });
+        }
+        return;
+      }
+      if (mounted) {
+        setState(() {
+          _rippleWavePhase = (DateTime.now().millisecondsSinceEpoch % 2000) / 2000.0;
+        });
+      }
+    });
+  }
+
+  Set<Circle> _buildPinRipples() {
+    if (_newPinRippleLocation == null) return {};
+    final wave1 = _rippleWavePhase;
+    final wave2 = (_rippleWavePhase + 0.5) % 1.0;
+
+    return {
+      Circle(
+        circleId: const CircleId('new_pin_ripple_1'),
+        center: _newPinRippleLocation!,
+        radius: 30.0 + (wave1 * 180.0),
+        strokeWidth: 2,
+        strokeColor: AppTheme.primaryAccent.withValues(alpha: (1.0 - wave1) * 0.75),
+        fillColor: AppTheme.primaryAccent.withValues(alpha: (1.0 - wave1) * 0.20),
+      ),
+      Circle(
+        circleId: const CircleId('new_pin_ripple_2'),
+        center: _newPinRippleLocation!,
+        radius: 30.0 + (wave2 * 180.0),
+        strokeWidth: 2,
+        strokeColor: AppTheme.primaryAccent.withValues(alpha: (1.0 - wave2) * 0.75),
+        fillColor: AppTheme.primaryAccent.withValues(alpha: (1.0 - wave2) * 0.20),
+      ),
+    };
+  }
+
   GoogleMapController? _mapController;
   List<SubRequest> _allGigs = [];
   final Set<String> _appliedGigIds = {};
@@ -448,13 +523,21 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
   String? _focusedTargetId;
   bool _isWhiteMap = true;
 
-  static const String _darkMapStyle = '''
+    static const String _darkMapStyle = '''
 [
   {
     "elementType": "geometry",
     "stylers": [
       {
         "color": "#18142c"
+      }
+    ]
+  },
+  {
+    "elementType": "labels.icon",
+    "stylers": [
+      {
+        "visibility": "off"
       }
     ]
   },
@@ -485,19 +568,9 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
   },
   {
     "featureType": "poi",
-    "elementType": "labels.text.fill",
     "stylers": [
       {
-        "color": "#7b61ff"
-      }
-    ]
-  },
-  {
-    "featureType": "poi.park",
-    "elementType": "geometry",
-    "stylers": [
-      {
-        "color": "#16132d"
+        "visibility": "off"
       }
     ]
   },
@@ -521,15 +594,6 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
   },
   {
     "featureType": "road",
-    "elementType": "labels.text.fill",
-    "stylers": [
-      {
-        "color": "#8e8c9a"
-      }
-    ]
-  },
-  {
-    "featureType": "road",
     "elementType": "labels",
     "stylers": [
       {
@@ -540,67 +604,6 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
   {
     "featureType": "road",
     "elementType": "labels.icon",
-    "stylers": [
-      {
-        "visibility": "off"
-      }
-    ]
-  },
-  {
-    "featureType": "road.highway",
-    "elementType": "labels",
-    "stylers": [
-      {
-        "visibility": "off"
-      }
-    ]
-  },
-  {
-    "featureType": "road.highway",
-    "elementType": "labels",
-    "stylers": [
-      {
-        "visibility": "off"
-      }
-    ]
-  },
-  {
-    "featureType": "road.highway",
-    "elementType": "labels.icon",
-    "stylers": [
-      {
-        "visibility": "off"
-      }
-    ]
-  },
-  {
-    "featureType": "road.arterial",
-    "elementType": "labels.icon",
-    "stylers": [
-      {
-        "visibility": "off"
-      }
-    ]
-  },
-  {
-    "featureType": "transit",
-    "stylers": [
-      {
-        "visibility": "off"
-      }
-    ]
-  },
-  {
-    "featureType": "road.arterial",
-    "elementType": "labels.icon",
-    "stylers": [
-      {
-        "visibility": "off"
-      }
-    ]
-  },
-  {
-    "featureType": "transit",
     "stylers": [
       {
         "visibility": "off"
@@ -622,6 +625,68 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
     "stylers": [
       {
         "color": "#18142c"
+      }
+    ]
+  },
+  {
+    "featureType": "road.highway",
+    "elementType": "labels",
+    "stylers": [
+      {
+        "visibility": "off"
+      }
+    ]
+  },
+  {
+    "featureType": "road.highway",
+    "elementType": "labels.icon",
+    "stylers": [
+      {
+        "visibility": "off"
+      }
+    ]
+  },
+  {
+    "featureType": "road.arterial",
+    "elementType": "labels",
+    "stylers": [
+      {
+        "visibility": "off"
+      }
+    ]
+  },
+  {
+    "featureType": "road.arterial",
+    "elementType": "labels.icon",
+    "stylers": [
+      {
+        "visibility": "off"
+      }
+    ]
+  },
+  {
+    "featureType": "road.local",
+    "elementType": "labels",
+    "stylers": [
+      {
+        "visibility": "off"
+      }
+    ]
+  },
+  {
+    "featureType": "road.local",
+    "elementType": "labels.icon",
+    "stylers": [
+      {
+        "visibility": "off"
+      }
+    ]
+  },
+  {
+    "featureType": "transit",
+    "stylers": [
+      {
+        "visibility": "off"
       }
     ]
   },
@@ -717,7 +782,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
   },
   {
     "featureType": "road",
-    "elementType": "labels.icon",
+    "elementType": "labels",
     "stylers": [
       {
         "visibility": "off"
@@ -726,16 +791,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
   },
   {
     "featureType": "road",
-    "elementType": "labels.text.fill",
-    "stylers": [
-      {
-        "color": "#64748b"
-      }
-    ]
-  },
-  {
-    "featureType": "road",
-    "elementType": "labels",
+    "elementType": "labels.icon",
     "stylers": [
       {
         "visibility": "off"
@@ -762,6 +818,51 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
   },
   {
     "featureType": "road.highway",
+    "elementType": "labels",
+    "stylers": [
+      {
+        "visibility": "off"
+      }
+    ]
+  },
+  {
+    "featureType": "road.highway",
+    "elementType": "labels.icon",
+    "stylers": [
+      {
+        "visibility": "off"
+      }
+    ]
+  },
+  {
+    "featureType": "road.arterial",
+    "elementType": "labels",
+    "stylers": [
+      {
+        "visibility": "off"
+      }
+    ]
+  },
+  {
+    "featureType": "road.arterial",
+    "elementType": "labels.icon",
+    "stylers": [
+      {
+        "visibility": "off"
+      }
+    ]
+  },
+  {
+    "featureType": "road.local",
+    "elementType": "labels",
+    "stylers": [
+      {
+        "visibility": "off"
+      }
+    ]
+  },
+  {
+    "featureType": "road.local",
     "elementType": "labels.icon",
     "stylers": [
       {
@@ -773,77 +874,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
     "featureType": "transit",
     "stylers": [
       {
-        "visibility": "on"
-      }
-    ]
-  },
-  {
-    "featureType": "transit.line",
-    "elementType": "geometry",
-    "stylers": [
-      {
-        "color": "#cbd5e1"
-      },
-      {
-        "visibility": "on"
-      }
-    ]
-  },
-  {
-    "featureType": "transit.station",
-    "stylers": [
-      {
-        "visibility": "on"
-      }
-    ]
-  },
-  {
-    "featureType": "transit.station",
-    "elementType": "labels.icon",
-    "stylers": [
-      {
-        "visibility": "on"
-      }
-    ]
-  },
-  {
-    "featureType": "transit.station",
-    "elementType": "labels.text.fill",
-    "stylers": [
-      {
-        "color": "#1e293b"
-      },
-      {
-        "visibility": "on"
-      }
-    ]
-  },
-  {
-    "featureType": "transit.station.subway",
-    "stylers": [
-      {
-        "visibility": "on"
-      }
-    ]
-  },
-  {
-    "featureType": "transit.station.subway",
-    "elementType": "labels.icon",
-    "stylers": [
-      {
-        "visibility": "on"
-      }
-    ]
-  },
-  {
-    "featureType": "transit.station.subway",
-    "elementType": "labels.text.fill",
-    "stylers": [
-      {
-        "color": "#0284c7"
-      },
-      {
-        "visibility": "on"
+        "visibility": "off"
       }
     ]
   },
@@ -1154,6 +1185,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
         }
       }
     }
+    _newPinRippleTimer?.cancel();
     super.dispose();
   }
 
@@ -2332,8 +2364,23 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
       builder: (ctx) => StatefulBuilder(
         builder: (context, setSheetState) {
           final typesForCategory = selectedCategory == 'Music'
-              ? ['Gig / Concert', 'Rehearsal', 'Jam Session', 'Demos / Recordings']
-              : ['Substitute', 'New Member', 'Paid Gigs'];
+              ? [
+                  'Gig',
+                  'Concert',
+                  'Festival',
+                  'Rehearsal',
+                  'Demo',
+                  'Recording',
+                  'Jam Session',
+                  'Songwriting Session',
+                  'Workshop',
+                  'Lecture',
+                  'Other'
+                ]
+              : [
+                  'New Member',
+                  'Substitute'
+                ];
 
           return Padding(
             padding: EdgeInsets.only(
@@ -2412,24 +2459,40 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
                   ),
                   const SizedBox(height: 12),
 
-                  // Type Selector
-                  Text('Type', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white)),
-                  const SizedBox(height: 6),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 6,
-                    children: typesForCategory.map((type) {
-                      final isSelected = selectedType == type;
-                      return ChoiceChip(
-                        label: Text(type, style: GoogleFonts.inter(fontSize: 11, color: isSelected ? Colors.white : Colors.white70)),
-                        selected: isSelected,
-                        selectedColor: const Color(0xFF6366F1),
-                        backgroundColor: const Color(0xFF1E1A38),
-                        onSelected: (val) {
-                          if (val) setSheetState(() => selectedType = type);
+                  // Standardized Event / Search Type Selector (Clean Dropdown, no 'Type' prefix)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1E1A38),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFF38325A)),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: typesForCategory.contains(selectedType) ? selectedType : typesForCategory.first,
+                        isExpanded: true,
+                        dropdownColor: const Color(0xFF1A1633),
+                        icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white70),
+                        items: typesForCategory.map((type) {
+                          return DropdownMenuItem<String>(
+                            value: type,
+                            child: Text(
+                              type,
+                              style: GoogleFonts.inter(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white,
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                        onChanged: (newVal) {
+                          if (newVal != null) {
+                            setSheetState(() => selectedType = newVal);
+                          }
                         },
-                      );
-                    }).toList(),
+                      ),
+                    ),
                   ),
                   const SizedBox(height: 14),
 
@@ -2840,38 +2903,28 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
                               LatLng targetLatLng;
                               String effectiveLocation;
 
-                              if (addressText.isNotEmpty) {
-                                final geocoded = await _geocodeAddress(addressText);
-                                if (geocoded == null || !_isValidCoordinate(geocoded.latitude, geocoded.longitude)) {
-                                  if (ctx.mounted) {
-                                    setSheetState(() {
-                                      isPublishing = false;
-                                      uploadErrorMessage = 'Could not resolve the entered address. Please check spelling or leave blank to pin at map centre.';
-                                    });
-                                  }
-                                  return;
+                              if (addressText.isEmpty) {
+                                if (ctx.mounted) {
+                                  setSheetState(() {
+                                    isPublishing = false;
+                                    uploadErrorMessage = 'Please enter a street address and city (e.g. "Kungsgatan 12, Stockholm") so musicians can locate your pin.';
+                                  });
                                 }
-                                targetLatLng = geocoded;
-                                effectiveLocation = addressText;
-                              } else {
-                                final camTarget = _currentCameraPosition.target;
-                                if (!_isValidCoordinate(camTarget.latitude, camTarget.longitude)) {
-                                  if (ctx.mounted) {
-                                    setSheetState(() => isPublishing = false);
-                                  }
-                                  if (context.mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text('No valid map location available. Please pan the map or enter a street address.'),
-                                        backgroundColor: Colors.redAccent,
-                                      ),
-                                    );
-                                  }
-                                  return;
-                                }
-                                targetLatLng = camTarget;
-                                effectiveLocation = venueText.isNotEmpty ? venueText : 'Map Centre Location';
+                                return;
                               }
+
+                              final geocoded = await _geocodeAddress(addressText);
+                              if (geocoded == null || !_isValidCoordinate(geocoded.latitude, geocoded.longitude)) {
+                                if (ctx.mounted) {
+                                  setSheetState(() {
+                                    isPublishing = false;
+                                    uploadErrorMessage = 'Could not locate address "$addressText". Please specify street, house number and city.';
+                                  });
+                                }
+                                return;
+                              }
+                              targetLatLng = geocoded;
+                              effectiveLocation = addressText;
 
                               String mappedType = 'gigConcert';
                               if (selectedType == 'Rehearsal') mappedType = 'rehearsal';
@@ -2991,8 +3044,9 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
                               });
 
                               _mapController?.animateCamera(
-                                CameraUpdate.newLatLngZoom(targetLatLng, 14.5),
+                                CameraUpdate.newLatLngZoom(targetLatLng, 15.0),
                               );
+                              _triggerNewPinRipple(targetLatLng);
 
                               if (ctx.mounted) {
                                 Navigator.pop(ctx);
@@ -3087,6 +3141,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
                       _evaluateCrosshairTargeting(filteredGigs);
                     },
                     markers: markers,
+                    circles: _buildPinRipples(),
                     mapToolbarEnabled: false,
                     zoomControlsEnabled: false,
                     myLocationEnabled: false,
@@ -3566,6 +3621,33 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
         child: ValueListenableBuilder<bool>(
           valueListenable: _audioController!.isAudioStoppedNotifier,
           builder: (context, isStopped, _) {
+            if (isStopped) {
+              return GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () {
+                  setState(() => _isAutoSelected = false);
+                  _audioController?.toggleAudioPower();
+                },
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.volume_off_rounded, size: 14, color: AppTheme.danger),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Turn ON Audio',
+                      style: GoogleFonts.inter(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    const Icon(Icons.play_arrow_rounded, size: 15, color: AppTheme.success),
+                  ],
+                ),
+              );
+            }
+
             return ValueListenableBuilder<bool>(
               valueListenable: _audioController!.isMutedNotifier,
               builder: (context, isMuted, _) {

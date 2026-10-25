@@ -639,22 +639,6 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> with SingleTick
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: AppTheme.primaryAccent.withOpacity(0.2),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(
-                              sessionType,
-                              style: GoogleFonts.inter(
-                                fontSize: 11,
-                                color: AppTheme.primaryAccent,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 6),
                           Text(
                             bandName,
                             style: GoogleFonts.outfit(
@@ -670,10 +654,28 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> with SingleTick
                             style: GoogleFonts.inter(
                               fontSize: 15,
                               fontWeight: FontWeight.w600,
-                              color: Colors.white.withOpacity(0.9),
+                              color: AppTheme.primaryAccent,
                             ),
                             overflow: TextOverflow.ellipsis,
                           ),
+                          if (sessionType.isNotEmpty && sessionType.toLowerCase() != 'event') ...[
+                            const SizedBox(height: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: AppTheme.primaryAccent.withOpacity(0.18),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                sessionType,
+                                style: GoogleFonts.inter(
+                                  fontSize: 10.5,
+                                  color: AppTheme.primaryAccent,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ),

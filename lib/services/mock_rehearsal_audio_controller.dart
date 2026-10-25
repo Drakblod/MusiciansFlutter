@@ -38,6 +38,10 @@ class MockRehearsalAudioController {
   final ValueNotifier<bool> isAudioStoppedNotifier = ValueNotifier<bool>(false);
   final ValueNotifier<bool> webAutoplayBlockedNotifier = ValueNotifier<bool>(false);
 
+  MockRehearsalAudioController() {
+    activeInstance = this;
+  }
+
   /// Helper to immediately pause map audio from anywhere in the app (e.g. navigation / top bar).
   static void pauseActiveAudio() {
     activeInstance?.pauseAudio();
