@@ -500,7 +500,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
   bool _showInstrumentSearch = false;
 
   SubRequest? _selectedGig;
-  bool _showGuideBanner = true;
+  bool _showGuideBanner = false;
 
   // Prototype Mock Live Rehearsal Audio State
   MockRehearsalAudioController? _audioController;
@@ -902,27 +902,56 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
 
   Future<void> _loadMapStylePref() async {
     try {
+      final appState = Provider.of<AppState>(context, listen: false);
+      _isWhiteMap = appState.isWhiteMapTheme;
+      _mapController?.setMapStyle(_isWhiteMap ? _whiteMapStyle : _darkMapStyle);
+    } catch (_) {}
+  }
+
+  Future<void> _loadGuideBannerPref() async {
+    try {
       final prefs = await SharedPreferences.getInstance();
-      final saved = prefs.getBool('map_view_is_white_theme');
-      if (saved != null && mounted) {
+      final hasSeen = prefs.getBool('has_seen_map_intro') ?? false;
+      if (mounted) {
         setState(() {
-          _isWhiteMap = saved;
+          _showGuideBanner = !hasSeen;
         });
-        _mapController?.setMapStyle(_isWhiteMap ? _whiteMapStyle : _darkMapStyle);
       }
     } catch (_) {}
   }
 
-  Future<void> _toggleMapTheme(bool isWhite) async {
-    if (_isWhiteMap == isWhite) return;
+  Future<void> _dismissGuideBanner() async {
+    if (!_showGuideBanner) return;
     setState(() {
-      _isWhiteMap = isWhite;
+      _showGuideBanner = false;
     });
-    await _mapController?.setMapStyle(_isWhiteMap ? _whiteMapStyle : _darkMapStyle);
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('map_view_is_white_theme', isWhite);
+      await prefs.setBool('has_seen_map_intro', true);
     } catch (_) {}
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final appState = Provider.of<AppState>(context);
+    if (_isWhiteMap != appState.isWhiteMapTheme) {
+      _isWhiteMap = appState.isWhiteMapTheme;
+      _mapController?.setMapStyle(_isWhiteMap ? _whiteMapStyle : _darkMapStyle);
+    }
+  }
+
+  /// Calculates the geographical LatLng point directly under the elevated crosshair overlay.
+  LatLng _getCrosshairMapCoordinate(LatLng cameraCenter, double zoom) {
+    if (!mounted) return cameraCenter;
+    final screenHeight = MediaQuery.of(context).size.height;
+    // Optical vertical alignment: -0.22 means -0.22 * (screenHeight / 2) pixels vertically
+    final pixelOffsetFromCenter = -0.22 * (screenHeight / 2.0); // negative is up (north)
+    final mpp = MapCrosshairTargeting.metersPerPixel(cameraCenter.latitude, zoom);
+    final deltaMetersNorth = -pixelOffsetFromCenter * mpp;
+    final deltaLat = deltaMetersNorth / 111320.0;
+    final crosshairLat = (cameraCenter.latitude + deltaLat).clamp(-85.0, 85.0);
+    return LatLng(crosshairLat, cameraCenter.longitude);
   }
 
   static final Map<String, BitmapDescriptor> _notePinCache = {};
@@ -1058,6 +1087,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
   void initState() {
     super.initState();
     _loadMapStylePref();
+    _loadGuideBannerPref();
     _initNotePins();
     _fetchGigs();
     WidgetsBinding.instance.addObserver(this);
@@ -1689,12 +1719,13 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
       }
     }
 
+    final crosshairPos = _getCrosshairMapCoordinate(_currentCameraPosition.target, _currentCameraPosition.zoom);
     final bestTarget = MapCrosshairTargeting.findNearestTarget(
-      cameraLat: _currentCameraPosition.target.latitude,
-      cameraLng: _currentCameraPosition.target.longitude,
+      cameraLat: crosshairPos.latitude,
+      cameraLng: crosshairPos.longitude,
       zoom: _currentCameraPosition.zoom,
       candidates: candidates,
-      hitRadiusPixels: 48.0,
+      hitRadiusPixels: 24.0,
     );
 
     if (bestTarget == null) {
@@ -1920,6 +1951,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
 
   void _showMapInfoDialog() {
     showWhatIsMapViewDialog(context);
+    _dismissGuideBanner();
   }
 
   void _openStartLiveBroadcastDialog() {
@@ -3120,10 +3152,13 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
                     ),
                     onMapCreated: (controller) {
                       _mapController = controller;
+                      final appState = Provider.of<AppState>(context, listen: false);
+                      _isWhiteMap = appState.isWhiteMapTheme;
                       _mapController?.setMapStyle(_isWhiteMap ? _whiteMapStyle : _darkMapStyle);
+                      final crosshairPos = _getCrosshairMapCoordinate(_currentCameraPosition.target, _currentCameraPosition.zoom);
                       if (FeatureFlags.enableMockLiveRehearsals) {
                         _audioController?.updateCameraTarget(
-                          _currentCameraPosition.target,
+                          crosshairPos,
                           immediate: true,
                           zoom: _currentCameraPosition.zoom,
                         );
@@ -3131,18 +3166,21 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
                     },
                     onCameraMove: (position) {
                       _currentCameraPosition = position;
+                      final crosshairPos = _getCrosshairMapCoordinate(position.target, position.zoom);
                       if (FeatureFlags.enableMockLiveRehearsals) {
                         _audioController?.updateCameraTarget(
-                          position.target,
+                          crosshairPos,
                           zoom: position.zoom,
                         );
                       }
+                      _evaluateCrosshairTargeting(filteredGigs);
                     },
                     onCameraIdle: () {
+                      final crosshairPos = _getCrosshairMapCoordinate(_currentCameraPosition.target, _currentCameraPosition.zoom);
                       if (FeatureFlags.enableMockLiveRehearsals && _mapController != null) {
                         _mapController?.getVisibleRegion();
                         _audioController?.updateCameraTarget(
-                          _currentCameraPosition.target,
+                          crosshairPos,
                           immediate: true,
                           zoom: _currentCameraPosition.zoom,
                         );
@@ -3171,8 +3209,9 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
                     },
                   ),
 
-            // Center Map Crosshair Overlay
-            Center(
+            // Map Crosshair Overlay (centered between top controls and bottom panel)
+            Align(
+              alignment: const Alignment(0.0, -0.22),
               child: MapCrosshair(
                 isTargetAcquired: _selectedGig != null || _selectedRehearsal != null,
               ),
@@ -3227,65 +3266,42 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
                     ),
                   ],
 
-                  // Row 2: Actions Header (Map Style Toggle on left, Refresh and Guide on right)
+                  // Row 2: Actions Header (Refresh and Guide Help icon)
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      mainAxisAlignment: MainAxisAlignment.end,
                       children: [
-                        // Map Style Toggle Pill (White vs Default Dark)
-                        _buildMapThemeToggle(),
-
-                        // Action Buttons: Refresh & Guide Toggle
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Container(
-                              width: 34,
-                              height: 34,
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF0F0C20).withOpacity(0.92),
-                                shape: BoxShape.circle,
-                                border: Border.all(color: const Color(0xFF2E2A4E), width: 1.2),
-                              ),
-                              child: IconButton(
-                                padding: EdgeInsets.zero,
-                                icon: const Icon(Icons.refresh_rounded, color: Colors.white, size: 18),
-                                tooltip: 'Refresh Map',
-                                onPressed: _fetchGigs,
-                              ),
-                            ),
-                            if (!_showGuideBanner) ...[
-                              const SizedBox(width: 8),
-                              GestureDetector(
-                                onTap: () => setState(() => _showGuideBanner = true),
-                                child: Container(
-                                  height: 34,
-                                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF0F0C20).withOpacity(0.92),
-                                    borderRadius: BorderRadius.circular(17),
-                                    border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.5), width: 1.2),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      const Icon(Icons.help_outline_rounded, color: AppTheme.primaryAccent, size: 14),
-                                      const SizedBox(width: 5),
-                                      Text(
-                                        'What is Map View?',
-                                        style: GoogleFonts.inter(
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.bold,
-                                          color: AppTheme.primaryAccent,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ],
+                        Container(
+                          width: 34,
+                          height: 34,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF0F0C20).withOpacity(0.92),
+                            shape: BoxShape.circle,
+                            border: Border.all(color: const Color(0xFF2E2A4E), width: 1.2),
+                          ),
+                          child: IconButton(
+                            padding: EdgeInsets.zero,
+                            icon: const Icon(Icons.help_outline_rounded, color: AppTheme.primaryAccent, size: 17),
+                            tooltip: 'What is Map View?',
+                            onPressed: _showMapInfoDialog,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          width: 34,
+                          height: 34,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF0F0C20).withOpacity(0.92),
+                            shape: BoxShape.circle,
+                            border: Border.all(color: const Color(0xFF2E2A4E), width: 1.2),
+                          ),
+                          child: IconButton(
+                            padding: EdgeInsets.zero,
+                            icon: const Icon(Icons.refresh_rounded, color: Colors.white, size: 18),
+                            tooltip: 'Refresh Map',
+                            onPressed: _fetchGigs,
+                          ),
                         ),
                       ],
                     ),
@@ -3583,17 +3599,31 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
                 color: AppTheme.primaryAccent,
                 size: 11,
               ),
-              const SizedBox(width: 4),
-              IconButton(
-                icon: const Icon(Icons.close_rounded, color: Colors.white60, size: 16),
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-                tooltip: 'Dismiss',
-                onPressed: () {
-                  setState(() {
-                    _showGuideBanner = false;
-                  });
-                },
+              const SizedBox(width: 8),
+              AnimatedTapDetector(
+                onTap: _dismissGuideBanner,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primaryAccent,
+                    borderRadius: BorderRadius.circular(10),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppTheme.primaryAccent.withOpacity(0.35),
+                        blurRadius: 6,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Text(
+                    'Got it!',
+                    style: GoogleFonts.inter(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
               ),
             ],
           ),
@@ -4056,105 +4086,6 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
             ],
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildMapThemeToggle() {
-    return Container(
-      height: 34,
-      padding: const EdgeInsets.all(2.5),
-      decoration: BoxDecoration(
-        color: const Color(0xFF0F0C20).withOpacity(0.92),
-        borderRadius: BorderRadius.circular(17),
-        border: Border.all(color: const Color(0xFF2E2A4E), width: 1.2),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // White Map Button
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () => _toggleMapTheme(true),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: _isWhiteMap ? Colors.white : Colors.transparent,
-                borderRadius: BorderRadius.circular(14),
-                boxShadow: _isWhiteMap
-                    ? [
-                        BoxShadow(
-                          color: Colors.white.withOpacity(0.25),
-                          blurRadius: 4,
-                          offset: const Offset(0, 1),
-                        ),
-                      ]
-                    : null,
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.wb_sunny_rounded,
-                    size: 13,
-                    color: _isWhiteMap ? const Color(0xFF0F0C20) : Colors.white60,
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    'White',
-                    style: GoogleFonts.inter(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      color: _isWhiteMap ? const Color(0xFF0F0C20) : Colors.white60,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          // Default Map Button
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () => _toggleMapTheme(false),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: !_isWhiteMap ? AppTheme.primaryAccent : Colors.transparent,
-                borderRadius: BorderRadius.circular(14),
-                boxShadow: !_isWhiteMap
-                    ? [
-                        BoxShadow(
-                          color: AppTheme.primaryAccent.withOpacity(0.3),
-                          blurRadius: 4,
-                          offset: const Offset(0, 1),
-                        ),
-                      ]
-                    : null,
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.nightlight_round,
-                    size: 13,
-                    color: !_isWhiteMap ? Colors.white : Colors.white60,
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    'Default',
-                    style: GoogleFonts.inter(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      color: !_isWhiteMap ? Colors.white : Colors.white60,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

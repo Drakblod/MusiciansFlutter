@@ -355,6 +355,21 @@ class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
                   },
                 ),
                 const SizedBox(height: 12),
+                Consumer<AppState>(
+                  builder: (context, state, _) {
+                    final isWhite = state.isWhiteMapTheme;
+                    return _buildMenuItem(
+                      context,
+                      icon: Icons.map_outlined,
+                      title: 'Map Theme: ${isWhite ? "White" : "Dark (Default)"}',
+                      color: const Color(0xFF38BDF8),
+                      onTap: () {
+                        state.toggleMapTheme();
+                      },
+                    );
+                  },
+                ),
+                const SizedBox(height: 12),
                 _buildMenuItem(
                   context,
                   icon: Icons.logout_rounded,

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../theme/app_theme.dart';
 
 /// Shows the standardized "What is Map View?" guide and explanation dialog.
@@ -85,7 +86,13 @@ void showWhatIsMapViewDialog(BuildContext context, {String? description}) {
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.pop(context),
+          onPressed: () async {
+            Navigator.pop(context);
+            try {
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.setBool('has_seen_map_intro', true);
+            } catch (_) {}
+          },
           child: Text(
             'Got it',
             style: GoogleFonts.inter(color: AppTheme.primaryAccent, fontWeight: FontWeight.bold),

@@ -68,7 +68,41 @@ class AppState extends ChangeNotifier {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initializeAuthListener();
       loadSelectedBubbles();
+      loadMapThemePref();
     });
+  }
+
+  bool _isWhiteMapTheme = true;
+  bool get isWhiteMapTheme => _isWhiteMapTheme;
+
+  Future<void> loadMapThemePref() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final saved = prefs.getBool('map_view_is_white_theme');
+      if (saved != null) {
+        _isWhiteMapTheme = saved;
+        notifyListeners();
+      }
+    } catch (_) {}
+  }
+
+  Future<void> toggleMapTheme() async {
+    _isWhiteMapTheme = !_isWhiteMapTheme;
+    notifyListeners();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('map_view_is_white_theme', _isWhiteMapTheme);
+    } catch (_) {}
+  }
+
+  Future<void> setMapTheme(bool isWhite) async {
+    if (_isWhiteMapTheme == isWhite) return;
+    _isWhiteMapTheme = isWhite;
+    notifyListeners();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('map_view_is_white_theme', isWhite);
+    } catch (_) {}
   }
 
   Future<void> loadSelectedBubbles() async {

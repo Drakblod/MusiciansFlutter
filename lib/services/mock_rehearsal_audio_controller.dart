@@ -4,7 +4,6 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:audioplayers/audioplayers.dart';
 import '../data/mock_live_rehearsals.dart';
 import '../utils/geo_distance.dart';
-import '../utils/map_crosshair_targeting.dart';
 
 class MockRehearsalAudioController {
   /// Singleton / active instance tracker for global lifecycle & navigation audio stops.
@@ -167,29 +166,13 @@ class MockRehearsalAudioController {
     if (_isDisposed || _isAudioStopped) return;
 
     // 1. Calculate geographical distance to all rehearsals
-    String? nearestId;
-    double minDistanceKm = double.infinity;
-
     for (final rehearsal in mockLiveRehearsals) {
       final distKm = calculateHaversineDistanceKm(cameraTarget, rehearsal.position);
       _distancesKm[rehearsal.id] = distKm;
-      if (distKm < minDistanceKm) {
-        minDistanceKm = distKm;
-        nearestId = rehearsal.id;
-      }
     }
 
-    // 2. Compute zoom-aware audible radius in meters
-    // MapCrosshairTargeting.metersPerPixel provides accurate mercator ground resolution
-    final mpp = MapCrosshairTargeting.metersPerPixel(cameraTarget.latitude, zoom);
-    // 600 display pixels represents ~1.5x mobile viewport radius
-    // Clamped between 1.5 km (street zoom) and 80 km (country/overview zoom)
-    final double audibleRadiusMeters = (mpp * 600.0).clamp(1500.0, 80000.0);
-    final double audibleRadiusKm = audibleRadiusMeters / 1000.0;
-
-    // 3. Determine active rehearsal:
-    // If a specific rehearsal is focused in the crosshair, it takes precedence.
-    // Otherwise, the geographically closest rehearsal within the audible radius is active.
+    // 2. Determine active rehearsal:
+    // Only activate playback if a specific rehearsal is focused strictly under the crosshair.
     String? activeRehearsalId;
     if (_focusedTargetId != null) {
       final isFocusedRehearsal = mockLiveRehearsals.any((r) => r.id == _focusedTargetId);
@@ -197,19 +180,13 @@ class MockRehearsalAudioController {
         activeRehearsalId = _focusedTargetId;
       }
     }
-    activeRehearsalId ??= (minDistanceKm <= audibleRadiusKm ? nearestId : null);
 
-    // 4. Calculate target volumes (organic linear decay with distance)
+    // 4. Calculate target volumes (instant target on focused pin, 0.0 everywhere else)
     for (final rehearsal in mockLiveRehearsals) {
       double targetVol = 0.0;
 
       if (!_isAudioStopped && !_isMuted && rehearsal.id == activeRehearsalId) {
-        final distKm = _distancesKm[rehearsal.id] ?? double.infinity;
-        if (distKm <= audibleRadiusKm) {
-          // Strictly linear decay: 1.0 at pin center (0km) down to 0.0 at audibleRadiusKm
-          final double normalized = (1.0 - (distKm / audibleRadiusKm)).clamp(0.0, 1.0);
-          targetVol = normalized;
-        }
+        targetVol = 1.0;
       }
 
       _targetVolumes[rehearsal.id] = targetVol;
@@ -223,12 +200,12 @@ class MockRehearsalAudioController {
     _startSmoothVolumeTransition();
   }
 
-  /// Smoothly interpolates current volumes towards target volumes over ~250ms.
+  /// Smoothly interpolates current volumes towards target volumes over ~120ms.
   void _startSmoothVolumeTransition() {
     _fadeTimer?.cancel();
 
-    const int steps = 10;
-    const Duration stepDuration = Duration(milliseconds: 25);
+    const int steps = 6;
+    const Duration stepDuration = Duration(milliseconds: 20);
     int currentStep = 0;
 
     final Map<String, double> startVolumes = Map.from(_currentVolumes);
