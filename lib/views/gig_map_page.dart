@@ -2487,6 +2487,16 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
       }
     }
 
+    final initialTargetCoord = isEditing
+        ? LatLng(editingPin.latitude ?? _currentCameraPosition.target.latitude, editingPin.longitude ?? _currentCameraPosition.target.longitude)
+        : _currentCameraPosition.target;
+    String previewLocation = 'Map Center (${initialTargetCoord.latitude.toStringAsFixed(3)}, ${initialTargetCoord.longitude.toStringAsFixed(3)})';
+    _reverseGeocode(initialTargetCoord).then((res) {
+      if (res != null && res.isNotEmpty) {
+        previewLocation = res;
+      }
+    });
+
     final bandNameController = TextEditingController(text: editingPin?.bandName ?? '');
     final venueController = TextEditingController(text: editingPin?.extraFields['venue']?.toString() ?? '');
     final locationController = TextEditingController(text: editingPin?.location ?? '');
@@ -2743,7 +2753,8 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
                     decoration: InputDecoration(
                       labelText: 'Street Address (Optional)',
                       hintText: 'e.g. 123 Main Street, Stockholm (or leave blank)',
-                      helperText: 'Optional. Leave blank to place the pin at crosshair map centre.',
+                      helperText: 'Leave blank to place pin at crosshair: $previewLocation',
+                      helperStyle: GoogleFonts.inter(fontSize: 11, color: const Color(0xFF00E5FF)),
                       hintStyle: GoogleFonts.inter(fontSize: 12, color: Colors.white38),
                       labelStyle: GoogleFonts.inter(fontSize: 12, color: Colors.white60),
                       filled: true,
@@ -3049,12 +3060,13 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
                               String effectiveLocation;
 
                               if (addressText.isEmpty) {
-                                targetLatLng = _getCrosshairMapCoordinate(_currentCameraPosition.target, _currentCameraPosition.zoom);
+                                targetLatLng = initialTargetCoord;
                                 if (venueText.isNotEmpty) {
                                   effectiveLocation = venueText;
                                 } else {
-                                  final rev = await _reverseGeocode(targetLatLng);
-                                  effectiveLocation = rev ?? 'Map Location';
+                                  effectiveLocation = previewLocation.startsWith('Map Center')
+                                      ? (await _reverseGeocode(targetLatLng) ?? 'Map Location')
+                                      : previewLocation;
                                 }
                               } else {
                                 if (addressText.length < 5 || (!addressText.contains(' ') && !addressText.contains(','))) {
