@@ -967,29 +967,14 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
     } catch (_) {}
   }
 
-  /// Calculates the geographical LatLng point directly under the elevated crosshair overlay.
+  /// Direct geographical coordinate under the map center crosshair.
   LatLng _getCrosshairMapCoordinate(LatLng cameraCenter, double zoom) {
-    if (!mounted) return cameraCenter;
-    final screenHeight = MediaQuery.of(context).size.height;
-    // Optical vertical alignment: -0.22 means -0.22 * (screenHeight / 2) pixels vertically
-    final pixelOffsetFromCenter = -0.22 * (screenHeight / 2.0); // negative is up (north)
-    final mpp = MapCrosshairTargeting.metersPerPixel(cameraCenter.latitude, zoom);
-    final deltaMetersNorth = -pixelOffsetFromCenter * mpp;
-    final deltaLat = deltaMetersNorth / 111320.0;
-    final crosshairLat = (cameraCenter.latitude + deltaLat).clamp(-85.0, 85.0);
-    return LatLng(crosshairLat, cameraCenter.longitude);
+    return cameraCenter;
   }
 
-  /// Calculates the camera center needed so that [crosshairTarget] is positioned under the elevated crosshair.
+  /// Calculates the camera center needed to center [crosshairTarget] directly under the crosshair.
   LatLng _getCameraCenterForCrosshair(LatLng crosshairTarget, double zoom) {
-    if (!mounted) return crosshairTarget;
-    final screenHeight = MediaQuery.of(context).size.height;
-    final pixelOffsetFromCenter = -0.22 * (screenHeight / 2.0);
-    final mpp = MapCrosshairTargeting.metersPerPixel(crosshairTarget.latitude, zoom);
-    final deltaMetersNorth = -pixelOffsetFromCenter * mpp;
-    final deltaLat = deltaMetersNorth / 111320.0;
-    final cameraLat = (crosshairTarget.latitude - deltaLat).clamp(-85.0, 85.0);
-    return LatLng(cameraLat, crosshairTarget.longitude);
+    return crosshairTarget;
   }
 
   static final Map<String, BitmapDescriptor> _notePinCache = {};
@@ -3359,9 +3344,8 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
                     },
                   ),
 
-            // Map Crosshair Overlay (centered between top controls and bottom panel)
-            Align(
-              alignment: const Alignment(0.0, -0.22),
+            // Map Crosshair Overlay (centered directly over the interactive map)
+            Center(
               child: MapCrosshair(
                 isTargetAcquired: _selectedGig != null || _selectedRehearsal != null,
               ),
