@@ -4166,7 +4166,7 @@ exports.createMapPin = onCall({ region: 'europe-west1' }, async (request) => {
     throw new HttpsError('invalid-argument', 'Valid eventType is required.');
   }
   const eventType = rawEventType.trim();
-  const ALLOWED_MAP_EVENT_TYPES = ['gigConcert', 'rehearsal', 'jamSession', 'recordedMusic'];
+  const ALLOWED_MAP_EVENT_TYPES = ['gigConcert', 'concert', 'rehearsal', 'jamSession', 'recordedMusic', 'gigPromo'];
   if (!ALLOWED_MAP_EVENT_TYPES.includes(eventType)) {
     throw new HttpsError('invalid-argument', `Invalid event type "${eventType}". Only ordinary music pins are allowed.`);
   }
