@@ -478,4 +478,6 @@ class SubRequest {
   bool get isMapOnlyPin =>
       extraFields['NotificationMode'] == 'map_pin' ||
       extraFields['notificationMode'] == 'map_pin';
+
+  bool get isMapPin => isMapOnlyPin;
 }

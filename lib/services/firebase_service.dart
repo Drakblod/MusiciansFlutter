@@ -622,6 +622,9 @@ class FirebaseService {
       final resData = result.data is Map ? Map<dynamic, dynamic>.from(result.data as Map) : <dynamic, dynamic>{};
       final pinId = resData['id']?.toString() ?? '';
       final pinPayload = resData['pin'] is Map ? Map<dynamic, dynamic>.from(resData['pin'] as Map) : <dynamic, dynamic>{};
+      if (pinId.isNotEmpty) {
+        _dbRef('BandEvents/CancelledSubRequests/$pinId').remove().catchError((_) {});
+      }
       return SubRequest.fromJson(pinPayload, pinId);
     } catch (e) {
       debugPrint('[FirebaseService] Error creating Map Pin via createMapPin ($e). Falling back to direct database write...');
@@ -824,6 +827,16 @@ class FirebaseService {
       final groupId = req.requestGroupId ?? '';
       final st = req.status.toLowerCase();
       if (st == 'cancelled' || st == 'deleted' || st == 'closed') return true;
+
+      final isMapPin = req.isMapPin ||
+          req.extraFields['NotificationMode'] == 'map_pin' ||
+          req.extraFields['notificationMode'] == 'map_pin';
+
+      // Map pins are managed independently: they are only cancelled if status is cancelled/deleted/closed
+      if (isMapPin) {
+        return false;
+      }
+
       if (id.isNotEmpty && cancelledIds.contains(id)) return true;
       if (slotId.isNotEmpty && cancelledIds.contains(slotId)) return true;
       if (groupId.isNotEmpty && cancelledIds.contains(groupId)) return true;

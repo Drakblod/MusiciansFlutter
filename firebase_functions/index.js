@@ -4296,8 +4296,15 @@ exports.createMapPin = onCall({ region: 'europe-west1' }, async (request) => {
   if (audioSnippetTitle) persistedPayload.audioSnippetTitle = audioSnippetTitle;
   if (infoAudioTrack) persistedPayload.infoAudioTrack = infoAudioTrack;
 
-  // 8. Write strictly once to SubRequests/{generatedId}
+  // 8. Write to SubRequests/{generatedId}, BandEvents/PublishedSubRequests/{generatedId}, and users/{callerUid}/SubRequests/{generatedId}
   await newPinRef.set(persistedPayload);
+  await db.ref(`BandEvents/PublishedSubRequests/${generatedId}`).set(persistedPayload).catch((e) => {
+    console.warn(`[createMapPin] Failed to write to PublishedSubRequests:`, e.message);
+  });
+  await db.ref(`users/${callerUid}/SubRequests/${generatedId}`).set(persistedPayload).catch((e) => {
+    console.warn(`[createMapPin] Failed to write to users/${callerUid}/SubRequests:`, e.message);
+  });
+  await db.ref(`BandEvents/CancelledSubRequests/${generatedId}`).remove().catch(() => {});
 
   // Safe logging: never log personal address, audio URL or full payload
   console.log(`[createMapPin] Successfully created map pin ${generatedId} for caller ${callerUid} (type: ${eventType})`);
@@ -4451,6 +4458,11 @@ exports.updateMapPin = onCall({ region: 'europe-west1' }, async (request) => {
   updates['updatedAt'] = Date.now();
 
   await pinRef.update(updates);
+  await db.ref(`BandEvents/PublishedSubRequests/${pinId}`).update(updates).catch(() => {});
+  const pinOwner = creatorUid || callerUid;
+  if (pinOwner) {
+    await db.ref(`users/${pinOwner}/SubRequests/${pinId}`).update(updates).catch(() => {});
+  }
 
   console.log(`[updateMapPin] Successfully updated pin ${pinId} for caller ${callerUid}`);
 
