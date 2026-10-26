@@ -1141,6 +1141,27 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
   }
 
 
+  void _startLiveBlinkTimer() {
+    _liveBlinkTimer?.cancel();
+    _liveBlinkTimer = Timer.periodic(const Duration(milliseconds: 750), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      if (ModalRoute.of(context)?.isCurrent != true) {
+        return;
+      }
+      final hasAnyLive = _allGigs.any(isSubRequestActive) ||
+          (FeatureFlags.enableMockLiveRehearsals && mockLiveRehearsals.any(isMockLiveRehearsalActive)) ||
+          _activeRealBroadcasts.isNotEmpty;
+      if (hasAnyLive) {
+        setState(() {
+          _liveNoteBlinkOn = !_liveNoteBlinkOn;
+        });
+      }
+    });
+  }
+
   @override
   void initState() {
     super.initState();
@@ -1149,18 +1170,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
     _initNotePins();
     _fetchGigs();
     WidgetsBinding.instance.addObserver(this);
-    _liveBlinkTimer = Timer.periodic(const Duration(milliseconds: 750), (timer) {
-      if (mounted) {
-        final hasAnyLive = _allGigs.any(isSubRequestActive) ||
-            (FeatureFlags.enableMockLiveRehearsals && mockLiveRehearsals.any(isMockLiveRehearsalActive)) ||
-            _activeRealBroadcasts.isNotEmpty;
-        if (hasAnyLive) {
-          setState(() {
-            _liveNoteBlinkOn = !_liveNoteBlinkOn;
-          });
-        }
-      }
-    });
+    _startLiveBlinkTimer();
     if (FeatureFlags.enableMockLiveRehearsals) {
       _audioController = MockRehearsalAudioController();
       _audioController!.initialize();
@@ -1210,6 +1220,8 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
   @override
   void didPushNext() {
     // Another screen was pushed on top of GigMapPage (e.g. Edit Band, Inbox, Profile, Settings)
+    _liveBlinkTimer?.cancel();
+    _liveBlinkTimer = null;
     if (FeatureFlags.enableMockLiveRehearsals) {
       _audioController?.pauseAudio();
     }
@@ -1225,6 +1237,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
   @override
   void didPopNext() {
     // User popped the screen that was covering GigMapPage and returned back
+    _startLiveBlinkTimer();
     if (FeatureFlags.enableMockLiveRehearsals && _audioController != null) {
       if (!_audioController!.isAudioStopped && !_audioController!.isMuted) {
         _audioController!.resumeAudio();
@@ -1243,18 +1256,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
       _liveBlinkTimer?.cancel();
       _liveBlinkTimer = null;
     } else if (state == AppLifecycleState.resumed && _liveBlinkTimer == null) {
-      _liveBlinkTimer = Timer.periodic(const Duration(milliseconds: 750), (timer) {
-        if (mounted) {
-          final hasAnyLive = _allGigs.any(isSubRequestActive) ||
-              (FeatureFlags.enableMockLiveRehearsals && mockLiveRehearsals.any(isMockLiveRehearsalActive)) ||
-              _activeRealBroadcasts.isNotEmpty;
-          if (hasAnyLive) {
-            setState(() {
-              _liveNoteBlinkOn = !_liveNoteBlinkOn;
-            });
-          }
-        }
-      });
+      _startLiveBlinkTimer();
     }
     if (FeatureFlags.enableMockLiveRehearsals && _audioController != null) {
       if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
@@ -2418,8 +2420,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
             onPressed: () async {
               Navigator.pop(dialogCtx);
               try {
-                final myUid = appState.currentUserId ?? '';
-                final ok = await appState.firebaseService.deleteSubRequestAsync(myUid, pinId);
+                final ok = await appState.firebaseService.deleteMapPinAsync(pinId);
                 if (ok && mounted) {
                   setState(() {
                     _allGigs.removeWhere((g) => g.canonicalTargetId == pinId || g.id == pinId);
@@ -2458,7 +2459,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
     );
   }
 
-  void _showUploadEventSheet({SubRequest? editingPin}) {
+  Future<void> _showUploadEventSheet({SubRequest? editingPin}) async {
     final isEditing = editingPin != null;
     String selectedCategory = editingPin?.extraFields['subCategory']?.toString() ?? 'Music';
     String selectedType = editingPin?.requestType ?? (selectedCategory == 'Music' ? 'Gig' : 'Substitute');
@@ -2502,15 +2503,23 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
     final locationController = TextEditingController(text: editingPin?.location ?? '');
     final descriptionController = TextEditingController(text: editingPin?.description ?? '');
     final audioTrackController = TextEditingController(
-      text: editingPin?.extraFields['audioSnippetTitle']?.toString() ??
-          editingPin?.extraFields['infoAudioTrack']?.toString() ??
+      text: editingPin?.audioSnippetTitle ??
+          editingPin?.extraFields['audioSnippetTitle']?.toString() ??
+          editingPin?.extraFields['audioTitle']?.toString() ??
+          '',
+    );
+    final infoAudioTrackController = TextEditingController(
+      text: editingPin?.extraFields['infoAudioTrack']?.toString() ??
+          editingPin?.extraFields['audioInfo']?.toString() ??
           '',
     );
     PlatformFile? pickedAudioFile;
     bool isPublishing = false;
     String? uploadErrorMessage;
 
-    showModalBottomSheet(
+    _liveBlinkTimer?.cancel();
+    _liveBlinkTimer = null;
+    await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: const Color(0xFF0F0C20),
@@ -2522,13 +2531,15 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
         builder: (context, setSheetState) {
           final typesForCategory = selectedCategory == 'Music'
               ? [
+                  'Gig / Concert',
                   'Gig',
                   'Concert',
                   'Festival',
                   'Rehearsal',
+                  'Jam Session',
+                  'Demos / Recordings',
                   'Demo',
                   'Recording',
-                  'Jam Session',
                   'Songwriting Session',
                   'Workshop',
                   'Lecture',
@@ -2720,8 +2731,8 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
                     controller: venueController,
                     style: GoogleFonts.inter(fontSize: 13, color: Colors.white),
                     decoration: InputDecoration(
-                      labelText: 'Venue (e.g. Ronnie Scott\'s, Blue Note)',
-                      hintText: 'e.g. Ronnie Scott\'s, Blue Note, Village Vanguard',
+                      labelText: 'Venue (Optional)',
+                      hintText: 'Venue name (optional)',
                       hintStyle: GoogleFonts.inter(fontSize: 12, color: Colors.white38),
                       labelStyle: GoogleFonts.inter(fontSize: 12, color: Colors.white60),
                       filled: true,
@@ -2751,7 +2762,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
                     controller: locationController,
                     style: GoogleFonts.inter(fontSize: 13, color: Colors.white),
                     decoration: InputDecoration(
-                      labelText: 'Street Address (Optional)',
+                      labelText: 'Map View Note / Pin Location (Street, City)',
                       hintText: 'e.g. 123 Main Street, Stockholm (or leave blank)',
                       helperText: 'Leave blank to place pin at crosshair: $previewLocation',
                       helperStyle: GoogleFonts.inter(fontSize: 11, color: const Color(0xFF00E5FF)),
@@ -2909,15 +2920,52 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
                   ),
                   const SizedBox(height: 10),
 
-                  // Audio Track info (title + info)
-                  Text('Audio Track info (title + info)', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white)),
+                  // Audio Track Info (title + info)
+                  Text.rich(
+                    TextSpan(
+                      text: 'Audio Track Info ',
+                      style: GoogleFonts.outfit(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                      children: [
+                        TextSpan(
+                          text: '(title + info)',
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            fontWeight: FontWeight.normal,
+                            color: Colors.white70,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                   const SizedBox(height: 6),
+
+                  // Title field
                   TextField(
                     controller: audioTrackController,
                     style: GoogleFonts.inter(fontSize: 13, color: Colors.white),
                     decoration: InputDecoration(
-                      labelText: 'Audio Track info (title + info)',
+                      labelText: 'Title',
                       hintText: 'e.g. Live at Montreux, rough horn mix',
+                      hintStyle: GoogleFonts.inter(fontSize: 12, color: Colors.white38),
+                      labelStyle: GoogleFonts.inter(fontSize: 12, color: Colors.white60),
+                      filled: true,
+                      fillColor: const Color(0xFF1A1633),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+
+                  // Info field
+                  TextField(
+                    controller: infoAudioTrackController,
+                    style: GoogleFonts.inter(fontSize: 13, color: Colors.white),
+                    decoration: InputDecoration(
+                      labelText: 'Info',
+                      hintText: 'e.g. Recorded live with rough horn mix',
                       hintStyle: GoogleFonts.inter(fontSize: 12, color: Colors.white38),
                       labelStyle: GoogleFonts.inter(fontSize: 12, color: Colors.white60),
                       filled: true,
@@ -3087,6 +3135,14 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
                                       uploadErrorMessage = 'Could not locate address "$addressText". Please check spelling or specify street, house number and city.';
                                     });
                                   }
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text('Could not resolve the entered address: "$addressText".'),
+                                        backgroundColor: Colors.redAccent,
+                                      ),
+                                    );
+                                  }
                                   return;
                                 }
                                 targetLatLng = geocoded;
@@ -3105,7 +3161,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
                               if (selectedType == 'Paid Gigs') mappedType = 'paid';
 
                               final audioText = audioTrackController.text.trim();
-                              final audioInfo = audioText;
+                              final audioInfo = infoAudioTrackController.text.trim();
 
                               String? audioUrl;
                               if (pickedAudioFile != null) {
@@ -3203,19 +3259,34 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
                                     uploadErrorMessage = 'Failed to save pin: $e';
                                   });
                                 }
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('Failed to publish pin: $e'),
+                                      backgroundColor: Colors.redAccent,
+                                    ),
+                                  );
+                                }
                                 return;
                               }
 
                               final effectiveTargetId = publishedGig.canonicalTargetId;
+                              if (effectiveTargetId == null || effectiveTargetId.isEmpty) {
+                                if (ctx.mounted) {
+                                  setSheetState(() {
+                                    isPublishing = false;
+                                    uploadErrorMessage = 'Failed to save pin: Server returned invalid pin ID.';
+                                  });
+                                }
+                                return;
+                              }
 
                               if (ctx.mounted) {
                                 Navigator.pop(ctx);
                               }
 
                               setState(() {
-                                if (effectiveTargetId != null) {
-                                  _allGigs.removeWhere((g) => g.canonicalTargetId == effectiveTargetId);
-                                }
+                                _allGigs.removeWhere((g) => g.canonicalTargetId == effectiveTargetId);
                                 _allGigs.insert(0, publishedGig);
                                 _selectedGig = publishedGig;
                                 _focusedTargetId = effectiveTargetId;
@@ -3261,6 +3332,9 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
         },
       ),
     );
+    if (mounted) {
+      _startLiveBlinkTimer();
+    }
   }
 
   @override

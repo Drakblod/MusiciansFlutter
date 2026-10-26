@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/sub_request.dart';
-import '../views/gig_map_page.dart' show MapEventType, MapEventTypeHelper;
+import '../views/gig_map_page.dart' show MapEventType, MapEventTypeHelper, MapCategory;
 
 /// Presentation data model for displaying a Map View pin / note details card.
 class MapPinDetails {
@@ -10,6 +10,7 @@ class MapPinDetails {
   final String typeDisplayLabel;
   final Color typeColor;
   final IconData typeIcon;
+  final String? postedDateDisplay;
   final String? dateTimeDisplay;
   final String? description;
   final String? audioTrackTitle;
@@ -24,6 +25,7 @@ class MapPinDetails {
     required this.typeDisplayLabel,
     required this.typeColor,
     required this.typeIcon,
+    this.postedDateDisplay,
     this.dateTimeDisplay,
     this.description,
     this.audioTrackTitle,
@@ -93,13 +95,16 @@ MapPinDetails resolveMapPinDetails(SubRequest gig) {
     typeDisplayLabel = MapEventTypeHelper.getShortLabel(eventType);
   }
 
-  // 4. Date & Time formatting: Omit if not applicable or unavailable
+  // 4. Posted date for Sub & Member Search pins (omit for ordinary Music pins or if missing timestamp)
+  final String? postedDateDisplay = _resolvePostedDate(gig, eventType, rawType);
+
+  // 5. Date & Time formatting: Omit if not applicable or unavailable
   String? dateTimeDisplay = _formatPinDateTime(gig);
   if (dateTimeDisplay != null && dateTimeDisplay.trim().isEmpty) {
     dateTimeDisplay = null;
   }
 
-  // 5. Description / Details: Prefer canonical description.
+  // 6. Description / Details: Prefer canonical description.
   // Use legacy fallback (role/eventTitle/details) ONLY if canonical description is empty.
   // Never concatenate them.
   String? resolvedDescription = gig.description?.trim();
@@ -119,7 +124,7 @@ MapPinDetails resolveMapPinDetails(SubRequest gig) {
     resolvedDescription = null;
   }
 
-  // 6. Audio Track Info (Title + Info)
+  // 7. Audio Track Info (Title + Info)
   String? audioTrackTitle = gig.audioSnippetTitle?.trim() ??
       gig.extraFields['audioSnippetTitle']?.toString().trim() ??
       gig.extraFields['audioTitle']?.toString().trim() ??
@@ -136,7 +141,7 @@ MapPinDetails resolveMapPinDetails(SubRequest gig) {
     audioTrackInfo = null;
   }
 
-  // 7. Usable Audio URL
+  // 8. Usable Audio URL
   String? audioUrl = gig.audioSnippetUrl?.trim() ??
       gig.extraFields['audioSnippetUrl']?.toString().trim() ??
       gig.extraFields['audioUrl']?.toString().trim() ??
@@ -161,6 +166,7 @@ MapPinDetails resolveMapPinDetails(SubRequest gig) {
     typeDisplayLabel: typeDisplayLabel,
     typeColor: typeColor,
     typeIcon: typeIcon,
+    postedDateDisplay: postedDateDisplay,
     dateTimeDisplay: dateTimeDisplay,
     description: resolvedDescription,
     audioTrackTitle: audioTrackTitle,
@@ -168,6 +174,66 @@ MapPinDetails resolveMapPinDetails(SubRequest gig) {
     audioSnippetUrl: audioUrl,
     hasUsableAudio: hasUsableAudio,
   );
+}
+
+String? _resolvePostedDate(SubRequest gig, MapEventType eventType, String rawType) {
+  // Only show for Sub & Member Search pins:
+  // - Substitute Requests
+  // - New Member Requests
+  // - other pins belonging to Sub & Member Search category (e.g. paid)
+  final isSubOrMemberSearch = MapEventTypeHelper.getCategory(eventType) == MapCategory.subAndMember ||
+      rawType.toLowerCase() == 'subs' ||
+      rawType.toLowerCase() == 'substitute' ||
+      rawType.toLowerCase() == 'substitute request' ||
+      rawType.toLowerCase() == 'new member' ||
+      rawType.toLowerCase() == 'new member request' ||
+      rawType.toLowerCase() == 'paid' ||
+      rawType.toLowerCase() == 'paid gigs';
+
+  if (!isSubOrMemberSearch) {
+    return null;
+  }
+
+  // Resolve timestamp from canonical createdAt or legacy extraFields
+  dynamic rawTs = gig.createdAt ??
+      gig.extraFields['CreatedAt'] ??
+      gig.extraFields['createdAt'] ??
+      gig.extraFields['created_at'] ??
+      gig.extraFields['timestamp'] ??
+      gig.extraFields['postedAt'] ??
+      gig.extraFields['posted_at'] ??
+      gig.extraFields['postedDate'] ??
+      gig.extraFields['PostedDate'];
+
+  if (rawTs == null) {
+    return null;
+  }
+
+  DateTime? dt;
+  if (rawTs is int) {
+    if (rawTs > 1000000000000) {
+      dt = DateTime.fromMillisecondsSinceEpoch(rawTs);
+    } else if (rawTs > 1000000000) {
+      dt = DateTime.fromMillisecondsSinceEpoch(rawTs * 1000);
+    }
+  } else if (rawTs is String) {
+    final parsedInt = int.tryParse(rawTs);
+    if (parsedInt != null) {
+      if (parsedInt > 1000000000000) {
+        dt = DateTime.fromMillisecondsSinceEpoch(parsedInt);
+      } else if (parsedInt > 1000000000) {
+        dt = DateTime.fromMillisecondsSinceEpoch(parsedInt * 1000);
+      }
+    } else {
+      dt = DateTime.tryParse(rawTs);
+    }
+  }
+
+  if (dt == null) {
+    return null;
+  }
+
+  return 'Posted: ${_formatDate(dt)}';
 }
 
 String? _formatPinDateTime(SubRequest gig) {

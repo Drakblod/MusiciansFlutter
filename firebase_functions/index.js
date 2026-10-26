@@ -4200,6 +4200,7 @@ exports.createMapPin = onCall({ region: 'europe-west1' }, async (request) => {
   // 4. Validate scalar string fields with length limits
   const location = validateOptionalString(data.location !== undefined ? data.location : data.Location, 'location', 300);
   const description = validateOptionalString(data.description !== undefined ? data.description : data.Description, 'description', 2000);
+  const title = validateOptionalString(data.title !== undefined ? data.title : data.Title, 'title', 120);
   const bandName = validateOptionalString(data.bandName !== undefined ? data.bandName : data.BandName, 'bandName', 200);
   const style = validateOptionalString(data.style !== undefined ? data.style : data.Style, 'style', 100);
   const genre = validateOptionalString(data.genre !== undefined ? data.genre : data.Genre, 'genre', 100);
@@ -4264,6 +4265,10 @@ exports.createMapPin = onCall({ region: 'europe-west1' }, async (request) => {
     IsPaid: false,
   };
 
+  if (title) {
+    persistedPayload.Title = title;
+    persistedPayload.title = title;
+  }
   if (location) persistedPayload.Location = location;
   if (description) persistedPayload.Description = description;
   if (bandName) {
@@ -4296,15 +4301,8 @@ exports.createMapPin = onCall({ region: 'europe-west1' }, async (request) => {
   if (audioSnippetTitle) persistedPayload.audioSnippetTitle = audioSnippetTitle;
   if (infoAudioTrack) persistedPayload.infoAudioTrack = infoAudioTrack;
 
-  // 8. Write to SubRequests/{generatedId}, BandEvents/PublishedSubRequests/{generatedId}, and users/{callerUid}/SubRequests/{generatedId}
+  // 8. Write strictly once to canonical SubRequests/{generatedId}
   await newPinRef.set(persistedPayload);
-  await db.ref(`BandEvents/PublishedSubRequests/${generatedId}`).set(persistedPayload).catch((e) => {
-    console.warn(`[createMapPin] Failed to write to PublishedSubRequests:`, e.message);
-  });
-  await db.ref(`users/${callerUid}/SubRequests/${generatedId}`).set(persistedPayload).catch((e) => {
-    console.warn(`[createMapPin] Failed to write to users/${callerUid}/SubRequests:`, e.message);
-  });
-  await db.ref(`BandEvents/CancelledSubRequests/${generatedId}`).remove().catch(() => {});
 
   // Safe logging: never log personal address, audio URL or full payload
   console.log(`[createMapPin] Successfully created map pin ${generatedId} for caller ${callerUid} (type: ${eventType})`);
@@ -4332,8 +4330,8 @@ exports.updateMapPin = onCall({ region: 'europe-west1' }, async (request) => {
     throw new HttpsError('invalid-argument', 'Request data must be an object.');
   }
 
-  const pinId = data.id || data.subRequestId;
-  if (!pinId || typeof pinId !== 'string') {
+  const pinId = data.pinId || data.id || data.subRequestId;
+  if (!pinId || typeof pinId !== 'string' || pinId.trim().length === 0) {
     throw new HttpsError('invalid-argument', 'Valid pin id is required.');
   }
 
@@ -4357,6 +4355,10 @@ exports.updateMapPin = onCall({ region: 'europe-west1' }, async (request) => {
   }
 
   const existing = snap.val() || {};
+  const notifMode = existing.NotificationMode || existing.notificationMode || (existing.extraFields && (existing.extraFields.NotificationMode || existing.extraFields.notificationMode));
+  if (notifMode !== 'map_pin') {
+    throw new HttpsError('failed-precondition', 'updateMapPin can only update ordinary map pins.');
+  }
   const creatorUid = existing.CreatorUserId || existing.creatorUserId || existing.UserId || existing.userId;
 
   let isAuthorized = (creatorUid === callerUid);
@@ -4376,6 +4378,13 @@ exports.updateMapPin = onCall({ region: 'europe-west1' }, async (request) => {
   }
 
   const updates = {};
+  if (data.title !== undefined || data.Title !== undefined) {
+    const val = validateOptionalString(data.title !== undefined ? data.title : data.Title, 'title', 120);
+    if (val !== undefined) {
+      updates['Title'] = val;
+      updates['title'] = val;
+    }
+  }
   if (data.bandName !== undefined) {
     const val = validateOptionalString(data.bandName, 'bandName', 200);
     if (val !== undefined) {
@@ -4444,25 +4453,23 @@ exports.updateMapPin = onCall({ region: 'europe-west1' }, async (request) => {
     const val = validateOptionalString(data.infoAudioTrack, 'infoAudioTrack', 1000);
     if (val !== undefined) updates['infoAudioTrack'] = val;
   }
-  if (typeof data.latitude === 'number' && Number.isFinite(data.latitude) &&
-      typeof data.longitude === 'number' && Number.isFinite(data.longitude)) {
-    if (data.latitude >= -90 && data.latitude <= 90 && data.longitude >= -180 && data.longitude <= 180) {
-      updates['Latitude'] = data.latitude;
-      updates['latitude'] = data.latitude;
-      updates['Longitude'] = data.longitude;
-      updates['longitude'] = data.longitude;
+  if (data.latitude !== undefined || data.longitude !== undefined) {
+    if (typeof data.latitude !== 'number' || !Number.isFinite(data.latitude) ||
+        typeof data.longitude !== 'number' || !Number.isFinite(data.longitude) ||
+        data.latitude < -90 || data.latitude > 90 ||
+        data.longitude < -180 || data.longitude > 180) {
+      throw new HttpsError('invalid-argument', 'Valid coordinates are required (latitude -90..90, longitude -180..180).');
     }
+    updates['Latitude'] = data.latitude;
+    updates['latitude'] = data.latitude;
+    updates['Longitude'] = data.longitude;
+    updates['longitude'] = data.longitude;
   }
 
   updates['UpdatedAt'] = Date.now();
   updates['updatedAt'] = Date.now();
 
   await pinRef.update(updates);
-  await db.ref(`BandEvents/PublishedSubRequests/${pinId}`).update(updates).catch(() => {});
-  const pinOwner = creatorUid || callerUid;
-  if (pinOwner) {
-    await db.ref(`users/${pinOwner}/SubRequests/${pinId}`).update(updates).catch(() => {});
-  }
 
   console.log(`[updateMapPin] Successfully updated pin ${pinId} for caller ${callerUid}`);
 
@@ -4481,6 +4488,94 @@ const {
   leaveLiveBroadcast,
   stopLiveBroadcast,
 } = require('./live_broadcasts');
+
+
+/**
+ * Server-owned Cloud Function callable to securely delete an existing Map Pin.
+ * Requires authenticated caller, validates pin ID, verifies NotificationMode == 'map_pin',
+ * enforces authorization (creator or band leader/admin), and atomically removes
+ * canonical record and legacy copies via a root multi-location update.
+ */
+exports.deleteMapPin = onCall({ region: 'europe-west1' }, async (request) => {
+  const callerUid = request.auth?.uid;
+  if (!callerUid) {
+    throw new HttpsError('unauthenticated', 'User must be authenticated to delete a map pin.');
+  }
+
+  const data = request.data;
+  const pinId = data?.pinId || data?.id || data?.subRequestId;
+  if (!pinId || typeof pinId !== 'string' || pinId.trim().length === 0) {
+    throw new HttpsError('invalid-argument', 'Valid pin id is required.');
+  }
+
+  const db = admin.database();
+  let existing = null;
+
+  const pinRef = db.ref(`SubRequests/${pinId}`);
+  const snap = await pinRef.get();
+  if (snap.exists()) {
+    existing = snap.val() || {};
+  } else {
+    // Canonical record is missing. Check legacy mirrors for backward compatibility.
+    const pubSnap = await db.ref(`BandEvents/PublishedSubRequests/${pinId}`).get();
+    if (pubSnap.exists()) {
+      existing = pubSnap.val() || {};
+    } else {
+      const userSnap = await db.ref(`users/${callerUid}/SubRequests/${pinId}`).get();
+      if (userSnap.exists()) {
+        existing = userSnap.val() || {};
+      }
+    }
+  }
+
+  if (!existing) {
+    // Idempotent: return success if pin is already absent from canonical and legacy paths
+    return {
+      success: true,
+      id: pinId,
+      alreadyDeleted: true,
+    };
+  }
+  const notifMode = existing.NotificationMode || existing.notificationMode || (existing.extraFields && (existing.extraFields.NotificationMode || existing.extraFields.notificationMode));
+  if (notifMode !== 'map_pin') {
+    throw new HttpsError('failed-precondition', 'deleteMapPin can only delete ordinary map pins.');
+  }
+
+  const creatorUid = existing.CreatorUserId || existing.creatorUserId || existing.UserId || existing.userId;
+  let isAuthorized = (creatorUid === callerUid);
+  if (!isAuthorized) {
+    const bandId = existing.bandId || existing.BandId;
+    if (bandId) {
+      const memberRoleSnap = await db.ref(`Bands/${bandId}/Members_band/${callerUid}/Role`).get();
+      const role = memberRoleSnap.val();
+      if (role === 'Leader' || role === 'Admin') {
+        isAuthorized = true;
+      }
+    }
+  }
+
+  if (!isAuthorized) {
+    throw new HttpsError('permission-denied', 'Only the pin creator or band leader may delete this pin.');
+  }
+
+  // Atomically delete canonical pin and backward-compatibility legacy copies
+  const updates = {};
+  updates[`SubRequests/${pinId}`] = null;
+  updates[`BandEvents/PublishedSubRequests/${pinId}`] = null;
+  if (creatorUid) {
+    updates[`users/${creatorUid}/SubRequests/${pinId}`] = null;
+  }
+  updates[`users/${callerUid}/SubRequests/${pinId}`] = null;
+
+  await db.ref().update(updates);
+
+  console.log(`[deleteMapPin] Successfully deleted map pin ${pinId} for caller ${callerUid}`);
+
+  return {
+    success: true,
+    id: pinId,
+  };
+});
 
 exports.startLiveBroadcast = startLiveBroadcast;
 exports.joinLiveBroadcast = joinLiveBroadcast;

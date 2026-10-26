@@ -107,21 +107,21 @@
       ],
       "$subRequestId": {
         ".read": "auth != null",
-        ".write": "auth != null && !data.exists() && !newData.child('Responses').exists() && (newData.child('bandId').exists() || newData.child('BandId').exists()) && ( (newData.child('bandId').exists() && (root.child('Bands').child(newData.child('bandId').val()).child('Members_band').child(auth.uid).child('Role').val() == 'Leader' || root.child('Bands').child(newData.child('bandId').val()).child('Members_band').child(auth.uid).child('Role').val() == 'Admin') && root.child('Bands').child(newData.child('bandId').val()).child('Events').child(newData.child('eventId').val()).exists()) || (newData.child('BandId').exists() && (root.child('Bands').child(newData.child('BandId').val()).child('Members_band').child(auth.uid).child('Role').val() == 'Leader' || root.child('Bands').child(newData.child('BandId').val()).child('Members_band').child(auth.uid).child('Role').val() == 'Admin') && root.child('Bands').child(newData.child('BandId').val()).child('Events').child(newData.child('EventId').val()).exists()) )",
+        ".write": "auth != null && !data.exists() && !newData.child('Responses').exists() && newData.child('NotificationMode').val() != 'map_pin' && newData.child('notificationMode').val() != 'map_pin' && (newData.child('bandId').exists() || newData.child('BandId').exists()) && ( (newData.child('bandId').exists() && (root.child('Bands').child(newData.child('bandId').val()).child('Members_band').child(auth.uid).child('Role').val() == 'Leader' || root.child('Bands').child(newData.child('bandId').val()).child('Members_band').child(auth.uid).child('Role').val() == 'Admin') && root.child('Bands').child(newData.child('bandId').val()).child('Events').child(newData.child('eventId').val()).exists()) || (newData.child('BandId').exists() && (root.child('Bands').child(newData.child('BandId').val()).child('Members_band').child(auth.uid).child('Role').val() == 'Leader' || root.child('Bands').child(newData.child('BandId').val()).child('Members_band').child(auth.uid).child('Role').val() == 'Admin') && root.child('Bands').child(newData.child('BandId').val()).child('Events').child(newData.child('EventId').val()).exists()) )",
         "Status": {
-          ".write": "auth != null && newData.val() == 'cancelled'"
+          ".write": "auth != null && data.parent().child('NotificationMode').val() != 'map_pin' && data.parent().child('notificationMode').val() != 'map_pin' && newData.val() == 'cancelled'"
         },
         "PayAmountMinor": {
-          ".write": "auth != null"
+          ".write": "auth != null && data.parent().child('NotificationMode').val() != 'map_pin' && data.parent().child('notificationMode').val() != 'map_pin'"
         },
         "PayAmount": {
-          ".write": "auth != null"
+          ".write": "auth != null && data.parent().child('NotificationMode').val() != 'map_pin' && data.parent().child('notificationMode').val() != 'map_pin'"
         },
         "Currency": {
-          ".write": "auth != null"
+          ".write": "auth != null && data.parent().child('NotificationMode').val() != 'map_pin' && data.parent().child('notificationMode').val() != 'map_pin'"
         },
         "Description": {
-          ".write": "auth != null"
+          ".write": "auth != null && data.parent().child('NotificationMode').val() != 'map_pin' && data.parent().child('notificationMode').val() != 'map_pin'"
         },
         "AssignedUserId": {
           ".write": false
@@ -182,7 +182,7 @@
         },
         "Responses": {
           "$userId": {
-            ".write": "auth != null && auth.uid == $userId && !data.exists() && newData.val() == true && data.parent().parent().child('Status').val() == 'published' && root.child('subRequestAudience').child($subRequestId).child(auth.uid).val() == true"
+            ".write": "auth != null && auth.uid == $userId && !data.exists() && newData.val() == true && data.parent().parent().child('NotificationMode').val() != 'map_pin' && data.parent().parent().child('notificationMode').val() != 'map_pin' && data.parent().parent().child('Status').val() == 'published' && root.child('subRequestAudience').child($subRequestId).child(auth.uid).val() == true"
           }
         }
       }

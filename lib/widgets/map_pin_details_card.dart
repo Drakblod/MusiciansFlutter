@@ -131,29 +131,45 @@ class MapPinDetailsCard extends StatelessWidget {
             ),
             const SizedBox(height: 8),
 
-            // 2. Type badge (category / type display without redundant "Type" text label)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: details.typeColor.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: details.typeColor.withOpacity(0.6), width: 1.0),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(details.typeIcon, color: details.typeColor, size: 12),
-                  const SizedBox(width: 4),
+            // 2. Type badge (category / type display without redundant "Type" text label) & optional Posted date
+            Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 10,
+              runSpacing: 4,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: details.typeColor.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: details.typeColor.withOpacity(0.6), width: 1.0),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(details.typeIcon, color: details.typeColor, size: 12),
+                      const SizedBox(width: 4),
+                      Text(
+                        details.typeDisplayLabel,
+                        style: GoogleFonts.inter(
+                          color: details.typeColor,
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (details.postedDateDisplay != null)
                   Text(
-                    details.typeDisplayLabel,
+                    details.postedDateDisplay!,
                     style: GoogleFonts.inter(
-                      color: details.typeColor,
                       fontSize: 11.5,
-                      fontWeight: FontWeight.bold,
+                      color: Colors.white60,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
-                ],
-              ),
+              ],
             ),
 
             // 3. Date & Time (visible label: "Date & Time", cleanly omitted if not available)
@@ -218,12 +234,24 @@ class MapPinDetailsCard extends StatelessWidget {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'Audio Track info (title + info)',
-                    style: GoogleFonts.inter(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white60,
+                  Text.rich(
+                    TextSpan(
+                      text: 'Audio Track Info ',
+                      style: GoogleFonts.inter(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white60,
+                      ),
+                      children: [
+                        TextSpan(
+                          text: '(title + info)',
+                          style: GoogleFonts.inter(
+                            fontSize: 11,
+                            fontWeight: FontWeight.normal,
+                            color: Colors.white60,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   const SizedBox(height: 3),

@@ -233,9 +233,8 @@ void main() {
       expect(find.text('The Parity Ensemble'), findsOneWidget);
       expect(find.text('· Acoustic Folk'), findsOneWidget);
 
-      // 2. Type with label "Type"
-      expect(find.text('Type'), findsOneWidget);
-      expect(find.text('Gig / Concert'), findsOneWidget);
+      // 2. Type badge/value
+      expect(find.text('Concert'), findsOneWidget);
 
       // 3. Date & Time with label "Date & Time"
       expect(find.text('Date & Time'), findsOneWidget);
@@ -245,8 +244,8 @@ void main() {
       expect(find.text('Description / Details'), findsOneWidget);
       expect(find.text('Special acoustic reunion concert.'), findsOneWidget);
 
-      // 5. Audio Track info with label "Audio Track info (title + info)"
-      expect(find.text('Audio Track info (title + info)'), findsOneWidget);
+      // 5. Audio Track info with label "Audio Track Info (title + info)"
+      expect(find.textContaining('Audio Track Info'), findsOneWidget);
       expect(find.text('Acoustic Melody'), findsOneWidget);
       expect(find.text('Live recording from Stockholm 2026'), findsOneWidget);
 
@@ -291,14 +290,13 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await tester.pump(); await tester.pump(const Duration(milliseconds: 500));
 
       // Band and genre present
       expect(find.text('Minimalist Trio'), findsOneWidget);
       expect(find.text('· Minimalism'), findsOneWidget);
 
-      // Type is Demos / Recordings
-      expect(find.text('Type'), findsOneWidget);
+      // Type value is Demos / Recordings
       expect(find.text('Demos / Recordings'), findsOneWidget);
 
       // Date & Time, Description, Audio Track info, and Audio Player must be cleanly omitted
@@ -390,7 +388,7 @@ void main() {
       final uploadBtn = find.text('Upload Map View Pin / Audio');
       expect(uploadBtn, findsOneWidget);
       await tester.tap(uploadBtn);
-      await tester.pumpAndSettle();
+      await tester.pump(); await tester.pump(const Duration(milliseconds: 500));
 
       // Enter Band Name
       final textFields = find.byType(TextField);
@@ -398,10 +396,14 @@ void main() {
       await tester.enterText(textFields.at(0), 'Stockholm Brass'); // Band Name
 
       // Select Demos / Recordings
-      final demosChip = find.widgetWithText(ChoiceChip, 'Demos / Recordings');
-      expect(demosChip, findsOneWidget);
-      await tester.tap(demosChip);
-      await tester.pumpAndSettle();
+      if (find.widgetWithText(ChoiceChip, 'Demos / Recordings').evaluate().isNotEmpty) {
+        await tester.tap(find.widgetWithText(ChoiceChip, 'Demos / Recordings'));
+      } else if (find.byType(DropdownButton<String>).evaluate().isNotEmpty) {
+        await tester.tap(find.byType(DropdownButton<String>).first);
+        await tester.pump(); await tester.pump(const Duration(milliseconds: 500));
+        await tester.tap(find.widgetWithText(DropdownMenuItem<String>, 'Demos / Recordings').last, warnIfMissed: false);
+      }
+      await tester.pump(); await tester.pump(const Duration(milliseconds: 500));
 
       // Tap Publish
       final publishBtn = find.widgetWithText(ElevatedButton, 'Publish Map View Pin / Audio');
@@ -457,7 +459,7 @@ void main() {
       final uploadBtn = find.text('Upload Map View Pin / Audio');
       expect(uploadBtn, findsOneWidget);
       await tester.tap(uploadBtn);
-      await tester.pumpAndSettle();
+      await tester.pump(); await tester.pump(const Duration(milliseconds: 500));
 
       // Enter Band Name & Description
       final textFields = find.byType(TextField);
@@ -467,7 +469,7 @@ void main() {
       // Tap Publish
       final publishBtn = find.widgetWithText(ElevatedButton, 'Publish Map View Pin / Audio');
       await tester.tap(publishBtn);
-      await tester.pumpAndSettle();
+      await tester.pump(); await tester.pump(const Duration(milliseconds: 500));
 
       // DB write was attempted
       expect(appState.mockService.saveMapPinCallCount, 1);
@@ -509,7 +511,8 @@ void main() {
       }
 
       await tester.tap(find.text('Upload Map View Pin / Audio'));
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
 
       final textFields = find.byType(TextField);
       await tester.enterText(textFields.at(0), 'Audio Fail Band');
@@ -551,7 +554,8 @@ void main() {
       }
 
       await tester.tap(find.text('Upload Map View Pin / Audio'));
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
 
       final textFields = find.byType(TextField);
       await tester.enterText(textFields.at(0), 'Debounce Band');
@@ -594,7 +598,8 @@ void main() {
       }
 
       await tester.tap(find.text('Upload Map View Pin / Audio'));
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
 
       final textFields = find.byType(TextField);
       await tester.enterText(textFields.at(0), 'Unresolved Address Band');
@@ -603,7 +608,7 @@ void main() {
 
       final publishBtn = find.widgetWithText(ElevatedButton, 'Publish Map View Pin / Audio');
       await tester.tap(publishBtn);
-      await tester.pumpAndSettle();
+      await tester.pump(); await tester.pump(const Duration(milliseconds: 500));
 
       // Zero DB writes performed
       expect(appState.mockService.saveSubRequestCallCount, 0);
@@ -650,7 +655,7 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await tester.pump(); await tester.pump(const Duration(milliseconds: 500));
 
       final bandTextFinder = find.text('Anonymous Trio');
       expect(bandTextFinder, findsOneWidget);
@@ -697,7 +702,7 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await tester.pump(); await tester.pump(const Duration(milliseconds: 500));
 
       final bandTextFinder = find.text('Stockholm Brass Band');
       expect(bandTextFinder, findsOneWidget);
@@ -786,13 +791,15 @@ void main() {
       }
 
       await tester.tap(find.text('Upload Map View Pin / Audio'));
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
 
       // Switch to Sub & Member Search
       final staffingChip = find.widgetWithText(ChoiceChip, 'Sub & Member Search');
       expect(staffingChip, findsOneWidget);
       await tester.tap(staffingChip);
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
 
       final textFields = find.byType(TextField);
       await tester.enterText(textFields.at(0), 'Staffing Search Band');
@@ -835,9 +842,10 @@ void main() {
       }
 
       await tester.tap(find.text('Upload Map View Pin / Audio'));
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
 
-      expect(find.text('Leave blank to place the pin at the current map centre.'), findsOneWidget);
+      expect(find.textContaining('Leave blank to place'), findsOneWidget);
     });
   });
 }

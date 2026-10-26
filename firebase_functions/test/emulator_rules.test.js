@@ -1474,5 +1474,211 @@ describe('Real RTDB Emulator Rules Tests', function () {
         })
       );
     });
+
+    it('Another user cannot overwrite an existing map pin in SubRequests/{id}', async () => {
+      await testEnvFinal.withSecurityRulesDisabled(async (context) => {
+        await context.database().ref('SubRequests/map_pin_overwrite_test').set({
+          SubRequestId: 'map_pin_overwrite_test',
+          CreatorUserId: 'user_a',
+          NotificationMode: 'map_pin',
+          title: 'Original Pin',
+          latitude: 59.32,
+          longitude: 18.06,
+        });
+      });
+
+      const userB = testEnvFinal.authenticatedContext('user_b');
+      const ref = userB.database().ref('SubRequests/map_pin_overwrite_test');
+      await assertFails(
+        ref.set({
+          SubRequestId: 'map_pin_overwrite_test',
+          CreatorUserId: 'user_b',
+          NotificationMode: 'map_pin',
+          title: 'Hacked Pin',
+        })
+      );
+    });
+
+    it('Another user cannot delete an existing map pin in SubRequests/{id}', async () => {
+      await testEnvFinal.withSecurityRulesDisabled(async (context) => {
+        await context.database().ref('SubRequests/map_pin_delete_test').set({
+          SubRequestId: 'map_pin_delete_test',
+          CreatorUserId: 'user_a',
+          NotificationMode: 'map_pin',
+        });
+      });
+
+      const userB = testEnvFinal.authenticatedContext('user_b');
+      const ref = userB.database().ref('SubRequests/map_pin_delete_test');
+      await assertFails(ref.remove());
+    });
+
+    it('Direct client update or delete cannot bypass updateMapPin/deleteMapPin authorization', async () => {
+      await testEnvFinal.withSecurityRulesDisabled(async (context) => {
+        await context.database().ref('SubRequests/map_pin_bypass_test').set({
+          SubRequestId: 'map_pin_bypass_test',
+          CreatorUserId: 'user_a',
+          NotificationMode: 'map_pin',
+          latitude: 59.32,
+          longitude: 18.06,
+          title: 'Initial Title',
+        });
+      });
+
+      const userA = testEnvFinal.authenticatedContext('user_a');
+      // Direct deletion by creator is denied (must use deleteMapPin callable)
+      await assertFails(userA.database().ref('SubRequests/map_pin_bypass_test').remove());
+      // Direct update of coordinates/title by creator is denied (must use updateMapPin callable)
+      await assertFails(userA.database().ref('SubRequests/map_pin_bypass_test/latitude').set(60.0));
+      await assertFails(userA.database().ref('SubRequests/map_pin_bypass_test/title').set('Updated Title'));
+    });
+
+    it('Child-level direct writes (Status, Description, PayAmount, Currency, Responses) are DENIED on map pins in final rules', async () => {
+      await testEnvFinal.withSecurityRulesDisabled(async (context) => {
+        const db = context.database();
+        await db.ref('SubRequests/map_pin_child_test').set({
+          SubRequestId: 'map_pin_child_test',
+          CreatorUserId: 'user_a',
+          NotificationMode: 'map_pin',
+          Status: 'published',
+          Description: 'Original Pin Desc',
+          PayAmount: 500,
+          Currency: 'SEK',
+          latitude: 59.32,
+          longitude: 18.06,
+        });
+        await db.ref('subRequestAudience/map_pin_child_test/user_c').set(true);
+      });
+
+      const userA = testEnvFinal.authenticatedContext('user_a');
+      const userB = testEnvFinal.authenticatedContext('user_b');
+      const userC = testEnvFinal.authenticatedContext('user_c');
+
+      // 1. Direct Status mutation denied for creator and others
+      await assertFails(userA.database().ref('SubRequests/map_pin_child_test/Status').set('cancelled'));
+      await assertFails(userB.database().ref('SubRequests/map_pin_child_test/Status').set('cancelled'));
+
+      // 2. Direct Description mutation denied
+      await assertFails(userA.database().ref('SubRequests/map_pin_child_test/Description').set('Hacked Desc'));
+      await assertFails(userB.database().ref('SubRequests/map_pin_child_test/Description').set('Hacked Desc'));
+
+      // 3. Direct PayAmount and PayAmountMinor mutation denied
+      await assertFails(userA.database().ref('SubRequests/map_pin_child_test/PayAmount').set(1000));
+      await assertFails(userA.database().ref('SubRequests/map_pin_child_test/PayAmountMinor').set(100000));
+      await assertFails(userB.database().ref('SubRequests/map_pin_child_test/PayAmount').set(1000));
+
+      // 4. Direct Currency mutation denied
+      await assertFails(userA.database().ref('SubRequests/map_pin_child_test/Currency').set('EUR'));
+      await assertFails(userB.database().ref('SubRequests/map_pin_child_test/Currency').set('EUR'));
+
+      // 5. Direct coordinate mutation denied
+      await assertFails(userA.database().ref('SubRequests/map_pin_child_test/latitude').set(60.0));
+      await assertFails(userA.database().ref('SubRequests/map_pin_child_test/Latitude').set(60.0));
+
+      // 6. Direct overwrite denied
+      await assertFails(userA.database().ref('SubRequests/map_pin_child_test').set({
+        SubRequestId: 'map_pin_child_test',
+        CreatorUserId: 'user_a',
+        NotificationMode: 'map_pin',
+      }));
+
+      // 7. Direct deletion denied
+      await assertFails(userA.database().ref('SubRequests/map_pin_child_test').remove());
+      await assertFails(userB.database().ref('SubRequests/map_pin_child_test').remove());
+
+      // 8. Direct Responses writes denied
+      await assertFails(userC.database().ref('SubRequests/map_pin_child_test/Responses/user_c').set(true));
+    });
+
+    it('Child-level direct writes are also DENIED when notificationMode is lowercase map_pin', async () => {
+      await testEnvFinal.withSecurityRulesDisabled(async (context) => {
+        const db = context.database();
+        await db.ref('SubRequests/map_pin_lower_child_test').set({
+          SubRequestId: 'map_pin_lower_child_test',
+          CreatorUserId: 'user_a',
+          notificationMode: 'map_pin',
+          Status: 'published',
+          Description: 'Original Lower Desc',
+          PayAmount: 500,
+          Currency: 'SEK',
+        });
+      });
+
+      const userA = testEnvFinal.authenticatedContext('user_a');
+      await assertFails(userA.database().ref('SubRequests/map_pin_lower_child_test/Status').set('cancelled'));
+      await assertFails(userA.database().ref('SubRequests/map_pin_lower_child_test/Description').set('Hacked Desc'));
+      await assertFails(userA.database().ref('SubRequests/map_pin_lower_child_test/PayAmount').set(1000));
+      await assertFails(userA.database().ref('SubRequests/map_pin_lower_child_test/Currency').set('EUR'));
+    });
+
+    it('Child-level direct writes on map pins are DENIED in transitional rules', async () => {
+      await testEnvTransitional.withSecurityRulesDisabled(async (context) => {
+        const db = context.database();
+        await db.ref('SubRequests/map_pin_trans_child_test').set({
+          SubRequestId: 'map_pin_trans_child_test',
+          CreatorUserId: 'user_a',
+          NotificationMode: 'map_pin',
+          Status: 'published',
+          Description: 'Trans Pin Desc',
+          PayAmount: 500,
+          Currency: 'SEK',
+        });
+        await db.ref('subRequestAudience/map_pin_trans_child_test/user_c').set(true);
+      });
+
+      const userA = testEnvTransitional.authenticatedContext('user_a');
+      const userB = testEnvTransitional.authenticatedContext('user_b');
+      const userC = testEnvTransitional.authenticatedContext('user_c');
+
+      await assertFails(userA.database().ref('SubRequests/map_pin_trans_child_test/Status').set('cancelled'));
+      await assertFails(userB.database().ref('SubRequests/map_pin_trans_child_test/Status').set('cancelled'));
+      await assertFails(userA.database().ref('SubRequests/map_pin_trans_child_test/Description').set('Hacked'));
+      await assertFails(userA.database().ref('SubRequests/map_pin_trans_child_test/PayAmount').set(1000));
+      await assertFails(userA.database().ref('SubRequests/map_pin_trans_child_test/Currency').set('EUR'));
+      await assertFails(userC.database().ref('SubRequests/map_pin_trans_child_test/Responses/user_c').set(true));
+    });
+
+    it('Staffing requests with NotificationMode absent or non-map_pin preserve approved direct field operations', async () => {
+      await testEnvFinal.withSecurityRulesDisabled(async (context) => {
+        const db = context.database();
+        await db.ref('SubRequests/staffing_req_test').set({
+          SubRequestId: 'staffing_req_test',
+          CreatorUserId: 'user_staff_creator',
+          NotificationMode: 'in_app',
+          Status: 'published',
+          Description: 'Staffing description',
+          PayAmount: 1200,
+          PayAmountMinor: 120000,
+          Currency: 'SEK',
+        });
+        await db.ref('subRequestAudience/staffing_req_test/user_candidate').set(true);
+      });
+
+      const creator = testEnvFinal.authenticatedContext('user_staff_creator');
+      const candidate = testEnvFinal.authenticatedContext('user_candidate');
+      const outsider = testEnvFinal.authenticatedContext('user_outsider');
+
+      // 1. Staffing creator CAN update Description, PayAmount, Currency
+      await assertSucceeds(creator.database().ref('SubRequests/staffing_req_test/Description').set('Updated Staffing Desc'));
+      await assertSucceeds(creator.database().ref('SubRequests/staffing_req_test/PayAmount').set(1500));
+      await assertSucceeds(creator.database().ref('SubRequests/staffing_req_test/PayAmountMinor').set(150000));
+      await assertSucceeds(creator.database().ref('SubRequests/staffing_req_test/Currency').set('EUR'));
+
+      // 2. Candidate in audience CAN submit response
+      await assertSucceeds(candidate.database().ref('SubRequests/staffing_req_test/Responses/user_candidate').set(true));
+
+      // 3. Candidate CANNOT overwrite response
+      await assertFails(candidate.database().ref('SubRequests/staffing_req_test/Responses/user_candidate').set(true));
+
+      // 4. Candidate CANNOT delete response
+      await assertFails(candidate.database().ref('SubRequests/staffing_req_test/Responses/user_candidate').remove());
+
+      // 5. Outsider CANNOT write response or modify fields
+      await assertFails(outsider.database().ref('SubRequests/staffing_req_test/Responses/user_outsider').set(true));
+      await assertFails(outsider.database().ref('SubRequests/staffing_req_test/Description').set('Outsider tamper'));
+
+      // 6. Staffing creator CAN cancel
+      await assertSucceeds(creator.database().ref('SubRequests/staffing_req_test/Status').set('cancelled'));
+    });
   });
 });

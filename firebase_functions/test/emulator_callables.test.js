@@ -1527,6 +1527,403 @@ describe('Real Cloud Functions Emulator Integration Tests (JS Client SDK + Emula
         }
         assert.strictEqual(receivedNotif, true, 'Genuine staffing request MUST notify eligible candidates');
       });
+
+      it('41. updateMapPin updates canonical /SubRequests/{id} and leaves mirrors byte-for-byte unchanged', async () => {
+        const createCallable = httpsCallable(functionsUserA, 'createMapPin');
+        const createResult = await createCallable({
+          eventType: 'gigConcert',
+          latitude: 59.3293,
+          longitude: 18.0686,
+          title: 'Original Title',
+          description: 'Original Desc',
+        });
+        const pinId = createResult.data.id;
+
+        // 1. Populate legacy locations to prove they remain byte-for-byte unchanged
+        const legacyPubData = { SubRequestId: pinId, Title: 'Legacy Mirror Title', oldFlag: true, untouchedValue: 42 };
+        const legacyUserData = { SubRequestId: pinId, Title: 'User Mirror Title', note: 'Legacy Note', count: 99 };
+        await adminDb.ref(`BandEvents/PublishedSubRequests/${pinId}`).set(legacyPubData);
+        await adminDb.ref(`users/user_a/SubRequests/${pinId}`).set(legacyUserData);
+
+        const updateCallable = httpsCallable(functionsUserA, 'updateMapPin');
+        const updateResult = await updateCallable({
+          pinId: pinId,
+          title: 'Updated Title',
+          description: 'Updated Desc',
+          latitude: 59.3400,
+          longitude: 18.0700,
+        });
+
+        assert.strictEqual(updateResult.data.success, true);
+        assert.strictEqual(updateResult.data.pin.Title, 'Updated Title');
+        assert.strictEqual(updateResult.data.pin.Latitude, 59.3400);
+
+        // Check canonical record
+        const canonSnap = await adminDb.ref(`SubRequests/${pinId}`).get();
+        assert.strictEqual(canonSnap.val().Title, 'Updated Title');
+        assert.strictEqual(canonSnap.val().Latitude, 59.3400);
+
+        // Assert existing legacy mirrors remain byte-for-byte unchanged
+        const pubSnap = await adminDb.ref(`BandEvents/PublishedSubRequests/${pinId}`).get();
+        assert.deepStrictEqual(pubSnap.val(), legacyPubData);
+
+        const userSnap = await adminDb.ref(`users/user_a/SubRequests/${pinId}`).get();
+        assert.deepStrictEqual(userSnap.val(), legacyUserData);
+
+        // 2. Missing mirrors are not created
+        const create2 = await createCallable({
+          eventType: 'gigConcert',
+          latitude: 59.31,
+          longitude: 18.05,
+          title: 'Pin Without Mirrors',
+        });
+        const pinId2 = create2.data.id;
+        await updateCallable({
+          pinId: pinId2,
+          title: 'Updated Pin Without Mirrors',
+        });
+        const pubSnap2 = await adminDb.ref(`BandEvents/PublishedSubRequests/${pinId2}`).get();
+        assert.strictEqual(pubSnap2.exists(), false, 'Missing PublishedSubRequests mirror must not be created');
+        const userSnap2 = await adminDb.ref(`users/user_a/SubRequests/${pinId2}`).get();
+        assert.strictEqual(userSnap2.exists(), false, 'Missing user SubRequests mirror must not be created');
+      });
+
+      it('42. updateMapPin authorization: Leader and Admin succeed, ordinary member, unrelated user, and missing bandId denied, creator authorized', async () => {
+        const createCallable = httpsCallable(functionsUserA, 'createMapPin');
+        const updateCallableA = httpsCallable(functionsUserA, 'updateMapPin');
+        const updateCallableB = httpsCallable(functionsUserB, 'updateMapPin');
+        const updateCallableC = httpsCallable(functionsUserC, 'updateMapPin');
+
+        // Case 1: Creator remains authorized independently of band role
+        const noBandPin = await createCallable({
+          eventType: 'jamSession',
+          latitude: 59.32,
+          longitude: 18.06,
+          title: 'Creator Independent Pin',
+        });
+        const noBandPinId = noBandPin.data.id;
+        const creatorUpdate = await updateCallableA({ pinId: noBandPinId, title: 'Creator Self Update' });
+        assert.strictEqual(creatorUpdate.data.success, true);
+        assert.strictEqual(creatorUpdate.data.pin.Title, 'Creator Self Update');
+
+        // Case 2: Missing bandId does not grant band authorization to others
+        await assert.rejects(
+          updateCallableB({ pinId: noBandPinId, title: 'Hacker Update' }),
+          (err) => err.code === 'functions/permission-denied' || err.code === 'permission-denied'
+        );
+
+        // Setup band with Members_band
+        const bandId = 'band_auth_matrix_test';
+        await adminDb.ref(`Bands/${bandId}`).set({
+          Name: 'Matrix Band',
+          Members_band: {
+            user_a: { Role: 'Member' },  // Creator is only Member in band
+            user_b: { Role: 'Leader' },  // user_b is Leader
+            user_c: { Role: 'Member' },  // user_c is ordinary Member
+          },
+        });
+
+        const bandPin = await createCallable({
+          eventType: 'gigConcert',
+          bandId: bandId,
+          latitude: 59.32,
+          longitude: 18.06,
+          title: 'Band Pin Title',
+        });
+        const bandPinId = bandPin.data.id;
+
+        // Case 3: Leader succeeds
+        const leaderUpdate = await updateCallableB({ pinId: bandPinId, title: 'Leader Title' });
+        assert.strictEqual(leaderUpdate.data.success, true);
+        assert.strictEqual(leaderUpdate.data.pin.Title, 'Leader Title');
+
+        // Case 4: Admin succeeds
+        await adminDb.ref(`Bands/${bandId}/Members_band/user_b/Role`).set('Admin');
+        const adminUpdate = await updateCallableB({ pinId: bandPinId, title: 'Admin Title' });
+        assert.strictEqual(adminUpdate.data.success, true);
+        assert.strictEqual(adminUpdate.data.pin.Title, 'Admin Title');
+
+        // Case 5: Ordinary member is denied
+        await assert.rejects(
+          updateCallableC({ pinId: bandPinId, title: 'Member Title' }),
+          (err) => err.code === 'functions/permission-denied' || err.code === 'permission-denied'
+        );
+
+        // Case 6: Unrelated user is denied
+        await adminDb.ref(`Bands/${bandId}/Members_band/user_b/Role`).remove(); // user_b removed from band
+        await assert.rejects(
+          updateCallableB({ pinId: bandPinId, title: 'Unrelated Title' }),
+          (err) => err.code === 'functions/permission-denied' || err.code === 'permission-denied'
+        );
+      });
+
+      it('43. updateMapPin validates coordinates, field lengths, non-empty pinId, and non-map-pin records', async () => {
+        const updateCallableA = httpsCallable(functionsUserA, 'updateMapPin');
+
+        // Missing pinId
+        await assert.rejects(
+          updateCallableA({ title: 'New' }),
+          (err) => err.code === 'functions/invalid-argument' || err.code === 'invalid-argument'
+        );
+
+        const realCreateCallable = httpsCallable(functionsUserA, 'createMapPin');
+        const pin = await realCreateCallable({
+          eventType: 'rehearsal',
+          latitude: 59.32,
+          longitude: 18.06,
+        });
+        const pinId = pin.data.id;
+
+        // Invalid coords (> 90 lat)
+        await assert.rejects(
+          updateCallableA({ pinId: pinId, latitude: 120, longitude: 18.06 }),
+          (err) => err.code === 'functions/invalid-argument' || err.code === 'invalid-argument'
+        );
+
+        // Field length validation (title > 120 chars)
+        await assert.rejects(
+          updateCallableA({ pinId: pinId, title: 'a'.repeat(125) }),
+          (err) => err.code === 'functions/invalid-argument' || err.code === 'invalid-argument'
+        );
+
+        // Non-map-pin record rejected
+        await adminDb.ref('SubRequests/regular_staffing_item').set({
+          SubRequestId: 'regular_staffing_item',
+          CreatorUserId: 'user_a',
+          NotificationMode: 'staffing',
+          eventType: 'subs',
+        });
+        await assert.rejects(
+          updateCallableA({ pinId: 'regular_staffing_item', title: 'New' }),
+          (err) => err.code === 'functions/failed-precondition' || err.code === 'failed-precondition'
+        );
+      });
+
+      it('44. deleteMapPin rejects unauthenticated callers and invalid pinId', async () => {
+        const unauthCallable = httpsCallable(functionsUnauth, 'deleteMapPin');
+        await assert.rejects(
+          unauthCallable({ pinId: 'pin_1' }),
+          (err) => isAuthError(err)
+        );
+
+        const callableA = httpsCallable(functionsUserA, 'deleteMapPin');
+        await assert.rejects(
+          callableA({ pinId: '' }),
+          (err) => err.code === 'functions/invalid-argument' || err.code === 'invalid-argument'
+        );
+        await assert.rejects(
+          callableA({}),
+          (err) => err.code === 'functions/invalid-argument' || err.code === 'invalid-argument'
+        );
+      });
+
+      it('45. deleteMapPin on non-existent pin returns idempotent success', async () => {
+        const callableA = httpsCallable(functionsUserA, 'deleteMapPin');
+        const res = await callableA({ pinId: 'does_not_exist_99999' });
+        assert.strictEqual(res.data.success, true);
+        assert.strictEqual(res.data.alreadyDeleted, true);
+      });
+
+      it('46. deleteMapPin rejects non-map-pin records with failed-precondition', async () => {
+        await adminDb.ref('SubRequests/not_a_map_pin').set({
+          SubRequestId: 'not_a_map_pin',
+          CreatorUserId: 'user_a',
+          NotificationMode: 'standard',
+        });
+        const callableA = httpsCallable(functionsUserA, 'deleteMapPin');
+        await assert.rejects(
+          callableA({ pinId: 'not_a_map_pin' }),
+          (err) => err.code === 'functions/failed-precondition' || err.code === 'failed-precondition'
+        );
+      });
+
+      it('47. deleteMapPin rejects unauthorized caller with permission-denied', async () => {
+        const createCallable = httpsCallable(functionsUserA, 'createMapPin');
+        const pin = await createCallable({
+          eventType: 'jamSession',
+          latitude: 59.32,
+          longitude: 18.06,
+        });
+        const pinId = pin.data.id;
+
+        const callableB = httpsCallable(functionsUserB, 'deleteMapPin');
+        await assert.rejects(
+          callableB({ pinId: pinId }),
+          (err) => err.code === 'functions/permission-denied' || err.code === 'permission-denied'
+        );
+      });
+
+      it('48. deleteMapPin by creator succeeds, cleans canonical & legacy mirrors, and is idempotent', async () => {
+        const createCallable = httpsCallable(functionsUserA, 'createMapPin');
+        const pin = await createCallable({
+          eventType: 'jamSession',
+          latitude: 59.32,
+          longitude: 18.06,
+        });
+        const pinId = pin.data.id;
+
+        // Plant legacy mirrors
+        await adminDb.ref(`BandEvents/PublishedSubRequests/${pinId}`).set({ legacy: true });
+        await adminDb.ref(`users/user_a/SubRequests/${pinId}`).set({ legacy: true });
+
+        const callableA = httpsCallable(functionsUserA, 'deleteMapPin');
+        const delResult = await callableA({ pinId: pinId });
+        assert.strictEqual(delResult.data.success, true);
+
+        // Check canonical deleted
+        const canonSnap = await adminDb.ref(`SubRequests/${pinId}`).get();
+        assert.strictEqual(canonSnap.exists(), false);
+
+        // Check legacy copies removed
+        const pubSnap = await adminDb.ref(`BandEvents/PublishedSubRequests/${pinId}`).get();
+        assert.strictEqual(pubSnap.exists(), false);
+
+        const userSnap = await adminDb.ref(`users/user_a/SubRequests/${pinId}`).get();
+        assert.strictEqual(userSnap.exists(), false);
+
+        // Calling a second time on the already deleted pin succeeds idempotently
+        const secondDel = await callableA({ pinId: pinId });
+        assert.strictEqual(secondDel.data.success, true);
+        assert.strictEqual(secondDel.data.alreadyDeleted, true);
+      });
+
+      it('49. deleteMapPin by band leader/admin succeeds', async () => {
+        const bandId = 'band_del_test_1';
+        await adminDb.ref(`Bands/${bandId}`).set({
+          Name: 'Band Del Test',
+          Members_band: {
+            user_b: { Role: 'Leader' },
+            user_a: { Role: 'Member' },
+          },
+        });
+
+        const createCallable = httpsCallable(functionsUserA, 'createMapPin');
+        const pin = await createCallable({
+          eventType: 'gigConcert',
+          bandId: bandId,
+          latitude: 59.32,
+          longitude: 18.06,
+        });
+        const pinId = pin.data.id;
+
+        // user_b is Leader -> can delete
+        const callableB = httpsCallable(functionsUserB, 'deleteMapPin');
+        const delResult = await callableB({ pinId: pinId });
+        assert.strictEqual(delResult.data.success, true);
+
+        const canonSnap = await adminDb.ref(`SubRequests/${pinId}`).get();
+        assert.strictEqual(canonSnap.exists(), false);
+      });
+
+      it('50. deleteMapPin: canonical and mirrors all absent -> idempotent success', async () => {
+        const callableA = httpsCallable(functionsUserA, 'deleteMapPin');
+        const res = await callableA({ pinId: 'non_existent_pin_completely_absent' });
+        assert.strictEqual(res.data.success, true);
+        assert.strictEqual(res.data.id, 'non_existent_pin_completely_absent');
+        assert.strictEqual(res.data.alreadyDeleted, true);
+      });
+
+      it('51. deleteMapPin: canonical missing but authorized creator-owned legacy map-pin mirror exists -> cleaned successfully', async () => {
+        const pinId = 'orphan_legacy_pin_1';
+        // Plant legacy mirror only (canonical SubRequests/{pinId} does not exist)
+        await adminDb.ref('BandEvents/PublishedSubRequests/' + pinId).set({
+          SubRequestId: pinId,
+          CreatorUserId: 'user_a',
+          NotificationMode: 'map_pin',
+          title: 'Legacy Orphan Pin',
+        });
+        await adminDb.ref('users/user_a/SubRequests/' + pinId).set({
+          SubRequestId: pinId,
+          CreatorUserId: 'user_a',
+          NotificationMode: 'map_pin',
+        });
+
+        // Verify canonical does not exist
+        const canonBefore = await adminDb.ref('SubRequests/' + pinId).get();
+        assert.strictEqual(canonBefore.exists(), false);
+
+        const callableA = httpsCallable(functionsUserA, 'deleteMapPin');
+        const res = await callableA({ pinId: pinId });
+        assert.strictEqual(res.data.success, true);
+        assert.strictEqual(res.data.id, pinId);
+
+        // Verify legacy mirrors are cleaned
+        const pubAfter = await adminDb.ref('BandEvents/PublishedSubRequests/' + pinId).get();
+        assert.strictEqual(pubAfter.exists(), false);
+        const userAfter = await adminDb.ref('users/user_a/SubRequests/' + pinId).get();
+        assert.strictEqual(userAfter.exists(), false);
+      });
+
+      it('52. deleteMapPin: canonical missing but unauthorized caller targets legacy mirror -> permission-denied', async () => {
+        const pinId = 'orphan_legacy_pin_stranger';
+        await adminDb.ref('BandEvents/PublishedSubRequests/' + pinId).set({
+          SubRequestId: pinId,
+          CreatorUserId: 'user_a',
+          NotificationMode: 'map_pin',
+        });
+
+        // user_b is not creator and no band leader role
+        const callableB = httpsCallable(functionsUserB, 'deleteMapPin');
+        await assert.rejects(
+          callableB({ pinId: pinId }),
+          (err) => err.code === 'functions/permission-denied' || err.code === 'permission-denied'
+        );
+
+        // Record must still exist
+        const pubSnap = await adminDb.ref('BandEvents/PublishedSubRequests/' + pinId).get();
+        assert.strictEqual(pubSnap.exists(), true);
+      });
+
+      it('53. deleteMapPin: canonical missing but legacy record is a staffing request -> failed-precondition', async () => {
+        const pinId = 'orphan_legacy_staffing_req';
+        // Plant legacy staffing record without map_pin notification mode
+        await adminDb.ref('BandEvents/PublishedSubRequests/' + pinId).set({
+          SubRequestId: pinId,
+          CreatorUserId: 'user_a',
+          NotificationMode: 'staffing_request',
+        });
+
+        const callableA = httpsCallable(functionsUserA, 'deleteMapPin');
+        await assert.rejects(
+          callableA({ pinId: pinId }),
+          (err) => err.code === 'functions/failed-precondition' || err.code === 'failed-precondition'
+        );
+
+        // Record must not be deleted
+        const pubSnap = await adminDb.ref('BandEvents/PublishedSubRequests/' + pinId).get();
+        assert.strictEqual(pubSnap.exists(), true);
+      });
+
+      it('54. deleteMapPin: successful deletion leaves none of the relevant paths behind and creates no tombstone', async () => {
+        const createCallable = httpsCallable(functionsUserA, 'createMapPin');
+        const pin = await createCallable({
+          eventType: 'jamSession',
+          latitude: 59.33,
+          longitude: 18.07,
+          title: 'Clean Sweep Pin',
+        });
+        const pinId = pin.data.id;
+
+        // Plant all potential paths
+        await adminDb.ref('BandEvents/PublishedSubRequests/' + pinId).set({ legacy: true });
+        await adminDb.ref('users/user_a/SubRequests/' + pinId).set({ legacy: true });
+
+        const callableA = httpsCallable(functionsUserA, 'deleteMapPin');
+        const res = await callableA({ pinId: pinId });
+        assert.strictEqual(res.data.success, true);
+
+        // Verify none of the paths exist
+        const canonSnap = await adminDb.ref('SubRequests/' + pinId).get();
+        assert.strictEqual(canonSnap.exists(), false);
+        const pubSnap = await adminDb.ref('BandEvents/PublishedSubRequests/' + pinId).get();
+        assert.strictEqual(pubSnap.exists(), false);
+        const userSnap = await adminDb.ref('users/user_a/SubRequests/' + pinId).get();
+        assert.strictEqual(userSnap.exists(), false);
+
+        // Verify no tombstone write under CancelledSubRequests
+        const cancelSnap = await adminDb.ref('BandEvents/CancelledSubRequests/' + pinId).get();
+        assert.strictEqual(cancelSnap.exists(), false);
+      });
     });
   });
 });

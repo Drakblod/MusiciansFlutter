@@ -621,64 +621,14 @@ class FirebaseService {
       final result = await callable.call(payload);
       final resData = result.data is Map ? Map<dynamic, dynamic>.from(result.data as Map) : <dynamic, dynamic>{};
       final pinId = resData['id']?.toString() ?? '';
-      final pinPayload = resData['pin'] is Map ? Map<dynamic, dynamic>.from(resData['pin'] as Map) : <dynamic, dynamic>{};
-      if (pinId.isNotEmpty) {
-        _dbRef('BandEvents/CancelledSubRequests/$pinId').remove().catchError((_) {});
+      if (pinId.isEmpty) {
+        throw Exception('Server did not return a valid pin ID.');
       }
+      final pinPayload = resData['pin'] is Map ? Map<dynamic, dynamic>.from(resData['pin'] as Map) : <dynamic, dynamic>{};
       return SubRequest.fromJson(pinPayload, pinId);
     } catch (e) {
-      debugPrint('[FirebaseService] Error creating Map Pin via createMapPin ($e). Falling back to direct database write...');
-      final newRef = _dbRef('SubRequests').push();
-      final key = newRef.key ?? 'pin_${DateTime.now().millisecondsSinceEpoch}';
-      final myUid = currentUserId ?? 'map_user';
-      final now = DateTime.now().millisecondsSinceEpoch;
-
-      final updated = pin.copyWith(
-        id: key,
-        subRequestId: key,
-        creatorUserId: myUid,
-        userId: myUid,
-        status: 'published',
-        extraFields: {
-          ...pin.extraFields,
-          'NotificationMode': 'map_pin',
-          'notificationMode': 'map_pin',
-          'subCategory': 'Music',
-          'eventType': payload['eventType'],
-          'createdAt': now,
-        },
-      );
-
-      final json = updated.toJson();
-      json['NotificationMode'] = 'map_pin';
-      json['notificationMode'] = 'map_pin';
-      json['subCategory'] = 'Music';
-      json['eventType'] = payload['eventType'];
-      json['CreatedAt'] = now;
-      json['createdAt'] = now;
-      json['CreatorUserId'] = myUid;
-      json['UserId'] = myUid;
-      json['Status'] = 'published';
-
-      try {
-        await _dbRef('BandEvents/PublishedSubRequests/$key').set(json);
-      } catch (dbErr) {
-        debugPrint('[FirebaseService] Error writing fallback BandEvents/PublishedSubRequests: $dbErr');
-      }
-
-      try {
-        await newRef.set(json);
-      } catch (dbErr) {
-        debugPrint('[FirebaseService] Error writing fallback SubRequests: $dbErr');
-      }
-
-      if (currentUserId != null) {
-        try {
-          await _dbRef('users/$currentUserId/SubRequests/$key').set(json);
-        } catch (_) {}
-      }
-
-      return updated;
+      debugPrint('[FirebaseService] Error creating Map Pin via createMapPin: $e');
+      rethrow;
     }
   }
 
@@ -714,20 +664,24 @@ class FirebaseService {
       final pinPayload = resData['pin'] is Map ? Map<dynamic, dynamic>.from(resData['pin'] as Map) : <dynamic, dynamic>{};
       return SubRequest.fromJson(pinPayload, pinId);
     } catch (e) {
-      debugPrint('[FirebaseService] Error updating Map Pin via updateMapPin ($e). Falling back to direct database update...');
-      final json = pin.toJson();
-      try {
-        await _dbRef('BandEvents/PublishedSubRequests/$pinId').update(json);
-      } catch (_) {}
-      try {
-        await _dbRef('SubRequests/$pinId').update(json);
-      } catch (_) {}
-      if (currentUserId != null) {
-        try {
-          await _dbRef('users/$currentUserId/SubRequests/$pinId').update(json);
-        } catch (_) {}
-      }
-      return pin;
+      debugPrint('[FirebaseService] Error updating Map Pin via updateMapPin: $e');
+      rethrow;
+    }
+  }
+
+  /// Securely deletes an ordinary Map View music pin via server-owned callable deleteMapPin.
+  Future<bool> deleteMapPinAsync(String pinId) async {
+    if (pinId.isEmpty) {
+      throw Exception('Valid pin id is required to delete a map pin.');
+    }
+    try {
+      final callable = _functions.httpsCallable('deleteMapPin');
+      final result = await callable.call({'id': pinId});
+      final resData = result.data is Map ? Map<dynamic, dynamic>.from(result.data as Map) : <dynamic, dynamic>{};
+      return resData['success'] == true;
+    } catch (e) {
+      debugPrint('[FirebaseService] Error deleting Map Pin via deleteMapPin: $e');
+      rethrow;
     }
   }
 
@@ -807,20 +761,6 @@ class FirebaseService {
       } catch (_) {}
     }
 
-    // 3. User's active subrequests set (to detect if creator deleted a subrequest locally)
-    final Set<String> userActiveSubIds = {};
-    if (selfId != null) {
-      try {
-        final userSubs = await getUserSubRequestsAsync(selfId);
-        for (final r in userSubs) {
-          final id = r.subRequestId ?? r.id;
-          if (id != null && id.isNotEmpty) {
-            userActiveSubIds.add(id);
-          }
-        }
-      } catch (_) {}
-    }
-
     bool isCancelled(SubRequest req) {
       final id = req.subRequestId ?? req.id ?? '';
       final slotId = req.slotId ?? '';
@@ -828,30 +768,9 @@ class FirebaseService {
       final st = req.status.toLowerCase();
       if (st == 'cancelled' || st == 'deleted' || st == 'closed') return true;
 
-      final isMapPin = req.isMapPin ||
-          req.extraFields['NotificationMode'] == 'map_pin' ||
-          req.extraFields['notificationMode'] == 'map_pin';
-
-      // Map pins are managed independently: they are only cancelled if status is cancelled/deleted/closed
-      if (isMapPin) {
-        return false;
-      }
-
       if (id.isNotEmpty && cancelledIds.contains(id)) return true;
       if (slotId.isNotEmpty && cancelledIds.contains(slotId)) return true;
       if (groupId.isNotEmpty && cancelledIds.contains(groupId)) return true;
-
-      // If created by the current user, but no longer in the user's active subrequests, it was deleted by the user!
-      if (selfId != null && (req.creatorUserId == selfId || req.userId == selfId)) {
-        if (!userActiveSubIds.contains(id) && !userActiveSubIds.contains(slotId)) {
-          // Auto-mark in CancelledSubRequests so it's pruned everywhere
-          _dbRef('BandEvents/CancelledSubRequests/$id').set(true).catchError((_) {});
-          if (groupId.isNotEmpty) {
-            _dbRef('BandEvents/CancelledSubRequests/$groupId').set(true).catchError((_) {});
-          }
-          return true;
-        }
-      }
 
       return false;
     }
