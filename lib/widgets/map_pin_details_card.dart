@@ -131,44 +131,29 @@ class MapPinDetailsCard extends StatelessWidget {
             ),
             const SizedBox(height: 8),
 
-            // 2. Type (visible label: "Type", value: category / type display)
-            Wrap(
-              crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: 8,
-              runSpacing: 4,
-              children: [
-                Text(
-                  'Type',
-                  style: GoogleFonts.inter(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white60,
+            // 2. Type badge (category / type display without redundant "Type" text label)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: details.typeColor.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: details.typeColor.withOpacity(0.6), width: 1.0),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(details.typeIcon, color: details.typeColor, size: 12),
+                  const SizedBox(width: 4),
+                  Text(
+                    details.typeDisplayLabel,
+                    style: GoogleFonts.inter(
+                      color: details.typeColor,
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: details.typeColor.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: details.typeColor.withOpacity(0.6), width: 1.0),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(details.typeIcon, color: details.typeColor, size: 12),
-                      const SizedBox(width: 4),
-                      Text(
-                        details.typeDisplayLabel,
-                        style: GoogleFonts.inter(
-                          color: details.typeColor,
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
 
             // 3. Date & Time (visible label: "Date & Time", cleanly omitted if not available)
