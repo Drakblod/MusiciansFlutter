@@ -1102,6 +1102,41 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
     return null;
   }
 
+  Future<String?> _reverseGeocode(LatLng latLng) async {
+    try {
+      final url = Uri.parse(
+        'https://nominatim.openstreetmap.org/reverse?lat=${latLng.latitude}&lon=${latLng.longitude}&format=json&zoom=16&addressdetails=1',
+      );
+      final response = await http.get(
+        url,
+        headers: {
+          'User-Agent': 'MusiciansFlutterApp/2.79 (info@musiciansapp.com)',
+          'Accept': 'application/json',
+        },
+      ).timeout(const Duration(seconds: 3));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data is Map && data['address'] is Map) {
+          final addr = data['address'] as Map;
+          final road = addr['road'] ?? addr['pedestrian'] ?? addr['street'];
+          final city = addr['city'] ?? addr['town'] ?? addr['municipality'] ?? addr['suburb'] ?? addr['village'];
+          if (road != null && city != null) {
+            return '$road, $city';
+          }
+          if (city != null) {
+            return city.toString();
+          }
+          if (data['display_name'] != null) {
+            final parts = data['display_name'].toString().split(',');
+            return parts.take(2).join(',').trim();
+          }
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
+
   void _openBandProfile({
     required BuildContext context,
     required String bandId,
@@ -1957,7 +1992,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
         anchor: const Offset(0.321, 0.716),
         infoWindow: InfoWindow(
           title: title,
-          snippet: '$standardizedType · ${gig.location ?? ""}',
+          snippet: '$standardizedType${(gig.location != null && gig.location!.isNotEmpty) ? " · ${gig.location}" : ""}',
         ),
         onTap: () {
           setState(() {
@@ -3029,12 +3064,12 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
                               String effectiveLocation;
 
                               if (addressText.isEmpty) {
-                                if (_currentCameraPosition.zoom < 10.0) {
-                                  targetLatLng = const LatLng(59.3293, 18.0686);
-                                  effectiveLocation = venueText.isNotEmpty ? venueText : 'Stockholm Center';
+                                targetLatLng = _getCrosshairMapCoordinate(_currentCameraPosition.target, _currentCameraPosition.zoom);
+                                if (venueText.isNotEmpty) {
+                                  effectiveLocation = venueText;
                                 } else {
-                                  targetLatLng = _getCrosshairMapCoordinate(_currentCameraPosition.target, _currentCameraPosition.zoom);
-                                  effectiveLocation = venueText.isNotEmpty ? venueText : 'Map Center Location';
+                                  final rev = await _reverseGeocode(targetLatLng);
+                                  effectiveLocation = rev ?? 'Map Location';
                                 }
                               } else {
                                 if (addressText.length < 5 || (!addressText.contains(' ') && !addressText.contains(','))) {

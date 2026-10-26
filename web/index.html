@@ -33,6 +33,57 @@
 
   <title>musicians_flutter</title>
   <link rel="manifest" href="manifest.json">
+  <style>
+    /* Google Maps Custom Dark Themed InfoWindow */
+    .gm-style .gm-style-iw-c {
+      background-color: #120e24 !important;
+      border: 1px solid rgba(124, 77, 255, 0.65) !important;
+      border-radius: 14px !important;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8), 0 0 16px rgba(124, 77, 255, 0.3) !important;
+      padding: 12px 14px !important;
+      max-width: 300px !important;
+    }
+    .gm-style .gm-style-iw-tc::after {
+      background-color: #120e24 !important;
+    }
+    .gm-style .gm-style-iw-t::after {
+      background: #120e24 !important;
+      box-shadow: -1px 1px 2px rgba(0, 0, 0, 0.5) !important;
+    }
+    .gm-style .gm-style-iw-d {
+      overflow: hidden !important;
+      padding: 0 !important;
+    }
+    .gm-style .gm-style-iw-d div {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+    }
+    /* Title in InfoWindow */
+    .gm-style .gm-style-iw-d .gm-title,
+    .gm-style .gm-style-iw-d div > div:first-child {
+      color: #ffffff !important;
+      font-weight: 700 !important;
+      font-size: 13.5px !important;
+      letter-spacing: 0.2px !important;
+      line-height: 1.3 !important;
+    }
+    /* Snippet / subtitle in InfoWindow */
+    .gm-style .gm-style-iw-d div > div:last-child {
+      color: rgba(255, 255, 255, 0.72) !important;
+      font-size: 11.5px !important;
+      margin-top: 4px !important;
+      line-height: 1.25 !important;
+    }
+    /* Close button X */
+    .gm-style .gm-ui-hover-effect {
+      filter: invert(1) !important;
+      opacity: 0.75 !important;
+      top: 4px !important;
+      right: 4px !important;
+    }
+    .gm-style .gm-ui-hover-effect:hover {
+      opacity: 1 !important;
+    }
+  </style>
 </head>
 <body>
   <script src="flutter_bootstrap.js" async></script>
