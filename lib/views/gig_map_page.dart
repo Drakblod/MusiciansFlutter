@@ -3412,12 +3412,24 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
                     ),
                   ],
 
-                  // Row 2: Actions Header (Refresh and Guide Help icon)
+                  // Combined Row: Primary Category Filter Chips and Action Buttons (Help + Refresh)
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
                       children: [
+                        Expanded(
+                          child: SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: Row(
+                              children: [
+                                _buildMainFilterChip('Music', _getFilterCount('Music', appState.currentUserProfile), displayLabel: 'Music'),
+                                _buildMainFilterChip('Sub & Member Search', _getFilterCount('Sub & Member Search', appState.currentUserProfile), displayLabel: 'Sub...'),
+                                _buildMainFilterChip('This Week', _getFilterCount('This Week', appState.currentUserProfile), displayLabel: 'This week'),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
                         Container(
                           width: 34,
                           height: 34,
@@ -3449,21 +3461,6 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
                             onPressed: _fetchGigs,
                           ),
                         ),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: 8),
-
-                  // Row 3: Full-width Primary Category Filter Tabs
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Row(
-                      children: [
-                        _buildMainFilterChip('Music', _getFilterCount('Music', appState.currentUserProfile), displayLabel: 'Music'),
-                        _buildMainFilterChip('Sub & Member Search', _getFilterCount('Sub & Member Search', appState.currentUserProfile), displayLabel: 'Sub...'),
-                        _buildMainFilterChip('This Week', _getFilterCount('This Week', appState.currentUserProfile), displayLabel: 'This week'),
                       ],
                     ),
                   ),
