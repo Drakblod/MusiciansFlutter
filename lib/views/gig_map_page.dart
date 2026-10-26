@@ -464,16 +464,16 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
   double _rippleWavePhase = 0.0;
 
   void _triggerNewPinRipple(LatLng position) {
+    _newPinRippleTimer?.cancel();
     _newPinRippleLocation = position;
     _newPinRippleStartTime = DateTime.now();
-    _newPinRippleTimer?.cancel();
     _newPinRippleTimer = Timer.periodic(const Duration(milliseconds: 100), (timer) {
       if (!mounted || _newPinRippleLocation == null || _newPinRippleStartTime == null) {
         timer.cancel();
         return;
       }
-      final elapsed = DateTime.now().difference(_newPinRippleStartTime!).inSeconds;
-      if (elapsed >= 30) {
+      final elapsed = DateTime.now().difference(_newPinRippleStartTime!).inMilliseconds;
+      if (elapsed >= 2500) {
         timer.cancel();
         if (mounted) {
           setState(() {
@@ -485,7 +485,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
       }
       if (mounted) {
         setState(() {
-          _rippleWavePhase = (DateTime.now().millisecondsSinceEpoch % 2000) / 2000.0;
+          _rippleWavePhase = (DateTime.now().millisecondsSinceEpoch % 1250) / 1250.0;
         });
       }
     });
@@ -553,7 +553,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
   // MAP-02 Automatic Crosshair Targeting State
   CameraPosition _currentCameraPosition = const CameraPosition(
     target: LatLng(59.3293, 18.0686),
-    zoom: 5.5,
+    zoom: 12.5,
   );
   bool _isAutoSelected = false;
   String? _manuallyClosedTargetId;
@@ -1270,6 +1270,8 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
       }
     }
     _newPinRippleTimer?.cancel();
+    _newPinRippleLocation = null;
+    _newPinRippleStartTime = null;
     super.dispose();
   }
 
@@ -3027,8 +3029,13 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
                               String effectiveLocation;
 
                               if (addressText.isEmpty) {
-                                targetLatLng = _getCrosshairMapCoordinate(_currentCameraPosition.target, _currentCameraPosition.zoom);
-                                effectiveLocation = venueText.isNotEmpty ? venueText : 'Map Center Location';
+                                if (_currentCameraPosition.zoom < 10.0) {
+                                  targetLatLng = const LatLng(59.3293, 18.0686);
+                                  effectiveLocation = venueText.isNotEmpty ? venueText : 'Stockholm Center';
+                                } else {
+                                  targetLatLng = _getCrosshairMapCoordinate(_currentCameraPosition.target, _currentCameraPosition.zoom);
+                                  effectiveLocation = venueText.isNotEmpty ? venueText : 'Map Center Location';
+                                }
                               } else {
                                 if (addressText.length < 5 || (!addressText.contains(' ') && !addressText.contains(','))) {
                                   if (ctx.mounted) {
@@ -3169,6 +3176,10 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
 
                               final effectiveTargetId = publishedGig.canonicalTargetId;
 
+                              if (ctx.mounted) {
+                                Navigator.pop(ctx);
+                              }
+
                               setState(() {
                                 if (effectiveTargetId != null) {
                                   _allGigs.removeWhere((g) => g.canonicalTargetId == effectiveTargetId);
@@ -3181,15 +3192,11 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
                                 _manuallyClosedTargetId = null;
                               });
 
-                               final camCenter = _getCameraCenterForCrosshair(targetLatLng, 15.0);
+                              final camCenter = _getCameraCenterForCrosshair(targetLatLng, 15.0);
                               _mapController?.animateCamera(
                                 CameraUpdate.newLatLngZoom(camCenter, 15.0),
                               );
                               _triggerNewPinRipple(targetLatLng);
-
-                              if (ctx.mounted) {
-                                Navigator.pop(ctx);
-                              }
                               if (context.mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
@@ -3246,7 +3253,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
                 : GoogleMap(
                     initialCameraPosition: const CameraPosition(
                       target: LatLng(59.3293, 18.0686),
-                      zoom: 5.5,
+                      zoom: 12.5,
                     ),
                     onMapCreated: (controller) {
                       _mapController = controller;
@@ -3264,6 +3271,11 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
                     },
                     onCameraMove: (position) {
                       _currentCameraPosition = position;
+                      if (_newPinRippleLocation != null) {
+                        _newPinRippleTimer?.cancel();
+                        _newPinRippleLocation = null;
+                        _newPinRippleStartTime = null;
+                      }
                       final crosshairPos = _getCrosshairMapCoordinate(position.target, position.zoom);
                       if (FeatureFlags.enableMockLiveRehearsals) {
                         _audioController?.updateCameraTarget(
@@ -3292,6 +3304,11 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
                     myLocationEnabled: false,
                     myLocationButtonEnabled: false,
                     onTap: (_) {
+                      if (_newPinRippleLocation != null) {
+                        _newPinRippleTimer?.cancel();
+                        _newPinRippleLocation = null;
+                        _newPinRippleStartTime = null;
+                      }
                       // Deselect gig and rehearsal on tapping map empty space
                       final closedId = _selectedGig?.canonicalTargetId ?? _selectedRehearsal?.id;
                       if (FeatureFlags.enableMockLiveRehearsals) {
