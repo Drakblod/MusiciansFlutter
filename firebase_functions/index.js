@@ -749,6 +749,99 @@ exports.onSubRequestGroupPublished = onValueCreated({
   }
 });
 
+
+/**
+ * Taxonomy of SubRequest categories for least-privilege feed distribution.
+ */
+const SUBREQUEST_KIND = {
+  DIRECT_INVITATION: 'direct_invitation',
+  FAVORITES_ONLY: 'favorites_only',
+  PUBLIC_GIG: 'public_gig',
+  EVENT_SUBSTITUTE_PUBLIC: 'event_substitute_public',
+  PROMO_MAP_PIN: 'promo_map_pin',
+};
+
+/**
+ * Classifies a subrequest item into its security kind.
+ */
+function classifySubRequest(data) {
+  if (!data) return SUBREQUEST_KIND.PUBLIC_GIG;
+
+  const mode = data.NotificationMode || data.notificationMode;
+  if (mode === 'map_pin') {
+    return SUBREQUEST_KIND.PROMO_MAP_PIN;
+  }
+
+  const rawType = (data.Type || data.type || '').toString().toLowerCase();
+  const searchSource = (data.SearchSource || data.searchSource || '').toString().toLowerCase();
+  const isFavoritesOnly = data.IsFavoritesOnly === true || data.isFavoritesOnly === true || searchSource === 'favorites';
+
+  if (rawType === 'direct_invitation' || rawType === 'direct') {
+    return SUBREQUEST_KIND.DIRECT_INVITATION;
+  }
+
+  if (isFavoritesOnly) {
+    return SUBREQUEST_KIND.FAVORITES_ONLY;
+  }
+
+  const targetUserIds = data.TargetUserIds || data.targetUserIds;
+  if (Array.isArray(targetUserIds) && targetUserIds.length > 0 && targetUserIds[0]) {
+    return SUBREQUEST_KIND.DIRECT_INVITATION;
+  }
+
+  const bandId = data.BandId || data.bandId;
+  const eventId = data.EventId || data.eventId;
+  if (bandId && eventId && bandId !== 'freelance' && bandId !== 'standalone') {
+    return SUBREQUEST_KIND.EVENT_SUBSTITUTE_PUBLIC;
+  }
+
+  return SUBREQUEST_KIND.PUBLIC_GIG;
+}
+
+/**
+ * Builds a sanitized, leak-free feed item containing only displayable fields.
+ */
+function buildSanitizedFeedItem(subRequest) {
+  if (!subRequest) return null;
+
+  return {
+    id: subRequest.SubRequestId || subRequest.subRequestId || subRequest.id || subRequest.slotId || '',
+    subRequestId: subRequest.SubRequestId || subRequest.subRequestId || subRequest.id || subRequest.slotId || '',
+    slotId: subRequest.SlotId || subRequest.slotId || subRequest.SubRequestId || subRequest.subRequestId || subRequest.id || '',
+    requestGroupId: subRequest.RequestGroupId || subRequest.requestGroupId || '',
+    publicationId: subRequest.PublicationId || subRequest.publicationId || '',
+    bandId: subRequest.BandId || subRequest.bandId || '',
+    bandName: subRequest.BandName || subRequest.bandName || 'Freelance Gig',
+    eventId: subRequest.EventId || subRequest.eventId || '',
+    eventTitle: subRequest.EventTitle || subRequest.eventTitle || '',
+    voicePart: subRequest.VoicePart || subRequest.voicePart || subRequest.role || subRequest.Role || '',
+    date: subRequest.Date || subRequest.date || '',
+    time: subRequest.Time || subRequest.time || '',
+    location: subRequest.Location || subRequest.location || '',
+    city: subRequest.City || subRequest.city || '',
+    latitude: subRequest.Latitude ?? subRequest.latitude ?? null,
+    longitude: subRequest.Longitude ?? subRequest.longitude ?? null,
+    payAmount: subRequest.PayAmount ?? subRequest.payAmount ?? null,
+    payAmountMinor: subRequest.PayAmountMinor ?? subRequest.payAmountMinor ?? null,
+    currency: subRequest.Currency || subRequest.currency || 'SEK',
+    isPaid: subRequest.IsPaid ?? subRequest.isPaid ?? false,
+    notes: subRequest.Notes || subRequest.notes || subRequest.Description || subRequest.description || '',
+    genre: subRequest.Genre || subRequest.genre || '',
+    status: subRequest.Status || subRequest.status || 'published',
+    createdAt: subRequest.CreatedAt || subRequest.createdAt || Date.now(),
+    updatedAt: subRequest.UpdatedAt || subRequest.updatedAt || Date.now(),
+    creatorUserId: subRequest.CreatorUserId || subRequest.creatorUserId || subRequest.UserId || subRequest.userId || '',
+    creatorName: subRequest.CreatorName || subRequest.creatorName || '',
+    searchSource: subRequest.SearchSource || subRequest.searchSource || 'search_all',
+    type: subRequest.Type || subRequest.type || 'sub_request',
+    isFavoritesOnly: subRequest.IsFavoritesOnly === true || subRequest.isFavoritesOnly === true || (subRequest.SearchSource || subRequest.searchSource) === 'favorites',
+  };
+}
+
+exports.SUBREQUEST_KIND = SUBREQUEST_KIND;
+exports.classifySubRequest = classifySubRequest;
+exports.buildSanitizedFeedItem = buildSanitizedFeedItem;
+
 /**
  * Production callable entrypoint to publish a grouped substitute request.
  * Authorized for Band Leader/Admin or event creator.
@@ -808,20 +901,24 @@ exports.publishSubRequestGroup = onCall({ region: 'europe-west1' }, async (reque
   const updates = {};
   const now = Date.now();
 
-  // 3. Write each canonical SubRequest
+  // 3. Write each canonical SubRequest & Creator feed
   slots.forEach((slot) => {
     const slotKey = slot.subRequestId || slot.slotId;
-    updates[`/SubRequests/${slotKey}`] = {
+    const canonicalItem = {
       ...slot,
       SubRequestId: slotKey,
       SlotId: slot.slotId || slotKey,
       RequestGroupId: requestGroupId,
       PublicationId: publicationId,
-      NotificationMode: 'grouped',
+      NotificationMode: slot.NotificationMode || slot.notificationMode || 'grouped',
       CreatorUserId: callerId,
       Status: 'published',
-      CreatedAt: slot.createdAt || now,
+      CreatedAt: slot.createdAt || slot.CreatedAt || now,
+      UpdatedAt: now,
     };
+    updates[`/SubRequests/${slotKey}`] = canonicalItem;
+    updates[`/creatorSubRequestFeed/${callerId}/${slotKey}`] = buildSanitizedFeedItem(canonicalItem);
+    updates[`/users/${callerId}/SubRequests/${slotKey}`] = canonicalItem;
   });
 
   // 4. Write publication manifest
@@ -846,14 +943,11 @@ exports.publishSubRequestGroup = onCall({ region: 'europe-west1' }, async (reque
     })),
   };
 
-  // 5. Populate audience and feed indexes across users
-  const usersSnap = await db.ref('/users').once('value');
-  const users = usersSnap.val() || {};
-
   if (callerId) {
     updates[`/creatorSubRequestGroups/${callerId}/${requestGroupId}`] = true;
   }
 
+  // 5. Populate feeds according to least-privilege security model
   function matchesInstrument(requested, userSkills) {
     if (!requested || !requested.trim()) return true;
     const nonGeneric = userSkills.filter(s => {
@@ -891,59 +985,97 @@ exports.publishSubRequestGroup = onCall({ region: 'europe-west1' }, async (reque
     return false;
   }
 
-  Object.keys(users).forEach((userId) => {
-    const userObj = users[userId] || {};
-    const userInfo = userObj.info || {};
-    const userSkills = [];
+  const usersSnap = await db.ref('/users').once('value');
+  const users = usersSnap.val() || {};
 
-    const rawUserType = userInfo.UserType || userInfo.userType || userObj.UserType || userObj.userType || '';
-    if (rawUserType) userSkills.push(rawUserType);
-
-    const rawMain = userInfo.MainInstrument || userInfo.mainInstrument || userObj.MainInstrument || userObj.mainInstrument || '';
-    if (rawMain) {
-      rawMain.split(',').forEach(s => { if (s.trim()) userSkills.push(s.trim()); });
-    }
-
-    const rawInsts = userInfo.Instruments || userInfo.instruments || userObj.Instruments || userObj.instruments || userObj.Instruments_user || [];
-    if (Array.isArray(rawInsts)) {
-      rawInsts.forEach(i => { if (i && typeof i === 'string') userSkills.push(i.trim()); });
-    } else if (typeof rawInsts === 'object') {
-      Object.values(rawInsts).forEach(i => { if (i && typeof i === 'string') userSkills.push(i.trim()); });
-    }
-
-    slots.forEach((slot) => {
-      const slotKey = slot.subRequestId || slot.slotId;
-      const voicePart = slot.voicePart || slot.VoicePart || slot.role || slot.Role || '';
-      const searchSource = slot.searchSource || slot.SearchSource || 'search_all';
-      const rawTargetUserIds = slot.targetUserIds || slot.TargetUserIds || [];
-
-      let isEligible = false;
-      if (searchSource === 'favorites') {
-        // Enforce that target user is genuinely in the caller's favorites list
-        const isVerifiedFavorite = callerFavorites[userId] === true || callerFavorites[userId] === 'true';
-        isEligible = isVerifiedFavorite && (rawTargetUserIds.length === 0 || rawTargetUserIds.includes(userId));
-      } else if (Array.isArray(rawTargetUserIds) && rawTargetUserIds.length > 0) {
-        isEligible = rawTargetUserIds.includes(userId);
-      } else {
-        isEligible = matchesInstrument(voicePart, userSkills);
-      }
-
-      if (isEligible && slotKey) {
-        updates[`/subRequestAudience/${slotKey}/${userId}`] = true;
-        updates[`/userSubRequestFeed/${userId}/${slotKey}`] = {
-          slotId: slot.slotId || slotKey,
-          requestGroupId: requestGroupId,
-          bandName: bandName || 'Freelance Gig',
-          voicePart: slot.voicePart || slot.VoicePart || '',
-          date: slot.date || slot.Date || '',
-          searchSource: searchSource,
-          publishedAt: now,
-        };
-      }
+  for (const slot of slots) {
+    const slotKey = slot.subRequestId || slot.slotId;
+    const sanitizedItem = buildSanitizedFeedItem({
+      ...slot,
+      SubRequestId: slotKey,
+      SlotId: slot.slotId || slotKey,
+      RequestGroupId: requestGroupId,
+      PublicationId: publicationId,
+      CreatorUserId: callerId,
+      Status: 'published',
+      CreatedAt: slot.createdAt || slot.CreatedAt || now,
+      UpdatedAt: now,
     });
-  });
 
-  // Single atomic root multi-location update containing all prerequisites and manifest
+    const kind = classifySubRequest(slot);
+
+    if (kind === SUBREQUEST_KIND.PROMO_MAP_PIN) {
+      // Ordinary music pins stay isolated and never appear in SubRequest feeds
+      continue;
+    }
+
+    const rawTargetUserIds = Array.isArray(slot.targetUserIds || slot.TargetUserIds)
+      ? (slot.targetUserIds || slot.TargetUserIds)
+      : [];
+
+    let eligibleRecipientUids = [];
+
+    if (kind === SUBREQUEST_KIND.PUBLIC_GIG || kind === SUBREQUEST_KIND.EVENT_SUBSTITUTE_PUBLIC) {
+      // Truly public: readable by all authenticated users
+      updates[`/publicSubRequests/${slotKey}`] = sanitizedItem;
+
+      // Audience indexing for public matching users
+      const voicePart = slot.voicePart || slot.VoicePart || slot.role || slot.Role || '';
+      Object.keys(users).forEach(uid => {
+        if (uid === callerId) return;
+        const userObj = users[uid] || {};
+        const userInfo = userObj.info || {};
+        const userSkills = [];
+        const rawUserType = userInfo.UserType || userInfo.userType || userObj.UserType || userObj.userType || '';
+        if (rawUserType) userSkills.push(rawUserType);
+        const rawMain = userInfo.MainInstrument || userInfo.mainInstrument || userObj.MainInstrument || userObj.mainInstrument || '';
+        if (rawMain) {
+          rawMain.split(',').forEach(s => { if (s.trim()) userSkills.push(s.trim()); });
+        }
+        const rawInsts = userInfo.Instruments || userInfo.instruments || userObj.Instruments || userObj.instruments || userObj.Instruments_user || [];
+        if (Array.isArray(rawInsts)) {
+          rawInsts.forEach(i => { if (i && typeof i === 'string') userSkills.push(i.trim()); });
+        } else if (typeof rawInsts === 'object') {
+          Object.values(rawInsts).forEach(i => { if (i && typeof i === 'string') userSkills.push(i.trim()); });
+        }
+        if (matchesInstrument(voicePart, userSkills)) {
+          eligibleRecipientUids.push(uid);
+        }
+      });
+    } else if (kind === SUBREQUEST_KIND.FAVORITES_ONLY) {
+      // Public feed entry must be removed if converted to private
+      updates[`/publicSubRequests/${slotKey}`] = null;
+
+      if (rawTargetUserIds.length > 0) {
+        eligibleRecipientUids = rawTargetUserIds.filter(uid => callerFavorites[uid] === true || callerFavorites[uid] === 'true');
+      } else {
+        eligibleRecipientUids = Object.keys(callerFavorites).filter(uid => callerFavorites[uid] === true || callerFavorites[uid] === 'true');
+      }
+    } else {
+      // Direct invitation
+      updates[`/publicSubRequests/${slotKey}`] = null;
+      eligibleRecipientUids = rawTargetUserIds;
+    }
+
+    // Clean up previous audience members who are no longer eligible
+    const existingAudienceSnap = await db.ref(`/subRequestAudience/${slotKey}`).once('value');
+    const existingAudience = existingAudienceSnap.val() || {};
+    for (const oldUid of Object.keys(existingAudience)) {
+      if (!eligibleRecipientUids.includes(oldUid)) {
+        updates[`/userSubRequestFeed/${oldUid}/${slotKey}`] = null;
+        updates[`/subRequestAudience/${slotKey}/${oldUid}`] = null;
+      }
+    }
+
+    for (const targetUid of eligibleRecipientUids) {
+      if (targetUid && targetUid !== callerId) {
+        updates[`/userSubRequestFeed/${targetUid}/${slotKey}`] = sanitizedItem;
+        updates[`/subRequestAudience/${slotKey}/${targetUid}`] = true;
+      }
+    }
+  }
+
+  // Single atomic root multi-location update containing all feeds and manifest
   await db.ref().update(updates);
 
   return {
@@ -954,9 +1086,6 @@ exports.publishSubRequestGroup = onCall({ region: 'europe-west1' }, async (reque
   };
 });
 
-/**
- * Server-owned Cloud Function callable to securely submit a response / application to a SubRequest.
- */
 exports.respondToSubRequest = onCall({ region: 'europe-west1' }, async (request) => {
   if (!request.auth || !request.auth.uid) {
     throw new HttpsError('unauthenticated', 'User must be authenticated.');
@@ -1101,26 +1230,55 @@ exports.deleteSubRequest = onCall({ region: 'europe-west1' }, async (request) =>
 
   const val = subSnap.val() || {};
   const creatorId = val.CreatorUserId || val.creatorUserId || val.UserId || val.userId;
+  const bandId = val.BandId || val.bandId;
+
+  // Authorization check: Caller must be creator OR Band Leader/Admin of the request's band
+  let isAuthorized = (creatorId === callerId);
+  if (!isAuthorized && bandId) {
+    const memberSnap = await db.ref(`/Bands/${bandId}/Members_band/${callerId}`).once('value');
+    if (memberSnap.exists()) {
+      const role = memberSnap.val()?.Role || memberSnap.val()?.role;
+      if (role === 'Leader' || role === 'Admin') {
+        isAuthorized = true;
+      }
+    }
+  }
+
+  if (!isAuthorized) {
+    throw new HttpsError('permission-denied', 'Only creator or Band Leader/Admin can delete this request.');
+  }
+
+  // Fetch all audience recipients for atomic removal
+  const audienceSnap = await db.ref(`subRequestAudience/${subRequestId}`).once('value');
+  const audience = audienceSnap.val() || {};
+  const recipientUids = Object.keys(audience);
+  const extraTargets = Array.isArray(val.TargetUserIds) ? val.TargetUserIds : (Array.isArray(val.targetUserIds) ? val.targetUserIds : []);
+  for (const tUid of extraTargets) {
+    if (tUid && !recipientUids.includes(tUid)) {
+      recipientUids.push(tUid);
+    }
+  }
 
   const updates = {};
-  updates[`SubRequests/${subRequestId}/Status`] = 'cancelled';
-  await db.ref().update(updates);
-
-  await db.ref(`BandEvents/SubRequestResponses/${subRequestId}`).remove();
-  await db.ref(`BandEvents/PublishedSubRequests/${subRequestId}`).remove();
-  await db.ref(`SubRequests/${subRequestId}`).remove();
+  updates[`SubRequests/${subRequestId}`] = null;
+  updates[`publicSubRequests/${subRequestId}`] = null;
   if (creatorId) {
-    await db.ref(`users/${creatorId}/SubRequests/${subRequestId}`).remove();
+    updates[`creatorSubRequestFeed/${creatorId}/${subRequestId}`] = null;
+    updates[`users/${creatorId}/SubRequests/${subRequestId}`] = null;
   }
+  for (const rUid of recipientUids) {
+    updates[`userSubRequestFeed/${rUid}/${subRequestId}`] = null;
+  }
+  updates[`subRequestAudience/${subRequestId}`] = null;
+  updates[`BandEvents/PublishedSubRequests/${subRequestId}`] = null;
+  updates[`BandEvents/CancelledSubRequests/${subRequestId}`] = null;
+  updates[`BandEvents/SubRequestResponses/${subRequestId}`] = null;
+
+  await db.ref().update(updates);
 
   return { success: true };
 });
 
-/**
- * Secure server-owned Cloud Function callable to assign a candidate to a SubRequest slot.
- * Enforces authentication, Band Leader/Admin/Creator authorization, candidate eligibility,
- * and performs an atomic RTDB transaction rejecting competing candidates while ensuring idempotent retry.
- */
 exports.assignSubstitute = onCall({ region: 'europe-west1' }, async (request) => {
   const callerId = request.auth?.uid;
   if (!callerId) {
@@ -1282,6 +1440,36 @@ exports.assignSubstitute = onCall({ region: 'europe-west1' }, async (request) =>
     updates[`/users/${callerId}/SubRequests/${subRequestId}/AssignedBy`] = callerId;
   }
 
+  // Remove from public feed & legacy mirror so slot is no longer open
+  updates[`/publicSubRequests/${subRequestId}`] = null;
+  updates[`/BandEvents/PublishedSubRequests/${subRequestId}`] = null;
+
+  // Remove from userSubRequestFeed for all audience recipients
+  const audienceSnap = await db.ref(`/subRequestAudience/${subRequestId}`).once('value');
+  const audience = audienceSnap.val() || {};
+  const recipientUids = Object.keys(audience);
+  const extraTargets = Array.isArray(subReqData.TargetUserIds) ? subReqData.TargetUserIds : (Array.isArray(subReqData.targetUserIds) ? subReqData.targetUserIds : []);
+  for (const tUid of extraTargets) {
+    if (tUid && !recipientUids.includes(tUid)) {
+      recipientUids.push(tUid);
+    }
+  }
+  for (const rUid of recipientUids) {
+    updates[`/userSubRequestFeed/${rUid}/${subRequestId}`] = null;
+  }
+
+  // Update creatorSubRequestFeed with assignment status
+  const actualCreatorId = creatorUserId || callerId;
+  if (actualCreatorId) {
+    updates[`/creatorSubRequestFeed/${actualCreatorId}/${subRequestId}/isSelected`] = true;
+    updates[`/creatorSubRequestFeed/${actualCreatorId}/${subRequestId}/status`] = 'assigned';
+    updates[`/creatorSubRequestFeed/${actualCreatorId}/${subRequestId}/assignedUserId`] = candidateUserId;
+    if (candidateName) {
+      updates[`/creatorSubRequestFeed/${actualCreatorId}/${subRequestId}/assignedUserName`] = candidateName;
+    }
+    updates[`/creatorSubRequestFeed/${actualCreatorId}/${subRequestId}/assignedAt`] = now;
+    updates[`/creatorSubRequestFeed/${actualCreatorId}/${subRequestId}/assignedBy`] = callerId;
+  }
   if (Object.keys(updates).length > 0) {
     await db.ref().update(updates);
   }
@@ -1403,15 +1591,54 @@ exports.revokeSubstituteAssignment = onCall({ region: 'europe-west1' }, async (r
     updates[`/Bands/${targetBandId}/Events/${targetEventId}/substituteAssignments/${actualSlotId}`] = null;
   }
 
-  if (callerId) {
-    updates[`/users/${callerId}/SubRequests/${subRequestId}/IsSelected`] = false;
-    updates[`/users/${callerId}/SubRequests/${subRequestId}/Status`] = 'published';
-    updates[`/users/${callerId}/SubRequests/${subRequestId}/AssignedUserId`] = null;
-    updates[`/users/${callerId}/SubRequests/${subRequestId}/AssignedUserName`] = null;
-    updates[`/users/${callerId}/SubRequests/${subRequestId}/AssignedAt`] = null;
-    updates[`/users/${callerId}/SubRequests/${subRequestId}/AssignedBy`] = null;
+  const actualCreatorId = creatorUserId || callerId;
+  if (actualCreatorId) {
+    updates[`/users/${actualCreatorId}/SubRequests/${subRequestId}/IsSelected`] = false;
+    updates[`/users/${actualCreatorId}/SubRequests/${subRequestId}/Status`] = 'published';
+    updates[`/users/${actualCreatorId}/SubRequests/${subRequestId}/AssignedUserId`] = null;
+    updates[`/users/${actualCreatorId}/SubRequests/${subRequestId}/AssignedUserName`] = null;
+    updates[`/users/${actualCreatorId}/SubRequests/${subRequestId}/AssignedAt`] = null;
+    updates[`/users/${actualCreatorId}/SubRequests/${subRequestId}/AssignedBy`] = null;
+
+    updates[`/creatorSubRequestFeed/${actualCreatorId}/${subRequestId}/isSelected`] = false;
+    updates[`/creatorSubRequestFeed/${actualCreatorId}/${subRequestId}/status`] = 'published';
+    updates[`/creatorSubRequestFeed/${actualCreatorId}/${subRequestId}/assignedUserId`] = null;
+    updates[`/creatorSubRequestFeed/${actualCreatorId}/${subRequestId}/assignedUserName`] = null;
+    updates[`/creatorSubRequestFeed/${actualCreatorId}/${subRequestId}/assignedAt`] = null;
+    updates[`/creatorSubRequestFeed/${actualCreatorId}/${subRequestId}/assignedBy`] = null;
   }
 
+  // Re-classify and restore to appropriate feed
+  const restoredSubReq = {
+    ...subReqData,
+    IsSelected: false,
+    Status: 'published',
+    AssignedUserId: null,
+    AssignedUserName: null,
+    AssignedAt: null,
+    AssignedBy: null,
+    updatedAt: Date.now(),
+  };
+
+  const kind = classifySubRequest(restoredSubReq);
+  const sanitizedItem = buildSanitizedFeedItem(restoredSubReq);
+
+  if (kind === SUBREQUEST_KIND.PUBLIC_GIG || kind === SUBREQUEST_KIND.EVENT_SUBSTITUTE_PUBLIC) {
+    updates[`/publicSubRequests/${subRequestId}`] = sanitizedItem;
+  } else if (kind === SUBREQUEST_KIND.DIRECT_INVITATION || kind === SUBREQUEST_KIND.FAVORITES_ONLY) {
+    const audienceSnap = await db.ref(`/subRequestAudience/${subRequestId}`).once('value');
+    const audience = audienceSnap.val() || {};
+    const recipientUids = Object.keys(audience);
+    const extraTargets = Array.isArray(restoredSubReq.TargetUserIds) ? restoredSubReq.TargetUserIds : (Array.isArray(restoredSubReq.targetUserIds) ? restoredSubReq.targetUserIds : []);
+    for (const tUid of extraTargets) {
+      if (tUid && !recipientUids.includes(tUid)) {
+        recipientUids.push(tUid);
+      }
+    }
+    for (const rUid of recipientUids) {
+      updates[`/userSubRequestFeed/${rUid}/${subRequestId}`] = sanitizedItem;
+    }
+  }
   await db.ref().update(updates);
 
   return { success: true, subRequestId };

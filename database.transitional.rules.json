@@ -191,7 +191,17 @@
       ".read": false,
       ".write": false
     },
+    "publicSubRequests": {
+      ".read": "auth != null",
+      ".write": false
+    },
     "userSubRequestFeed": {
+      "$userId": {
+        ".read": "auth != null && auth.uid == $userId",
+        ".write": false
+      }
+    },
+    "creatorSubRequestFeed": {
       "$userId": {
         ".read": "auth != null && auth.uid == $userId",
         ".write": false
@@ -276,8 +286,32 @@
       }
     },
     "BandEvents": {
-      ".read": "auth != null",
-      ".write": "auth != null"
+      "PublishedSubRequests": {
+        ".read": false,
+        ".write": false
+      },
+      "CancelledSubRequests": {
+        ".read": false,
+        ".write": false
+      },
+      "Notifications": {
+        "$userId": {
+          ".read": "auth != null && auth.uid == $userId",
+          ".write": "auth != null"
+        }
+      },
+      "Agreements": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      },
+      "SubRequestResponses": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      },
+      "$bandId": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
     },
     "Collabs": {
       "Sessions": {

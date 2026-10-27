@@ -1925,5 +1925,317 @@ describe('Real Cloud Functions Emulator Integration Tests (JS Client SDK + Emula
         assert.strictEqual(cancelSnap.exists(), false);
       });
     });
+
+    describe('SUBREQUEST-SECURITY-MIGRATION-01: Integration Tests for SubRequest Lifecycle and Feeds', () => {
+      it('55. publishSubRequestGroup: public staffing request writes to canonical, publicSubRequests, creator feed, and zero legacy mirror writes', async () => {
+        const publish = httpsCallable(functionsUserA, 'publishSubRequestGroup');
+        const res = await publish({
+          requestGroupId: 'grp_pub_test',
+          slots: [{
+            slotId: 'slot_pub_test_1',
+            voicePart: 'Drums',
+            date: '2026-12-01',
+            searchSource: 'search_all',
+          }],
+        });
+        assert.strictEqual(res.data.success, true);
+
+        const canon = await adminDb.ref('SubRequests/slot_pub_test_1').get();
+        assert.strictEqual(canon.exists(), true);
+        assert.strictEqual(canon.val().CreatorUserId, 'user_a');
+
+        const pub = await adminDb.ref('publicSubRequests/slot_pub_test_1').get();
+        assert.strictEqual(pub.exists(), true);
+        assert.strictEqual(pub.val().voicePart, 'Drums');
+
+        const creator = await adminDb.ref('creatorSubRequestFeed/user_a/slot_pub_test_1').get();
+        assert.strictEqual(creator.exists(), true);
+
+        const userBFeed = await adminDb.ref('userSubRequestFeed/user_b/slot_pub_test_1').get();
+        assert.strictEqual(userBFeed.exists(), false);
+
+        const legacy = await adminDb.ref('BandEvents/PublishedSubRequests/slot_pub_test_1').get();
+        assert.strictEqual(legacy.exists(), false);
+      });
+
+      it('56. publishSubRequestGroup: Direct Invitation writes to userSubRequestFeed and subRequestAudience, NEVER to publicSubRequests', async () => {
+        const publish = httpsCallable(functionsUserA, 'publishSubRequestGroup');
+        const res = await publish({
+          requestGroupId: 'grp_direct_test',
+          slots: [{
+            slotId: 'slot_direct_test_1',
+            voicePart: 'Bass',
+            date: '2026-12-02',
+            type: 'direct_invitation',
+            targetUserIds: ['user_b'],
+          }],
+        });
+        assert.strictEqual(res.data.success, true);
+
+        const canon = await adminDb.ref('SubRequests/slot_direct_test_1').get();
+        assert.strictEqual(canon.exists(), true);
+
+        const pub = await adminDb.ref('publicSubRequests/slot_direct_test_1').get();
+        assert.strictEqual(pub.exists(), false);
+
+        const userBFeed = await adminDb.ref('userSubRequestFeed/user_b/slot_direct_test_1').get();
+        assert.strictEqual(userBFeed.exists(), true);
+
+        const userCFeed = await adminDb.ref('userSubRequestFeed/user_c/slot_direct_test_1').get();
+        assert.strictEqual(userCFeed.exists(), false);
+
+        const audience = await adminDb.ref('subRequestAudience/slot_direct_test_1/user_b').get();
+        assert.strictEqual(audience.val(), true);
+      });
+
+      it('57. publishSubRequestGroup: Favorites-only without targetUserIds restricts to favorites, NEVER leaks to public', async () => {
+        await adminDb.ref('users/user_a/Favorites/user_b').set(true);
+
+        const publish = httpsCallable(functionsUserA, 'publishSubRequestGroup');
+        const res = await publish({
+          requestGroupId: 'grp_fav_test',
+          slots: [{
+            slotId: 'slot_fav_test_1',
+            voicePart: 'Guitar',
+            date: '2026-12-03',
+            searchSource: 'favorites',
+            targetUserIds: [],
+          }],
+        });
+        assert.strictEqual(res.data.success, true);
+
+        const canon = await adminDb.ref('SubRequests/slot_fav_test_1').get();
+        assert.strictEqual(canon.exists(), true);
+
+        const pub = await adminDb.ref('publicSubRequests/slot_fav_test_1').get();
+        assert.strictEqual(pub.exists(), false);
+
+        const userBFeed = await adminDb.ref('userSubRequestFeed/user_b/slot_fav_test_1').get();
+        assert.strictEqual(userBFeed.exists(), true);
+
+        const userCFeed = await adminDb.ref('userSubRequestFeed/user_c/slot_fav_test_1').get();
+        assert.strictEqual(userCFeed.exists(), false);
+      });
+
+      it('58. createMapPin: music promo pin never enters publicSubRequests or user feeds', async () => {
+        const createPin = httpsCallable(functionsUserA, 'createMapPin');
+        const pin = await createPin({
+          eventType: 'jamSession',
+          latitude: 59.33,
+          longitude: 18.06,
+          title: 'Acoustic Jam',
+        });
+        const pinId = pin.data.id;
+
+        const canon = await adminDb.ref('SubRequests/' + pinId).get();
+        assert.strictEqual(canon.exists(), true);
+        assert.strictEqual(canon.val().NotificationMode, 'map_pin');
+
+        const pub = await adminDb.ref('publicSubRequests/' + pinId).get();
+        assert.strictEqual(pub.exists(), false);
+
+        const userBFeed = await adminDb.ref('userSubRequestFeed/user_b/' + pinId).get();
+        assert.strictEqual(userBFeed.exists(), false);
+      });
+
+      it('59. deleteSubRequest: completely removes canonical, public, user feed, creator feed, audience and legacy mirrors', async () => {
+        const publish = httpsCallable(functionsUserA, 'publishSubRequestGroup');
+        await publish({
+          requestGroupId: 'grp_del_test',
+          slots: [{
+            slotId: 'slot_del_test_1',
+            voicePart: 'Keys',
+            type: 'direct_invitation',
+            targetUserIds: ['user_b'],
+          }],
+        });
+
+        await adminDb.ref('BandEvents/PublishedSubRequests/slot_del_test_1').set({ legacy: true });
+
+        const del = httpsCallable(functionsUserA, 'deleteSubRequest');
+        const res = await del({ subRequestId: 'slot_del_test_1' });
+        assert.strictEqual(res.data.success, true);
+
+        const canon = await adminDb.ref('SubRequests/slot_del_test_1').get();
+        assert.strictEqual(canon.exists(), false);
+
+        const pub = await adminDb.ref('publicSubRequests/slot_del_test_1').get();
+        assert.strictEqual(pub.exists(), false);
+
+        const userFeed = await adminDb.ref('userSubRequestFeed/user_b/slot_del_test_1').get();
+        assert.strictEqual(userFeed.exists(), false);
+
+        const creatorFeed = await adminDb.ref('creatorSubRequestFeed/user_a/slot_del_test_1').get();
+        assert.strictEqual(creatorFeed.exists(), false);
+
+        const aud = await adminDb.ref('subRequestAudience/slot_del_test_1').get();
+        assert.strictEqual(aud.exists(), false);
+
+        const legacy = await adminDb.ref('BandEvents/PublishedSubRequests/slot_del_test_1').get();
+        assert.strictEqual(legacy.exists(), false);
+      });
+
+      it('60. assignSubstitute: removes slot from public and user feeds and updates creator feed to assigned', async () => {
+        const publish = httpsCallable(functionsUserA, 'publishSubRequestGroup');
+        await publish({
+          requestGroupId: 'grp_assign_test',
+          slots: [{
+            slotId: 'slot_assign_test_1',
+            voicePart: 'Vocals',
+            searchSource: 'search_all',
+          }],
+        });
+
+        const assign = httpsCallable(functionsUserA, 'assignSubstitute');
+        const res = await assign({
+          subRequestId: 'slot_assign_test_1',
+          candidateUserId: 'user_b',
+          candidateName: 'Bob Singer',
+        });
+        assert.strictEqual(res.data.success, true);
+
+        const pub = await adminDb.ref('publicSubRequests/slot_assign_test_1').get();
+        assert.strictEqual(pub.exists(), false);
+
+        const canon = await adminDb.ref('SubRequests/slot_assign_test_1').get();
+        assert.strictEqual(canon.val().Status, 'assigned');
+        assert.strictEqual(canon.val().IsSelected, true);
+
+        const creator = await adminDb.ref('creatorSubRequestFeed/user_a/slot_assign_test_1').get();
+        assert.strictEqual(creator.val().status, 'assigned');
+        assert.strictEqual(creator.val().isSelected, true);
+        assert.strictEqual(creator.val().assignedUserId, 'user_b');
+      });
+
+      it('61. revokeSubstituteAssignment: restores slot to published status and re-populates exact feed', async () => {
+        const publish = httpsCallable(functionsUserA, 'publishSubRequestGroup');
+        await publish({
+          requestGroupId: 'grp_revoke_test',
+          slots: [{
+            slotId: 'slot_revoke_test_1',
+            voicePart: 'Vocals',
+            searchSource: 'search_all',
+          }],
+        });
+
+        const assign = httpsCallable(functionsUserA, 'assignSubstitute');
+        await assign({
+          subRequestId: 'slot_revoke_test_1',
+          candidateUserId: 'user_b',
+          candidateName: 'Bob Singer',
+        });
+
+        const revoke = httpsCallable(functionsUserA, 'revokeSubstituteAssignment');
+        const res = await revoke({
+          subRequestId: 'slot_revoke_test_1',
+          candidateUserId: 'user_b',
+        });
+        assert.strictEqual(res.data.success, true);
+
+        const canon = await adminDb.ref('SubRequests/slot_revoke_test_1').get();
+        assert.strictEqual(canon.val().Status, 'published');
+        assert.strictEqual(canon.val().IsSelected, false);
+
+        const creator = await adminDb.ref('creatorSubRequestFeed/user_a/slot_revoke_test_1').get();
+        assert.strictEqual(creator.val().status, 'published');
+        assert.strictEqual(creator.val().isSelected, false);
+
+        const pub = await adminDb.ref('publicSubRequests/slot_revoke_test_1').get();
+        assert.strictEqual(pub.exists(), true);
+      });
+
+      it('62. public to favorites transition removes the publicSubRequests entry', async () => {
+        const publish = httpsCallable(functionsUserA, 'publishSubRequestGroup');
+        await publish({
+          requestGroupId: 'grp_switch_test',
+          slots: [{
+            slotId: 'slot_switch_test_1',
+            voicePart: 'Saxophone',
+            searchSource: 'search_all',
+          }],
+        });
+        let pubSnap = await adminDb.ref('publicSubRequests/slot_switch_test_1').get();
+        assert.strictEqual(pubSnap.exists(), true);
+
+        await adminDb.ref('users/user_a/Favorites/user_b').set(true);
+
+        await publish({
+          requestGroupId: 'grp_switch_test',
+          slots: [{
+            slotId: 'slot_switch_test_1',
+            voicePart: 'Saxophone',
+            searchSource: 'favorites',
+            targetUserIds: ['user_b'],
+          }],
+        });
+
+        pubSnap = await adminDb.ref('publicSubRequests/slot_switch_test_1').get();
+        assert.strictEqual(pubSnap.exists(), false);
+
+        const userFeed = await adminDb.ref('userSubRequestFeed/user_b/slot_switch_test_1').get();
+        assert.strictEqual(userFeed.exists(), true);
+      });
+
+      it('63. changing audience removes the subrequest from previous recipients feeds', async () => {
+        const publish = httpsCallable(functionsUserA, 'publishSubRequestGroup');
+        await publish({
+          requestGroupId: 'grp_aud_test',
+          slots: [{
+            slotId: 'slot_aud_test_1',
+            voicePart: 'Trumpet',
+            type: 'direct_invitation',
+            targetUserIds: ['user_b'],
+          }],
+        });
+        let feedB = await adminDb.ref('userSubRequestFeed/user_b/slot_aud_test_1').get();
+        assert.strictEqual(feedB.exists(), true);
+
+        await publish({
+          requestGroupId: 'grp_aud_test',
+          slots: [{
+            slotId: 'slot_aud_test_1',
+            voicePart: 'Trumpet',
+            type: 'direct_invitation',
+            targetUserIds: ['user_c'],
+          }],
+        });
+
+        feedB = await adminDb.ref('userSubRequestFeed/user_b/slot_aud_test_1').get();
+        assert.strictEqual(feedB.exists(), false);
+
+        const feedC = await adminDb.ref('userSubRequestFeed/user_c/slot_aud_test_1').get();
+        assert.strictEqual(feedC.exists(), true);
+
+        const audB = await adminDb.ref('subRequestAudience/slot_aud_test_1/user_b').get();
+        assert.strictEqual(audB.exists(), false);
+        const audC = await adminDb.ref('subRequestAudience/slot_aud_test_1/user_c').get();
+        assert.strictEqual(audC.val(), true);
+      });
+
+      it('64. retry/re-publishing creates no duplicates and maintains idempotent state', async () => {
+        const publish = httpsCallable(functionsUserA, 'publishSubRequestGroup');
+        const payload = {
+          requestGroupId: 'grp_retry_test',
+          slots: [{
+            slotId: 'slot_retry_test_1',
+            voicePart: 'Cello',
+            searchSource: 'search_all',
+          }],
+        };
+
+        const res1 = await publish(payload);
+        assert.strictEqual(res1.data.success, true);
+
+        const res2 = await publish(payload);
+        assert.strictEqual(res2.data.success, true);
+        assert.strictEqual(res1.data.publicationId, res2.data.publicationId);
+
+        const canon = await adminDb.ref('SubRequests/slot_retry_test_1').get();
+        assert.strictEqual(canon.exists(), true);
+
+        const pub = await adminDb.ref('publicSubRequests/slot_retry_test_1').get();
+        assert.strictEqual(pub.exists(), true);
+      });
+    });
   });
 });
