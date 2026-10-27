@@ -2,12 +2,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:musicians_flutter/utils/map_event_activity_helper.dart';
 import 'package:musicians_flutter/views/gig_map_page.dart' show MapEventType;
 import 'package:musicians_flutter/models/sub_request.dart';
-import 'package:musicians_flutter/models/mock_live_rehearsal.dart';
 import 'package:musicians_flutter/data/mock_live_rehearsals.dart';
 
 void main() {
   group('MapEventActivityHelper - Canonical Activity Calculation', () {
-    final baseDate = DateTime(2026, 10, 23);
 
     test('1. Exact boundary rule: start <= now < end', () {
       final start = DateTime(2026, 10, 23, 19, 0);
@@ -303,8 +301,11 @@ void main() {
 
       final now = DateTime.now();
 
-      // Stockholm is defined relative to now (-1h to +2h) -> ACTIVE
-      expect(isMockLiveRehearsalActive(stockholm, now: now), isTrue);
+      // Stockholm has fixed historical dates (Oct 23, 2026, 18:00 - 21:00)
+      expect(isMockLiveRehearsalActive(stockholm, now: DateTime(2026, 10, 23, 19, 0)), isTrue);
+      expect(isMockLiveRehearsalActive(stockholm, now: DateTime(2026, 10, 24, 12, 0)), isFalse);
+      final activeFixture = createActiveMockLiveRehearsalFixture(now: now);
+      expect(isMockLiveRehearsalActive(activeFixture, now: now), isTrue);
 
       // Umeå is future (+1 day) -> INACTIVE
       expect(isMockLiveRehearsalActive(umea, now: now), isFalse);

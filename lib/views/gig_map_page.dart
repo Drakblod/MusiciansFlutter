@@ -173,18 +173,14 @@ class MapEventTypeHelper {
     return MapEventType.gigConcert;
   }
 
-  static Future<BitmapDescriptor> createNoteBitmap({
+  @visibleForTesting
+  static void drawNoteSilhouette(
+    Canvas canvas, {
     required Color color,
     required bool isHalfNote,
     double opacity = 1.0,
     bool hasGlow = false,
-  }) async {
-    final pictureRecorder = ui.PictureRecorder();
-    final canvas = Canvas(pictureRecorder);
-
-    // Canvas size (2x resolution for retina / crisp display)
-    const double canvasWidth = 60.0;
-    const double canvasHeight = 74.0;
+  }) {
 
     // Outer badge: Rectangle with crisp black border and subtle rounded corners
     const double badgeLeft = 4.0;
@@ -312,6 +308,27 @@ class MapEventTypeHelper {
     }
 
     canvas.restore();
+
+  }
+
+  static Future<BitmapDescriptor> createNoteBitmap({
+    required Color color,
+    required bool isHalfNote,
+    double opacity = 1.0,
+    bool hasGlow = false,
+  }) async {
+    const double canvasWidth = 60.0;
+    const double canvasHeight = 74.0;
+    final pictureRecorder = ui.PictureRecorder();
+    final canvas = Canvas(pictureRecorder);
+
+    drawNoteSilhouette(
+      canvas,
+      color: color,
+      isHalfNote: isHalfNote,
+      opacity: opacity,
+      hasGlow: hasGlow,
+    );
 
     final picture = pictureRecorder.endRecording();
     final image = await picture.toImage(canvasWidth.toInt(), canvasHeight.toInt());
@@ -444,18 +461,32 @@ class MapEventTypeHelper {
 
 
 class GigMapPage extends StatefulWidget {
-  const GigMapPage({super.key});
+  final ILiveBroadcastService? liveBroadcastService;
+  final LiveKitAudioController? liveKitAudioController;
+  final MockRehearsalAudioController? mockRehearsalAudioController;
+
+  const GigMapPage({
+    super.key,
+    this.liveBroadcastService,
+    this.liveKitAudioController,
+    this.mockRehearsalAudioController,
+  });
 
   @visibleForTesting
-  static const String darkMapStyle = _GigMapPageState._darkMapStyle;
+  static const String darkMapStyle = GigMapPageState._darkMapStyle;
   @visibleForTesting
-  static const String whiteMapStyle = _GigMapPageState._whiteMapStyle;
+  static const String whiteMapStyle = GigMapPageState._whiteMapStyle;
+
+  @visibleForTesting
+  static void resetSessionGuideBannerDismissalForTesting() {
+    GigMapPageState._sessionDismissedGuideBanner = false;
+  }
 
   @override
-  State<GigMapPage> createState() => _GigMapPageState();
+  State<GigMapPage> createState() => GigMapPageState();
 }
 
-class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, RouteAware {
+class GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, RouteAware {
 
   // --- New Pin Ripple Wave Spotter ---
   LatLng? _newPinRippleLocation;
@@ -536,6 +567,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
   bool _showInstrumentSearch = false;
 
   SubRequest? _selectedGig;
+  static bool _sessionDismissedGuideBanner = false;
   bool _showGuideBanner = false;
 
   // Prototype Mock Live Rehearsal Audio State
@@ -543,12 +575,31 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
   MockLiveRehearsal? _selectedRehearsal;
 
   // Real Live Broadcast (LiveKit Cloud) State
-  LiveBroadcastService? _liveBroadcastService;
+  ILiveBroadcastService? _liveBroadcastService;
   LiveKitAudioController? _liveKitAudioController;
   StreamSubscription<List<LiveBroadcast>>? _liveBroadcastsSubscription;
   List<LiveBroadcast> _activeRealBroadcasts = [];
   LiveBroadcast? _currentPublishingBroadcast;
   LiveBroadcast? _currentlyListeningBroadcast;
+
+  @visibleForTesting
+  void setPublishingBroadcastForTesting(LiveBroadcast? broadcast) {
+    _currentPublishingBroadcast = broadcast;
+  }
+
+  @visibleForTesting
+  LiveBroadcast? get currentPublishingBroadcastForTesting => _currentPublishingBroadcast;
+
+  @visibleForTesting
+  void setListeningBroadcastForTesting(LiveBroadcast? broadcast) {
+    _currentlyListeningBroadcast = broadcast;
+  }
+
+  @visibleForTesting
+  LiveBroadcast? get currentlyListeningBroadcastForTesting => _currentlyListeningBroadcast;
+
+  @visibleForTesting
+  Timer? get liveBlinkTimerForTesting => _liveBlinkTimer;
 
   // MAP-02 Automatic Crosshair Targeting State
   CameraPosition _currentCameraPosition = const CameraPosition(
@@ -945,6 +996,14 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
   }
 
   Future<void> _loadGuideBannerPref() async {
+    if (_sessionDismissedGuideBanner) {
+      if (mounted) {
+        setState(() {
+          _showGuideBanner = false;
+        });
+      }
+      return;
+    }
     try {
       final prefs = await SharedPreferences.getInstance();
       final hasSeen = prefs.getBool('has_seen_map_intro') ?? false;
@@ -957,6 +1016,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
   }
 
   Future<void> _dismissGuideBanner() async {
+    _sessionDismissedGuideBanner = true;
     if (!_showGuideBanner) return;
     setState(() {
       _showGuideBanner = false;
@@ -1008,7 +1068,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
           try {
             _notePinCache[keyOn] = await MapEventTypeHelper.createNoteBitmap(
               color: color,
-              isHalfNote: true,
+              isHalfNote: false,
               opacity: 1.0,
               hasGlow: true,
             );
@@ -1021,7 +1081,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
           try {
             _notePinCache[keyDim] = await MapEventTypeHelper.createNoteBitmap(
               color: color,
-              isHalfNote: true,
+              isHalfNote: false,
               opacity: 0.28,
               hasGlow: false,
             );
@@ -1172,12 +1232,12 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
     WidgetsBinding.instance.addObserver(this);
     _startLiveBlinkTimer();
     if (FeatureFlags.enableMockLiveRehearsals) {
-      _audioController = MockRehearsalAudioController();
+      _audioController = widget.mockRehearsalAudioController ?? MockRehearsalAudioController();
       _audioController!.initialize();
     }
     if (FeatureFlags.enableRealLiveBroadcasts) {
-      _liveBroadcastService = LiveBroadcastService();
-      _liveKitAudioController = LiveKitAudioController();
+      _liveBroadcastService = widget.liveBroadcastService ?? LiveBroadcastService();
+      _liveKitAudioController = widget.liveKitAudioController ?? LiveKitAudioController();
       _liveBroadcastsSubscription = _liveBroadcastService!.streamActiveBroadcasts().listen((broadcasts) {
         if (mounted) {
           final appState = Provider.of<AppState>(context, listen: false);
@@ -1231,6 +1291,11 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
         _liveKitAudioController!.disconnect();
         _currentlyListeningBroadcast = null;
       }
+      if (_currentPublishingBroadcast != null) {
+        _liveBroadcastService?.stopLiveBroadcast(broadcastId: _currentPublishingBroadcast!.id);
+        _liveKitAudioController!.disconnect();
+        _currentPublishingBroadcast = null;
+      }
     }
   }
 
@@ -1279,16 +1344,16 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
     if (FeatureFlags.enableRealLiveBroadcasts) {
       _liveBroadcastsSubscription?.cancel();
       if (_liveKitAudioController != null) {
-        if (_liveKitAudioController!.isListener || _currentlyListeningBroadcast != null) {
-          if (_currentlyListeningBroadcast != null) {
-            _liveBroadcastService?.leaveLiveBroadcast(broadcastId: _currentlyListeningBroadcast!.id);
-          }
+        if (_currentlyListeningBroadcast != null) {
+          _liveBroadcastService?.leaveLiveBroadcast(broadcastId: _currentlyListeningBroadcast!.id);
           _liveKitAudioController!.disconnect();
           _currentlyListeningBroadcast = null;
         }
-        if (!_liveKitAudioController!.isPublisher) {
-          _liveKitAudioController!.dispose();
+        if (_currentPublishingBroadcast != null) {
+          _liveBroadcastService?.stopLiveBroadcast(broadcastId: _currentPublishingBroadcast!.id);
+          _currentPublishingBroadcast = null;
         }
+        _liveKitAudioController!.dispose();
       }
     }
     _newPinRippleTimer?.cancel();
@@ -1963,24 +2028,12 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
 
   Set<Marker> _buildMarkers(List<SubRequest> filteredGigs) {
     final gigMarkers = filteredGigs.map((gig) {
-      final eventType = MapEventTypeHelper.getEventType(gig);
-      final standardizedType = MapEventTypeHelper.getShortLabel(eventType);
-      final genre = gig.extraFields['genre']?.toString() ??
-          gig.extraFields['Genre']?.toString() ??
-          gig.style ??
-          '';
-      final title = genre.isNotEmpty
-          ? '${gig.bandName ?? "Band"} - $genre'
-          : (gig.bandName ?? 'Band');
       return Marker(
         markerId: MarkerId(gig.canonicalTargetId ?? UniqueKey().toString()),
         position: LatLng(gig.latitude!, gig.longitude!),
         icon: _getMarkerColor(gig),
         anchor: const Offset(0.321, 0.716),
-        infoWindow: InfoWindow(
-          title: title,
-          snippet: '$standardizedType${(gig.location != null && gig.location!.isNotEmpty) ? " · ${gig.location}" : ""}',
-        ),
+        infoWindow: InfoWindow.noText,
         onTap: () {
           setState(() {
             _selectedGig = gig;
@@ -2012,10 +2065,7 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
             position: LatLng(broadcast.latitude, broadcast.longitude),
             icon: _getNoteDescriptor(MapEventType.gigConcert, isLive: true),
             anchor: const Offset(0.321, 0.716),
-            infoWindow: InfoWindow(
-              title: '🔴 LIVE: ${broadcast.bandName}',
-              snippet: '${broadcast.title} · ${broadcast.listenerCount} listeners',
-            ),
+            infoWindow: InfoWindow.noText,
             onTap: () {
               _showLiveBroadcastDetails(broadcast);
             },
@@ -2042,19 +2092,16 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
             position: rehearsal.position,
             icon: _getNoteDescriptor(MapEventType.rehearsal, isLive: isLive),
             anchor: const Offset(0.321, 0.716),
-        infoWindow: InfoWindow(
-          title: rehearsal.genre.isNotEmpty ? '${rehearsal.bandName} - ${rehearsal.genre}' : rehearsal.bandName,
-          snippet: 'Rehearsal · ${rehearsal.city}',
-        ),
-        onTap: () {
-          setState(() {
-            _selectedRehearsal = rehearsal;
-            _selectedGig = null;
-            _isAutoSelected = false;
-            _manuallyClosedTargetId = null;
-          });
-        },
-      );
+            infoWindow: InfoWindow.noText,
+            onTap: () {
+              setState(() {
+                _selectedRehearsal = rehearsal;
+                _selectedGig = null;
+                _isAutoSelected = false;
+                _manuallyClosedTargetId = null;
+              });
+            },
+          );
     }).toSet();
 
     return {...gigMarkers, ...rehearsalMarkers, ...realLiveMarkers};
@@ -2092,7 +2139,13 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
           description: description,
         );
 
-        await _liveKitAudioController!.connectPublisher(session);
+        try {
+          await _liveKitAudioController!.connectPublisher(session);
+        } catch (e) {
+          // If audio connection fails, roll back server broadcast record so UI isn't left in false Live state
+          await _liveBroadcastService?.stopLiveBroadcast(broadcastId: session.broadcastId);
+          rethrow;
+        }
 
         if (mounted) {
           setState(() {
@@ -3486,56 +3539,18 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
                     ),
                   ],
 
-                  // Combined Row: Primary Category Filter Chips and Action Buttons (Help + Refresh)
+                  // Primary Category Filter Chips Row
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            child: Row(
-                              children: [
-                                _buildMainFilterChip('Music', _getFilterCount('Music', appState.currentUserProfile), displayLabel: 'Music'),
-                                _buildMainFilterChip('Sub & Member Search', _getFilterCount('Sub & Member Search', appState.currentUserProfile), displayLabel: 'Sub...'),
-                                _buildMainFilterChip('This Week', _getFilterCount('This Week', appState.currentUserProfile), displayLabel: 'This week'),
-                              ],
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Container(
-                          width: 34,
-                          height: 34,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF0F0C20).withOpacity(0.92),
-                            shape: BoxShape.circle,
-                            border: Border.all(color: const Color(0xFF2E2A4E), width: 1.2),
-                          ),
-                          child: IconButton(
-                            padding: EdgeInsets.zero,
-                            icon: const Icon(Icons.help_outline_rounded, color: AppTheme.primaryAccent, size: 17),
-                            tooltip: 'What is Map View?',
-                            onPressed: _showMapInfoDialog,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Container(
-                          width: 34,
-                          height: 34,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF0F0C20).withOpacity(0.92),
-                            shape: BoxShape.circle,
-                            border: Border.all(color: const Color(0xFF2E2A4E), width: 1.2),
-                          ),
-                          child: IconButton(
-                            padding: EdgeInsets.zero,
-                            icon: const Icon(Icons.refresh_rounded, color: Colors.white, size: 18),
-                            tooltip: 'Refresh Map',
-                            onPressed: _fetchGigs,
-                          ),
-                        ),
-                      ],
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          _buildMainFilterChip('Music', _getFilterCount('Music', appState.currentUserProfile), displayLabel: 'Music'),
+                          _buildMainFilterChip('Sub & Member Search', _getFilterCount('Sub & Member Search', appState.currentUserProfile), displayLabel: 'Sub...'),
+                          _buildMainFilterChip('This Week', _getFilterCount('This Week', appState.currentUserProfile), displayLabel: 'This week'),
+                        ],
+                      ),
                     ),
                   ),
 
@@ -3591,10 +3606,60 @@ class _GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Ro
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // Live Audio Bar ("Turn ON/OFF & Mute") - ALWAYS VISIBLE
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: _buildLiveAudioBar(isDocked: true),
+                    // Secondary Control Row: Live Audio Bar + Help & Refresh buttons
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Expanded(
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              child: _buildLiveAudioBar(isDocked: true),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 32,
+                              height: 32,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF0F0C20).withOpacity(0.92),
+                                shape: BoxShape.circle,
+                                border: Border.all(color: const Color(0xFF2E2A4E), width: 1.2),
+                              ),
+                              child: IconButton(
+                                key: const ValueKey('map_help_button'),
+                                padding: EdgeInsets.zero,
+                                icon: const Icon(Icons.help_outline_rounded, color: AppTheme.primaryAccent, size: 16),
+                                tooltip: 'What is Map View?',
+                                onPressed: _showMapInfoDialog,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Container(
+                              width: 32,
+                              height: 32,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF0F0C20).withOpacity(0.92),
+                                shape: BoxShape.circle,
+                                border: Border.all(color: const Color(0xFF2E2A4E), width: 1.2),
+                              ),
+                              child: IconButton(
+                                key: const ValueKey('map_refresh_button'),
+                                padding: EdgeInsets.zero,
+                                icon: const Icon(Icons.refresh_rounded, color: Colors.white, size: 16),
+                                tooltip: 'Refresh Map',
+                                onPressed: _fetchGigs,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 8),
 

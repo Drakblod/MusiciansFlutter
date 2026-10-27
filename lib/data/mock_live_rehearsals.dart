@@ -5,7 +5,6 @@ import '../models/mock_live_rehearsal.dart';
 /// Pre-configured mock live rehearsal broadcast sources with structured timestamps.
 List<MockLiveRehearsal> getMockLiveRehearsals({DateTime? now}) {
   final current = now ?? DateTime.now();
-  final todayStr = DateFormat('EEEE, MMM d, yyyy').format(current);
   final tomorrowStr = DateFormat('EEEE, MMM d, yyyy').format(current.add(const Duration(days: 1)));
   final inTwoDaysStr = DateFormat('EEEE, MMM d, yyyy').format(current.add(const Duration(days: 2)));
   final twoDaysAgoStr = DateFormat('EEEE, MMM d, yyyy').format(current.subtract(const Duration(days: 2)));
@@ -20,10 +19,10 @@ List<MockLiveRehearsal> getMockLiveRehearsals({DateTime? now}) {
       genre: 'Indie / Alternative',
       venue: 'Södermalm Rehearsal Studio',
       location: 'Södermalm Rehearsal Studio, Stockholm',
-      dateTime: '$todayStr · 6.00 PM - 9.00 PM (Live Now)',
+      dateTime: 'Friday, Oct 23, 2026 · 6.00 PM - 9.00 PM',
       description: 'Pre-production band rehearsal broadcasting live. Testing new track arrangements for the winter tour.',
-      startDateTime: current.subtract(const Duration(hours: 1)),
-      endDateTime: current.add(const Duration(hours: 2)),
+      startDateTime: DateTime(2026, 10, 23, 18, 0),
+      endDateTime: DateTime(2026, 10, 23, 21, 0),
       isLiveBroadcast: true,
     ),
     MockLiveRehearsal(
@@ -76,3 +75,23 @@ List<MockLiveRehearsal> getMockLiveRehearsals({DateTime? now}) {
 
 /// Pre-configured mock live rehearsal broadcast sources for prototype testing.
 List<MockLiveRehearsal> get mockLiveRehearsals => getMockLiveRehearsals();
+
+/// Explicit QA / test fixture representing an active live rehearsal.
+MockLiveRehearsal createActiveMockLiveRehearsalFixture({DateTime? now}) {
+  final current = now ?? DateTime.now();
+  return MockLiveRehearsal(
+    id: 'qa_active_live_rehearsal',
+    bandName: 'QA Active Live Band',
+    city: 'Stockholm',
+    position: const LatLng(59.3293, 18.0686),
+    audioAssetPath: 'audio/bandrep1.mp3',
+    genre: 'Indie / Alternative',
+    venue: 'QA Live Studio',
+    location: 'QA Live Studio, Stockholm',
+    dateTime: 'Live Now · 6.00 PM - 9.00 PM',
+    description: 'Explicit active rehearsal fixture for QA and testing.',
+    startDateTime: current.subtract(const Duration(hours: 1)),
+    endDateTime: current.add(const Duration(hours: 2)),
+    isLiveBroadcast: true,
+  );
+}
