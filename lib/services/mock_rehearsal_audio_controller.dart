@@ -8,6 +8,7 @@ import '../utils/geo_distance.dart';
 class MockRehearsalAudioController {
   /// Singleton / active instance tracker for global lifecycle & navigation audio stops.
   static MockRehearsalAudioController? activeInstance;
+  static const double maxRehearsalVolume = 0.70;
 
   final Map<String, AudioPlayer> _players = {};
   final Map<String, double> _currentVolumes = {};
@@ -186,7 +187,7 @@ class MockRehearsalAudioController {
       double targetVol = 0.0;
 
       if (!_isAudioStopped && !_isMuted && rehearsal.id == activeRehearsalId) {
-        targetVol = 1.0;
+        targetVol = maxRehearsalVolume;
       }
 
       _targetVolumes[rehearsal.id] = targetVol;
@@ -225,7 +226,7 @@ class MockRehearsalAudioController {
         final double interpolated = start + (target - start) * progress;
         _currentVolumes[id] = interpolated;
 
-        final double effectiveVolume = _isMuted ? 0.0 : interpolated.clamp(0.0, 1.0);
+        final double effectiveVolume = _isMuted ? 0.0 : interpolated.clamp(0.0, maxRehearsalVolume);
         final player = _players[id];
         if (player != null) {
           player.setVolume(effectiveVolume);
@@ -306,7 +307,7 @@ class MockRehearsalAudioController {
     isMutedNotifier.value = _isMuted;
 
     for (final id in _players.keys) {
-      final double effectiveVolume = _isMuted ? 0.0 : (_currentVolumes[id] ?? 0.0).clamp(0.0, 1.0);
+      final double effectiveVolume = _isMuted ? 0.0 : (_currentVolumes[id] ?? 0.0).clamp(0.0, maxRehearsalVolume);
       _players[id]?.setVolume(effectiveVolume);
     }
   }

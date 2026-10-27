@@ -1027,14 +1027,33 @@ class GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Rou
     } catch (_) {}
   }
 
-  /// Direct geographical coordinate under the map center crosshair.
+  /// Vertical pixel offset shifting the crosshair slightly higher than the screen center
+  /// to give clear visibility above bottom details cards.
+  static const double crosshairYOffset = -60.0;
+
+  /// Direct geographical coordinate under the map crosshair.
   LatLng _getCrosshairMapCoordinate(LatLng cameraCenter, double zoom) {
-    return cameraCenter;
+    if (crosshairYOffset == 0.0) return cameraCenter;
+    final mpp = MapCrosshairTargeting.metersPerPixel(cameraCenter.latitude, zoom);
+    // Negative Y offset on screen is North (higher latitude)
+    final metersNorth = -crosshairYOffset * mpp;
+    final latOffset = metersNorth / 111139.0;
+    return LatLng(
+      (cameraCenter.latitude + latOffset).clamp(-85.0, 85.0),
+      cameraCenter.longitude,
+    );
   }
 
-  /// Calculates the camera center needed to center [crosshairTarget] directly under the crosshair.
+  /// Calculates the camera center needed to center [crosshairTarget] directly under the elevated crosshair.
   LatLng _getCameraCenterForCrosshair(LatLng crosshairTarget, double zoom) {
-    return crosshairTarget;
+    if (crosshairYOffset == 0.0) return crosshairTarget;
+    final mpp = MapCrosshairTargeting.metersPerPixel(crosshairTarget.latitude, zoom);
+    final metersNorth = -crosshairYOffset * mpp;
+    final latOffset = metersNorth / 111139.0;
+    return LatLng(
+      (crosshairTarget.latitude - latOffset).clamp(-85.0, 85.0),
+      crosshairTarget.longitude,
+    );
   }
 
   static final Map<String, BitmapDescriptor> _notePinCache = {};
@@ -3483,10 +3502,14 @@ class GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Rou
                     },
                   ),
 
-            // Map Crosshair Overlay (centered directly over the interactive map)
+            // Map Crosshair Overlay (positioned slightly higher than screen center)
             Center(
-              child: MapCrosshair(
-                isTargetAcquired: _selectedGig != null || _selectedRehearsal != null,
+              child: Transform.translate(
+                key: const ValueKey('map_crosshair_transform'),
+                offset: const Offset(0, crosshairYOffset),
+                child: MapCrosshair(
+                  isTargetAcquired: _selectedGig != null || _selectedRehearsal != null,
+                ),
               ),
             ),
 

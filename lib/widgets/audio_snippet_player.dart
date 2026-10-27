@@ -19,6 +19,8 @@ class AudioSnippetPlayer extends StatefulWidget {
 }
 
 class _AudioSnippetPlayerState extends State<AudioSnippetPlayer> {
+  static const double _comfortableSnippetVolume = 0.70;
+
   AudioPlayer? _audioPlayer;
   PlayerState _playerState = PlayerState.stopped;
   Duration _duration = Duration.zero;
@@ -64,9 +66,11 @@ class _AudioSnippetPlayerState extends State<AudioSnippetPlayer> {
     try {
       final player = AudioPlayer();
       _audioPlayer = player;
-      
+
       // Set release mode to keep resource
       await player.setReleaseMode(ReleaseMode.stop);
+      // Set volume with headroom to avoid DAC clipping / distortion on hot audio
+      await player.setVolume(_comfortableSnippetVolume);
 
       // Listen to changes
       _durationSubscription = player.onDurationChanged.listen((d) {
@@ -105,6 +109,7 @@ class _AudioSnippetPlayerState extends State<AudioSnippetPlayer> {
 
       if (widget.autoPlay) {
         try {
+          await player.setVolume(_comfortableSnippetVolume);
           await player.play(_getSource(widget.audioUrl));
           if (mounted) {
             setState(() {
@@ -182,12 +187,14 @@ class _AudioSnippetPlayerState extends State<AudioSnippetPlayer> {
       if (_playerState == PlayerState.playing) {
         await _audioPlayer!.pause();
       } else if (_playerState == PlayerState.paused) {
+        await _audioPlayer!.setVolume(_comfortableSnippetVolume);
         await _audioPlayer!.resume();
       } else {
         setState(() {
           _isLoading = true;
           _errorMessage = null;
         });
+        await _audioPlayer!.setVolume(_comfortableSnippetVolume);
         await _audioPlayer!.play(_getSource(widget.audioUrl));
         if (mounted) {
           setState(() {
@@ -218,75 +225,39 @@ class _AudioSnippetPlayerState extends State<AudioSnippetPlayer> {
     final isPlaying = _playerState == PlayerState.playing;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: AppTheme.cardBackground,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF2E2A4E)),
+        color: const Color(0xFF0F0C20).withOpacity(0.92),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF2E2A4E), width: 1.0),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.2),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
           ),
         ],
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: AppTheme.primaryAccent.withOpacity(0.1),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.audiotrack_rounded,
-                  color: AppTheme.primaryAccent,
-                  size: 18,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                'MUSIC SNIPPET',
-                style: GoogleFonts.outfit(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: AppTheme.primaryAccent,
-                  letterSpacing: 1.0,
-                ),
-              ),
-              const Spacer(),
-              if (_isLoading)
-                const SizedBox(
-                  width: 14,
-                  height: 14,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primaryAccent),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 8),
           if (_errorMessage != null)
             Padding(
-              padding: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.only(bottom: 4),
               child: Row(
                 children: [
-                  const Icon(Icons.info_outline_rounded, color: AppTheme.danger, size: 16),
-                  const SizedBox(width: 6),
+                  const Icon(Icons.info_outline_rounded, color: AppTheme.danger, size: 14),
+                  const SizedBox(width: 4),
                   Expanded(
                     child: Text(
                       _errorMessage!,
-                      style: GoogleFonts.inter(color: AppTheme.danger, fontSize: 12),
+                      style: GoogleFonts.inter(color: AppTheme.danger, fontSize: 11),
                     ),
                   ),
                   TextButton(
                     style: TextButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       minimumSize: Size.zero,
                       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     ),
@@ -298,7 +269,7 @@ class _AudioSnippetPlayerState extends State<AudioSnippetPlayer> {
                       'Retry',
                       style: GoogleFonts.inter(
                         color: AppTheme.primaryAccent,
-                        fontSize: 12,
+                        fontSize: 11,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -308,75 +279,85 @@ class _AudioSnippetPlayerState extends State<AudioSnippetPlayer> {
             ),
           Row(
             children: [
-              // Play/Pause Button
-              IconButton(
-                padding: EdgeInsets.zero,
-                iconSize: 36,
-                icon: Icon(
-                  isPlaying ? Icons.pause_circle_filled : Icons.play_circle_filled,
-                  color: Colors.white,
+              // Sleek compact Play/Pause Button
+              SizedBox(
+                width: 28,
+                height: 28,
+                child: IconButton(
+                  padding: EdgeInsets.zero,
+                  iconSize: 24,
+                  icon: Icon(
+                    isPlaying ? Icons.pause_circle_filled_rounded : Icons.play_circle_fill_rounded,
+                    color: AppTheme.primaryAccent,
+                  ),
+                  onPressed: _isLoading ? null : _togglePlayback,
                 ),
-                onPressed: _isLoading ? null : _togglePlayback,
               ),
-              const SizedBox(width: 8),
-              // Time Progress and Slider
+              const SizedBox(width: 6),
+              // Current elapsed time
+              Text(
+                _formatDuration(_position),
+                style: GoogleFonts.inter(
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w500,
+                  color: AppTheme.textSecondary,
+                ),
+              ),
+              const SizedBox(width: 4),
+              // Time Progress Slider (clean, slim & responsive)
               Expanded(
-                child: Column(
-                  children: [
-                    SliderTheme(
-                      data: SliderTheme.of(context).copyWith(
-                        trackHeight: 4,
-                        activeTrackColor: AppTheme.primaryAccent,
-                        inactiveTrackColor: const Color(0xFF2E2A4E),
-                        thumbColor: Colors.white,
-                        thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
-                        overlayColor: AppTheme.primaryAccent.withOpacity(0.2),
-                        overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
-                      ),
-                      child: Slider(
-                        min: 0.0,
-                        max: _duration.inMilliseconds.toDouble() > 0
-                            ? _duration.inMilliseconds.toDouble()
-                            : 1.0,
-                        value: _position.inMilliseconds.toDouble().clamp(
-                              0.0,
-                              _duration.inMilliseconds.toDouble() > 0
-                                  ? _duration.inMilliseconds.toDouble()
-                                  : 1.0,
-                            ),
-                        onChanged: _isLoading || _audioPlayer == null
-                            ? null
-                            : (value) async {
-                                final duration = Duration(milliseconds: value.toInt());
-                                await _audioPlayer!.seek(duration);
-                              },
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            _formatDuration(_position),
-                            style: GoogleFonts.inter(
-                              fontSize: 11,
-                              color: AppTheme.textSecondary,
-                            ),
-                          ),
-                          Text(
-                            _formatDuration(_duration),
-                            style: GoogleFonts.inter(
-                              fontSize: 11,
-                              color: AppTheme.textSecondary,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+                child: SliderTheme(
+                  data: SliderTheme.of(context).copyWith(
+                    trackHeight: 3,
+                    trackShape: const RectangularSliderTrackShape(),
+                    activeTrackColor: AppTheme.primaryAccent,
+                    inactiveTrackColor: const Color(0xFF2E2A4E),
+                    thumbColor: Colors.white,
+                    thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 4.5),
+                    overlayColor: AppTheme.primaryAccent.withOpacity(0.15),
+                    overlayShape: const RoundSliderOverlayShape(overlayRadius: 10),
+                  ),
+                  child: Slider(
+                    min: 0.0,
+                    max: _duration.inMilliseconds.toDouble() > 0
+                        ? _duration.inMilliseconds.toDouble()
+                        : 1.0,
+                    value: _position.inMilliseconds.toDouble().clamp(
+                          0.0,
+                          _duration.inMilliseconds.toDouble() > 0
+                              ? _duration.inMilliseconds.toDouble()
+                              : 1.0,
+                        ),
+                    onChanged: _isLoading || _audioPlayer == null
+                        ? null
+                        : (value) async {
+                            final duration = Duration(milliseconds: value.toInt());
+                            await _audioPlayer!.seek(duration);
+                          },
+                  ),
                 ),
               ),
+              const SizedBox(width: 4),
+              // Total track duration
+              Text(
+                _formatDuration(_duration),
+                style: GoogleFonts.inter(
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w500,
+                  color: AppTheme.textSecondary,
+                ),
+              ),
+              if (_isLoading) ...[
+                const SizedBox(width: 6),
+                const SizedBox(
+                  width: 12,
+                  height: 12,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 1.5,
+                    valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primaryAccent),
+                  ),
+                ),
+              ],
             ],
           ),
         ],
