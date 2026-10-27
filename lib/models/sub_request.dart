@@ -1,4 +1,5 @@
 import '../utils/currency_formatter.dart';
+import 'canonical_location.dart';
 
 class SubRequest {
   final String? id;
@@ -8,6 +9,7 @@ class SubRequest {
   final String? userId;
   final String? voicePart;
   final String? location;
+  final String? city;
   final String? startTime;
   final String? endTime;
   final String? description;
@@ -26,6 +28,9 @@ class SubRequest {
   final Map<String, bool> responses;
   final double? latitude;
   final double? longitude;
+  final LocationPrecision? locationPrecision;
+  final String? placeId;
+  final LocationResolutionStatus? locationStatus;
   final List<String>? targetUserIds;
   final String? eventId;
   final String? bandId;
@@ -54,6 +59,7 @@ class SubRequest {
     this.userId,
     this.voicePart,
     this.location,
+    this.city,
     this.startTime,
     this.endTime,
     this.description,
@@ -72,6 +78,9 @@ class SubRequest {
     this.responses = const {},
     this.latitude,
     this.longitude,
+    this.locationPrecision,
+    this.placeId,
+    this.locationStatus,
     this.targetUserIds,
     this.eventId,
     this.bandId,
@@ -103,12 +112,13 @@ class SubRequest {
       });
     }
 
-    final latRaw = json['Latitude'];
-    final lngRaw = json['Longitude'];
-    double? parsedLat;
-    double? parsedLng;
-    if (latRaw is num) parsedLat = latRaw.toDouble();
-    if (lngRaw is num) parsedLng = lngRaw.toDouble();
+    final parsedCity = json['City']?.toString() ?? json['city']?.toString();
+    final canonicalLoc = CanonicalLocation.fromJson(json);
+    final parsedLat = canonicalLoc.latitude;
+    final parsedLng = canonicalLoc.longitude;
+    final parsedPrecision = canonicalLoc.precision;
+    final parsedPlaceId = canonicalLoc.placeId;
+    final parsedLocStatus = canonicalLoc.status;
 
     final targetUserIdsRaw = json['TargetUserIds'];
     List<String>? parsedTargetUserIds;
@@ -154,6 +164,18 @@ class SubRequest {
       'Latitude',
       'Longitude',
       'TargetUserIds',
+      'LocationPrecision',
+      'locationPrecision',
+      'PlaceId',
+      'placeId',
+      'LocationStatus',
+      'locationStatus',
+      'lat',
+      'lng',
+      'lon',
+      'Lat',
+      'Lng',
+      'Lon',
       'eventId',
       'bandId',
       'EventId',
@@ -203,23 +225,19 @@ class SubRequest {
     // Canonical PayAmountMinor wins if both exist; fallback to legacy PayAmount * 100
     final effectiveMinor = parsedPayAmountMinor ?? (parsedLegacyPayAmount != null ? parsedLegacyPayAmount * 100 : null);
 
-    final rawRequestType = json['RequestType']?.toString() ?? json['requestType']?.toString();
-    final rawRole = json['Role']?.toString() ?? json['role']?.toString();
+    final isNewMember = SubRequest.isNewMemberRecord(json);
     final String derivedRequestType;
-    if (rawRequestType != null && rawRequestType.trim().isNotEmpty) {
-      final norm = rawRequestType.trim().toLowerCase();
-      if (norm == 'new member') {
-        derivedRequestType = 'New Member';
-      } else if (norm == 'other') {
-        derivedRequestType = 'Other';
-      } else {
-        derivedRequestType = 'Substitute';
-      }
+    if (isNewMember) {
+      derivedRequestType = 'New Member';
     } else {
-      // Legacy compatibility:
-      // If RequestType is missing and normalized legacy role equals new member, derive New Member. Otherwise derive Substitute.
-      if (rawRole?.trim().toLowerCase() == 'new member') {
-        derivedRequestType = 'New Member';
+      final rawRequestType = json['RequestType']?.toString() ?? json['requestType']?.toString();
+      if (rawRequestType != null && rawRequestType.trim().isNotEmpty) {
+        final norm = rawRequestType.trim().toLowerCase().replaceAll(RegExp(r'[\s_-]+'), '');
+        if (norm == 'other') {
+          derivedRequestType = 'Other';
+        } else {
+          derivedRequestType = 'Substitute';
+        }
       } else {
         derivedRequestType = 'Substitute';
       }
@@ -233,6 +251,7 @@ class SubRequest {
       userId: json['UserId']?.toString() ?? json['userId']?.toString(),
       voicePart: json['VoicePart']?.toString() ?? json['voicePart']?.toString() ?? json['Instrument']?.toString() ?? json['instrument']?.toString(),
       location: json['Location']?.toString() ?? json['location']?.toString(),
+      city: parsedCity,
       startTime: json['StartTime']?.toString() ?? json['startTime']?.toString(),
       endTime: json['EndTime']?.toString() ?? json['endTime']?.toString(),
       description: json['Description']?.toString() ?? json['description']?.toString(),
@@ -253,6 +272,9 @@ class SubRequest {
       responses: parsedResponses,
       latitude: parsedLat,
       longitude: parsedLng,
+      locationPrecision: parsedPrecision,
+      placeId: parsedPlaceId,
+      locationStatus: parsedLocStatus,
       targetUserIds: parsedTargetUserIds,
       eventId: json['eventId']?.toString() ?? json['EventId']?.toString(),
       bandId: json['bandId']?.toString() ?? json['BandId']?.toString(),
@@ -311,6 +333,7 @@ class SubRequest {
       'UserId': userId,
       'VoicePart': voicePart,
       'Location': location,
+      if (city != null) 'City': city,
       'StartTime': startTime,
       'EndTime': endTime,
       'Description': description,
@@ -331,6 +354,9 @@ class SubRequest {
       'Responses': responses,
       'Latitude': latitude,
       'Longitude': longitude,
+      if (locationPrecision != null) 'LocationPrecision': locationPrecision!.name,
+      if (placeId != null && placeId!.isNotEmpty) 'PlaceId': placeId,
+      if (locationStatus != null) 'LocationStatus': locationStatus!.name,
       'TargetUserIds': targetUserIds,
       'eventId': eventId,
       'bandId': bandId,
@@ -360,6 +386,7 @@ class SubRequest {
     String? userId,
     String? voicePart,
     String? location,
+    String? city,
     String? startTime,
     String? endTime,
     String? description,
@@ -378,6 +405,9 @@ class SubRequest {
     Map<String, bool>? responses,
     double? latitude,
     double? longitude,
+    LocationPrecision? locationPrecision,
+    String? placeId,
+    LocationResolutionStatus? locationStatus,
     List<String>? targetUserIds,
     String? eventId,
     String? bandId,
@@ -405,6 +435,7 @@ class SubRequest {
       userId: userId ?? this.userId,
       voicePart: voicePart ?? this.voicePart,
       location: location ?? this.location,
+      city: city ?? this.city,
       startTime: startTime ?? this.startTime,
       endTime: endTime ?? this.endTime,
       description: description ?? this.description,
@@ -423,6 +454,9 @@ class SubRequest {
       responses: responses ?? this.responses,
       latitude: latitude ?? this.latitude,
       longitude: longitude ?? this.longitude,
+      locationPrecision: locationPrecision ?? this.locationPrecision,
+      placeId: placeId ?? this.placeId,
+      locationStatus: locationStatus ?? this.locationStatus,
       targetUserIds: targetUserIds ?? this.targetUserIds,
       eventId: eventId ?? this.eventId,
       bandId: bandId ?? this.bandId,
@@ -480,4 +514,84 @@ class SubRequest {
       extraFields['notificationMode'] == 'map_pin';
 
   bool get isMapPin => isMapOnlyPin;
+
+  /// Centralized normalized classifier recognizing all New Member representation variants
+  /// without misclassifying Substitute, Other, direct invitations, or map pins.
+  static bool isNewMemberRecord(dynamic item) {
+    if (item == null) return false;
+
+    if (item is SubRequest) {
+      final mode = (item.extraFields['NotificationMode'] ?? item.extraFields['notificationMode'])?.toString().trim().toLowerCase();
+      if (mode == 'map_pin') return false;
+
+      final reqType = item.requestType?.trim();
+      if (reqType != null && reqType.isNotEmpty) {
+        final clean = reqType.toLowerCase().replaceAll(RegExp(r'[\s_-]+'), '');
+        if (clean == 'newmember') return true;
+        if (clean == 'substitute' || clean == 'sub' || clean == 'other') return false;
+      }
+
+      final role = item.role?.trim();
+      if (role != null && role.isNotEmpty) {
+        final cleanRole = role.toLowerCase().replaceAll(RegExp(r'[\s_-]+'), '');
+        if (cleanRole == 'newmember') return true;
+      }
+
+      final eventType = (item.extraFields['eventType'] ?? item.extraFields['EventType'])?.toString().trim();
+      if (eventType != null && eventType.isNotEmpty) {
+        final cleanEvent = eventType.toLowerCase().replaceAll(RegExp(r'[\s_-]+'), '');
+        if (cleanEvent == 'newmember') return true;
+      }
+
+      return false;
+    }
+
+    if (item is Map) {
+      final mode = (item['NotificationMode'] ?? item['notificationMode'])?.toString().trim().toLowerCase();
+      if (mode == 'map_pin') return false;
+
+      final rawReqType = (item['RequestType'] ?? item['requestType'])?.toString().trim();
+      if (rawReqType != null && rawReqType.isNotEmpty) {
+        final clean = rawReqType.toLowerCase().replaceAll(RegExp(r'[\s_-]+'), '');
+        if (clean == 'newmember') return true;
+        if (clean == 'substitute' || clean == 'sub' || clean == 'other') return false;
+      }
+
+      final rawRole = (item['Role'] ?? item['role'])?.toString().trim();
+      if (rawRole != null && rawRole.isNotEmpty) {
+        final cleanRole = rawRole.toLowerCase().replaceAll(RegExp(r'[\s_-]+'), '');
+        if (cleanRole == 'newmember') return true;
+      }
+
+      final extra = item['extraFields'] is Map ? item['extraFields'] as Map : null;
+      final rawEvent = (item['EventType'] ?? item['eventType'] ?? (extra != null ? (extra['eventType'] ?? extra['EventType']) : null))?.toString().trim();
+      if (rawEvent != null && rawEvent.isNotEmpty) {
+        final cleanEvent = rawEvent.toLowerCase().replaceAll(RegExp(r'[\s_-]+'), '');
+        if (cleanEvent == 'newmember') return true;
+      }
+
+      return false;
+    }
+
+    return false;
+  }
+
+  /// Whether this request represents a New Member recruitment search.
+  bool get isNewMember => SubRequest.isNewMemberRecord(this);
+
+  /// Whether this request is active and live (published).
+  bool get isLive => status == 'published';
+
+  CanonicalLocation get canonicalLocation {
+    return CanonicalLocation(
+      locationLabel: location ?? venue ?? '',
+      latitude: latitude,
+      longitude: longitude,
+      precision: locationPrecision ?? LocationPrecision.exact,
+      placeId: placeId,
+      status: (latitude != null && longitude != null)
+          ? (locationStatus ?? LocationResolutionStatus.resolved)
+          : LocationResolutionStatus.unresolved,
+    );
+  }
 }

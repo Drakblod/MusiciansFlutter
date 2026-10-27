@@ -2251,3 +2251,315 @@ describe('HOME-ACTIVITY-BADGES-01: Backend Callable & Trigger Logic Tests', () =
     assert.strictEqual(notif.data.fileId, 'file_prod_1');
   });
 });
+
+describe('MAP-VIEW-FEED-01: Final Privacy, Path & New Member Classification Audit', () => {
+  const {
+    isNewMemberRequest,
+    extractCityLabel,
+    buildSanitizedFeedItem,
+  } = require('../index');
+  const { runBackfillCoordinates } = require('../scripts/backfill_subrequest_coordinates');
+
+  describe('1. Table-Driven New Member Classification', () => {
+    const positiveCases = [
+      { name: 'PascalCase NewMember without space', data: { RequestType: 'NewMember' } },
+      { name: 'PascalCase New Member with space', data: { RequestType: 'New Member' } },
+      { name: 'camelCase requestType: new member', data: { requestType: 'new member' } },
+      { name: 'UPPERCASE NEW MEMBER', data: { requestType: 'NEW MEMBER' } },
+      { name: 'Underscore new_member', data: { requestType: 'new_member' } },
+      { name: 'Hyphen new-member', data: { requestType: 'new-member' } },
+      { name: 'Leading and trailing spaces', data: { requestType: '   New   Member   ' } },
+      { name: 'Legacy Role: New Member (RequestType omitted)', data: { Role: 'New Member' } },
+      { name: 'Legacy lowercase role: new member', data: { role: 'new member' } },
+      { name: 'Legacy role: NewMember', data: { role: 'NewMember' } },
+      { name: 'extraFields.eventType: newMember', data: { extraFields: { eventType: 'newMember' } } },
+      { name: 'Find Musician client payload', data: { requestType: 'New Member', role: 'New Member', voicePart: 'Electric Guitar' } },
+    ];
+
+    positiveCases.forEach(({ name, data }) => {
+      it(`Correctly identifies: ${name}`, () => {
+        assert.strictEqual(isNewMemberRequest(data), true);
+      });
+    });
+
+    const negativeCases = [
+      { name: 'Substitute request', data: { RequestType: 'Substitute', Role: 'Guitar' } },
+      { name: 'Short sub request', data: { requestType: 'sub' } },
+      { name: 'Other request', data: { requestType: 'Other' } },
+      { name: 'Instrument role only without requestType', data: { role: 'Bass' } },
+      { name: 'map_pin with promo mode', data: { notificationMode: 'map_pin', role: 'New Member' } },
+      { name: 'map_pin notification mode uppercase', data: { NotificationMode: 'map_pin', RequestType: 'New Member' } },
+      { name: 'Direct Invitation substitute', data: { Type: 'direct_invitation', RequestType: 'Substitute', targetUserIds: ['user_target'] } },
+      { name: 'band member metadata unrelated to RequestType', data: { BandMembers: ['Alice', 'Bob'], role: 'Guitar' } },
+      { name: 'event participant/member text', data: { EventParticipants: '5 members', role: 'Bass' } },
+      { name: 'music promotion text containing member', data: { NotificationMode: 'map_pin', Title: 'Band members album release', role: 'New Member' } },
+      { name: 'direct invitation for a Substitute with member in description', data: { RequestType: 'Substitute', Description: 'Looking for a substitute member' } },
+      { name: 'Other request with member in description', data: { RequestType: 'Other', Description: 'Band member audition for session' } },
+      { name: 'arbitrary description containing member', data: { Role: 'Guitar', Description: 'Our band has 4 members' } },
+      { name: 'Empty object', data: {} },
+      { name: 'Null or undefined', data: null },
+    ];
+
+    negativeCases.forEach(({ name, data }) => {
+      it(`Does not misclassify: ${name}`, () => {
+        assert.strictEqual(isNewMemberRequest(data), false);
+      });
+    });
+  });
+
+  describe('2. New Member Location Privacy & Sanitization', () => {
+    it('Extracts city label from complex street addresses', () => {
+      assert.strictEqual(extractCityLabel('Storgatan 14, 114 51 Stockholm, Sweden'), 'Stockholm');
+      assert.strictEqual(extractCityLabel('Kungsgatan 63, Stockholm'), 'Stockholm');
+      assert.strictEqual(extractCityLabel('Avenyn 1, 411 36 Göteborg, Sverige'), 'Göteborg');
+      assert.strictEqual(extractCityLabel('Stortorget 5 Malmö'), 'Malmö');
+    });
+
+    it('Coarsens New Member coordinates to 1 decimal place and strips exact residential address', () => {
+      const residentialReq = {
+        subRequestId: 'sub_mem_priv_1',
+        RequestType: 'New Member',
+        Latitude: 59.33258,
+        Longitude: 18.06491,
+        Location: 'Storgatan 14, 114 51 Stockholm, Sweden',
+        PlaceId: 'place_private_home_123',
+        StreetAddress: 'Storgatan 14',
+        HouseNumber: '14',
+        ExactLatitude: 59.33258,
+        ExactLongitude: 18.06491,
+      };
+
+      const sanitized = buildSanitizedFeedItem(residentialReq);
+
+      assert.strictEqual(sanitized.latitude, 59.3);
+      assert.strictEqual(sanitized.longitude, 18.1);
+      assert.strictEqual(sanitized.location, 'Stockholm');
+      assert.strictEqual(sanitized.city, 'Stockholm');
+      assert.strictEqual(sanitized.locationPrecision, 'city');
+
+      assert.strictEqual(sanitized.PlaceId, undefined);
+      assert.strictEqual(sanitized.placeId, undefined);
+      assert.strictEqual(sanitized.StreetAddress, undefined);
+      assert.strictEqual(sanitized.streetAddress, undefined);
+      assert.strictEqual(sanitized.HouseNumber, undefined);
+      assert.strictEqual(sanitized.houseNumber, undefined);
+      assert.strictEqual(sanitized.ExactLatitude, undefined);
+      assert.strictEqual(sanitized.exactLatitude, undefined);
+    });
+
+    it('Preserves exact coordinates and venue name for Substitute staffing requests', () => {
+      const venueSubReq = {
+        subRequestId: 'sub_venue_1',
+        RequestType: 'Substitute',
+        Latitude: 59.33258,
+        Longitude: 18.06491,
+        Location: 'Fasching Jazz Club, Kungsgatan 63, Stockholm',
+        PlaceId: 'place_fasching_999',
+      };
+
+      const sanitized = buildSanitizedFeedItem(venueSubReq);
+
+      assert.strictEqual(sanitized.latitude, 59.33258);
+      assert.strictEqual(sanitized.longitude, 18.06491);
+      assert.strictEqual(sanitized.location, 'Fasching Jazz Club, Kungsgatan 63, Stockholm');
+      assert.strictEqual(sanitized.locationPrecision, 'exact');
+    });
+
+    it('Proves feed projections (public, recipient, creator) contain only allowlisted fields and omit sensitive data', () => {
+      const sensitiveSubReq = {
+        subRequestId: 'sub_sensitive_1',
+        RequestType: 'Substitute',
+        CreatorUserId: 'creator_1',
+        CreatorName: 'Alice Leader',
+        targetUserIds: ['target_bob', 'target_charlie'],
+        targetUserNames: ['Bob Guitar', 'Charlie Drums'],
+        fcmToken: 'fcm_token_secret_123',
+        pushToken: 'push_token_xyz',
+        deviceToken: 'device_abc',
+        email: 'alice@example.com',
+        phone: '+46701234567',
+        password: 'super_secret_password',
+        authToken: 'jwt_bearer_token',
+        internalAudit: { traceId: 'audit_999', callerIp: '192.168.1.1' },
+        notificationMetadata: { sentAt: 123456789 },
+        Latitude: 59.3293,
+        Longitude: 18.0686,
+        Location: 'Fasching, Kungsgatan 63, Stockholm',
+        VoicePart: 'Drums',
+      };
+
+      const feedItem = buildSanitizedFeedItem(sensitiveSubReq);
+
+      // Verify forbidden sensitive fields are NEVER present in feed projections
+      assert.strictEqual(feedItem.targetUserIds, undefined);
+      assert.strictEqual(feedItem.targetUserNames, undefined);
+      assert.strictEqual(feedItem.fcmToken, undefined);
+      assert.strictEqual(feedItem.pushToken, undefined);
+      assert.strictEqual(feedItem.deviceToken, undefined);
+      assert.strictEqual(feedItem.email, undefined);
+      assert.strictEqual(feedItem.phone, undefined);
+      assert.strictEqual(feedItem.password, undefined);
+      assert.strictEqual(feedItem.authToken, undefined);
+      assert.strictEqual(feedItem.internalAudit, undefined);
+      assert.strictEqual(feedItem.notificationMetadata, undefined);
+
+      // Verify exact allowlisted keys
+      const allowlistedKeys = [
+        'id', 'subRequestId', 'slotId', 'requestGroupId', 'publicationId',
+        'bandId', 'bandName', 'eventId', 'eventTitle', 'voicePart',
+        'date', 'time', 'location', 'city', 'latitude', 'longitude',
+        'locationPrecision', 'payAmount', 'payAmountMinor', 'currency',
+        'isPaid', 'notes', 'genre', 'status', 'createdAt', 'updatedAt',
+        'creatorUserId', 'creatorName', 'searchSource', 'type', 'isFavoritesOnly'
+      ];
+      assert.deepStrictEqual(Object.keys(feedItem).sort(), allowlistedKeys.sort());
+    });
+  });
+
+  describe('3. Real Event RTDB Path & Backfill Behavior', () => {
+    function createMockDb(initialData = {}) {
+      const data = JSON.parse(JSON.stringify(initialData));
+      return {
+        data,
+        ref: (path) => ({
+          once: async () => ({
+            val: () => data[path] || null,
+            exists: () => !!data[path],
+          }),
+          update: async (updates) => {
+            Object.assign(data, updates);
+          },
+        }),
+      };
+    }
+
+    it('Inherits coordinates from canonical path /Bands/{bandId}/Events/{eventId}', async () => {
+      const mockDb = createMockDb({
+        SubRequests: {
+          sub_test_event_1: {
+            subRequestId: 'sub_test_event_1',
+            BandId: 'band_alpha',
+            EventId: 'event_canon_1',
+            RequestType: 'Substitute',
+            Location: 'Concert Hall',
+          },
+        },
+        Bands: {
+          band_alpha: {
+            Events: {
+              event_canon_1: {
+                Latitude: 59.3325,
+                Longitude: 18.0649,
+              },
+            },
+          },
+        },
+        BandEvents: {},
+      });
+
+      const res = await runBackfillCoordinates({
+        isEmulator: true,
+        isApply: true,
+        db: mockDb,
+      });
+
+      assert.strictEqual(res.resolvedViaEventCount, 1);
+      assert.strictEqual(mockDb.data['SubRequests/sub_test_event_1/Latitude'], 59.3325);
+      assert.strictEqual(mockDb.data['SubRequests/sub_test_event_1/Longitude'], 18.0649);
+      assert.strictEqual(mockDb.data['SubRequests/sub_test_event_1/LocationPrecision'], 'exact');
+    });
+
+    it('Inherits coordinates from verified legacy path /BandEvents/{bandId}/{eventId}', async () => {
+      const mockDb = createMockDb({
+        SubRequests: {
+          sub_test_event_2: {
+            subRequestId: 'sub_test_event_2',
+            BandId: 'band_legacy',
+            EventId: 'event_legacy_1',
+            RequestType: 'Substitute',
+            Location: 'Old Club',
+          },
+        },
+        Bands: {},
+        BandEvents: {
+          band_legacy: {
+            event_legacy_1: {
+              Latitude: 57.7089,
+              Longitude: 11.9746,
+            },
+          },
+        },
+      });
+
+      const res = await runBackfillCoordinates({
+        isEmulator: true,
+        isApply: true,
+        db: mockDb,
+      });
+
+      assert.strictEqual(res.resolvedViaEventCount, 1);
+      assert.strictEqual(mockDb.data['SubRequests/sub_test_event_2/Latitude'], 57.7089);
+      assert.strictEqual(mockDb.data['SubRequests/sub_test_event_2/Longitude'], 11.9746);
+    });
+
+    it('Does NOT inherit from incorrect path or invent coordinates; missing event remains unresolved', async () => {
+      const mockDb = createMockDb({
+        SubRequests: {
+          sub_test_missing: {
+            subRequestId: 'sub_test_missing',
+            BandId: 'band_missing',
+            EventId: 'event_nonexistent',
+            RequestType: 'Substitute',
+            Location: 'Somewhere in Stockholm',
+          },
+        },
+        Bands: {},
+        BandEvents: {},
+      });
+
+      const res = await runBackfillCoordinates({
+        isEmulator: true,
+        isApply: true,
+        db: mockDb,
+      });
+
+      assert.strictEqual(res.resolvedViaEventCount, 0);
+      assert.strictEqual(res.unresolvedCount, 1);
+      assert.strictEqual(mockDb.data['/SubRequests/sub_test_missing/Latitude'], undefined);
+    });
+
+    it('Dry-run performs zero writes', async () => {
+      const mockDb = createMockDb({
+        SubRequests: {
+          sub_dry: {
+            subRequestId: 'sub_dry',
+            BandId: 'band_alpha',
+            EventId: 'event_canon_1',
+            RequestType: 'Substitute',
+          },
+        },
+        Bands: {
+          band_alpha: {
+            Events: {
+              event_canon_1: {
+                Latitude: 59.3325,
+                Longitude: 18.0649,
+              },
+            },
+          },
+        },
+        BandEvents: {},
+      });
+
+      const res = await runBackfillCoordinates({
+        isEmulator: true,
+        isApply: false,
+        db: mockDb,
+      });
+
+      assert.strictEqual(res.resolvedViaEventCount, 1);
+      assert.strictEqual(res.writesPerformed, 0);
+      assert.strictEqual(mockDb.data['/SubRequests/sub_dry/Latitude'], undefined);
+    });
+  });
+});

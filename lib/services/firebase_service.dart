@@ -781,6 +781,115 @@ class FirebaseService {
     return requests;
   }
 
+  /// Real-time stream of merged, deduplicated, authorized SubRequests for Map View and feeds.
+  /// Exactly one listener per authorized feed.
+  /// Subscriptions are cleanly cancelled when the stream subscriber cancels.
+  Stream<List<SubRequest>> getSubRequestFeedStream({String? targetUserId}) {
+    final selfId = targetUserId ?? currentUserId;
+    late StreamController<List<SubRequest>> controller;
+
+    StreamSubscription<DatabaseEvent>? publicSub;
+    StreamSubscription<DatabaseEvent>? userSub;
+    StreamSubscription<DatabaseEvent>? creatorSub;
+
+    final Map<String, SubRequest> publicMap = {};
+    final Map<String, SubRequest> userMap = {};
+    final Map<String, SubRequest> creatorMap = {};
+
+    void emitMerged() {
+      if (controller.isClosed) return;
+      final List<SubRequest> merged = [];
+      final Set<String> seenIds = {};
+
+      void addIfValid(SubRequest r) {
+        final id = r.subRequestId ?? r.id;
+        if (id != null && !seenIds.contains(id) && r.isLive) {
+          seenIds.add(id);
+          merged.add(r);
+        }
+      }
+
+      for (final r in publicMap.values) {
+        addIfValid(r);
+      }
+      for (final r in userMap.values) {
+        addIfValid(r);
+      }
+      for (final r in creatorMap.values) {
+        addIfValid(r);
+      }
+
+      controller.add(merged);
+    }
+
+    controller = StreamController<List<SubRequest>>(
+      onListen: () {
+        publicSub = _dbRef('publicSubRequests').onValue.listen((event) {
+          publicMap.clear();
+          if (event.snapshot.exists && event.snapshot.value is Map) {
+            (event.snapshot.value as Map).forEach((k, v) {
+              if (v is Map) {
+                try {
+                  publicMap[k.toString()] = SubRequest.fromJson(v, k.toString());
+                } catch (_) {}
+              }
+            });
+          }
+          emitMerged();
+        }, onError: (e) {
+          debugPrint('[FirebaseService] publicSubRequests stream error: $e');
+        });
+
+        if (selfId != null && selfId.isNotEmpty) {
+          userSub = _dbRef('userSubRequestFeed/' + selfId).onValue.listen((event) {
+            userMap.clear();
+            if (event.snapshot.exists && event.snapshot.value is Map) {
+              (event.snapshot.value as Map).forEach((k, v) {
+                if (v is Map) {
+                  try {
+                    userMap[k.toString()] = SubRequest.fromJson(v, k.toString());
+                  } catch (_) {}
+                }
+              });
+            }
+            emitMerged();
+          }, onError: (e) {
+            debugPrint('[FirebaseService] userSubRequestFeed stream error: $e');
+          });
+
+          creatorSub = _dbRef('creatorSubRequestFeed/' + selfId).onValue.listen((event) {
+            creatorMap.clear();
+            if (event.snapshot.exists && event.snapshot.value is Map) {
+              (event.snapshot.value as Map).forEach((k, v) {
+                if (v is Map) {
+                  try {
+                    creatorMap[k.toString()] = SubRequest.fromJson(v, k.toString());
+                  } catch (_) {}
+                }
+              });
+            }
+            emitMerged();
+          }, onError: (e) {
+            debugPrint('[FirebaseService] creatorSubRequestFeed stream error: $e');
+          });
+        }
+      },
+      onCancel: () {
+        publicSub?.cancel();
+        publicSub = null;
+        userSub?.cancel();
+        userSub = null;
+        creatorSub?.cancel();
+        creatorSub = null;
+        publicMap.clear();
+        userMap.clear();
+        creatorMap.clear();
+      },
+    );
+
+    return controller.stream;
+  }
+
   Future<List<SubRequest>> getUserSubRequestsAsync(String userId) async {
     final List<SubRequest> requests = [];
     final selfId = currentUserId;

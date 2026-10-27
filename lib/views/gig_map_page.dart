@@ -14,6 +14,7 @@ import 'edit_band_info_screen.dart';
 import '../providers/app_state.dart';
 import '../theme/app_theme.dart';
 import '../models/sub_request.dart';
+import '../services/location_service.dart';
 import '../models/user_profile.dart';
 import '../config/feature_flags.dart';
 import '../models/mock_live_rehearsal.dart';
@@ -93,7 +94,7 @@ class MapEventTypeHelper {
     if (explicitType == 'jamsession' || explicitType == 'jam_session') return MapEventType.jamSession;
     if (explicitType == 'recordedmusic' || explicitType == 'recorded_music' || explicitType == 'studio') return MapEventType.recordedMusic;
     if (explicitType == 'gigpromo' || explicitType == 'gig_promo') return MapEventType.gigPromo;
-    if (explicitType == 'newmember' || explicitType == 'new_member') return MapEventType.newMember;
+    if (gig.isNewMember || explicitType == 'newmember' || explicitType == 'new_member') return MapEventType.newMember;
     if (explicitType == 'subs' || explicitType == 'sub') return MapEventType.subs;
     if (explicitType == 'paid') return MapEventType.paid;
 
@@ -567,6 +568,9 @@ class GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Rou
   bool _showInstrumentSearch = false;
 
   SubRequest? _selectedGig;
+  List<SubRequest>? _selectedGroupMembers;
+  StreamSubscription<List<SubRequest>>? _feedSubscription;
+  String? _subscribedUserId;
   static bool _sessionDismissedGuideBanner = false;
   bool _showGuideBanner = false;
 
@@ -1137,68 +1141,15 @@ class GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Rou
   }
 
   Future<LatLng?> _geocodeAddress(String address) async {
-    final clean = address.trim();
-    if (clean.isEmpty) return null;
-
-    try {
-      final encoded = Uri.encodeComponent(clean);
-      final url = Uri.parse('https://nominatim.openstreetmap.org/search?q=$encoded&format=json&limit=1');
-      final response = await http.get(
-        url,
-        headers: {
-          'User-Agent': 'MusiciansFlutterApp/2.75.7 (info@musiciansapp.com)',
-          'Accept': 'application/json',
-        },
-      ).timeout(const Duration(seconds: 4));
-
-      if (response.statusCode == 200) {
-        final List data = jsonDecode(response.body);
-        if (data.isNotEmpty) {
-          final lat = double.tryParse(data[0]['lat']?.toString() ?? '');
-          final lon = double.tryParse(data[0]['lon']?.toString() ?? '');
-          if (lat != null && lon != null && _isValidCoordinate(lat, lon)) {
-            return LatLng(lat, lon);
-          }
-        }
-      }
-    } catch (_) {}
-
+    final cityLoc = LocationService.resolveKnownCity(address);
+    if (cityLoc != null && cityLoc.latitude != null && cityLoc.longitude != null) {
+      return LatLng(cityLoc.latitude!, cityLoc.longitude!);
+    }
     return null;
   }
 
   Future<String?> _reverseGeocode(LatLng latLng) async {
-    try {
-      final url = Uri.parse(
-        'https://nominatim.openstreetmap.org/reverse?lat=${latLng.latitude}&lon=${latLng.longitude}&format=json&zoom=16&addressdetails=1',
-      );
-      final response = await http.get(
-        url,
-        headers: {
-          'User-Agent': 'MusiciansFlutterApp/2.79 (info@musiciansapp.com)',
-          'Accept': 'application/json',
-        },
-      ).timeout(const Duration(seconds: 3));
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        if (data is Map && data['address'] is Map) {
-          final addr = data['address'] as Map;
-          final road = addr['road'] ?? addr['pedestrian'] ?? addr['street'];
-          final city = addr['city'] ?? addr['town'] ?? addr['municipality'] ?? addr['suburb'] ?? addr['village'];
-          if (road != null && city != null) {
-            return '$road, $city';
-          }
-          if (city != null) {
-            return city.toString();
-          }
-          if (data['display_name'] != null) {
-            final parts = data['display_name'].toString().split(',');
-            return parts.take(2).join(',').trim();
-          }
-        }
-      }
-    } catch (_) {}
-    return null;
+    return 'Map Location (' + latLng.latitude.toStringAsFixed(3) + ', ' + latLng.longitude.toStringAsFixed(3) + ')';
   }
 
   void _openBandProfile({
@@ -1248,6 +1199,7 @@ class GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Rou
     _loadGuideBannerPref();
     _initNotePins();
     _fetchGigs();
+    _subscribeFeedStream();
     WidgetsBinding.instance.addObserver(this);
     _startLiveBlinkTimer();
     if (FeatureFlags.enableMockLiveRehearsals) {
@@ -1293,6 +1245,9 @@ class GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Rou
     if (_isWhiteMap != appState.isWhiteMapTheme) {
       _isWhiteMap = appState.isWhiteMapTheme;
       _mapController?.setMapStyle(_isWhiteMap ? _whiteMapStyle : _darkMapStyle);
+    }
+    if (_subscribedUserId != appState.currentUserId) {
+      _subscribeFeedStream();
     }
   }
 
@@ -1351,8 +1306,36 @@ class GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Rou
     }
   }
 
+  void _subscribeFeedStream() {
+    if (!mounted) return;
+    final appState = Provider.of<AppState>(context, listen: false);
+    final currentUid = appState.currentUserId;
+
+    if (_feedSubscription != null && _subscribedUserId == currentUid) {
+      return;
+    }
+
+    _feedSubscription?.cancel();
+    _feedSubscription = null;
+    _subscribedUserId = currentUid;
+
+    _feedSubscription = appState.firebaseService.getSubRequestFeedStream().listen((gigs) {
+      if (!mounted) return;
+      final dbGigsWithCoords = gigs.where((g) => LocationService.isValidCoordinate(g.latitude, g.longitude)).toList();
+      setState(() {
+        _allGigs = dbGigsWithCoords;
+        _isLoading = false;
+      });
+    }, onError: (e) {
+      debugPrint('[GigMapPage] Feed stream error: $e');
+    });
+  }
+
   @override
   void dispose() {
+    _feedSubscription?.cancel();
+    _feedSubscription = null;
+    _subscribedUserId = null;
     appRouteObserver.unsubscribe(this);
     _liveBlinkTimer?.cancel();
     _instrumentSearchController.dispose();
@@ -1392,10 +1375,13 @@ class GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Rou
       }
       final rawGigs = await appState.firebaseService.getAllSubRequestsAsync();
       
-      // Filter out gigs that have coordinates
-      final dbGigsWithCoords = rawGigs.where((g) => g.latitude != null && g.longitude != null).toList();
+      // Filter out gigs that have valid canonical coordinates
+      final dbGigsWithCoords = rawGigs.where((g) => LocationService.isValidCoordinate(g.latitude, g.longitude)).toList();
 
-      if (dbGigsWithCoords.isEmpty) {
+      if (rawGigs.isNotEmpty) {
+        // If database contains requests, strictly use valid coordinates without fallback pins
+        _allGigs = dbGigsWithCoords;
+      } else if (dbGigsWithCoords.isEmpty) {
         // Fallback mock markers inside Sweden covering all 8 event types
         _allGigs = [
           SubRequest(
@@ -2045,17 +2031,45 @@ class GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Rou
     return list;
   }
 
+  String _getPinGroupKey(SubRequest gig) {
+    final latStr = gig.latitude!.toStringAsFixed(5);
+    final lngStr = gig.longitude!.toStringAsFixed(5);
+
+    final groupId = gig.requestGroupId?.trim();
+    if (groupId != null && groupId.isNotEmpty) {
+      return 'reqgrp_${groupId}_${latStr}_${lngStr}';
+    }
+
+    final evId = gig.eventId?.trim();
+    final bId = gig.bandId?.trim();
+    if (evId != null && evId.isNotEmpty && bId != null && bId.isNotEmpty && evId != 'standalone') {
+      return 'event_${bId}_${evId}_${latStr}_${lngStr}';
+    }
+
+    return 'single_${gig.canonicalTargetId ?? gig.id ?? "${latStr}_${lngStr}"}';
+  }
+
   Set<Marker> _buildMarkers(List<SubRequest> filteredGigs) {
-    final gigMarkers = filteredGigs.map((gig) {
+    final Map<String, List<SubRequest>> groups = {};
+    for (final gig in filteredGigs) {
+      if (gig.latitude == null || gig.longitude == null) continue;
+      if (!LocationService.isValidCoordinate(gig.latitude, gig.longitude)) continue;
+      final key = _getPinGroupKey(gig);
+      groups.putIfAbsent(key, () => []).add(gig);
+    }
+
+    final gigMarkers = groups.values.map((memberList) {
+      final primary = memberList.first;
       return Marker(
-        markerId: MarkerId(gig.canonicalTargetId ?? UniqueKey().toString()),
-        position: LatLng(gig.latitude!, gig.longitude!),
-        icon: _getMarkerColor(gig),
+        markerId: MarkerId(primary.canonicalTargetId ?? UniqueKey().toString()),
+        position: LatLng(primary.latitude!, primary.longitude!),
+        icon: _getMarkerColor(primary),
         anchor: const Offset(0.321, 0.716),
         infoWindow: InfoWindow.noText,
         onTap: () {
           setState(() {
-            _selectedGig = gig;
+            _selectedGig = primary;
+            _selectedGroupMembers = memberList;
             _selectedRehearsal = null;
             _isAutoSelected = false;
             _manuallyClosedTargetId = null;
@@ -2563,12 +2577,7 @@ class GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Rou
     final initialTargetCoord = isEditing
         ? LatLng(editingPin.latitude ?? _currentCameraPosition.target.latitude, editingPin.longitude ?? _currentCameraPosition.target.longitude)
         : _currentCameraPosition.target;
-    String previewLocation = 'Map Center (${initialTargetCoord.latitude.toStringAsFixed(3)}, ${initialTargetCoord.longitude.toStringAsFixed(3)})';
-    _reverseGeocode(initialTargetCoord).then((res) {
-      if (res != null && res.isNotEmpty) {
-        previewLocation = res;
-      }
-    });
+    final previewLocation = 'Map Center (${initialTargetCoord.latitude.toStringAsFixed(3)}, ${initialTargetCoord.longitude.toStringAsFixed(3)})';
 
     final bandNameController = TextEditingController(text: editingPin?.bandName ?? '');
     final venueController = TextEditingController(text: editingPin?.extraFields['venue']?.toString() ?? '');
@@ -2601,26 +2610,21 @@ class GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Rou
       ),
       builder: (ctx) => StatefulBuilder(
         builder: (context, setSheetState) {
-          final typesForCategory = selectedCategory == 'Music'
-              ? [
-                  'Gig / Concert',
-                  'Gig',
-                  'Concert',
-                  'Festival',
-                  'Rehearsal',
-                  'Jam Session',
-                  'Demos / Recordings',
-                  'Demo',
-                  'Recording',
-                  'Songwriting Session',
-                  'Workshop',
-                  'Lecture',
-                  'Other'
-                ]
-              : [
-                  'New Member',
-                  'Substitute'
-                ];
+          final typesForCategory = [
+            'Gig / Concert',
+            'Gig',
+            'Concert',
+            'Festival',
+            'Rehearsal',
+            'Jam Session',
+            'Demos / Recordings',
+            'Demo',
+            'Recording',
+            'Songwriting Session',
+            'Workshop',
+            'Lecture',
+            'Other'
+          ];
 
           return Padding(
             padding: EdgeInsets.only(
@@ -2664,40 +2668,9 @@ class GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Rou
                   ),
                   const SizedBox(height: 16),
                   
-                  // Category Selector
-                  Text('Category', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white)),
+                  // Category (Staffing searches are managed via Find Musician)
+                  Text('Music Pin Type', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white)),
                   const SizedBox(height: 6),
-                  Row(
-                    children: ['Music', 'Sub & Member Search'].map((cat) {
-                      final isSelected = selectedCategory == cat;
-                      return Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: ChoiceChip(
-                          label: Text(
-                            cat,
-                            style: GoogleFonts.inter(
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
-                              color: isSelected ? Colors.white : Colors.white70,
-                            ),
-                          ),
-                          selected: isSelected,
-                          selectedColor: AppTheme.primaryAccent,
-                          backgroundColor: const Color(0xFF1E1A38),
-                          onSelected: (val) {
-                            if (val) {
-                              setSheetState(() {
-                                selectedCategory = cat;
-                                if (cat == 'Music') selectedType = 'Gig';
-                                if (cat == 'Sub & Member Search') selectedType = 'Substitute';
-                              });
-                            }
-                          },
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                  const SizedBox(height: 12),
 
                   // Standardized Event / Search Type Selector (Clean Dropdown, no 'Type' prefix)
                   Container(
@@ -3311,15 +3284,6 @@ class GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Rou
                                     subRequestId: pinId,
                                   );
                                   publishedGig = await appState.firebaseService.updateMapPinAsync(updateDraft);
-                                } else if (isStaffingSearch) {
-                                  final savedKey = await appState.firebaseService.saveSubRequestAsync(draftGig);
-                                  if (savedKey == null || savedKey.isEmpty) {
-                                    throw Exception('Database write did not return a valid key.');
-                                  }
-                                  publishedGig = draftGig.copyWith(
-                                    id: savedKey,
-                                    subRequestId: savedKey,
-                                  );
                                 } else {
                                   publishedGig = await appState.firebaseService.saveMapPinAsync(draftGig);
                                 }
@@ -4169,6 +4133,7 @@ class GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Rou
   Widget _buildBottomCardContent(SubRequest gig, AppState appState) {
     return MapPinDetailsCard(
       gig: gig,
+      groupedGigs: _selectedGroupMembers,
       appState: appState,
       focusedTargetId: _focusedTargetId,
       onClose: () {

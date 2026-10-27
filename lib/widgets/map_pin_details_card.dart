@@ -10,6 +10,7 @@ import 'audio_snippet_player.dart';
 /// Strictly follows the approved 6-item information order and labels.
 class MapPinDetailsCard extends StatelessWidget {
   final SubRequest gig;
+  final List<SubRequest>? groupedGigs;
   final AppState appState;
   final VoidCallback? onClose;
   final String? focusedTargetId;
@@ -20,6 +21,7 @@ class MapPinDetailsCard extends StatelessWidget {
   const MapPinDetailsCard({
     super.key,
     required this.gig,
+    this.groupedGigs,
     required this.appState,
     this.onClose,
     this.focusedTargetId,
@@ -30,7 +32,7 @@ class MapPinDetailsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final details = resolveMapPinDetails(gig);
+    final details = resolveMapPinDetails(gig, groupedGigs: groupedGigs);
     final currentUserId = appState.currentUserId;
     final isOwner = currentUserId != null &&
         (gig.creatorUserId == currentUserId ||
@@ -172,6 +174,46 @@ class MapPinDetailsCard extends StatelessWidget {
               ],
             ),
 
+            // Positions Needed (cleanly listed for single or multi-slot requests)
+            if (details.positionsNeeded.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 6,
+                runSpacing: 4,
+                children: [
+                  Text(
+                    details.positionsNeeded.length > 1
+                        ? 'Positions Needed (${details.positionsNeeded.length}):'
+                        : 'Position Needed:',
+                    style: GoogleFonts.inter(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white60,
+                    ),
+                  ),
+                  ...details.positionsNeeded.map(
+                    (pos) => Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                      decoration: BoxDecoration(
+                        color: details.typeColor.withOpacity(0.18),
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: details.typeColor.withOpacity(0.5), width: 1),
+                      ),
+                      child: Text(
+                        pos,
+                        style: GoogleFonts.inter(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+
             // 3. Date & Time (visible label: "Date & Time", cleanly omitted if not available)
             if (details.dateTimeDisplay != null) ...[
               const SizedBox(height: 8),
@@ -193,6 +235,29 @@ class MapPinDetailsCard extends StatelessWidget {
                     style: GoogleFonts.inter(
                       fontSize: 12.5,
                       color: Colors.white70,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+
+            // Location display: displays city label for New Member, exact venue for others
+            if (details.locationDisplay != null && details.locationDisplay!.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  const Icon(Icons.location_on, size: 14, color: Colors.white60),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      details.locationDisplay!,
+                      style: GoogleFonts.inter(
+                        fontSize: 12.5,
+                        color: Colors.white70,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ],

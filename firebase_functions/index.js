@@ -799,10 +799,103 @@ function classifySubRequest(data) {
 }
 
 /**
+ * Normalized classifier recognizing all New Member representation variants
+ * without misclassifying Substitute, Other, direct invitations, or map pins.
+ */
+function isNewMemberRequest(data) {
+  if (!data || typeof data !== 'object') return false;
+
+  const mode = (data.NotificationMode || data.notificationMode || '').toString().trim().toLowerCase();
+  if (mode === 'map_pin') return false;
+
+  const rawReqType = (data.RequestType || data.requestType || '').toString().trim();
+  if (rawReqType) {
+    const cleanReqType = rawReqType.toLowerCase().replace(/[\s_-]+/g, '');
+    if (cleanReqType === 'newmember') return true;
+    if (cleanReqType === 'substitute' || cleanReqType === 'sub' || cleanReqType === 'other') return false;
+  }
+
+  const rawRole = (data.Role || data.role || '').toString().trim();
+  if (rawRole) {
+    const cleanRole = rawRole.toLowerCase().replace(/[\s_-]+/g, '');
+    if (cleanRole === 'newmember') return true;
+  }
+
+  const extra = data.extraFields && typeof data.extraFields === 'object' ? data.extraFields : {};
+  const rawEventType = (data.EventType || data.eventType || extra.EventType || extra.eventType || '').toString().trim();
+  if (rawEventType) {
+    const cleanEventType = rawEventType.toLowerCase().replace(/[\s_-]+/g, '');
+    if (cleanEventType === 'newmember') return true;
+  }
+
+  return false;
+}
+
+/**
+ * Extracts a city label from a full address string by stripping street numbers and street names.
+ */
+function extractCityLabel(locationStr) {
+  if (!locationStr) return '';
+  const str = locationStr.toString().trim();
+  if (!str) return '';
+
+  if (str.includes(',')) {
+    const parts = str.split(',').map((p) => p.trim()).filter(Boolean);
+    for (let i = parts.length - 1; i >= 0; i--) {
+      const part = parts[i];
+      if ((part.toLowerCase() === 'sweden' || part.toLowerCase() === 'sverige') && i > 0) {
+        continue;
+      }
+      const cleaned = part.replace(/^\d{3}\s?\d{2}\s+/, '').trim();
+      if (cleaned && !/^\d+$/.test(cleaned)) {
+        return cleaned;
+      }
+    }
+    return parts[parts.length - 1];
+  }
+
+  const noHouseNum = str.replace(/^[A-Za-zåäöÅÄÖ\s\.\-]+\s+\d+[A-Za-z]?\s+/, '').trim();
+  if (noHouseNum && !/^\d+$/.test(noHouseNum)) return noHouseNum;
+
+  return str;
+}
+
+/**
  * Builds a sanitized, leak-free feed item containing only displayable fields.
  */
 function buildSanitizedFeedItem(subRequest) {
   if (!subRequest) return null;
+
+  const isNewMember = isNewMemberRequest(subRequest);
+  const isCityPrecision = (subRequest.LocationPrecision || subRequest.locationPrecision) === 'city' || isNewMember;
+
+  let lat = subRequest.Latitude ?? subRequest.latitude ?? null;
+  let lng = subRequest.Longitude ?? subRequest.longitude ?? null;
+  let locationLabel = (subRequest.Location || subRequest.location || '').toString().trim();
+
+  let cityLabel = (subRequest.City || subRequest.city || '').toString().trim();
+  if (!cityLabel && locationLabel) {
+    cityLabel = extractCityLabel(locationLabel);
+  }
+
+  if (isNewMember) {
+    // Coarsen coordinates to 1 decimal place (~11 km lat, ~6 km lng uncertainty)
+    // to strictly protect residential privacy
+    if (lat !== null && lng !== null) {
+      lat = Number(Number(lat).toFixed(1));
+      lng = Number(Number(lng).toFixed(1));
+    }
+    // Location label is strictly coarsened to city label only; never expose street addresses or house numbers
+    locationLabel = cityLabel || 'Stockholm';
+  } else if (isCityPrecision) {
+    if (lat !== null && lng !== null) {
+      lat = Number(Number(lat).toFixed(1));
+      lng = Number(Number(lng).toFixed(1));
+    }
+    if (cityLabel) {
+      locationLabel = cityLabel;
+    }
+  }
 
   return {
     id: subRequest.SubRequestId || subRequest.subRequestId || subRequest.id || subRequest.slotId || '',
@@ -817,10 +910,11 @@ function buildSanitizedFeedItem(subRequest) {
     voicePart: subRequest.VoicePart || subRequest.voicePart || subRequest.role || subRequest.Role || '',
     date: subRequest.Date || subRequest.date || '',
     time: subRequest.Time || subRequest.time || '',
-    location: subRequest.Location || subRequest.location || '',
-    city: subRequest.City || subRequest.city || '',
-    latitude: subRequest.Latitude ?? subRequest.latitude ?? null,
-    longitude: subRequest.Longitude ?? subRequest.longitude ?? null,
+    location: locationLabel,
+    city: cityLabel || (isNewMember ? locationLabel : ''),
+    latitude: lat,
+    longitude: lng,
+    locationPrecision: isCityPrecision ? 'city' : (subRequest.LocationPrecision || subRequest.locationPrecision || 'exact'),
     payAmount: subRequest.PayAmount ?? subRequest.payAmount ?? null,
     payAmountMinor: subRequest.PayAmountMinor ?? subRequest.payAmountMinor ?? null,
     currency: subRequest.Currency || subRequest.currency || 'SEK',
@@ -841,6 +935,8 @@ function buildSanitizedFeedItem(subRequest) {
 exports.SUBREQUEST_KIND = SUBREQUEST_KIND;
 exports.classifySubRequest = classifySubRequest;
 exports.buildSanitizedFeedItem = buildSanitizedFeedItem;
+exports.isNewMemberRequest = isNewMemberRequest;
+exports.extractCityLabel = extractCityLabel;
 
 /**
  * Production callable entrypoint to publish a grouped substitute request.

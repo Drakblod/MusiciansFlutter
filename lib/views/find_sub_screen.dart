@@ -11,6 +11,9 @@ import '../models/band_event.dart';
 import '../models/message.dart';
 import '../data/skills_taxonomy.dart';
 import '../models/sub_request.dart';
+import '../models/canonical_location.dart';
+import '../services/location_service.dart';
+import '../widgets/location_picker_field.dart';
 import '../models/user_profile.dart';
 import '../providers/app_state.dart';
 import '../theme/app_theme.dart';
@@ -89,6 +92,7 @@ class EventStaffingSection {
   String? selectedEventType;
   final TextEditingController descriptionController;
   final TextEditingController locationController;
+  CanonicalLocation? canonicalLocation;
   DateTime selectedDate;
   TimeOfDay startTime;
   TimeOfDay endTime;
@@ -101,6 +105,7 @@ class EventStaffingSection {
     this.selectedEventType,
     required this.descriptionController,
     required this.locationController,
+    this.canonicalLocation,
     required this.selectedDate,
     required this.startTime,
     required this.endTime,
@@ -135,6 +140,9 @@ class _FindSubScreenState extends State<FindSubScreen> {
   final _amountController = TextEditingController(text: '1.500');
   final _payDetailsController = TextEditingController();
   final _newMemberDescriptionController = TextEditingController();
+  final _newMemberLocationController = TextEditingController();
+  CanonicalLocation? _newMemberCanonicalLocation;
+  CanonicalLocation? _otherCanonicalLocation;
   String? _existingRequestGroupId;
   String? _canonicalMultipleEventParentId;
 
@@ -275,6 +283,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
     _amountController.dispose();
     _payDetailsController.dispose();
     _newMemberDescriptionController.dispose();
+    _newMemberLocationController.dispose();
     for (final section in _eventSections) {
       section.dispose();
     }
@@ -836,6 +845,13 @@ class _FindSubScreenState extends State<FindSubScreen> {
         final startTimeStr = (section.startTime.hour.toString().padLeft(2, '0') + ':' + section.startTime.minute.toString().padLeft(2, '0'));
         final endTimeStr = (section.endTime.hour.toString().padLeft(2, '0') + ':' + section.endTime.minute.toString().padLeft(2, '0'));
 
+        CanonicalLocation? canonLoc = section.canonicalLocation;
+        if (canonLoc == null || !canonLoc.hasValidCoordinates) {
+          if (locStr.isNotEmpty && locStr != 'Stockholm, Sweden') {
+            canonLoc = LocationService.resolveKnownCity(locStr);
+          }
+        }
+
         for (final slot in section.slots) {
           if (slot.status != 'draft') continue;
 
@@ -854,6 +870,11 @@ class _FindSubScreenState extends State<FindSubScreen> {
             startTime: startTimeStr,
             endTime: endTimeStr,
             location: locStr,
+            latitude: canonLoc?.latitude,
+            longitude: canonLoc?.longitude,
+            locationPrecision: canonLoc?.precision,
+            placeId: canonLoc?.placeId,
+            locationStatus: canonLoc?.status,
             isPaid: _isPaid,
             payAmount: _isPaid ? payAmount : null,
             currency: 'SEK',
@@ -1484,13 +1505,29 @@ class _FindSubScreenState extends State<FindSubScreen> {
                     ),
                   ],
                   onChanged: (val) {
-                    if (val != null) {
+                    if (val != null && val != _selectedRequestType) {
                       setState(() {
+                        final prevType = _selectedRequestType;
                         _selectedRequestType = val;
                         if (val == 'Substitute') {
                           _currentMode = 'substitute';
+                          // Changing from New Member to Substitute: do not silently reuse coarsened city coordinates
+                          if (prevType == 'New Member') {
+                            for (final s in _eventSections) {
+                              if (s.canonicalLocation?.precision == LocationPrecision.city) {
+                                s.canonicalLocation = null;
+                              }
+                            }
+                          }
                         } else if (val == 'New Member') {
                           _currentMode = 'new_member';
+                          // Changing to New Member: invalidate exact venue selection and require city-level confirmation
+                          _newMemberCanonicalLocation = null;
+                          for (final s in _eventSections) {
+                            if (s.canonicalLocation?.precision == LocationPrecision.exact) {
+                              s.canonicalLocation = null;
+                            }
+                          }
                         } else {
                           _currentMode = 'other';
                         }
@@ -1501,38 +1538,10 @@ class _FindSubScreenState extends State<FindSubScreen> {
                 const SizedBox(height: 14),
 
                 // 3. Location
-                Text(
-                  'Location',
-                  style: GoogleFonts.inter(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: AppTheme.textSecondary,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                TextField(
+                LocationPickerField(
                   controller: section.locationController,
-                  style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
-                  decoration: InputDecoration(
-                    prefixIcon: const Icon(Icons.location_on_outlined, color: AppTheme.primaryAccent, size: 20),
-                    hintText: 'Enter location',
-                    hintStyle: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 14),
-                    filled: true,
-                    fillColor: const Color(0xFF1E1A3A),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: const BorderSide(color: Color(0xFF2E2A4E)),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: const BorderSide(color: Color(0xFF2E2A4E)),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: const BorderSide(color: AppTheme.primaryAccent, width: 1.5),
-                    ),
-                  ),
+                  initialLocation: section.canonicalLocation,
+                  onLocationChanged: (loc) => section.canonicalLocation = loc,
                 ),
                 const SizedBox(height: 14),
 
@@ -2966,11 +2975,37 @@ class _FindSubScreenState extends State<FindSubScreen> {
       final newMemberDesc = (sec != null && sec.descriptionController.text.trim().isNotEmpty)
           ? sec.descriptionController.text.trim()
           : _newMemberDescriptionController.text.trim();
-      final newMemberLoc = (sec != null && sec.locationController.text.trim().isNotEmpty)
-          ? sec.locationController.text.trim()
-          : (_locationController.text.trim().isNotEmpty
-              ? _locationController.text.trim()
-              : (profile?.location ?? 'Stockholm, Sweden'));
+      final newMemberLoc = _newMemberLocationController.text.trim().isNotEmpty
+          ? _newMemberLocationController.text.trim()
+          : ((sec != null && sec.locationController.text.trim().isNotEmpty)
+              ? sec.locationController.text.trim()
+              : (_locationController.text.trim().isNotEmpty
+                  ? _locationController.text.trim()
+                  : (profile?.location ?? 'Stockholm, Sweden')));
+      final effectiveCanon = _newMemberCanonicalLocation ?? sec?.canonicalLocation;
+      double? mLat = effectiveCanon?.latitude;
+      double? mLng = effectiveCanon?.longitude;
+      LocationPrecision? mPrec = effectiveCanon?.precision;
+      String? mPlaceId = effectiveCanon?.placeId;
+      LocationResolutionStatus? mStatus = effectiveCanon?.status;
+      if (mLat == null && newMemberLoc.isNotEmpty) {
+        final resolved = LocationService.resolveKnownCity(newMemberLoc);
+        if (resolved != null) {
+          mLat = resolved.latitude;
+          mLng = resolved.longitude;
+          mPrec = LocationPrecision.city;
+          mPlaceId = resolved.placeId;
+          mStatus = resolved.status;
+        }
+      }
+      if (mLat != null && mLng != null) {
+        mLat = double.parse(mLat.toStringAsFixed(1));
+        mLng = double.parse(mLng.toStringAsFixed(1));
+        mPrec = LocationPrecision.city;
+        mPlaceId = null; // strip residential placeId
+      }
+      final cleanCityLabel = LocationService.extractCityLabel(newMemberLoc);
+      final finalLocLabel = cleanCityLabel.isNotEmpty ? cleanCityLabel : (newMemberLoc.isNotEmpty ? newMemberLoc : 'Stockholm');
       final evType = (sec?.selectedEventType != null && sec!.selectedEventType!.trim().isNotEmpty)
           ? sec.selectedEventType!.trim()
           : 'Recruitment';
@@ -2998,7 +3033,12 @@ class _FindSubScreenState extends State<FindSubScreen> {
         date: dateStr,
         startTime: startTimeStr,
         endTime: endTimeStr,
-        location: newMemberLoc,
+        location: finalLocLabel,
+        latitude: mLat,
+        longitude: mLng,
+        locationPrecision: mPrec,
+        placeId: mPlaceId,
+        locationStatus: mStatus,
         bandId: effectiveBandId,
         bandName: effectiveBandName,
         eventId: evId,
@@ -3330,6 +3370,22 @@ class _FindSubScreenState extends State<FindSubScreen> {
           : (_locationController.text.trim().isNotEmpty
               ? _locationController.text.trim()
               : (profile?.location ?? 'Stockholm, Sweden'));
+      final oCanon = sec?.canonicalLocation ?? _otherCanonicalLocation;
+      double? oLat = oCanon?.latitude;
+      double? oLng = oCanon?.longitude;
+      LocationPrecision? oPrec = oCanon?.precision;
+      String? oPlaceId = oCanon?.placeId;
+      LocationResolutionStatus? oStatus = oCanon?.status;
+      if (oLat == null && locStr.isNotEmpty) {
+        final resolved = LocationService.resolveKnownCity(locStr);
+        if (resolved != null) {
+          oLat = resolved.latitude;
+          oLng = resolved.longitude;
+          oPrec = resolved.precision;
+          oPlaceId = resolved.placeId;
+          oStatus = resolved.status;
+        }
+      }
       final evType = (sec?.selectedEventType != null && sec!.selectedEventType!.trim().isNotEmpty)
           ? sec.selectedEventType!.trim()
           : 'Other';
@@ -3359,6 +3415,11 @@ class _FindSubScreenState extends State<FindSubScreen> {
         startTime: startTimeStr,
         endTime: endTimeStr,
         location: locStr,
+        latitude: oLat,
+        longitude: oLng,
+        locationPrecision: oPrec,
+        placeId: oPlaceId,
+        locationStatus: oStatus,
         bandId: effectiveBandId,
         bandName: effectiveBandName,
         eventId: evId,

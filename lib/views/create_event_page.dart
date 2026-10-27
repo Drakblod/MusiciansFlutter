@@ -8,9 +8,11 @@ import '../models/band_event.dart';
 import '../models/band.dart';
 import '../models/user_profile.dart';
 import '../models/sub_request.dart';
+import '../models/canonical_location.dart';
 import '../widgets/gradient_scaffold.dart';
 import '../widgets/custom_top_bar.dart';
 import '../widgets/animated_tap_detector.dart';
+import '../widgets/location_picker_field.dart';
 
 class CreateEventPage extends StatefulWidget {
   final String bandId;
@@ -33,6 +35,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _locationController = TextEditingController();
+  CanonicalLocation? _canonicalLocation;
   final _notesController = TextEditingController();
   final _customReminderController = TextEditingController();
 
@@ -311,9 +314,9 @@ class _CreateEventPageState extends State<CreateEventPage> {
       return DateFormat('EEE, MMM d, yyyy').format(minDate);
     }
     if (minDate.year == maxDate.year) {
-      return '${DateFormat('EEE, MMM d').format(minDate)} – ${DateFormat('EEE, MMM d, yyyy').format(maxDate)}';
+      return '${DateFormat('EEE, MMM d').format(minDate)} â€“ ${DateFormat('EEE, MMM d, yyyy').format(maxDate)}';
     }
-    return '${DateFormat('EEE, MMM d, yyyy').format(minDate)} – ${DateFormat('EEE, MMM d, yyyy').format(maxDate)}';
+    return '${DateFormat('EEE, MMM d, yyyy').format(minDate)} â€“ ${DateFormat('EEE, MMM d, yyyy').format(maxDate)}';
   }
 
   Future<void> _selectDate() async {
@@ -1355,6 +1358,11 @@ class _CreateEventPageState extends State<CreateEventPage> {
             startTime: startTimeStr,
             endTime: endTimeStr,
             location: _locationController.text.trim(),
+            latitude: _canonicalLocation?.latitude,
+            longitude: _canonicalLocation?.longitude,
+            locationPrecision: _canonicalLocation?.precision,
+            placeId: _canonicalLocation?.placeId,
+            locationStatus: _canonicalLocation?.status,
             status: 'published',
             searchSource: 'favorites',
             targetUserIds: [uid],
@@ -1509,7 +1517,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                       style: GoogleFonts.inter(color: Colors.white),
                       decoration: const InputDecoration(
                         labelText: 'Main Event Name',
-                        hintText: 'e.g. Club gig – Summer Tour',
+                        hintText: 'e.g. Club gig â€“ Summer Tour',
                       ),
                       validator: (value) {
                         if (value == null || value.trim().isEmpty) {
@@ -1543,14 +1551,14 @@ class _CreateEventPageState extends State<CreateEventPage> {
                     const SizedBox(height: 16),
 
                     // 3. Location
-                    TextFormField(
+                    LocationPickerField(
                       controller: _locationController,
-                      style: GoogleFonts.inter(color: Colors.white),
-                      decoration: const InputDecoration(
-                        labelText: 'Location (City, Country)',
-                        hintText: 'e.g. Globen, Stockholm',
-                        prefixIcon: Icon(Icons.location_on_outlined, color: AppTheme.textSecondary),
-                      ),
+                      initialLocation: _canonicalLocation,
+                      onLocationChanged: (loc) {
+                        setState(() {
+                          _canonicalLocation = loc;
+                        });
+                      },
                       validator: (value) {
                         if (value == null || value.trim().isEmpty) {
                           return 'Please enter a location';
@@ -1742,7 +1750,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                                             ),
                                             const SizedBox(height: 2),
                                             Text(
-                                              '$sessionType • $dateFormatted (${rehearsal.startTime} - ${rehearsal.endTime})',
+                                              '$sessionType â€¢ $dateFormatted (${rehearsal.startTime} - ${rehearsal.endTime})',
                                               style: GoogleFonts.inter(
                                                 fontSize: 11,
                                                 color: AppTheme.textSecondary,
@@ -1751,7 +1759,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                                             ),
                                           ] else ...[
                                             Text(
-                                              '$sessionType • $dateFormatted (${rehearsal.startTime} - ${rehearsal.endTime})',
+                                              '$sessionType â€¢ $dateFormatted (${rehearsal.startTime} - ${rehearsal.endTime})',
                                               style: GoogleFonts.inter(
                                                 fontSize: 12,
                                                 color: Colors.white,
