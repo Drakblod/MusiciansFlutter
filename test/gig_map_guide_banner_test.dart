@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:firebase_core/firebase_core.dart' hide FirebaseService;
 import 'package:firebase_core_platform_interface/test.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:musicians_flutter/views/gig_map_page.dart';
 import 'package:musicians_flutter/providers/app_state.dart';
 import 'package:musicians_flutter/services/firebase_service.dart';
@@ -35,6 +36,7 @@ void main() {
 
   setUpAll(() async {
     await Firebase.initializeApp();
+    SharedPreferences.setMockInitialValues({'has_seen_map_intro': false});
   });
 
   testWidgets('Map View displays clickable "What is Map View?" box and dialog', (tester) async {
@@ -51,9 +53,10 @@ void main() {
       ),
     );
     await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
 
     const expectedGuideText =
-        'Move pins towards the centre of the screen (telescopic sight) to hear different bands and their recordings, band info, gig promo, etc';
+        'Move notes / pins towards the centre of the screen (telescopic sight) to hear different bands and their recordings, band info, gig promo, etc';
 
     final guideFinder = find.byWidgetPredicate(
       (w) => w is RichText && w.text.toPlainText().contains(expectedGuideText),
@@ -81,19 +84,16 @@ void main() {
 
     expect(find.text('Got it'), findsNothing);
 
-    // Tap dismiss button on banner
-    await tester.tap(find.byTooltip('Dismiss'));
-    await tester.pump(const Duration(milliseconds: 300));
-
-    // Box is dismissed, floating re-open button appears
+    // Box is dismissed, floating re-open help button is present
     expect(guideFinder, findsNothing);
-    expect(find.text('What is Map View?'), findsOneWidget);
+    expect(find.byKey(const ValueKey('map_help_button')), findsOneWidget);
 
-    // Tap re-open button
-    await tester.tap(find.text('What is Map View?'));
+    // Tap re-open help button
+    await tester.tap(find.byKey(const ValueKey('map_help_button')));
     await tester.pump(const Duration(milliseconds: 300));
 
-    // Box is restored
-    expect(guideFinder, findsOneWidget);
+    // Info dialog is opened again
+    expect(find.text('HOW TO EXPLORE & LISTEN:'), findsOneWidget);
+    expect(find.text('Got it'), findsOneWidget);
   });
 }

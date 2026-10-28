@@ -119,7 +119,7 @@ describe('Real RTDB Emulator Rules Tests', function () {
       );
     });
 
-    it('Transitional: Band Leader CAN create legacy SubRequest with valid bandId and existing event', async () => {
+    it('Transitional: Band Leader CANNOT directly create SubRequest (server-owned creation enforced)', async () => {
       await testEnvTransitional.withSecurityRulesDisabled(async (context) => {
         const db = context.database();
         await db.ref('Bands/band_trans_test/Members_band/user_trans_leader').set({ Role: 'Leader' });
@@ -127,7 +127,7 @@ describe('Real RTDB Emulator Rules Tests', function () {
       });
 
       const leader = testEnvTransitional.authenticatedContext('user_trans_leader');
-      await assertSucceeds(
+      await assertFails(
         leader.database().ref('SubRequests/sub_trans_1').set({
           SubRequestId: 'sub_trans_1',
           bandId: 'band_trans_test',
@@ -468,10 +468,10 @@ describe('Real RTDB Emulator Rules Tests', function () {
       });
     });
 
-    it('1. Band Leader can manage legitimate fields on existing SubRequests', async () => {
+    it('1. Band Leader cannot directly mutate canonical fields on existing SubRequests', async () => {
       const leader = testEnvFinal.authenticatedContext('user_leader');
-      await assertSucceeds(leader.database().ref('SubRequests/sub_slot_1/Status').set('cancelled'));
-      await assertSucceeds(leader.database().ref('SubRequests/sub_slot_1/PayAmountMinor').set(150000));
+      await assertFails(leader.database().ref('SubRequests/sub_slot_1/Status').set('cancelled'));
+      await assertFails(leader.database().ref('SubRequests/sub_slot_1/PayAmountMinor').set(150000));
     });
 
     it('2. Unauthenticated user CANNOT read or write SubRequests', async () => {
@@ -639,10 +639,10 @@ describe('Real RTDB Emulator Rules Tests', function () {
       await assertFails(leader.database().ref('SubRequests/sub_rules_test/Status').set('assigned'));
     });
 
-    it('17. Band Leader can update PayAmount and Currency on existing SubRequests', async () => {
+    it('17. Band Leader cannot directly update PayAmount and Currency on existing SubRequests', async () => {
       const leader = testEnvFinal.authenticatedContext('user_leader');
-      await assertSucceeds(leader.database().ref('SubRequests/sub_group_slot_1/PayAmount').set(1500));
-      await assertSucceeds(leader.database().ref('SubRequests/sub_group_slot_1/Currency').set('SEK'));
+      await assertFails(leader.database().ref('SubRequests/sub_group_slot_1/PayAmount').set(1500));
+      await assertFails(leader.database().ref('SubRequests/sub_group_slot_1/Currency').set('SEK'));
     });
 
     it('18. Candidate CANNOT modify PayAmount or Currency on SubRequests', async () => {
@@ -669,10 +669,10 @@ describe('Real RTDB Emulator Rules Tests', function () {
       await assertFails(ref.update({ Status: 'cancelled' }));
     });
 
-    it('22. Authorized Band Leader CAN cancel SubRequest', async () => {
+    it('22. Authorized Band Leader CANNOT directly cancel canonical SubRequest (server-owned mutation)', async () => {
       const leader = testEnvFinal.authenticatedContext('user_leader');
       const ref = leader.database().ref('SubRequests/sub_group_slot_1/Status');
-      await assertSucceeds(ref.set('cancelled'));
+      await assertFails(ref.set('cancelled'));
     });
 
     it('23. User CAN add and remove targets under their own Favorites path', async () => {
@@ -762,8 +762,7 @@ describe('Real RTDB Emulator Rules Tests', function () {
       });
 
       const targetedUser = testEnvFinal.authenticatedContext('user_sub_cand_1');
-      const snap = await assertSucceeds(targetedUser.database().ref('SubRequests/sub_fav_targeted_1').get());
-      assert.strictEqual(snap.val().VoicePart, 'Electric Guitar');
+      await assertFails(targetedUser.database().ref('SubRequests/sub_fav_targeted_1').get());
     });
 
     it('32. Unselected user NOT in subRequestAudience CANNOT read Favorites-only SubRequest', async () => {
@@ -891,10 +890,10 @@ describe('Real RTDB Emulator Rules Tests', function () {
       await assertFails(admin.database().ref('SubRequests/sub_fav_targeted_1/Responses/user_sub_cand_2').set(true));
     });
 
-    it('51. Creator CAN still update legitimate request-management fields without modifying Responses', async () => {
+    it('51. Creator CANNOT directly update canonical request fields (callable-owned)', async () => {
       const creator = testEnvFinal.authenticatedContext('user_leader');
-      await assertSucceeds(creator.database().ref('SubRequests/sub_fav_targeted_1/Status').set('cancelled'));
-      await assertSucceeds(creator.database().ref('SubRequests/sub_fav_targeted_1/PayAmountMinor').set(180000));
+      await assertFails(creator.database().ref('SubRequests/sub_fav_targeted_1/Status').set('cancelled'));
+      await assertFails(creator.database().ref('SubRequests/sub_fav_targeted_1/PayAmountMinor').set(180000));
     });
 
     it('52. Request creation containing pre-populated forged Responses is REJECTED', async () => {
@@ -1658,11 +1657,11 @@ describe('Real RTDB Emulator Rules Tests', function () {
       const candidate = testEnvFinal.authenticatedContext('user_candidate');
       const outsider = testEnvFinal.authenticatedContext('user_outsider');
 
-      // 1. Staffing creator CAN update Description, PayAmount, Currency
-      await assertSucceeds(creator.database().ref('SubRequests/staffing_req_test/Description').set('Updated Staffing Desc'));
-      await assertSucceeds(creator.database().ref('SubRequests/staffing_req_test/PayAmount').set(1500));
-      await assertSucceeds(creator.database().ref('SubRequests/staffing_req_test/PayAmountMinor').set(150000));
-      await assertSucceeds(creator.database().ref('SubRequests/staffing_req_test/Currency').set('EUR'));
+      // 1. Staffing creator CANNOT update Description, PayAmount, Currency directly
+      await assertFails(creator.database().ref('SubRequests/staffing_req_test/Description').set('Updated Staffing Desc'));
+      await assertFails(creator.database().ref('SubRequests/staffing_req_test/PayAmount').set(1500));
+      await assertFails(creator.database().ref('SubRequests/staffing_req_test/PayAmountMinor').set(150000));
+      await assertFails(creator.database().ref('SubRequests/staffing_req_test/Currency').set('EUR'));
 
       // 2. Candidate in audience CAN submit response
       await assertSucceeds(candidate.database().ref('SubRequests/staffing_req_test/Responses/user_candidate').set(true));
@@ -1677,8 +1676,492 @@ describe('Real RTDB Emulator Rules Tests', function () {
       await assertFails(outsider.database().ref('SubRequests/staffing_req_test/Responses/user_outsider').set(true));
       await assertFails(outsider.database().ref('SubRequests/staffing_req_test/Description').set('Outsider tamper'));
 
-      // 6. Staffing creator CAN cancel
-      await assertSucceeds(creator.database().ref('SubRequests/staffing_req_test/Status').set('cancelled'));
+      // 6. Staffing creator CANNOT directly cancel (callable-owned)
+      await assertFails(creator.database().ref('SubRequests/staffing_req_test/Status').set('cancelled'));
     });
+  });
+
+  describe('SUBREQUEST-SECURITY: Response Escalation & Dual-Ruleset Verification', function () {
+    this.timeout(60000);
+    const suites = [
+      { name: 'Transitional Rules (database.transitional.rules.json)', getEnv: () => testEnvTransitional },
+      { name: 'Final Rules (database.rules.json)', getEnv: () => testEnvFinal },
+    ];
+
+    for (const { name, getEnv } of suites) {
+      describe(name, function () {
+        this.timeout(60000);
+        beforeEach(async () => {
+          await getEnv().withSecurityRulesDisabled(async (context) => {
+            const db = context.database();
+            await db.ref().set({
+              SubRequests: {
+                parity_pub_staffing: {
+                  SubRequestId: 'parity_pub_staffing',
+                  CreatorUserId: 'alice',
+                  VoicePart: 'Guitar',
+                  Status: 'published',
+                  InternalBudgetNotes: 'Secret internal budget $1000',
+                  Responses: {
+                    bob: true,
+                    diana: true,
+                  },
+                },
+                fresh_public_staffing: {
+                  SubRequestId: 'fresh_public_staffing',
+                  CreatorUserId: 'alice',
+                  VoicePart: 'Bass',
+                  Status: 'published',
+                },
+                parity_map_pin: {
+                  SubRequestId: 'parity_map_pin',
+                  CreatorUserId: 'alice',
+                  NotificationMode: 'map_pin',
+                  Status: 'published',
+                  Latitude: 59.33,
+                  Longitude: 18.06,
+                  DeliberatelyNonAllowlistedField: 'SECRET_PROMO_METRIC',
+                },
+                parity_direct_inv: {
+                  SubRequestId: 'parity_direct_inv',
+                  CreatorUserId: 'alice',
+                  NotificationMode: 'direct',
+                  Status: 'published',
+                  TargetUserIds: ['bob'],
+                  AssignedUserId: null,
+                  InternalTargetMetadata: { rank: 1 },
+                  Responses: {
+                    bob: true,
+                    other_invitee: true,
+                  },
+                },
+                parity_favorites: {
+                  SubRequestId: 'parity_favorites',
+                  CreatorUserId: 'alice',
+                  NotificationMode: 'favorites',
+                  Status: 'published',
+                  TargetUserIds: ['bob'],
+                  AssignedUserId: null,
+                  InternalAuditTrail: 'Confidential negotiation details',
+                  Responses: {
+                    bob: true,
+                    charlie_fav: true,
+                  },
+                },
+                fresh_direct_inv: {
+                  SubRequestId: 'fresh_direct_inv',
+                  CreatorUserId: 'alice',
+                  NotificationMode: 'direct',
+                  Status: 'published',
+                  TargetUserIds: ['bob'],
+                },
+                cancelled_direct_inv: {
+                  SubRequestId: 'cancelled_direct_inv',
+                  CreatorUserId: 'alice',
+                  NotificationMode: 'direct',
+                  Status: 'cancelled',
+                  TargetUserIds: ['bob'],
+                },
+                assigned_direct_inv: {
+                  SubRequestId: 'assigned_direct_inv',
+                  CreatorUserId: 'alice',
+                  NotificationMode: 'direct',
+                  Status: 'assigned',
+                  TargetUserIds: ['bob'],
+                  AssignedUserId: 'someone_else',
+                },
+              },
+              publicSubRequests: {
+                parity_pub_staffing: {
+                  subRequestId: 'parity_pub_staffing',
+                  creatorUserId: 'alice',
+                  voicePart: 'Guitar',
+                  status: 'published',
+                },
+                fresh_public_staffing: {
+                  subRequestId: 'fresh_public_staffing',
+                  creatorUserId: 'alice',
+                  voicePart: 'Bass',
+                  status: 'published',
+                },
+              },
+              publicMapPinFeed: {
+                parity_map_pin: {
+                  pinId: 'parity_map_pin',
+                  creatorUserId: 'alice',
+                  title: 'Parity Map Pin',
+                  latitude: 59.33,
+                  longitude: 18.06,
+                },
+              },
+              subRequestAudience: {
+                parity_direct_inv: { bob: true },
+                parity_favorites: { bob: true },
+                fresh_direct_inv: { bob: true },
+                cancelled_direct_inv: { bob: true },
+                assigned_direct_inv: { bob: true },
+              },
+              userSubRequestFeed: {
+                bob: {
+                  parity_direct_inv: {
+                    subRequestId: 'parity_direct_inv',
+                    creatorUserId: 'alice',
+                    status: 'published',
+                  },
+                  parity_favorites: {
+                    subRequestId: 'parity_favorites',
+                    creatorUserId: 'alice',
+                    status: 'published',
+                  },
+                },
+              },
+            });
+          });
+        });
+
+        // --- ATTACK TESTS: CHARLIE (UNRELATED ATTACKER) ---
+        it('1. Charlie cannot read private canonical requests', async () => {
+          const charlie = getEnv().authenticatedContext('charlie');
+          await assertFails(charlie.database().ref('SubRequests/parity_direct_inv').get());
+          await assertFails(charlie.database().ref('SubRequests/parity_favorites').get());
+        });
+
+        it('2. Charlie cannot write Responses/charlie = true', async () => {
+          const charlie = getEnv().authenticatedContext('charlie');
+          await assertFails(charlie.database().ref('SubRequests/parity_direct_inv/Responses/charlie').set(true));
+          await assertFails(charlie.database().ref('SubRequests/parity_favorites/Responses/charlie').set(true));
+        });
+
+        it('3. Charlie cannot write Responses/charlie = false', async () => {
+          const charlie = getEnv().authenticatedContext('charlie');
+          await assertFails(charlie.database().ref('SubRequests/parity_direct_inv/Responses/charlie').set(false));
+          await assertFails(charlie.database().ref('SubRequests/parity_favorites/Responses/charlie').set(false));
+        });
+
+        it('4. Charlie cannot write a string to Responses', async () => {
+          const charlie = getEnv().authenticatedContext('charlie');
+          await assertFails(charlie.database().ref('SubRequests/parity_direct_inv/Responses/charlie').set('hacked'));
+          await assertFails(charlie.database().ref('SubRequests/parity_favorites/Responses/charlie').set('applied'));
+        });
+
+        it('5. Charlie cannot write an object to Responses', async () => {
+          const charlie = getEnv().authenticatedContext('charlie');
+          await assertFails(charlie.database().ref('SubRequests/parity_direct_inv/Responses/charlie').set({ applied: true }));
+          await assertFails(charlie.database().ref('SubRequests/parity_favorites/Responses/charlie').set({ applied: true }));
+        });
+
+        it('6. Charlie cannot delete Bob response', async () => {
+          const charlie = getEnv().authenticatedContext('charlie');
+          await assertFails(charlie.database().ref('SubRequests/parity_direct_inv/Responses/bob').remove());
+          await assertFails(charlie.database().ref('SubRequests/parity_favorites/Responses/bob').remove());
+        });
+
+        it('7. Charlie cannot overwrite Bob response', async () => {
+          const charlie = getEnv().authenticatedContext('charlie');
+          await assertFails(charlie.database().ref('SubRequests/parity_direct_inv/Responses/bob').set(true));
+          await assertFails(charlie.database().ref('SubRequests/parity_favorites/Responses/bob').set(true));
+        });
+
+        it('8. After failed write attempts, Charlie still cannot read request', async () => {
+          const charlie = getEnv().authenticatedContext('charlie');
+          await assertFails(charlie.database().ref('SubRequests/parity_direct_inv').get());
+          await assertFails(charlie.database().ref('SubRequests/parity_favorites').get());
+        });
+
+        it('9. Charlie cannot create a forged whole canonical SubRequest', async () => {
+          const charlie = getEnv().authenticatedContext('charlie');
+          await assertFails(charlie.database().ref('SubRequests/forged_charlie_req').set({
+            SubRequestId: 'forged_charlie_req',
+            CreatorUserId: 'charlie',
+            VoicePart: 'Drums',
+            Status: 'published',
+          }));
+        });
+
+        it('10. Charlie cannot convert a private request into public or map_pin', async () => {
+          const charlie = getEnv().authenticatedContext('charlie');
+          await assertFails(charlie.database().ref('SubRequests/parity_direct_inv/NotificationMode').set('map_pin'));
+          await assertFails(charlie.database().ref('SubRequests/parity_direct_inv/notificationMode').set('map_pin'));
+        });
+
+        it('11. Charlie cannot mutate NotificationMode', async () => {
+          const charlie = getEnv().authenticatedContext('charlie');
+          await assertFails(charlie.database().ref('SubRequests/parity_direct_inv/NotificationMode').set('all'));
+        });
+
+        it('12. Charlie cannot mutate audience or target fields', async () => {
+          const charlie = getEnv().authenticatedContext('charlie');
+          await assertFails(charlie.database().ref('subRequestAudience/parity_direct_inv/charlie').set(true));
+          await assertFails(charlie.database().ref('SubRequests/parity_direct_inv/TargetUserIds').set(['charlie']));
+        });
+
+        it('13. Charlie cannot mutate assignment or publication fields', async () => {
+          const charlie = getEnv().authenticatedContext('charlie');
+          await assertFails(charlie.database().ref('SubRequests/parity_direct_inv/AssignedUserId').set('charlie'));
+          await assertFails(charlie.database().ref('SubRequests/parity_direct_inv/PublicationId').set('pub_fake'));
+        });
+
+        // --- CREATOR ISOLATION: ALICE ---
+        it('14. Alice cannot overwrite Bob response through parent set', async () => {
+          const alice = getEnv().authenticatedContext('alice');
+          await assertFails(alice.database().ref('SubRequests/parity_direct_inv').set({
+            SubRequestId: 'parity_direct_inv',
+            CreatorUserId: 'alice',
+            Status: 'published',
+            Responses: { bob: false },
+          }));
+        });
+
+        it('15. Alice cannot overwrite Bob response through parent update', async () => {
+          const alice = getEnv().authenticatedContext('alice');
+          await assertFails(alice.database().ref('SubRequests/parity_direct_inv').update({
+            'Responses/bob': false,
+          }));
+        });
+
+        it('16. Alice cannot delete Bob response through parent write', async () => {
+          const alice = getEnv().authenticatedContext('alice');
+          await assertFails(alice.database().ref('SubRequests/parity_direct_inv/Responses').remove());
+          await assertFails(alice.database().ref('SubRequests/parity_direct_inv/Responses/bob').remove());
+        });
+
+        it('17. Alice cannot prepopulate forged Responses while creating request', async () => {
+          const alice = getEnv().authenticatedContext('alice');
+          await assertFails(alice.database().ref('SubRequests/alice_forged_responses').set({
+            SubRequestId: 'alice_forged_responses',
+            CreatorUserId: 'alice',
+            Status: 'published',
+            Responses: { bob: true },
+          }));
+        });
+
+        it('18. Alice cannot directly delete canonical request (callable-owned)', async () => {
+          const alice = getEnv().authenticatedContext('alice');
+          await assertFails(alice.database().ref('SubRequests/parity_direct_inv').remove());
+        });
+
+        // --- LEGITIMATE BEHAVIOR: BOB & OTHERS ---
+        // --- PROJECTION BYPASS & ISOLATION GATES (PHASE 4) ---
+        it('19. Recipient can read /userSubRequestFeed/{uid}/{id}', async () => {
+          const bob = getEnv().authenticatedContext('bob');
+          await assertSucceeds(bob.database().ref('userSubRequestFeed/bob/parity_direct_inv').get());
+          await assertSucceeds(bob.database().ref('userSubRequestFeed/bob/parity_favorites').get());
+        });
+
+        it('19b. Recipient CANNOT read raw canonical request unless creator/admin', async () => {
+          const bob = getEnv().authenticatedContext('bob');
+          await assertFails(bob.database().ref('SubRequests/parity_direct_inv').get());
+          await assertFails(bob.database().ref('SubRequests/parity_favorites').get());
+        });
+
+        it('19c. Recipient CANNOT read collection Responses or another applicant response, but CAN read their own', async () => {
+          const bob = getEnv().authenticatedContext('bob');
+          // Whole responses collection denied
+          await assertFails(bob.database().ref('SubRequests/parity_direct_inv/Responses').get());
+          // Other applicant response denied
+          await assertFails(bob.database().ref('SubRequests/parity_direct_inv/Responses/other_invitee').get());
+          await assertFails(bob.database().ref('SubRequests/parity_favorites/Responses/charlie_fav').get());
+          // Own response allowed
+          await assertSucceeds(bob.database().ref('SubRequests/parity_direct_inv/Responses/bob').get());
+          await assertSucceeds(bob.database().ref('SubRequests/parity_favorites/Responses/bob').get());
+        });
+
+        it('19d. Creator CAN read approved canonical data and responses collection and leaf', async () => {
+          const alice = getEnv().authenticatedContext('alice');
+          await assertSucceeds(alice.database().ref('SubRequests/parity_direct_inv').get());
+          await assertSucceeds(alice.database().ref('SubRequests/parity_direct_inv/Responses').get());
+          await assertSucceeds(alice.database().ref('SubRequests/parity_direct_inv/Responses/bob').get());
+        });
+
+        it('20. Bob can submit exact approved first response (boolean true)', async () => {
+          const bob = getEnv().authenticatedContext('bob');
+          await assertSucceeds(bob.database().ref('SubRequests/fresh_direct_inv/Responses/bob').set(true));
+        });
+
+        it('20b. Public applicant can submit first response (boolean true) on public staffing', async () => {
+          const charlie = getEnv().authenticatedContext('charlie');
+          await assertSucceeds(charlie.database().ref('SubRequests/fresh_public_staffing/Responses/charlie').set(true));
+        });
+
+        it('21. Bob cannot submit a second response (no overwrite)', async () => {
+          const bob = getEnv().authenticatedContext('bob');
+          await assertFails(bob.database().ref('SubRequests/parity_direct_inv/Responses/bob').set(true));
+        });
+
+        it('22. Bob cannot delete the response', async () => {
+          const bob = getEnv().authenticatedContext('bob');
+          await assertFails(bob.database().ref('SubRequests/parity_direct_inv/Responses/bob').remove());
+        });
+
+        it('23. Bob cannot respond after cancellation or assignment', async () => {
+          const bob = getEnv().authenticatedContext('bob');
+          await assertFails(bob.database().ref('SubRequests/cancelled_direct_inv/Responses/bob').set(true));
+          await assertFails(bob.database().ref('SubRequests/assigned_direct_inv/Responses/bob').set(true));
+        });
+
+        it('24. Public user can read /publicSubRequests/{id}', async () => {
+          const charlie = getEnv().authenticatedContext('charlie');
+          await assertSucceeds(charlie.database().ref('publicSubRequests/parity_pub_staffing').get());
+        });
+
+        it('24b. Public user CANNOT read raw /SubRequests/{id} or /SubRequests/{id}/Responses', async () => {
+          const charlie = getEnv().authenticatedContext('charlie');
+          await assertFails(charlie.database().ref('SubRequests/parity_pub_staffing').get());
+          await assertFails(charlie.database().ref('SubRequests/parity_pub_staffing/Responses').get());
+          await assertFails(charlie.database().ref('SubRequests/parity_pub_staffing/Responses/bob').get());
+        });
+
+        it('25. Map viewer can read /publicMapPinFeed/{id}', async () => {
+          const charlie = getEnv().authenticatedContext('charlie');
+          await assertSucceeds(charlie.database().ref('publicMapPinFeed/parity_map_pin').get());
+        });
+
+        it('25b. Map viewer CANNOT read raw /SubRequests/{mapPinId}', async () => {
+          const charlie = getEnv().authenticatedContext('charlie');
+          await assertFails(charlie.database().ref('SubRequests/parity_map_pin').get());
+        });
+
+        it('25c. Fields removed by sanitizers cannot be recovered through another client path', async () => {
+          const charlie = getEnv().authenticatedContext('charlie');
+          const pubSnap = await assertSucceeds(charlie.database().ref('publicSubRequests/parity_pub_staffing').get());
+          assert.strictEqual(pubSnap.val().InternalBudgetNotes, undefined);
+          const pinSnap = await assertSucceeds(charlie.database().ref('publicMapPinFeed/parity_map_pin').get());
+          assert.strictEqual(pinSnap.val().DeliberatelyNonAllowlistedField, undefined);
+        });
+
+        it('26. Cloud Functions can still publish/delete/assign/respond using Admin SDK', async () => {
+          await getEnv().withSecurityRulesDisabled(async (context) => {
+            const db = context.database();
+            await db.ref('SubRequests/admin_sub_1').set({ Status: 'published' });
+            await db.ref('SubRequests/admin_sub_1/Responses/admin_user').set(true);
+            const snap = await db.ref('SubRequests/admin_sub_1').get();
+            assert.strictEqual(snap.val().Status, 'published');
+            await db.ref('SubRequests/admin_sub_1').remove();
+          });
+        });
+
+        it('27. Existing respondToSubRequest Admin SDK logic remains functional', async () => {
+          await getEnv().withSecurityRulesDisabled(async (context) => {
+            const db = context.database();
+            await db.ref('SubRequests/parity_direct_inv/Responses/new_resp').set(true);
+            await db.ref('subRequestAudience/parity_direct_inv/new_resp').set(true);
+            const snap = await db.ref('SubRequests/parity_direct_inv/Responses/new_resp').get();
+            assert.strictEqual(snap.val(), true);
+          });
+        });
+
+        it('28. Existing response notification record remains functional via Admin SDK', async () => {
+          await getEnv().withSecurityRulesDisabled(async (context) => {
+            const db = context.database();
+            await db.ref('userNotifications/alice/notif_sub_resp_parity_direct_inv_bob').set({
+              id: 'notif_sub_resp_parity_direct_inv_bob',
+              type: 'sub_request_response',
+            });
+            const snap = await db.ref('userNotifications/alice/notif_sub_resp_parity_direct_inv_bob').get();
+            assert.strictEqual(snap.val().id, 'notif_sub_resp_parity_direct_inv_bob');
+          });
+        });
+
+        // --- PHASE 5: MAP PIN DIRECT-WRITE TESTS ---
+        it('29. Client cannot directly create /SubRequests/{id} with NotificationMode map_pin', async () => {
+          const alice = getEnv().authenticatedContext('alice');
+          await assertFails(alice.database().ref('SubRequests/direct_pin_hack').set({
+            SubRequestId: 'direct_pin_hack',
+            CreatorUserId: 'alice',
+            NotificationMode: 'map_pin',
+            Latitude: 59.33,
+            Longitude: 18.06,
+          }));
+        });
+
+        it('30. Client cannot directly update a canonical map pin', async () => {
+          const alice = getEnv().authenticatedContext('alice');
+          await assertFails(alice.database().ref('SubRequests/parity_map_pin').set({
+            SubRequestId: 'parity_map_pin',
+            CreatorUserId: 'alice',
+            NotificationMode: 'map_pin',
+            title: 'Tampered Map Pin',
+          }));
+          await assertFails(alice.database().ref('SubRequests/parity_map_pin/title').set('Tampered Title'));
+        });
+
+        it('31. Client cannot directly delete a canonical map pin', async () => {
+          const alice = getEnv().authenticatedContext('alice');
+          await assertFails(alice.database().ref('SubRequests/parity_map_pin').remove());
+        });
+
+        it('32. Client cannot directly create, update, or delete /publicMapPinFeed/{id}', async () => {
+          const alice = getEnv().authenticatedContext('alice');
+          await assertFails(alice.database().ref('publicMapPinFeed/parity_map_pin').remove());
+          await assertFails(alice.database().ref('publicMapPinFeed/new_hacked_pin').set({
+            pinId: 'new_hacked_pin',
+            title: 'Injected Pin',
+          }));
+          await assertFails(alice.database().ref('publicMapPinFeed/parity_map_pin/title').set('Tampered Feed Title'));
+        });
+
+        // --- CANONICAL CHILD MUTATION LOCK TESTS (PHASE 3) ---
+        it('33. Creator cannot directly change Status, PayAmount, PayAmountMinor, Currency, Description', async () => {
+          const alice = getEnv().authenticatedContext('alice');
+          await assertFails(alice.database().ref('SubRequests/parity_pub_staffing/Status').set('cancelled'));
+          await assertFails(alice.database().ref('SubRequests/parity_pub_staffing/PayAmount').set(2000));
+          await assertFails(alice.database().ref('SubRequests/parity_pub_staffing/PayAmountMinor').set(200000));
+          await assertFails(alice.database().ref('SubRequests/parity_pub_staffing/Currency').set('EUR'));
+          await assertFails(alice.database().ref('SubRequests/parity_pub_staffing/Description').set('Tampered Desc'));
+        });
+
+        it('34. Band Leader/Admin cannot directly change Status, PayAmount, PayAmountMinor, Currency, Description', async () => {
+          await getEnv().withSecurityRulesDisabled(async (context) => {
+            const db = context.database();
+            await db.ref('Bands/band_parity/Members_band/leader_user').set({ Role: 'Leader' });
+            await db.ref('SubRequests/parity_band_req').set({
+              SubRequestId: 'parity_band_req',
+              bandId: 'band_parity',
+              CreatorUserId: 'alice',
+              Status: 'published',
+            });
+          });
+          const leader = getEnv().authenticatedContext('leader_user');
+          await assertFails(leader.database().ref('SubRequests/parity_band_req/Status').set('cancelled'));
+          await assertFails(leader.database().ref('SubRequests/parity_band_req/PayAmount').set(2500));
+          await assertFails(leader.database().ref('SubRequests/parity_band_req/PayAmountMinor').set(250000));
+          await assertFails(leader.database().ref('SubRequests/parity_band_req/Currency').set('EUR'));
+          await assertFails(leader.database().ref('SubRequests/parity_band_req/Description').set('Leader tamper'));
+        });
+
+        it('35. Lowercase legacy variants are strictly denied write access', async () => {
+          const alice = getEnv().authenticatedContext('alice');
+          await assertFails(alice.database().ref('SubRequests/parity_pub_staffing/status').set('cancelled'));
+          await assertFails(alice.database().ref('SubRequests/parity_pub_staffing/payAmount').set(2000));
+          await assertFails(alice.database().ref('SubRequests/parity_pub_staffing/payAmountMinor').set(200000));
+          await assertFails(alice.database().ref('SubRequests/parity_pub_staffing/currency').set('EUR'));
+          await assertFails(alice.database().ref('SubRequests/parity_pub_staffing/description').set('Tampered'));
+        });
+
+        it('36. Unrelated user is denied direct writes to every protected field', async () => {
+          const charlie = getEnv().authenticatedContext('charlie');
+          await assertFails(charlie.database().ref('SubRequests/parity_pub_staffing/Status').set('cancelled'));
+          await assertFails(charlie.database().ref('SubRequests/parity_pub_staffing/status').set('cancelled'));
+          await assertFails(charlie.database().ref('SubRequests/parity_pub_staffing/PayAmount').set(9999));
+          await assertFails(charlie.database().ref('SubRequests/parity_pub_staffing/payAmount').set(9999));
+          await assertFails(charlie.database().ref('SubRequests/parity_pub_staffing/PayAmountMinor').set(999900));
+          await assertFails(charlie.database().ref('SubRequests/parity_pub_staffing/payAmountMinor').set(999900));
+          await assertFails(charlie.database().ref('SubRequests/parity_pub_staffing/Currency').set('USD'));
+          await assertFails(charlie.database().ref('SubRequests/parity_pub_staffing/currency').set('USD'));
+          await assertFails(charlie.database().ref('SubRequests/parity_pub_staffing/Description').set('Hacked'));
+          await assertFails(charlie.database().ref('SubRequests/parity_pub_staffing/description').set('Hacked'));
+        });
+
+        it('37. Direct multi-path updates containing any protected field fail atomically', async () => {
+          const alice = getEnv().authenticatedContext('alice');
+          await assertFails(alice.database().ref().update({
+            'SubRequests/parity_pub_staffing/Status': 'cancelled',
+          }));
+          await assertFails(alice.database().ref().update({
+            'SubRequests/parity_pub_staffing/PayAmount': 5000,
+          }));
+        });
+      });
+    }
   });
 });

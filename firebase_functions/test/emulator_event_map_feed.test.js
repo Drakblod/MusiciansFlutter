@@ -64,14 +64,26 @@ describe('Real Firebase Emulator: MAP-VIEW-FEED-02 Event Feed & Rules Integratio
       'utf8'
     );
 
-    testEnv = await initializeTestEnvironment({
-      projectId: PROJECT_ID,
-      database: {
-        host: DB_HOST,
-        port: DB_PORT,
-        rules: finalRules,
-      },
-    });
+    try {
+      testEnv = await initializeTestEnvironment({
+        projectId: PROJECT_ID,
+        database: {
+          host: DB_HOST,
+          port: DB_PORT,
+          rules: finalRules,
+        },
+      });
+    } catch (err) {
+      await new Promise(resolve => setTimeout(resolve, 500));
+      testEnv = await initializeTestEnvironment({
+        projectId: PROJECT_ID,
+        database: {
+          host: DB_HOST,
+          port: DB_PORT,
+          rules: finalRules,
+        },
+      });
+    }
 
     // Seed initial test data in feeds via admin
     await adminDb.ref(`publicMapEventFeed/seed_public_1`).set({

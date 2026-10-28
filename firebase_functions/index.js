@@ -1450,6 +1450,7 @@ exports.deleteSubRequest = onCall({ region: 'europe-west1' }, async (request) =>
   const updates = {};
   updates[`SubRequests/${subRequestId}`] = null;
   updates[`publicSubRequests/${subRequestId}`] = null;
+  updates[`publicMapPinFeed/${subRequestId}`] = null;
   if (creatorId) {
     updates[`creatorSubRequestFeed/${creatorId}/${subRequestId}`] = null;
     updates[`users/${creatorId}/SubRequests/${subRequestId}`] = null;
@@ -4642,9 +4643,108 @@ exports.deleteBand = onCall({ region: 'europe-west1' }, async (request) => {
 });
 
 /**
- * MAP-VIEW-FEEDBACK-03: Server-owned Ordinary Map Pin Creation.
+ * MAP-VIEW-FEED-03B: Strict allowlist projection sanitizer for server-owned publicMapPinFeed.
+ * Strips all recipient data, tokens, staffing metadata, email/phone, etc.
+ */
+function sanitizeMapPinProjection(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+
+  const pinId = raw.id || raw.pinId || raw.SubRequestId || raw.subRequestId;
+  if (!pinId) return null;
+
+  const creatorUserId = raw.creatorUserId || raw.CreatorUserId || raw.userId || raw.UserId || '';
+  const status = raw.status || raw.Status || 'published';
+  const eventType = raw.eventType || raw.EventType || raw.promotionType || 'gigPromo';
+  const rawLat = raw.latitude !== undefined ? raw.latitude : raw.Latitude;
+  const rawLng = raw.longitude !== undefined ? raw.longitude : raw.Longitude;
+
+  if (typeof rawLat !== 'number' || typeof rawLng !== 'number' || !Number.isFinite(rawLat) || !Number.isFinite(rawLng)) {
+    return null;
+  }
+
+  const projection = {
+    id: pinId,
+    pinId: pinId,
+    subRequestId: pinId,
+    mapItemId: `map_pin:${pinId}`,
+    creatorUserId: creatorUserId,
+    status: status,
+    NotificationMode: 'map_pin',
+    notificationMode: 'map_pin',
+    subCategory: 'Music',
+    eventType: eventType,
+    latitude: rawLat,
+    longitude: rawLng,
+    Latitude: rawLat,
+    Longitude: rawLng,
+    createdAt: raw.createdAt || raw.CreatedAt || Date.now(),
+    updatedAt: raw.updatedAt || raw.UpdatedAt || Date.now(),
+  };
+
+  if (raw.title || raw.Title) {
+    projection.title = raw.title || raw.Title;
+    projection.Title = projection.title;
+  }
+  if (raw.bandName || raw.BandName) {
+    projection.bandName = raw.bandName || raw.BandName;
+    projection.BandName = projection.bandName;
+  }
+  if (raw.bandId || raw.BandId) {
+    projection.bandId = raw.bandId || raw.BandId;
+    projection.BandId = projection.bandId;
+  }
+  if (raw.description || raw.Description) {
+    projection.description = raw.description || raw.Description;
+    projection.Description = projection.description;
+  }
+  if (raw.location || raw.Location) {
+    projection.location = raw.location || raw.Location;
+    projection.Location = projection.location;
+  }
+  if (raw.venue || raw.venue) {
+    projection.venue = raw.venue || raw.Venue;
+  }
+  if (raw.city || raw.City) {
+    projection.city = raw.city || raw.City;
+  }
+  if (raw.genre || raw.Genre || raw.style || raw.Style) {
+    const g = raw.genre || raw.Genre || raw.style || raw.Style;
+    projection.genre = g;
+    projection.style = g;
+    projection.Style = g;
+  }
+  if (raw.date || raw.Date) {
+    projection.date = raw.date || raw.Date;
+    projection.Date = projection.date;
+  }
+  if (raw.startTime || raw.StartTime) {
+    projection.startTime = raw.startTime || raw.StartTime;
+    projection.StartTime = projection.startTime;
+  }
+  if (raw.endTime || raw.EndTime) {
+    projection.endTime = raw.endTime || raw.EndTime;
+    projection.EndTime = projection.endTime;
+  }
+  if (raw.audioSnippetUrl) {
+    projection.audioSnippetUrl = raw.audioSnippetUrl;
+  }
+  if (raw.audioSnippetTitle) {
+    projection.audioSnippetTitle = raw.audioSnippetTitle;
+  }
+  if (raw.infoAudioTrack) {
+    projection.infoAudioTrack = raw.infoAudioTrack;
+  }
+  if (raw.locationPrecision !== undefined) {
+    projection.locationPrecision = raw.locationPrecision;
+  }
+
+  return projection;
+}
+
+/**
+ * MAP-VIEW-FEEDBACK-03 & MAP-VIEW-FEED-03B: Server-owned Ordinary Map Pin Creation.
  * Narrowly scoped authenticated callable to persist ordinary Music Map View pins.
- * Writes exclusively to SubRequests/{generatedId} with NotificationMode: 'map_pin'.
+ * Writes atomically to SubRequests/{generatedId} and publicMapPinFeed/{generatedId}.
  * Never writes to BandEvents/PublishedSubRequests or staffing notification feeds.
  */
 exports.createMapPin = onCall({ region: 'europe-west1' }, async (request) => {
@@ -4812,8 +4912,14 @@ exports.createMapPin = onCall({ region: 'europe-west1' }, async (request) => {
   if (audioSnippetTitle) persistedPayload.audioSnippetTitle = audioSnippetTitle;
   if (infoAudioTrack) persistedPayload.infoAudioTrack = infoAudioTrack;
 
-  // 8. Write strictly once to canonical SubRequests/{generatedId}
-  await newPinRef.set(persistedPayload);
+  // 8. Write atomically to canonical SubRequests/{generatedId} and publicMapPinFeed/{generatedId}
+  const sanitizedProjection = sanitizeMapPinProjection(persistedPayload);
+  const writeBatch = {};
+  writeBatch[`SubRequests/${generatedId}`] = persistedPayload;
+  if (sanitizedProjection) {
+    writeBatch[`publicMapPinFeed/${generatedId}`] = sanitizedProjection;
+  }
+  await db.ref().update(writeBatch);
 
   // Safe logging: never log personal address, audio URL or full payload
   console.log(`[createMapPin] Successfully created map pin ${generatedId} for caller ${callerUid} (type: ${eventType})`);
@@ -4980,7 +5086,25 @@ exports.updateMapPin = onCall({ region: 'europe-west1' }, async (request) => {
   updates['UpdatedAt'] = Date.now();
   updates['updatedAt'] = Date.now();
 
-  await pinRef.update(updates);
+  // Atomically update canonical pin and publicMapPinFeed projection
+  const merged = { ...existing, ...updates };
+  const rootUpdates = {};
+  for (const [k, v] of Object.entries(updates)) {
+    rootUpdates[`SubRequests/${pinId}/${k}`] = v;
+  }
+
+  const isStillValid = (merged.NotificationMode === 'map_pin' || merged.notificationMode === 'map_pin') &&
+    merged.Status !== 'cancelled' && merged.status !== 'cancelled' &&
+    merged.Status !== 'deleted' && merged.status !== 'deleted' &&
+    merged.Status !== 'closed' && merged.status !== 'closed';
+
+  if (isStillValid) {
+    rootUpdates[`publicMapPinFeed/${pinId}`] = sanitizeMapPinProjection(merged);
+  } else {
+    rootUpdates[`publicMapPinFeed/${pinId}`] = null;
+  }
+
+  await db.ref().update(rootUpdates);
 
   console.log(`[updateMapPin] Successfully updated pin ${pinId} for caller ${callerUid}`);
 
@@ -5069,9 +5193,10 @@ exports.deleteMapPin = onCall({ region: 'europe-west1' }, async (request) => {
     throw new HttpsError('permission-denied', 'Only the pin creator or band leader may delete this pin.');
   }
 
-  // Atomically delete canonical pin and backward-compatibility legacy copies
+  // Atomically delete canonical pin, publicMapPinFeed projection, and backward-compatibility legacy copies
   const updates = {};
   updates[`SubRequests/${pinId}`] = null;
+  updates[`publicMapPinFeed/${pinId}`] = null;
   updates[`BandEvents/PublishedSubRequests/${pinId}`] = null;
   if (creatorUid) {
     updates[`users/${creatorUid}/SubRequests/${pinId}`] = null;
@@ -5100,3 +5225,4 @@ exports.buildEventProjections = buildEventProjections;
 exports.getAuthorizedUserIdsForBandEvent = getAuthorizedUserIdsForBandEvent;
 exports.calculateReconciliationDiff = calculateReconciliationDiff;
 exports.buildProjectionIndexKey = buildProjectionIndexKey;
+exports.sanitizeMapPinProjection = sanitizeMapPinProjection;

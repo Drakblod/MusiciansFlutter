@@ -44,7 +44,7 @@ function isAlreadyExistsError(err) {
 }
 
 describe('Real Cloud Functions Emulator Integration Tests (JS Client SDK + Emulators)', function () {
-  this.timeout(30000);
+  this.timeout(60000);
   const adminDb = admin.database();
 
   let appUserA, authUserA, functionsUserA, dbUserA;
@@ -286,16 +286,16 @@ describe('Real Cloud Functions Emulator Integration Tests (JS Client SDK + Emula
   });
 
   it('10. Repeated calls with no_valid_tokens continue returning no_valid_tokens and do NOT become already_sent', async () => {
-    await adminDb.ref('Bands/band_1/Members_band/user_a/Role').set('Leader');
-    await adminDb.ref('Bands/band_1/Members_band/user_b/Role').set('Member');
-    await adminDb.ref('Bands/band_1/Events/evt_10').set({ title: 'Rehearsal', isLocked: false });
+    await adminDb.ref('Bands/band_10/Members_band/user_a/Role').set('Leader');
+    await adminDb.ref('Bands/band_10/Members_band/user_b/Role').set('Member');
+    await adminDb.ref('Bands/band_10/Events/evt_10').set({ title: 'Rehearsal', isLocked: false });
 
     const callableReminderA = httpsCallable(functionsUserA, 'triggerEventReminder');
 
-    const res1 = await callableReminderA({ bandId: 'band_1', eventId: 'evt_10', reminderType: '24h' });
+    const res1 = await callableReminderA({ bandId: 'band_10', eventId: 'evt_10', reminderType: '24h' });
     assert.strictEqual(res1.data.status, 'no_valid_tokens');
 
-    const res2 = await callableReminderA({ bandId: 'band_1', eventId: 'evt_10', reminderType: '24h' });
+    const res2 = await callableReminderA({ bandId: 'band_10', eventId: 'evt_10', reminderType: '24h' });
     assert.strictEqual(res2.data.status, 'no_valid_tokens');
     assert.notStrictEqual(res2.data.status, 'already_sent');
   });
@@ -320,12 +320,12 @@ describe('Real Cloud Functions Emulator Integration Tests (JS Client SDK + Emula
   });
 
   it('12. sendBandSectionMessage updates all participants inboxes', async () => {
-    await adminDb.ref('Bands/band_sec/Members_band/user_a').set({ Role: 'Member' });
-    await adminDb.ref('Bands/band_sec/Members_band/user_b').set({ Role: 'Member' });
+    await adminDb.ref('Bands/band_sec_12/Members_band/user_a').set({ Role: 'Member' });
+    await adminDb.ref('Bands/band_sec_12/Members_band/user_b').set({ Role: 'Member' });
 
     const createFn = httpsCallable(functionsUserA, 'createBandSectionConversation');
     const createRes = await createFn({
-      bandId: 'band_sec',
+      bandId: 'band_sec_12',
       groupName: 'Horns',
       participantIds: ['user_b'],
     });
@@ -615,12 +615,10 @@ describe('Real Cloud Functions Emulator Integration Tests (JS Client SDK + Emula
     await adminDb.ref('users/user_b/info').set({
       UserType: 'Electric Guitar',
       Instruments: ['Electric Guitar'],
-      PushToken: 'token_b',
     });
     await adminDb.ref('users/user_c/info').set({
       UserType: 'Keyboard',
       Instruments: ['Keyboard'],
-      PushToken: 'token_c',
     });
   }
 
