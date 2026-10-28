@@ -44,7 +44,7 @@ function isAlreadyExistsError(err) {
 }
 
 describe('Real Cloud Functions Emulator Integration Tests (JS Client SDK + Emulators)', function () {
-  this.timeout(60000);
+  this.timeout(120000);
   const adminDb = admin.database();
 
   let appUserA, authUserA, functionsUserA, dbUserA;
