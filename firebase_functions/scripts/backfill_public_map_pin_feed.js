@@ -161,6 +161,9 @@ async function runCli() {
     }
   }
 
+  if (admin.apps.length && !admin.app().options.databaseURL) {
+    await admin.app().delete();
+  }
   if (!admin.apps.length) {
     admin.initializeApp({
       projectId,

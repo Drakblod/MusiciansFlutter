@@ -100,6 +100,9 @@ async function runBackfillCoordinates(options = {}) {
 
   let db = options.db;
   if (!db) {
+    if (admin.apps.length && !admin.app().options.databaseURL) {
+      await admin.app().delete();
+    }
     if (!admin.apps.length) {
       admin.initializeApp({
         projectId: projectId,
