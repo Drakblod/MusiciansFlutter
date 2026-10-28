@@ -1,3 +1,4 @@
+import '../services/location_service.dart';
 import 'package:flutter/material.dart';
 import '../models/sub_request.dart';
 import '../views/gig_map_page.dart' show MapEventType, MapEventTypeHelper, MapCategory;
@@ -17,6 +18,8 @@ class MapPinDetails {
   final String? audioTrackInfo;
   final String? audioSnippetUrl;
   final bool hasUsableAudio;
+  final List<String> positionsNeeded;
+  final String? locationDisplay;
 
   const MapPinDetails({
     required this.id,
@@ -32,23 +35,31 @@ class MapPinDetails {
     this.audioTrackInfo,
     this.audioSnippetUrl,
     required this.hasUsableAudio,
+    this.positionsNeeded = const [],
+    this.locationDisplay,
   });
 }
 
 /// Canonical presentation resolver for Map View pins.
 /// Ensures consistent field resolution and strict backward compatibility with legacy records.
-MapPinDetails resolveMapPinDetails(SubRequest gig) {
+MapPinDetails resolveMapPinDetails(SubRequest gig, {List<SubRequest>? groupedGigs}) {
   final id = gig.canonicalTargetId ?? '';
 
-  // 1. Band Name: Prefer canonical bandName, then legacy extraFields, fallback to 'Band'
-  String resolvedBandName = gig.bandName?.trim() ?? '';
-  if (resolvedBandName.isEmpty) {
-    resolvedBandName = gig.extraFields['bandName']?.toString().trim() ??
-        gig.extraFields['BandName']?.toString().trim() ??
-        '';
-  }
-  if (resolvedBandName.isEmpty) {
-    resolvedBandName = 'Band';
+  // 1. Band Name / Title: For event projections, prefer eventTitle, then bandName, then 'Event'
+  final isEventProj = gig.extraFields['isEventProjection'] == true;
+  String resolvedBandName = '';
+  if (isEventProj && gig.eventTitle != null && gig.eventTitle!.trim().isNotEmpty) {
+    resolvedBandName = gig.eventTitle!.trim();
+  } else {
+    resolvedBandName = gig.bandName?.trim() ?? '';
+    if (resolvedBandName.isEmpty) {
+      resolvedBandName = gig.extraFields['bandName']?.toString().trim() ??
+          gig.extraFields['BandName']?.toString().trim() ??
+          '';
+    }
+    if (resolvedBandName.isEmpty) {
+      resolvedBandName = isEventProj ? 'Event' : 'Band';
+    }
   }
 
   // 2. Genres / Band Types: Prefer canonical genre in extraFields, then style, fallback to null
@@ -58,6 +69,12 @@ MapPinDetails resolveMapPinDetails(SubRequest gig) {
       gig.style?.trim();
   if (resolvedGenre != null && resolvedGenre.isEmpty) {
     resolvedGenre = null;
+  }
+  if (isEventProj && (resolvedGenre == null || resolvedGenre.isEmpty)) {
+    final org = gig.bandName?.trim() ?? gig.extraFields['organizerName']?.toString().trim();
+    if (org != null && org.isNotEmpty && org != resolvedBandName) {
+      resolvedGenre = org;
+    }
   }
 
   // 3. Type resolution and display mapping
@@ -85,7 +102,7 @@ MapPinDetails resolveMapPinDetails(SubRequest gig) {
     typeDisplayLabel = 'Jam Session';
   } else if (rawType.toLowerCase() == 'gig promo' || eventType == MapEventType.gigPromo) {
     typeDisplayLabel = 'Gig Promo';
-  } else if (rawType.toLowerCase() == 'new member' || eventType == MapEventType.newMember) {
+  } else if (gig.isNewMember || rawType.toLowerCase() == 'new member' || eventType == MapEventType.newMember) {
     typeDisplayLabel = 'New Member';
   } else if (rawType.toLowerCase() == 'subs' || rawType.toLowerCase() == 'substitute' || eventType == MapEventType.subs) {
     typeDisplayLabel = 'Substitute';
@@ -159,9 +176,37 @@ MapPinDetails resolveMapPinDetails(SubRequest gig) {
           audioUrl.startsWith('/') ||
           audioUrl.contains('.'));
 
+  final List<String> positionsNeeded = [];
+  if (groupedGigs != null && groupedGigs.isNotEmpty) {
+    final seen = <String>{};
+    for (final m in groupedGigs) {
+      final part = (m.voicePart != null && m.voicePart!.trim().isNotEmpty)
+          ? m.voicePart!.trim()
+          : (m.role ?? m.requestType ?? 'Musician');
+      if (seen.add(part.toLowerCase())) {
+        positionsNeeded.add(part);
+      }
+    }
+  } else if (gig.voicePart != null && gig.voicePart!.trim().isNotEmpty) {
+    positionsNeeded.add(gig.voicePart!.trim());
+  }
+
+  String? resolvedLocationDisplay;
+  if (gig.isNewMember) {
+    final rawLoc = gig.location ?? gig.venue ?? '';
+    final city = gig.city ?? LocationService.extractCityLabel(rawLoc);
+    resolvedLocationDisplay = city.isNotEmpty ? city : 'Stockholm';
+  } else {
+    final rawLoc = gig.location ?? gig.venue;
+    if (rawLoc != null && rawLoc.trim().isNotEmpty) {
+      resolvedLocationDisplay = rawLoc.trim();
+    }
+  }
+
   return MapPinDetails(
     id: id,
     bandName: resolvedBandName,
+    locationDisplay: resolvedLocationDisplay,
     genre: resolvedGenre,
     typeDisplayLabel: typeDisplayLabel,
     typeColor: typeColor,
@@ -173,6 +218,7 @@ MapPinDetails resolveMapPinDetails(SubRequest gig) {
     audioTrackInfo: audioTrackInfo,
     audioSnippetUrl: audioUrl,
     hasUsableAudio: hasUsableAudio,
+    positionsNeeded: positionsNeeded,
   );
 }
 

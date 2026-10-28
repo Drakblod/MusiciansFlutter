@@ -5,11 +5,16 @@ import '../providers/app_state.dart';
 import '../theme/app_theme.dart';
 import '../utils/map_pin_details_helper.dart';
 import 'audio_snippet_player.dart';
+import '../views/event_details_page.dart';
+import '../views/public_event_details_screen.dart';
+import '../models/public_calendar_event.dart';
+import '../models/band_event.dart';
 
 /// Card widget displaying the details of a focused or selected Map View pin.
 /// Strictly follows the approved 6-item information order and labels.
 class MapPinDetailsCard extends StatelessWidget {
   final SubRequest gig;
+  final List<SubRequest>? groupedGigs;
   final AppState appState;
   final VoidCallback? onClose;
   final String? focusedTargetId;
@@ -20,6 +25,7 @@ class MapPinDetailsCard extends StatelessWidget {
   const MapPinDetailsCard({
     super.key,
     required this.gig,
+    this.groupedGigs,
     required this.appState,
     this.onClose,
     this.focusedTargetId,
@@ -30,9 +36,10 @@ class MapPinDetailsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final details = resolveMapPinDetails(gig);
+    final details = resolveMapPinDetails(gig, groupedGigs: groupedGigs);
     final currentUserId = appState.currentUserId;
-    final isOwner = currentUserId != null &&
+    final isEventProjection = gig.extraFields['isEventProjection'] == true;
+    final isOwner = !isEventProjection && currentUserId != null &&
         (gig.creatorUserId == currentUserId ||
             gig.userId == currentUserId ||
             gig.extraFields['creatorUserId'] == currentUserId ||
@@ -172,6 +179,46 @@ class MapPinDetailsCard extends StatelessWidget {
               ],
             ),
 
+            // Positions Needed (cleanly listed for single or multi-slot requests)
+            if (details.positionsNeeded.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 6,
+                runSpacing: 4,
+                children: [
+                  Text(
+                    details.positionsNeeded.length > 1
+                        ? 'Positions Needed (${details.positionsNeeded.length}):'
+                        : 'Position Needed:',
+                    style: GoogleFonts.inter(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white60,
+                    ),
+                  ),
+                  ...details.positionsNeeded.map(
+                    (pos) => Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                      decoration: BoxDecoration(
+                        color: details.typeColor.withOpacity(0.18),
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: details.typeColor.withOpacity(0.5), width: 1),
+                      ),
+                      child: Text(
+                        pos,
+                        style: GoogleFonts.inter(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+
             // 3. Date & Time (visible label: "Date & Time", cleanly omitted if not available)
             if (details.dateTimeDisplay != null) ...[
               const SizedBox(height: 8),
@@ -193,6 +240,29 @@ class MapPinDetailsCard extends StatelessWidget {
                     style: GoogleFonts.inter(
                       fontSize: 12.5,
                       color: Colors.white70,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+
+            // Location display: displays city label for New Member, exact venue for others
+            if (details.locationDisplay != null && details.locationDisplay!.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  const Icon(Icons.location_on, size: 14, color: Colors.white60),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      details.locationDisplay!,
+                      style: GoogleFonts.inter(
+                        fontSize: 12.5,
+                        color: Colors.white70,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ],
@@ -289,7 +359,81 @@ class MapPinDetailsCard extends StatelessWidget {
               ),
             ],
 
-            // 7. Owner actions: Edit & Delete Pin
+            // 7. Event projection navigation action
+            if (isEventProjection) ...[
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    final source = gig.extraFields['eventSource']?.toString();
+                    if (source == 'public_calendar') {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => PublicEventDetailsScreen(
+                            event: PublicCalendarEvent(
+                              id: gig.eventId ?? gig.id ?? '',
+                              title: gig.eventTitle ?? gig.eventTitle ?? '',
+                              shortDescription: '',
+                              description: gig.description ?? '',
+                              eventType: PublicEventType.liveGig,
+                              organizerName: gig.bandName ?? '',
+                              venueName: gig.location ?? '',
+                              city: gig.city ?? '',
+                              address: '',
+                              startDateTime: DateTime.tryParse(gig.extraFields['startDateTime']?.toString() ?? '') ?? DateTime.now(),
+                              endDateTime: DateTime.tryParse(gig.extraFields['endDateTime']?.toString() ?? '') ?? DateTime.now(),
+                            ),
+                          ),
+                        ),
+                      );
+                    } else if (gig.bandId != null && gig.eventId != null) {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => EventDetailsPage(
+                            bandId: gig.bandId!,
+                            eventId: gig.eventId!,
+                            initialEvent: BandEvent(
+                              id: gig.eventId!,
+                              title: gig.eventTitle ?? gig.eventTitle ?? '',
+                              description: gig.description ?? '',
+                              eventType: gig.requestType ?? 'Event',
+                              location: gig.location ?? '',
+                              startDateTime: gig.extraFields['startDateTime']?.toString() ?? '',
+                              endDateTime: gig.extraFields['endDateTime']?.toString() ?? '',
+                              additionalNotes: '',
+                              createdBy: gig.creatorUserId ?? '',
+                              createdAt: gig.createdAt ?? 0,
+                              updatedAt: gig.createdAt ?? 0,
+                              requireResponse: true,
+                            ),
+                          ),
+                        ),
+                      );
+                    }
+                  },
+                  icon: const Icon(Icons.event_available_rounded, size: 16, color: Colors.white),
+                  label: Text(
+                    gig.extraFields['eventSource'] == 'public_calendar'
+                        ? 'View Public Event'
+                        : 'View Event Details',
+                    style: GoogleFonts.inter(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.primaryAccent,
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+              ),
+            ],
+            // 8. Owner actions: Edit & Delete Pin
             if (isOwner && (onEditPin != null || onDeletePin != null)) ...[
               const SizedBox(height: 12),
               Row(

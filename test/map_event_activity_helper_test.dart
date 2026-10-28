@@ -339,4 +339,157 @@ void main() {
       expect(gig.canonicalTargetId, isNull);
     });
   });
+
+  group('MAP-VIEW-FEED-02: Deterministic Client Visibility Expiry', () {
+    final start = DateTime.utc(2026, 11, 25, 19, 0);
+    final end = DateTime.utc(2026, 11, 25, 21, 0);
+
+    final eventGig = SubRequest(
+      id: 'event:public:evt_expiry_1',
+      eventTitle: 'Live Jazz Showcase',
+      date: '2026-11-25',
+      startTime: '19:00',
+      endTime: '21:00',
+      extraFields: {
+        'isEventProjection': true,
+        'eventType': 'liveGig',
+        'isLive': true,
+        'startDateTime': '2026-11-25T19:00:00Z',
+        'endDateTime': '2026-11-25T21:00:00Z',
+      },
+    );
+
+    test('1. future Event -> visible, not blinking', () {
+      final beforeStart = DateTime.utc(2026, 11, 25, 18, 0, 0);
+
+      // Future event is visible on the map
+      expect(isMapEventVisible(eventGig, now: beforeStart), isTrue);
+      expect(isEventExpired(eventGig, now: beforeStart), isFalse);
+
+      // But static, not blinking
+      expect(isMapEventCurrentlyActive(eventGig, now: beforeStart), isFalse);
+    });
+
+    test('2. exact start -> visible and blinking when eligible', () {
+      final exactStart = DateTime.utc(2026, 11, 25, 19, 0, 0);
+
+      // Visible
+      expect(isMapEventVisible(eventGig, now: exactStart), isTrue);
+      expect(isEventExpired(eventGig, now: exactStart), isFalse);
+
+      // Blinking (start <= now < end)
+      expect(isMapEventCurrentlyActive(eventGig, now: exactStart), isTrue);
+      expect(isMapItemActive(type: MapEventType.gigConcert, startDateTime: start, endDateTime: end, now: exactStart), isTrue);
+    });
+
+    test('3. immediately before end -> visible and blinking', () {
+      final immediatelyBefore = DateTime.utc(2026, 11, 25, 20, 59, 59);
+
+      // Visible
+      expect(isMapEventVisible(eventGig, now: immediatelyBefore), isTrue);
+      expect(isEventExpired(eventGig, now: immediatelyBefore), isFalse);
+
+      // Blinking
+      expect(isMapEventCurrentlyActive(eventGig, now: immediatelyBefore), isTrue);
+    });
+
+    test('4. exact end -> absent', () {
+      final exactEnd = DateTime.utc(2026, 11, 25, 21, 0, 0);
+
+      // Absent from map (expired)
+      expect(isMapEventVisible(eventGig, now: exactEnd), isFalse);
+      expect(isEventExpired(eventGig, now: exactEnd), isTrue);
+
+      // Not blinking
+      expect(isMapEventCurrentlyActive(eventGig, now: exactEnd), isFalse);
+    });
+
+    test('5. past Event -> absent', () {
+      final pastNow = DateTime.utc(2026, 11, 25, 21, 15, 0);
+
+      // Absent from map
+      expect(isMapEventVisible(eventGig, now: pastNow), isFalse);
+      expect(isEventExpired(eventGig, now: pastNow), isTrue);
+
+      // Not blinking
+      expect(isMapEventCurrentlyActive(eventGig, now: pastNow), isFalse);
+    });
+
+    test('6. future non-Gig event -> visible and static', () {
+      final nonGigEvent = SubRequest(
+        id: 'event:private:band_1:evt_jam_1',
+        eventTitle: 'Acoustic Jam Session',
+        date: '2026-11-25',
+        startTime: '19:00',
+        endTime: '21:00',
+        extraFields: {
+          'isEventProjection': true,
+          'eventType': 'jamSession',
+          'startDateTime': '2026-11-25T19:00:00Z',
+          'endDateTime': '2026-11-25T21:00:00Z',
+        },
+      );
+
+      final beforeStart = DateTime.utc(2026, 11, 25, 18, 0, 0);
+      final duringTime = DateTime.utc(2026, 11, 25, 20, 0, 0);
+
+      // Visible before start and during
+      expect(isMapEventVisible(nonGigEvent, now: beforeStart), isTrue);
+      expect(isMapEventVisible(nonGigEvent, now: duringTime), isTrue);
+
+      // Strictly static (never blinking, because Jam Session is not eligible)
+      expect(isMapEventCurrentlyActive(nonGigEvent, now: beforeStart), isFalse);
+      expect(isMapEventCurrentlyActive(nonGigEvent, now: duringTime), isFalse);
+    });
+
+    test('7. missing end -> deterministic documented behavior, never blinking', () {
+      final noEndGig = SubRequest(
+        id: 'event:public:evt_no_end',
+        eventTitle: 'Concert Missing End',
+        date: '2026-11-25',
+        startTime: '19:00',
+        extraFields: {
+          'isEventProjection': true,
+          'eventType': 'liveGig',
+          'isLive': true,
+          'startDateTime': '2026-11-25T19:00:00Z',
+        },
+      );
+
+      final oneSecondBefore = DateTime.utc(2026, 11, 25, 18, 59, 59);
+      final exactStart = DateTime.utc(2026, 11, 25, 19, 0, 0);
+      final oneSecondAfter = DateTime.utc(2026, 11, 25, 19, 0, 1);
+
+      // 1. One second before start: visible, not active
+      expect(isMapEventVisible(noEndGig, now: oneSecondBefore), isTrue);
+      expect(isEventExpired(noEndGig, now: oneSecondBefore), isFalse);
+      expect(isMapEventCurrentlyActive(noEndGig, now: oneSecondBefore), isFalse);
+
+      // 2. Exact start: not visible, not active
+      expect(isMapEventVisible(noEndGig, now: exactStart), isFalse);
+      expect(isEventExpired(noEndGig, now: exactStart), isTrue);
+      expect(isMapEventCurrentlyActive(noEndGig, now: exactStart), isFalse);
+
+      // 3. One second after start: not visible, not active
+      expect(isMapEventVisible(noEndGig, now: oneSecondAfter), isFalse);
+      expect(isEventExpired(noEndGig, now: oneSecondAfter), isTrue);
+      expect(isMapEventCurrentlyActive(noEndGig, now: oneSecondAfter), isFalse);
+    });
+
+    test('8. findNearestEventBoundary calculates exact upcoming transition point', () {
+      final boundary = findNearestEventBoundary(
+        [eventGig],
+        now: DateTime.utc(2026, 11, 25, 18, 0, 0),
+      );
+      // Next transition is start at 19:00
+      expect(boundary, equals(DateTime.utc(2026, 11, 25, 19, 0, 0)));
+
+      final nextBoundary = findNearestEventBoundary(
+        [eventGig],
+        now: DateTime.utc(2026, 11, 25, 19, 30, 0),
+      );
+      // Next transition is end at 21:00
+      expect(nextBoundary, equals(DateTime.utc(2026, 11, 25, 21, 0, 0)));
+    });
+  });
 }

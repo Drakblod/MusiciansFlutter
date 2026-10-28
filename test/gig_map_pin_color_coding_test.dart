@@ -9,14 +9,15 @@ void main() {
       final gig = SubRequest(
         role: 'Rock Guitarist Needed',
         requestType: 'Gig',
-        description: 'Live concert show this Friday evening',
+        description: 'Live gig performance this Friday evening',
+        extraFields: {'eventType': 'gigConcert'},
       );
       final type = MapEventTypeHelper.getEventType(gig);
       expect(type, MapEventType.gigConcert);
       expect(MapEventTypeHelper.getCategory(type), MapCategory.music);
-      expect(MapEventTypeHelper.getLabel(type), 'Gig / Concert');
+      expect(MapEventTypeHelper.getLabel(type), 'Gig');
       expect(MapEventTypeHelper.getColor(type), const Color(0xFFF97316));
-      expect(MapEventTypeHelper.getIcon(type), Icons.stadium_rounded);
+      expect(MapEventTypeHelper.getIcon(type), Icons.music_note_rounded);
     });
 
     test('2. Category Music: Rehearsal is Röd (#EF4444)', () {
@@ -30,7 +31,7 @@ void main() {
       expect(MapEventTypeHelper.getCategory(type), MapCategory.music);
       expect(MapEventTypeHelper.getLabel(type), 'Rehearsal');
       expect(MapEventTypeHelper.getColor(type), const Color(0xFFEF4444));
-      expect(MapEventTypeHelper.getIcon(type), Icons.music_note_rounded);
+      expect(MapEventTypeHelper.getIcon(type), Icons.groups_rounded);
     });
 
     test('3. Category Music: Jam Session is Turkos (#06B6D4)', () {

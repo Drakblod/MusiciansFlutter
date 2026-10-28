@@ -4,6 +4,12 @@ const { onValueCreated, onValueWritten } = require('firebase-functions/v2/databa
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const logger = require('firebase-functions/logger');
 const crypto = require('crypto');
+const {
+  buildEventProjections,
+  getAuthorizedUserIdsForBandEvent,
+  calculateReconciliationDiff,
+  buildProjectionIndexKey,
+} = require('./event_projection');
 if (!admin.apps.length) {
   admin.initializeApp();
 }
@@ -327,6 +333,92 @@ exports.onBandEventCreated = functions.region(databaseTriggerRegion).database
       return null;
     }
   });
+
+/**
+ * MAP-VIEW-FEED-02:
+ * Synchronizes private band event projections with atomic index-driven reconciliation.
+ */
+exports.onBandEventWritten = functions.region(databaseTriggerRegion).database
+  .ref('/Bands/{bandId}/Events/{eventId}')
+  .onWrite(async (change, context) => {
+    const bandId = context.params.bandId;
+    const eventId = context.params.eventId;
+    const db = admin.database();
+    const sourceKey = `band:${bandId}:${eventId}`;
+
+    try {
+      const prevIndexSnap = await db.ref(`/mapEventProjectionIndex/${sourceKey}`).once('value');
+      const prevIndex = prevIndexSnap.val() || null;
+
+      let bandName = 'Band';
+      let bandData = { Members_band: {} };
+      try {
+        const bandSnap = await db.ref(`/Bands/${bandId}`).once('value');
+        if (bandSnap.exists() && bandSnap.val()) {
+          const bVal = bandSnap.val();
+          bandName = String(bVal.Name || bVal.name || 'Band').trim();
+          bandData = bVal;
+        }
+      } catch (_) {}
+
+      const eventData = change.after.exists() ? change.after.val() : null;
+
+      const { updates } = calculateReconciliationDiff({
+        source: 'private_band',
+        eventId,
+        bandId,
+        bandName,
+        bandData,
+        eventData,
+        prevIndex,
+      });
+
+      if (Object.keys(updates).length > 0) {
+        await db.ref().update(updates);
+      }
+    } catch (err) {
+      console.error(`[onBandEventWritten] Error reconciling event projections for ${sourceKey}: ${err.message}`);
+    }
+    return null;
+  });
+
+/**
+ * MAP-VIEW-FEED-02:
+ * Synchronizes public calendar event projections with atomic index-driven reconciliation.
+ */
+exports.onPublicEventWritten = functions.region(databaseTriggerRegion).database
+  .ref('/PublicEvents/{eventId}')
+  .onWrite(async (change, context) => {
+    const eventId = context.params.eventId;
+    const db = admin.database();
+    const sourceKey = `public:${eventId}`;
+
+    try {
+      const prevIndexSnap = await db.ref(`/mapEventProjectionIndex/${sourceKey}`).once('value');
+      const prevIndex = prevIndexSnap.val() || null;
+
+      const eventData = change.after.exists() ? change.after.val() : null;
+      const organizerName = eventData ? (eventData.organizerName || '') : '';
+
+      const { updates } = calculateReconciliationDiff({
+        source: 'public_calendar',
+        eventId,
+        bandId: null,
+        bandName: organizerName,
+        bandData: null,
+        eventData,
+        prevIndex,
+      });
+
+      if (Object.keys(updates).length > 0) {
+        await db.ref().update(updates);
+      }
+    } catch (err) {
+      console.error(`[onPublicEventWritten] Error reconciling public event projections for ${sourceKey}: ${err.message}`);
+    }
+    return null;
+  });
+
 
 /**
  * Triggered when a new substitute request is created under /SubRequests/{subRequestId}.
@@ -749,6 +841,195 @@ exports.onSubRequestGroupPublished = onValueCreated({
   }
 });
 
+
+/**
+ * Taxonomy of SubRequest categories for least-privilege feed distribution.
+ */
+const SUBREQUEST_KIND = {
+  DIRECT_INVITATION: 'direct_invitation',
+  FAVORITES_ONLY: 'favorites_only',
+  PUBLIC_GIG: 'public_gig',
+  EVENT_SUBSTITUTE_PUBLIC: 'event_substitute_public',
+  PROMO_MAP_PIN: 'promo_map_pin',
+};
+
+/**
+ * Classifies a subrequest item into its security kind.
+ */
+function classifySubRequest(data) {
+  if (!data) return SUBREQUEST_KIND.PUBLIC_GIG;
+
+  const mode = data.NotificationMode || data.notificationMode;
+  if (mode === 'map_pin') {
+    return SUBREQUEST_KIND.PROMO_MAP_PIN;
+  }
+
+  const rawType = (data.Type || data.type || '').toString().toLowerCase();
+  const searchSource = (data.SearchSource || data.searchSource || '').toString().toLowerCase();
+  const isFavoritesOnly = data.IsFavoritesOnly === true || data.isFavoritesOnly === true || searchSource === 'favorites';
+
+  if (rawType === 'direct_invitation' || rawType === 'direct') {
+    return SUBREQUEST_KIND.DIRECT_INVITATION;
+  }
+
+  if (isFavoritesOnly) {
+    return SUBREQUEST_KIND.FAVORITES_ONLY;
+  }
+
+  const targetUserIds = data.TargetUserIds || data.targetUserIds;
+  if (Array.isArray(targetUserIds) && targetUserIds.length > 0 && targetUserIds[0]) {
+    return SUBREQUEST_KIND.DIRECT_INVITATION;
+  }
+
+  const bandId = data.BandId || data.bandId;
+  const eventId = data.EventId || data.eventId;
+  if (bandId && eventId && bandId !== 'freelance' && bandId !== 'standalone') {
+    return SUBREQUEST_KIND.EVENT_SUBSTITUTE_PUBLIC;
+  }
+
+  return SUBREQUEST_KIND.PUBLIC_GIG;
+}
+
+/**
+ * Normalized classifier recognizing all New Member representation variants
+ * without misclassifying Substitute, Other, direct invitations, or map pins.
+ */
+function isNewMemberRequest(data) {
+  if (!data || typeof data !== 'object') return false;
+
+  const mode = (data.NotificationMode || data.notificationMode || '').toString().trim().toLowerCase();
+  if (mode === 'map_pin') return false;
+
+  const rawReqType = (data.RequestType || data.requestType || '').toString().trim();
+  if (rawReqType) {
+    const cleanReqType = rawReqType.toLowerCase().replace(/[\s_-]+/g, '');
+    if (cleanReqType === 'newmember') return true;
+    if (cleanReqType === 'substitute' || cleanReqType === 'sub' || cleanReqType === 'other') return false;
+  }
+
+  const rawRole = (data.Role || data.role || '').toString().trim();
+  if (rawRole) {
+    const cleanRole = rawRole.toLowerCase().replace(/[\s_-]+/g, '');
+    if (cleanRole === 'newmember') return true;
+  }
+
+  const extra = data.extraFields && typeof data.extraFields === 'object' ? data.extraFields : {};
+  const rawEventType = (data.EventType || data.eventType || extra.EventType || extra.eventType || '').toString().trim();
+  if (rawEventType) {
+    const cleanEventType = rawEventType.toLowerCase().replace(/[\s_-]+/g, '');
+    if (cleanEventType === 'newmember') return true;
+  }
+
+  return false;
+}
+
+/**
+ * Extracts a city label from a full address string by stripping street numbers and street names.
+ */
+function extractCityLabel(locationStr) {
+  if (!locationStr) return '';
+  const str = locationStr.toString().trim();
+  if (!str) return '';
+
+  if (str.includes(',')) {
+    const parts = str.split(',').map((p) => p.trim()).filter(Boolean);
+    for (let i = parts.length - 1; i >= 0; i--) {
+      const part = parts[i];
+      if ((part.toLowerCase() === 'sweden' || part.toLowerCase() === 'sverige') && i > 0) {
+        continue;
+      }
+      const cleaned = part.replace(/^\d{3}\s?\d{2}\s+/, '').trim();
+      if (cleaned && !/^\d+$/.test(cleaned)) {
+        return cleaned;
+      }
+    }
+    return parts[parts.length - 1];
+  }
+
+  const noHouseNum = str.replace(/^[A-Za-zåäöÅÄÖ\s\.\-]+\s+\d+[A-Za-z]?\s+/, '').trim();
+  if (noHouseNum && !/^\d+$/.test(noHouseNum)) return noHouseNum;
+
+  return str;
+}
+
+/**
+ * Builds a sanitized, leak-free feed item containing only displayable fields.
+ */
+function buildSanitizedFeedItem(subRequest) {
+  if (!subRequest) return null;
+
+  const isNewMember = isNewMemberRequest(subRequest);
+  const isCityPrecision = (subRequest.LocationPrecision || subRequest.locationPrecision) === 'city' || isNewMember;
+
+  let lat = subRequest.Latitude ?? subRequest.latitude ?? null;
+  let lng = subRequest.Longitude ?? subRequest.longitude ?? null;
+  let locationLabel = (subRequest.Location || subRequest.location || '').toString().trim();
+
+  let cityLabel = (subRequest.City || subRequest.city || '').toString().trim();
+  if (!cityLabel && locationLabel) {
+    cityLabel = extractCityLabel(locationLabel);
+  }
+
+  if (isNewMember) {
+    // Coarsen coordinates to 1 decimal place (~11 km lat, ~6 km lng uncertainty)
+    // to strictly protect residential privacy
+    if (lat !== null && lng !== null) {
+      lat = Number(Number(lat).toFixed(1));
+      lng = Number(Number(lng).toFixed(1));
+    }
+    // Location label is strictly coarsened to city label only; never expose street addresses or house numbers
+    locationLabel = cityLabel || 'Stockholm';
+  } else if (isCityPrecision) {
+    if (lat !== null && lng !== null) {
+      lat = Number(Number(lat).toFixed(1));
+      lng = Number(Number(lng).toFixed(1));
+    }
+    if (cityLabel) {
+      locationLabel = cityLabel;
+    }
+  }
+
+  return {
+    id: subRequest.SubRequestId || subRequest.subRequestId || subRequest.id || subRequest.slotId || '',
+    subRequestId: subRequest.SubRequestId || subRequest.subRequestId || subRequest.id || subRequest.slotId || '',
+    slotId: subRequest.SlotId || subRequest.slotId || subRequest.SubRequestId || subRequest.subRequestId || subRequest.id || '',
+    requestGroupId: subRequest.RequestGroupId || subRequest.requestGroupId || '',
+    publicationId: subRequest.PublicationId || subRequest.publicationId || '',
+    bandId: subRequest.BandId || subRequest.bandId || '',
+    bandName: subRequest.BandName || subRequest.bandName || 'Freelance Gig',
+    eventId: subRequest.EventId || subRequest.eventId || '',
+    eventTitle: subRequest.EventTitle || subRequest.eventTitle || '',
+    voicePart: subRequest.VoicePart || subRequest.voicePart || subRequest.role || subRequest.Role || '',
+    date: subRequest.Date || subRequest.date || '',
+    time: subRequest.Time || subRequest.time || '',
+    location: locationLabel,
+    city: cityLabel || (isNewMember ? locationLabel : ''),
+    latitude: lat,
+    longitude: lng,
+    locationPrecision: isCityPrecision ? 'city' : (subRequest.LocationPrecision || subRequest.locationPrecision || 'exact'),
+    payAmount: subRequest.PayAmount ?? subRequest.payAmount ?? null,
+    payAmountMinor: subRequest.PayAmountMinor ?? subRequest.payAmountMinor ?? null,
+    currency: subRequest.Currency || subRequest.currency || 'SEK',
+    isPaid: subRequest.IsPaid ?? subRequest.isPaid ?? false,
+    notes: subRequest.Notes || subRequest.notes || subRequest.Description || subRequest.description || '',
+    genre: subRequest.Genre || subRequest.genre || '',
+    status: subRequest.Status || subRequest.status || 'published',
+    createdAt: subRequest.CreatedAt || subRequest.createdAt || Date.now(),
+    updatedAt: subRequest.UpdatedAt || subRequest.updatedAt || Date.now(),
+    creatorUserId: subRequest.CreatorUserId || subRequest.creatorUserId || subRequest.UserId || subRequest.userId || '',
+    creatorName: subRequest.CreatorName || subRequest.creatorName || '',
+    searchSource: subRequest.SearchSource || subRequest.searchSource || 'search_all',
+    type: subRequest.Type || subRequest.type || 'sub_request',
+    isFavoritesOnly: subRequest.IsFavoritesOnly === true || subRequest.isFavoritesOnly === true || (subRequest.SearchSource || subRequest.searchSource) === 'favorites',
+  };
+}
+
+exports.SUBREQUEST_KIND = SUBREQUEST_KIND;
+exports.classifySubRequest = classifySubRequest;
+exports.buildSanitizedFeedItem = buildSanitizedFeedItem;
+exports.isNewMemberRequest = isNewMemberRequest;
+exports.extractCityLabel = extractCityLabel;
+
 /**
  * Production callable entrypoint to publish a grouped substitute request.
  * Authorized for Band Leader/Admin or event creator.
@@ -808,20 +1089,24 @@ exports.publishSubRequestGroup = onCall({ region: 'europe-west1' }, async (reque
   const updates = {};
   const now = Date.now();
 
-  // 3. Write each canonical SubRequest
+  // 3. Write each canonical SubRequest & Creator feed
   slots.forEach((slot) => {
     const slotKey = slot.subRequestId || slot.slotId;
-    updates[`/SubRequests/${slotKey}`] = {
+    const canonicalItem = {
       ...slot,
       SubRequestId: slotKey,
       SlotId: slot.slotId || slotKey,
       RequestGroupId: requestGroupId,
       PublicationId: publicationId,
-      NotificationMode: 'grouped',
+      NotificationMode: slot.NotificationMode || slot.notificationMode || 'grouped',
       CreatorUserId: callerId,
       Status: 'published',
-      CreatedAt: slot.createdAt || now,
+      CreatedAt: slot.createdAt || slot.CreatedAt || now,
+      UpdatedAt: now,
     };
+    updates[`/SubRequests/${slotKey}`] = canonicalItem;
+    updates[`/creatorSubRequestFeed/${callerId}/${slotKey}`] = buildSanitizedFeedItem(canonicalItem);
+    updates[`/users/${callerId}/SubRequests/${slotKey}`] = canonicalItem;
   });
 
   // 4. Write publication manifest
@@ -846,14 +1131,11 @@ exports.publishSubRequestGroup = onCall({ region: 'europe-west1' }, async (reque
     })),
   };
 
-  // 5. Populate audience and feed indexes across users
-  const usersSnap = await db.ref('/users').once('value');
-  const users = usersSnap.val() || {};
-
   if (callerId) {
     updates[`/creatorSubRequestGroups/${callerId}/${requestGroupId}`] = true;
   }
 
+  // 5. Populate feeds according to least-privilege security model
   function matchesInstrument(requested, userSkills) {
     if (!requested || !requested.trim()) return true;
     const nonGeneric = userSkills.filter(s => {
@@ -891,59 +1173,97 @@ exports.publishSubRequestGroup = onCall({ region: 'europe-west1' }, async (reque
     return false;
   }
 
-  Object.keys(users).forEach((userId) => {
-    const userObj = users[userId] || {};
-    const userInfo = userObj.info || {};
-    const userSkills = [];
+  const usersSnap = await db.ref('/users').once('value');
+  const users = usersSnap.val() || {};
 
-    const rawUserType = userInfo.UserType || userInfo.userType || userObj.UserType || userObj.userType || '';
-    if (rawUserType) userSkills.push(rawUserType);
-
-    const rawMain = userInfo.MainInstrument || userInfo.mainInstrument || userObj.MainInstrument || userObj.mainInstrument || '';
-    if (rawMain) {
-      rawMain.split(',').forEach(s => { if (s.trim()) userSkills.push(s.trim()); });
-    }
-
-    const rawInsts = userInfo.Instruments || userInfo.instruments || userObj.Instruments || userObj.instruments || userObj.Instruments_user || [];
-    if (Array.isArray(rawInsts)) {
-      rawInsts.forEach(i => { if (i && typeof i === 'string') userSkills.push(i.trim()); });
-    } else if (typeof rawInsts === 'object') {
-      Object.values(rawInsts).forEach(i => { if (i && typeof i === 'string') userSkills.push(i.trim()); });
-    }
-
-    slots.forEach((slot) => {
-      const slotKey = slot.subRequestId || slot.slotId;
-      const voicePart = slot.voicePart || slot.VoicePart || slot.role || slot.Role || '';
-      const searchSource = slot.searchSource || slot.SearchSource || 'search_all';
-      const rawTargetUserIds = slot.targetUserIds || slot.TargetUserIds || [];
-
-      let isEligible = false;
-      if (searchSource === 'favorites') {
-        // Enforce that target user is genuinely in the caller's favorites list
-        const isVerifiedFavorite = callerFavorites[userId] === true || callerFavorites[userId] === 'true';
-        isEligible = isVerifiedFavorite && (rawTargetUserIds.length === 0 || rawTargetUserIds.includes(userId));
-      } else if (Array.isArray(rawTargetUserIds) && rawTargetUserIds.length > 0) {
-        isEligible = rawTargetUserIds.includes(userId);
-      } else {
-        isEligible = matchesInstrument(voicePart, userSkills);
-      }
-
-      if (isEligible && slotKey) {
-        updates[`/subRequestAudience/${slotKey}/${userId}`] = true;
-        updates[`/userSubRequestFeed/${userId}/${slotKey}`] = {
-          slotId: slot.slotId || slotKey,
-          requestGroupId: requestGroupId,
-          bandName: bandName || 'Freelance Gig',
-          voicePart: slot.voicePart || slot.VoicePart || '',
-          date: slot.date || slot.Date || '',
-          searchSource: searchSource,
-          publishedAt: now,
-        };
-      }
+  for (const slot of slots) {
+    const slotKey = slot.subRequestId || slot.slotId;
+    const sanitizedItem = buildSanitizedFeedItem({
+      ...slot,
+      SubRequestId: slotKey,
+      SlotId: slot.slotId || slotKey,
+      RequestGroupId: requestGroupId,
+      PublicationId: publicationId,
+      CreatorUserId: callerId,
+      Status: 'published',
+      CreatedAt: slot.createdAt || slot.CreatedAt || now,
+      UpdatedAt: now,
     });
-  });
 
-  // Single atomic root multi-location update containing all prerequisites and manifest
+    const kind = classifySubRequest(slot);
+
+    if (kind === SUBREQUEST_KIND.PROMO_MAP_PIN) {
+      // Ordinary music pins stay isolated and never appear in SubRequest feeds
+      continue;
+    }
+
+    const rawTargetUserIds = Array.isArray(slot.targetUserIds || slot.TargetUserIds)
+      ? (slot.targetUserIds || slot.TargetUserIds)
+      : [];
+
+    let eligibleRecipientUids = [];
+
+    if (kind === SUBREQUEST_KIND.PUBLIC_GIG || kind === SUBREQUEST_KIND.EVENT_SUBSTITUTE_PUBLIC) {
+      // Truly public: readable by all authenticated users
+      updates[`/publicSubRequests/${slotKey}`] = sanitizedItem;
+
+      // Audience indexing for public matching users
+      const voicePart = slot.voicePart || slot.VoicePart || slot.role || slot.Role || '';
+      Object.keys(users).forEach(uid => {
+        if (uid === callerId) return;
+        const userObj = users[uid] || {};
+        const userInfo = userObj.info || {};
+        const userSkills = [];
+        const rawUserType = userInfo.UserType || userInfo.userType || userObj.UserType || userObj.userType || '';
+        if (rawUserType) userSkills.push(rawUserType);
+        const rawMain = userInfo.MainInstrument || userInfo.mainInstrument || userObj.MainInstrument || userObj.mainInstrument || '';
+        if (rawMain) {
+          rawMain.split(',').forEach(s => { if (s.trim()) userSkills.push(s.trim()); });
+        }
+        const rawInsts = userInfo.Instruments || userInfo.instruments || userObj.Instruments || userObj.instruments || userObj.Instruments_user || [];
+        if (Array.isArray(rawInsts)) {
+          rawInsts.forEach(i => { if (i && typeof i === 'string') userSkills.push(i.trim()); });
+        } else if (typeof rawInsts === 'object') {
+          Object.values(rawInsts).forEach(i => { if (i && typeof i === 'string') userSkills.push(i.trim()); });
+        }
+        if (matchesInstrument(voicePart, userSkills)) {
+          eligibleRecipientUids.push(uid);
+        }
+      });
+    } else if (kind === SUBREQUEST_KIND.FAVORITES_ONLY) {
+      // Public feed entry must be removed if converted to private
+      updates[`/publicSubRequests/${slotKey}`] = null;
+
+      if (rawTargetUserIds.length > 0) {
+        eligibleRecipientUids = rawTargetUserIds.filter(uid => callerFavorites[uid] === true || callerFavorites[uid] === 'true');
+      } else {
+        eligibleRecipientUids = Object.keys(callerFavorites).filter(uid => callerFavorites[uid] === true || callerFavorites[uid] === 'true');
+      }
+    } else {
+      // Direct invitation
+      updates[`/publicSubRequests/${slotKey}`] = null;
+      eligibleRecipientUids = rawTargetUserIds;
+    }
+
+    // Clean up previous audience members who are no longer eligible
+    const existingAudienceSnap = await db.ref(`/subRequestAudience/${slotKey}`).once('value');
+    const existingAudience = existingAudienceSnap.val() || {};
+    for (const oldUid of Object.keys(existingAudience)) {
+      if (!eligibleRecipientUids.includes(oldUid)) {
+        updates[`/userSubRequestFeed/${oldUid}/${slotKey}`] = null;
+        updates[`/subRequestAudience/${slotKey}/${oldUid}`] = null;
+      }
+    }
+
+    for (const targetUid of eligibleRecipientUids) {
+      if (targetUid && targetUid !== callerId) {
+        updates[`/userSubRequestFeed/${targetUid}/${slotKey}`] = sanitizedItem;
+        updates[`/subRequestAudience/${slotKey}/${targetUid}`] = true;
+      }
+    }
+  }
+
+  // Single atomic root multi-location update containing all feeds and manifest
   await db.ref().update(updates);
 
   return {
@@ -954,9 +1274,6 @@ exports.publishSubRequestGroup = onCall({ region: 'europe-west1' }, async (reque
   };
 });
 
-/**
- * Server-owned Cloud Function callable to securely submit a response / application to a SubRequest.
- */
 exports.respondToSubRequest = onCall({ region: 'europe-west1' }, async (request) => {
   if (!request.auth || !request.auth.uid) {
     throw new HttpsError('unauthenticated', 'User must be authenticated.');
@@ -1101,26 +1418,56 @@ exports.deleteSubRequest = onCall({ region: 'europe-west1' }, async (request) =>
 
   const val = subSnap.val() || {};
   const creatorId = val.CreatorUserId || val.creatorUserId || val.UserId || val.userId;
+  const bandId = val.BandId || val.bandId;
+
+  // Authorization check: Caller must be creator OR Band Leader/Admin of the request's band
+  let isAuthorized = (creatorId === callerId);
+  if (!isAuthorized && bandId) {
+    const memberSnap = await db.ref(`/Bands/${bandId}/Members_band/${callerId}`).once('value');
+    if (memberSnap.exists()) {
+      const role = memberSnap.val()?.Role || memberSnap.val()?.role;
+      if (role === 'Leader' || role === 'Admin') {
+        isAuthorized = true;
+      }
+    }
+  }
+
+  if (!isAuthorized) {
+    throw new HttpsError('permission-denied', 'Only creator or Band Leader/Admin can delete this request.');
+  }
+
+  // Fetch all audience recipients for atomic removal
+  const audienceSnap = await db.ref(`subRequestAudience/${subRequestId}`).once('value');
+  const audience = audienceSnap.val() || {};
+  const recipientUids = Object.keys(audience);
+  const extraTargets = Array.isArray(val.TargetUserIds) ? val.TargetUserIds : (Array.isArray(val.targetUserIds) ? val.targetUserIds : []);
+  for (const tUid of extraTargets) {
+    if (tUid && !recipientUids.includes(tUid)) {
+      recipientUids.push(tUid);
+    }
+  }
 
   const updates = {};
-  updates[`SubRequests/${subRequestId}/Status`] = 'cancelled';
-  await db.ref().update(updates);
-
-  await db.ref(`BandEvents/SubRequestResponses/${subRequestId}`).remove();
-  await db.ref(`BandEvents/PublishedSubRequests/${subRequestId}`).remove();
-  await db.ref(`SubRequests/${subRequestId}`).remove();
+  updates[`SubRequests/${subRequestId}`] = null;
+  updates[`publicSubRequests/${subRequestId}`] = null;
+  updates[`publicMapPinFeed/${subRequestId}`] = null;
   if (creatorId) {
-    await db.ref(`users/${creatorId}/SubRequests/${subRequestId}`).remove();
+    updates[`creatorSubRequestFeed/${creatorId}/${subRequestId}`] = null;
+    updates[`users/${creatorId}/SubRequests/${subRequestId}`] = null;
   }
+  for (const rUid of recipientUids) {
+    updates[`userSubRequestFeed/${rUid}/${subRequestId}`] = null;
+  }
+  updates[`subRequestAudience/${subRequestId}`] = null;
+  updates[`BandEvents/PublishedSubRequests/${subRequestId}`] = null;
+  updates[`BandEvents/CancelledSubRequests/${subRequestId}`] = null;
+  updates[`BandEvents/SubRequestResponses/${subRequestId}`] = null;
+
+  await db.ref().update(updates);
 
   return { success: true };
 });
 
-/**
- * Secure server-owned Cloud Function callable to assign a candidate to a SubRequest slot.
- * Enforces authentication, Band Leader/Admin/Creator authorization, candidate eligibility,
- * and performs an atomic RTDB transaction rejecting competing candidates while ensuring idempotent retry.
- */
 exports.assignSubstitute = onCall({ region: 'europe-west1' }, async (request) => {
   const callerId = request.auth?.uid;
   if (!callerId) {
@@ -1282,6 +1629,36 @@ exports.assignSubstitute = onCall({ region: 'europe-west1' }, async (request) =>
     updates[`/users/${callerId}/SubRequests/${subRequestId}/AssignedBy`] = callerId;
   }
 
+  // Remove from public feed & legacy mirror so slot is no longer open
+  updates[`/publicSubRequests/${subRequestId}`] = null;
+  updates[`/BandEvents/PublishedSubRequests/${subRequestId}`] = null;
+
+  // Remove from userSubRequestFeed for all audience recipients
+  const audienceSnap = await db.ref(`/subRequestAudience/${subRequestId}`).once('value');
+  const audience = audienceSnap.val() || {};
+  const recipientUids = Object.keys(audience);
+  const extraTargets = Array.isArray(subReqData.TargetUserIds) ? subReqData.TargetUserIds : (Array.isArray(subReqData.targetUserIds) ? subReqData.targetUserIds : []);
+  for (const tUid of extraTargets) {
+    if (tUid && !recipientUids.includes(tUid)) {
+      recipientUids.push(tUid);
+    }
+  }
+  for (const rUid of recipientUids) {
+    updates[`/userSubRequestFeed/${rUid}/${subRequestId}`] = null;
+  }
+
+  // Update creatorSubRequestFeed with assignment status
+  const actualCreatorId = creatorUserId || callerId;
+  if (actualCreatorId) {
+    updates[`/creatorSubRequestFeed/${actualCreatorId}/${subRequestId}/isSelected`] = true;
+    updates[`/creatorSubRequestFeed/${actualCreatorId}/${subRequestId}/status`] = 'assigned';
+    updates[`/creatorSubRequestFeed/${actualCreatorId}/${subRequestId}/assignedUserId`] = candidateUserId;
+    if (candidateName) {
+      updates[`/creatorSubRequestFeed/${actualCreatorId}/${subRequestId}/assignedUserName`] = candidateName;
+    }
+    updates[`/creatorSubRequestFeed/${actualCreatorId}/${subRequestId}/assignedAt`] = now;
+    updates[`/creatorSubRequestFeed/${actualCreatorId}/${subRequestId}/assignedBy`] = callerId;
+  }
   if (Object.keys(updates).length > 0) {
     await db.ref().update(updates);
   }
@@ -1403,15 +1780,54 @@ exports.revokeSubstituteAssignment = onCall({ region: 'europe-west1' }, async (r
     updates[`/Bands/${targetBandId}/Events/${targetEventId}/substituteAssignments/${actualSlotId}`] = null;
   }
 
-  if (callerId) {
-    updates[`/users/${callerId}/SubRequests/${subRequestId}/IsSelected`] = false;
-    updates[`/users/${callerId}/SubRequests/${subRequestId}/Status`] = 'published';
-    updates[`/users/${callerId}/SubRequests/${subRequestId}/AssignedUserId`] = null;
-    updates[`/users/${callerId}/SubRequests/${subRequestId}/AssignedUserName`] = null;
-    updates[`/users/${callerId}/SubRequests/${subRequestId}/AssignedAt`] = null;
-    updates[`/users/${callerId}/SubRequests/${subRequestId}/AssignedBy`] = null;
+  const actualCreatorId = creatorUserId || callerId;
+  if (actualCreatorId) {
+    updates[`/users/${actualCreatorId}/SubRequests/${subRequestId}/IsSelected`] = false;
+    updates[`/users/${actualCreatorId}/SubRequests/${subRequestId}/Status`] = 'published';
+    updates[`/users/${actualCreatorId}/SubRequests/${subRequestId}/AssignedUserId`] = null;
+    updates[`/users/${actualCreatorId}/SubRequests/${subRequestId}/AssignedUserName`] = null;
+    updates[`/users/${actualCreatorId}/SubRequests/${subRequestId}/AssignedAt`] = null;
+    updates[`/users/${actualCreatorId}/SubRequests/${subRequestId}/AssignedBy`] = null;
+
+    updates[`/creatorSubRequestFeed/${actualCreatorId}/${subRequestId}/isSelected`] = false;
+    updates[`/creatorSubRequestFeed/${actualCreatorId}/${subRequestId}/status`] = 'published';
+    updates[`/creatorSubRequestFeed/${actualCreatorId}/${subRequestId}/assignedUserId`] = null;
+    updates[`/creatorSubRequestFeed/${actualCreatorId}/${subRequestId}/assignedUserName`] = null;
+    updates[`/creatorSubRequestFeed/${actualCreatorId}/${subRequestId}/assignedAt`] = null;
+    updates[`/creatorSubRequestFeed/${actualCreatorId}/${subRequestId}/assignedBy`] = null;
   }
 
+  // Re-classify and restore to appropriate feed
+  const restoredSubReq = {
+    ...subReqData,
+    IsSelected: false,
+    Status: 'published',
+    AssignedUserId: null,
+    AssignedUserName: null,
+    AssignedAt: null,
+    AssignedBy: null,
+    updatedAt: Date.now(),
+  };
+
+  const kind = classifySubRequest(restoredSubReq);
+  const sanitizedItem = buildSanitizedFeedItem(restoredSubReq);
+
+  if (kind === SUBREQUEST_KIND.PUBLIC_GIG || kind === SUBREQUEST_KIND.EVENT_SUBSTITUTE_PUBLIC) {
+    updates[`/publicSubRequests/${subRequestId}`] = sanitizedItem;
+  } else if (kind === SUBREQUEST_KIND.DIRECT_INVITATION || kind === SUBREQUEST_KIND.FAVORITES_ONLY) {
+    const audienceSnap = await db.ref(`/subRequestAudience/${subRequestId}`).once('value');
+    const audience = audienceSnap.val() || {};
+    const recipientUids = Object.keys(audience);
+    const extraTargets = Array.isArray(restoredSubReq.TargetUserIds) ? restoredSubReq.TargetUserIds : (Array.isArray(restoredSubReq.targetUserIds) ? restoredSubReq.targetUserIds : []);
+    for (const tUid of extraTargets) {
+      if (tUid && !recipientUids.includes(tUid)) {
+        recipientUids.push(tUid);
+      }
+    }
+    for (const rUid of recipientUids) {
+      updates[`/userSubRequestFeed/${rUid}/${subRequestId}`] = sanitizedItem;
+    }
+  }
   await db.ref().update(updates);
 
   return { success: true, subRequestId };
@@ -3189,63 +3605,145 @@ exports.manageBandSectionConversation = onCall({ region: 'europe-west1' }, async
 });
 
 /**
- * 10. onBandMemberRemoved
- * Cleanup trigger when a member is removed from /Bands/{bandId}/Members_band/{memberId}
+ * Core handler for band membership changes (both /Bands/{bandId}/Members_band/{memberId}
+ * and legacy /Members_band/{bandId}/{memberId}).
+ * Idempotently reconciles private event projections and conversation membership.
  */
-exports.onBandMemberRemoved = onValueWritten({
-  ref: '/Bands/{bandId}/Members_band/{memberId}',
-  region: databaseTriggerRegion
-}, async (event) => {
-  // Only trigger on deletion
-  if (event.data.after.exists()) return null;
-
+async function handleBandMemberChange(event) {
   const bandId = event.params.bandId;
   const memberId = event.params.memberId;
+  const db = admin.database();
+  const updates = {};
 
   try {
-    const bandSectionSnap = await admin.database().ref(`/bandSectionConversations/${bandId}`).once('value');
-    if (!bandSectionSnap.exists() || !bandSectionSnap.val()) return null;
+    const afterExists = event.data.after.exists();
+    const memberData = afterExists ? event.data.after.val() : null;
 
-    const convIds = Object.keys(bandSectionSnap.val());
-    const updates = {};
+    if (!afterExists) {
+      // 1. Member was removed from band
+      // Strictly scoped removal: use mapEventProjectionIndex to remove ONLY projections for this band's events
+      try {
+        const bandSnap = await db.ref(`/Bands/${bandId}`).once('value');
+        const bandVal = bandSnap.exists() ? bandSnap.val() : {};
+        const eventsSnap = await db.ref(`/Bands/${bandId}/Events`).once('value');
+        if (eventsSnap.exists() && eventsSnap.val()) {
+          const eventsObj = eventsSnap.val();
+          for (const [eventId, eventData] of Object.entries(eventsObj)) {
+            if (!eventData || typeof eventData !== 'object') continue;
 
-    for (const convId of convIds) {
-      const convSnap = await admin.database().ref(`/conversations/${convId}`).once('value');
-      if (convSnap.exists()) {
-        const convVal = convSnap.val();
-        if (convVal && convVal.participants && convVal.participants[memberId]) {
-          updates[`/conversations/${convId}/participants/${memberId}`] = null;
-          updates[`/conversations/${convId}/admins/${memberId}`] = null;
-          updates[`/userConversations/${memberId}/${convId}`] = null;
-
-          const remainingParticipants = Object.keys(convVal.participants).filter(uid => uid !== memberId && convVal.participants[uid]);
-          const newCount = remainingParticipants.length;
-          updates[`/conversations/${convId}/participantCount`] = newCount;
-
-          remainingParticipants.forEach((uid) => {
-            updates[`/userConversations/${uid}/${convId}/participantCount`] = newCount;
-          });
-
-          // Ensure group still has an admin if the removed member was the only admin
-          const remainingAdmins = Object.keys(convVal.admins || {}).filter(uid => uid !== memberId && convVal.admins[uid]);
-          if (remainingAdmins.length === 0 && remainingParticipants.length > 0) {
-            updates[`/conversations/${convId}/admins/${remainingParticipants[0]}`] = true;
+            // Check if user is still authorized via another role (creator, invitee, confirmed substitute)
+            const stillAuthorized = getAuthorizedUserIdsForBandEvent(bandVal, eventData).includes(memberId);
+            if (!stillAuthorized) {
+              const indexSnap = await db.ref(`/mapEventProjectionIndex/band:${bandId}:${eventId}`).once('value');
+              const indexVal = indexSnap.exists() ? indexSnap.val() : null;
+              const mapItemIds = indexVal && indexVal.mapItemIds ? Object.keys(indexVal.mapItemIds) : [];
+              mapItemIds.forEach((mapItemId) => {
+                updates[`/userMapEventFeed/${memberId}/${mapItemId}`] = null;
+              });
+              updates[`/mapEventProjectionIndex/band:${bandId}:${eventId}/authorizedUids/${memberId}`] = null;
+            }
           }
         }
-      }
+      } catch (_) {}
+
+      // Section conversations cleanup
+      try {
+        const bandSectionSnap = await db.ref(`/bandSectionConversations/${bandId}`).once('value');
+        if (bandSectionSnap.exists() && bandSectionSnap.val()) {
+          const convIds = Object.keys(bandSectionSnap.val());
+          for (const convId of convIds) {
+            const convSnap = await db.ref(`/conversations/${convId}`).once('value');
+            if (convSnap.exists()) {
+              const convVal = convSnap.val();
+              if (convVal && convVal.participants && convVal.participants[memberId]) {
+                updates[`/conversations/${convId}/participants/${memberId}`] = null;
+                updates[`/conversations/${convId}/admins/${memberId}`] = null;
+                updates[`/userConversations/${memberId}/${convId}`] = null;
+
+                const remainingParticipants = Object.keys(convVal.participants).filter(uid => uid !== memberId && convVal.participants[uid]);
+                const newCount = remainingParticipants.length;
+                updates[`/conversations/${convId}/participantCount`] = newCount;
+
+                remainingParticipants.forEach((uid) => {
+                  updates[`/userConversations/${uid}/${convId}/participantCount`] = newCount;
+                });
+
+                const remainingAdmins = Object.keys(convVal.admins || {}).filter(uid => uid !== memberId && convVal.admins[uid]);
+                if (remainingAdmins.length === 0 && remainingParticipants.length > 0) {
+                  updates[`/conversations/${convId}/admins/${remainingParticipants[0]}`] = true;
+                }
+              }
+            }
+          }
+        }
+      } catch (_) {}
+    } else {
+      // 2. Member was added or role/status changed
+      const memberStatus = memberData && typeof memberData === 'object'
+        ? String(memberData.Status || memberData.status || 'active').toLowerCase()
+        : 'active';
+      const isActive = memberStatus !== 'inactive' && memberStatus !== 'suspended';
+
+      let bandName = 'Band';
+      let bandVal = { Members_band: {} };
+      try {
+        const bandSnap = await db.ref(`/Bands/${bandId}`).once('value');
+        if (bandSnap.exists() && bandSnap.val()) {
+          bandVal = bandSnap.val();
+          bandName = String(bandVal.Name || bandVal.name || 'Band').trim();
+        }
+      } catch (_) {}
+
+      try {
+        const eventsSnap = await db.ref(`/Bands/${bandId}/Events`).once('value');
+        if (eventsSnap.exists() && eventsSnap.val()) {
+          const eventsObj = eventsSnap.val();
+          for (const [eventId, eventData] of Object.entries(eventsObj)) {
+            if (!eventData || typeof eventData !== 'object') continue;
+
+            const authorizedUids = getAuthorizedUserIdsForBandEvent(bandVal, eventData);
+            const isAuth = isActive && authorizedUids.includes(memberId);
+            const projections = buildEventProjections('private_band', eventData, eventId, bandId, bandName);
+
+            if (isAuth && projections.length > 0) {
+              projections.forEach((p) => {
+                updates[`/userMapEventFeed/${memberId}/${p.mapItemId}`] = p;
+              });
+              updates[`/mapEventProjectionIndex/band:${bandId}:${eventId}/authorizedUids/${memberId}`] = true;
+            } else {
+              // Not authorized: ensure no stale projections remain
+              const indexSnap = await db.ref(`/mapEventProjectionIndex/band:${bandId}:${eventId}`).once('value');
+              const indexVal = indexSnap.exists() ? indexSnap.val() : null;
+              const mapItemIds = indexVal && indexVal.mapItemIds ? Object.keys(indexVal.mapItemIds) : projections.map((p) => p.mapItemId);
+              mapItemIds.forEach((mId) => {
+                updates[`/userMapEventFeed/${memberId}/${mId}`] = null;
+              });
+              updates[`/mapEventProjectionIndex/band:${bandId}:${eventId}/authorizedUids/${memberId}`] = null;
+            }
+          }
+        }
+      } catch (_) {}
     }
 
     if (Object.keys(updates).length > 0) {
-      await admin.database().ref().update(updates);
-      console.log(`Cleaned up section conversations for removed band member ${memberId} in band ${bandId}`);
+      await db.ref().update(updates);
     }
-
     return null;
   } catch (error) {
-    console.error('Error in onBandMemberRemoved trigger:', error);
+    console.error('Error in handleBandMemberChange trigger:', error);
     return null;
   }
-});
+}
+
+/**
+ * 10. onBandMemberWritten
+ * Primary cleanup/reconciliation trigger when a member is added, updated, or removed
+ * at canonical path /Bands/{bandId}/Members_band/{memberId}
+ */
+exports.onBandMemberWritten = onValueWritten({
+  ref: '/Bands/{bandId}/Members_band/{memberId}',
+  region: databaseTriggerRegion,
+}, handleBandMemberChange);
 
 /**
  * 10. createSessionConversation
@@ -4113,6 +4611,20 @@ exports.deleteBand = onCall({ region: 'europe-west1' }, async (request) => {
       updates[`/users/${memberId}/Bands/${trimmedBandId}`] = null;
     }
 
+    // Clean up private event projections for all members of deleted band
+    for (const memberId of memberIds) {
+      try {
+        const userFeedSnap = await db.ref(`userMapEventFeed/${memberId}`).once('value');
+        if (userFeedSnap.exists() && userFeedSnap.val()) {
+          Object.keys(userFeedSnap.val()).forEach((mapItemId) => {
+            if (mapItemId.startsWith(`event:private:${trimmedBandId}:`)) {
+              updates[`/userMapEventFeed/${memberId}/${mapItemId}`] = null;
+            }
+          });
+        }
+      } catch (_) {}
+    }
+
     // 2. Remove band conversations & section conversations
     updates[`/bandconversations/${trimmedBandId}`] = null;
     updates[`/bandSectionConversations/${trimmedBandId}`] = null;
@@ -4131,9 +4643,108 @@ exports.deleteBand = onCall({ region: 'europe-west1' }, async (request) => {
 });
 
 /**
- * MAP-VIEW-FEEDBACK-03: Server-owned Ordinary Map Pin Creation.
+ * MAP-VIEW-FEED-03B: Strict allowlist projection sanitizer for server-owned publicMapPinFeed.
+ * Strips all recipient data, tokens, staffing metadata, email/phone, etc.
+ */
+function sanitizeMapPinProjection(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+
+  const pinId = raw.id || raw.pinId || raw.SubRequestId || raw.subRequestId;
+  if (!pinId) return null;
+
+  const creatorUserId = raw.creatorUserId || raw.CreatorUserId || raw.userId || raw.UserId || '';
+  const status = raw.status || raw.Status || 'published';
+  const eventType = raw.eventType || raw.EventType || raw.promotionType || 'gigPromo';
+  const rawLat = raw.latitude !== undefined ? raw.latitude : raw.Latitude;
+  const rawLng = raw.longitude !== undefined ? raw.longitude : raw.Longitude;
+
+  if (typeof rawLat !== 'number' || typeof rawLng !== 'number' || !Number.isFinite(rawLat) || !Number.isFinite(rawLng)) {
+    return null;
+  }
+
+  const projection = {
+    id: pinId,
+    pinId: pinId,
+    subRequestId: pinId,
+    mapItemId: `map_pin:${pinId}`,
+    creatorUserId: creatorUserId,
+    status: status,
+    NotificationMode: 'map_pin',
+    notificationMode: 'map_pin',
+    subCategory: 'Music',
+    eventType: eventType,
+    latitude: rawLat,
+    longitude: rawLng,
+    Latitude: rawLat,
+    Longitude: rawLng,
+    createdAt: raw.createdAt || raw.CreatedAt || Date.now(),
+    updatedAt: raw.updatedAt || raw.UpdatedAt || Date.now(),
+  };
+
+  if (raw.title || raw.Title) {
+    projection.title = raw.title || raw.Title;
+    projection.Title = projection.title;
+  }
+  if (raw.bandName || raw.BandName) {
+    projection.bandName = raw.bandName || raw.BandName;
+    projection.BandName = projection.bandName;
+  }
+  if (raw.bandId || raw.BandId) {
+    projection.bandId = raw.bandId || raw.BandId;
+    projection.BandId = projection.bandId;
+  }
+  if (raw.description || raw.Description) {
+    projection.description = raw.description || raw.Description;
+    projection.Description = projection.description;
+  }
+  if (raw.location || raw.Location) {
+    projection.location = raw.location || raw.Location;
+    projection.Location = projection.location;
+  }
+  if (raw.venue || raw.venue) {
+    projection.venue = raw.venue || raw.Venue;
+  }
+  if (raw.city || raw.City) {
+    projection.city = raw.city || raw.City;
+  }
+  if (raw.genre || raw.Genre || raw.style || raw.Style) {
+    const g = raw.genre || raw.Genre || raw.style || raw.Style;
+    projection.genre = g;
+    projection.style = g;
+    projection.Style = g;
+  }
+  if (raw.date || raw.Date) {
+    projection.date = raw.date || raw.Date;
+    projection.Date = projection.date;
+  }
+  if (raw.startTime || raw.StartTime) {
+    projection.startTime = raw.startTime || raw.StartTime;
+    projection.StartTime = projection.startTime;
+  }
+  if (raw.endTime || raw.EndTime) {
+    projection.endTime = raw.endTime || raw.EndTime;
+    projection.EndTime = projection.endTime;
+  }
+  if (raw.audioSnippetUrl) {
+    projection.audioSnippetUrl = raw.audioSnippetUrl;
+  }
+  if (raw.audioSnippetTitle) {
+    projection.audioSnippetTitle = raw.audioSnippetTitle;
+  }
+  if (raw.infoAudioTrack) {
+    projection.infoAudioTrack = raw.infoAudioTrack;
+  }
+  if (raw.locationPrecision !== undefined) {
+    projection.locationPrecision = raw.locationPrecision;
+  }
+
+  return projection;
+}
+
+/**
+ * MAP-VIEW-FEEDBACK-03 & MAP-VIEW-FEED-03B: Server-owned Ordinary Map Pin Creation.
  * Narrowly scoped authenticated callable to persist ordinary Music Map View pins.
- * Writes exclusively to SubRequests/{generatedId} with NotificationMode: 'map_pin'.
+ * Writes atomically to SubRequests/{generatedId} and publicMapPinFeed/{generatedId}.
  * Never writes to BandEvents/PublishedSubRequests or staffing notification feeds.
  */
 exports.createMapPin = onCall({ region: 'europe-west1' }, async (request) => {
@@ -4301,8 +4912,14 @@ exports.createMapPin = onCall({ region: 'europe-west1' }, async (request) => {
   if (audioSnippetTitle) persistedPayload.audioSnippetTitle = audioSnippetTitle;
   if (infoAudioTrack) persistedPayload.infoAudioTrack = infoAudioTrack;
 
-  // 8. Write strictly once to canonical SubRequests/{generatedId}
-  await newPinRef.set(persistedPayload);
+  // 8. Write atomically to canonical SubRequests/{generatedId} and publicMapPinFeed/{generatedId}
+  const sanitizedProjection = sanitizeMapPinProjection(persistedPayload);
+  const writeBatch = {};
+  writeBatch[`SubRequests/${generatedId}`] = persistedPayload;
+  if (sanitizedProjection) {
+    writeBatch[`publicMapPinFeed/${generatedId}`] = sanitizedProjection;
+  }
+  await db.ref().update(writeBatch);
 
   // Safe logging: never log personal address, audio URL or full payload
   console.log(`[createMapPin] Successfully created map pin ${generatedId} for caller ${callerUid} (type: ${eventType})`);
@@ -4469,7 +5086,25 @@ exports.updateMapPin = onCall({ region: 'europe-west1' }, async (request) => {
   updates['UpdatedAt'] = Date.now();
   updates['updatedAt'] = Date.now();
 
-  await pinRef.update(updates);
+  // Atomically update canonical pin and publicMapPinFeed projection
+  const merged = { ...existing, ...updates };
+  const rootUpdates = {};
+  for (const [k, v] of Object.entries(updates)) {
+    rootUpdates[`SubRequests/${pinId}/${k}`] = v;
+  }
+
+  const isStillValid = (merged.NotificationMode === 'map_pin' || merged.notificationMode === 'map_pin') &&
+    merged.Status !== 'cancelled' && merged.status !== 'cancelled' &&
+    merged.Status !== 'deleted' && merged.status !== 'deleted' &&
+    merged.Status !== 'closed' && merged.status !== 'closed';
+
+  if (isStillValid) {
+    rootUpdates[`publicMapPinFeed/${pinId}`] = sanitizeMapPinProjection(merged);
+  } else {
+    rootUpdates[`publicMapPinFeed/${pinId}`] = null;
+  }
+
+  await db.ref().update(rootUpdates);
 
   console.log(`[updateMapPin] Successfully updated pin ${pinId} for caller ${callerUid}`);
 
@@ -4558,9 +5193,10 @@ exports.deleteMapPin = onCall({ region: 'europe-west1' }, async (request) => {
     throw new HttpsError('permission-denied', 'Only the pin creator or band leader may delete this pin.');
   }
 
-  // Atomically delete canonical pin and backward-compatibility legacy copies
+  // Atomically delete canonical pin, publicMapPinFeed projection, and backward-compatibility legacy copies
   const updates = {};
   updates[`SubRequests/${pinId}`] = null;
+  updates[`publicMapPinFeed/${pinId}`] = null;
   updates[`BandEvents/PublishedSubRequests/${pinId}`] = null;
   if (creatorUid) {
     updates[`users/${creatorUid}/SubRequests/${pinId}`] = null;
@@ -4584,3 +5220,9 @@ exports.stopLiveBroadcast = stopLiveBroadcast;
 exports.KNOWN_FEATURE_IDS = KNOWN_FEATURE_IDS;
 exports.resolveNotificationFeatureId = resolveNotificationFeatureId;
 
+
+exports.buildEventProjections = buildEventProjections;
+exports.getAuthorizedUserIdsForBandEvent = getAuthorizedUserIdsForBandEvent;
+exports.calculateReconciliationDiff = calculateReconciliationDiff;
+exports.buildProjectionIndexKey = buildProjectionIndexKey;
+exports.sanitizeMapPinProjection = sanitizeMapPinProjection;

@@ -794,26 +794,22 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 500));
 
-      // Switch to Sub & Member Search
+      // Verify Sub & Member Search is removed per MAP-VIEW-FEED-01 architecture
       final staffingChip = find.widgetWithText(ChoiceChip, 'Sub & Member Search');
-      expect(staffingChip, findsOneWidget);
-      await tester.tap(staffingChip);
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
+      expect(staffingChip, findsNothing);
 
+      // Manual uploads are strictly Music Promotion pins
       final textFields = find.byType(TextField);
-      await tester.enterText(textFields.at(0), 'Staffing Search Band');
+      await tester.enterText(textFields.at(0), 'Music Promotion Band');
 
       final publishBtn = find.widgetWithText(ElevatedButton, 'Publish Map View Pin / Audio');
       await tester.tap(publishBtn);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
-      // Uses saveSubRequestAsync, writing to PublishedSubRequests
-      expect(appState.mockService.saveSubRequestCallCount, 1);
-      expect(appState.mockService.publishedSubRequestsWriteCount, 1);
-      expect(appState.mockService.saveMapPinCallCount, 0);
-      expect(appState.mockService.lastSavedRequest?.isMapOnlyPin, isFalse);
+      // Uses saveMapPinAsync, never writes staffing PublishedSubRequests
+      expect(appState.mockService.saveMapPinCallCount, 1);
+      expect(appState.mockService.publishedSubRequestsWriteCount, 0);
     });
 
     testWidgets('17. Form communicates location optionality and center fallback helper text',

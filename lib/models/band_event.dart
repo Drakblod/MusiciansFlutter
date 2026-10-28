@@ -206,6 +206,12 @@ class EventRehearsal {
   final String location;
   final String description;
   final String type; // e.g. 'Rehearsal', 'Club gig', 'Show', 'Tour', etc.
+  final double? latitude;
+  final double? longitude;
+  final String? locationPrecision;
+  final String? city;
+  final String? placeId;
+  final String? locationStatus;
 
   EventRehearsal({
     required this.id,
@@ -216,6 +222,12 @@ class EventRehearsal {
     this.location = '',
     this.description = '',
     this.type = 'Rehearsal',
+    this.latitude,
+    this.longitude,
+    this.locationPrecision,
+    this.city,
+    this.placeId,
+    this.locationStatus,
   });
 
   factory EventRehearsal.fromJson(Map<dynamic, dynamic> json, [String? id]) {
@@ -228,6 +240,12 @@ class EventRehearsal {
       location: json['location']?.toString() ?? '',
       description: json['description']?.toString() ?? '',
       type: json['type']?.toString() ?? 'Rehearsal',
+      latitude: (json['latitude'] ?? json['Latitude']) is num ? ((json['latitude'] ?? json['Latitude']) as num).toDouble() : double.tryParse((json['latitude'] ?? json['Latitude'])?.toString() ?? ''),
+      longitude: (json['longitude'] ?? json['Longitude']) is num ? ((json['longitude'] ?? json['Longitude']) as num).toDouble() : double.tryParse((json['longitude'] ?? json['Longitude'])?.toString() ?? ''),
+      locationPrecision: json['locationPrecision']?.toString() ?? json['LocationPrecision']?.toString(),
+      city: json['city']?.toString() ?? json['City']?.toString(),
+      placeId: json['placeId']?.toString(),
+      locationStatus: json['locationStatus']?.toString(),
     );
   }
 
@@ -241,6 +259,12 @@ class EventRehearsal {
       'type': type,
       if (location.isNotEmpty) 'location': location,
       if (description.isNotEmpty) 'description': description,
+      if (latitude != null) 'latitude': latitude,
+      if (longitude != null) 'longitude': longitude,
+      if (locationPrecision != null) 'locationPrecision': locationPrecision,
+      if (city != null && city!.isNotEmpty) 'city': city,
+      if (placeId != null && placeId!.isNotEmpty) 'placeId': placeId,
+      if (locationStatus != null && locationStatus!.isNotEmpty) 'locationStatus': locationStatus,
     };
   }
 
@@ -253,6 +277,12 @@ class EventRehearsal {
     String? location,
     String? description,
     String? type,
+    double? latitude,
+    double? longitude,
+    String? locationPrecision,
+    String? city,
+    String? placeId,
+    String? locationStatus,
   }) {
     return EventRehearsal(
       id: id ?? this.id,
@@ -263,6 +293,12 @@ class EventRehearsal {
       location: location ?? this.location,
       description: description ?? this.description,
       type: type ?? this.type,
+      latitude: latitude ?? this.latitude,
+      longitude: longitude ?? this.longitude,
+      locationPrecision: locationPrecision ?? this.locationPrecision,
+      city: city ?? this.city,
+      placeId: placeId ?? this.placeId,
+      locationStatus: locationStatus ?? this.locationStatus,
     );
   }
 }
@@ -316,6 +352,12 @@ class BandEvent {
   final List<EventRehearsal> rehearsals;
   final Map<String, Map<String, EventResponse>> scheduleResponses;
   final List<String> excludedMemberIds;
+  final double? latitude;
+  final double? longitude;
+  final String locationPrecision;
+  final String? city;
+  final String? placeId;
+  final String? locationStatus;
 
   BandEvent({
     this.id,
@@ -349,6 +391,12 @@ class BandEvent {
     this.rehearsals = const [],
     this.scheduleResponses = const {},
     this.excludedMemberIds = const [],
+    this.latitude,
+    this.longitude,
+    this.locationPrecision = 'exact',
+    this.city,
+    this.placeId,
+    this.locationStatus,
   });
 
   /// Robust parsed start DateTime for strict chronological sorting across the app.
@@ -503,6 +551,12 @@ class BandEvent {
       rehearsals: parsedRehearsals,
       scheduleResponses: parsedScheduleResponses,
       excludedMemberIds: parsedExcludedMemberIds,
+      latitude: (json['latitude'] ?? json['Latitude']) is num ? ((json['latitude'] ?? json['Latitude']) as num).toDouble() : double.tryParse((json['latitude'] ?? json['Latitude'])?.toString() ?? ''),
+      longitude: (json['longitude'] ?? json['Longitude']) is num ? ((json['longitude'] ?? json['Longitude']) as num).toDouble() : double.tryParse((json['longitude'] ?? json['Longitude'])?.toString() ?? ''),
+      locationPrecision: json['locationPrecision']?.toString() ?? json['LocationPrecision']?.toString() ?? 'exact',
+      city: json['city']?.toString() ?? json['City']?.toString(),
+      placeId: json['placeId']?.toString(),
+      locationStatus: json['locationStatus']?.toString(),
     );
   }
 
@@ -568,6 +622,12 @@ class BandEvent {
       if (temporaryRoomId != null) 'temporaryRoomId': temporaryRoomId,
       if (parentEventId != null) 'parentEventId': parentEventId,
       if (subEventSequence != null) 'subEventSequence': subEventSequence,
+      if (latitude != null) 'latitude': latitude,
+      if (longitude != null) 'longitude': longitude,
+      'locationPrecision': locationPrecision,
+      if (city != null && city!.isNotEmpty) 'city': city,
+      if (placeId != null && placeId!.isNotEmpty) 'placeId': placeId,
+      if (locationStatus != null && locationStatus!.isNotEmpty) 'locationStatus': locationStatus,
     };
   }
 }

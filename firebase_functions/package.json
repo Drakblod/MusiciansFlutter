@@ -7,7 +7,7 @@
   },
   "scripts": {
     "test": "mocha test/*.test.js",
-    "test:emulator": "mocha --exit test/emulator_rules.test.js test/emulator_callables.test.js test/functions_logic.test.js",
+    "test:emulator": "mocha --exit test/emulator_rules.test.js test/emulator_callables.test.js test/functions_logic.test.js test/subrequest_security.test.js test/verify_subrequest_migration.test.js test/emulator_event_map_feed.test.js test/backfill_map_event_feed.test.js test/backfill_public_map_pin_feed.test.js test/emulator_map_pin_security.test.js",
     "test:transitional": "mocha test/emulator_rules.test.js test/emulator_callables.test.js test/functions_logic.test.js"
   },
   "dependencies": {

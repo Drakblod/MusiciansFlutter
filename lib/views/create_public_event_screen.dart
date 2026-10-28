@@ -8,6 +8,8 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../data/genres_taxonomy.dart';
 import '../models/public_calendar_event.dart';
+import '../models/canonical_location.dart';
+import '../widgets/location_picker_field.dart';
 import '../providers/app_state.dart';
 import '../repositories/public_event_repository.dart';
 import '../theme/app_theme.dart';
@@ -38,6 +40,8 @@ class _CreatePublicEventScreenState extends State<CreatePublicEventScreen> {
   final TextEditingController _venueController = TextEditingController();
   final TextEditingController _cityController = TextEditingController();
   final TextEditingController _addressController = TextEditingController();
+  final TextEditingController _locationController = TextEditingController();
+  CanonicalLocation? _canonicalLocation;
   final TextEditingController _priceController = TextEditingController();
   final TextEditingController _shortDescController = TextEditingController();
   final TextEditingController _descController = TextEditingController();
@@ -69,6 +73,17 @@ class _CreatePublicEventScreenState extends State<CreatePublicEventScreen> {
       _venueController.text = e.venueName;
       _cityController.text = e.city;
       _addressController.text = e.address;
+      _locationController.text = e.address.isNotEmpty ? '${e.venueName}, ${e.address}, ${e.city}' : (e.venueName.isNotEmpty ? '${e.venueName}, ${e.city}' : e.city);
+      if (e.latitude != null && e.longitude != null) {
+        _canonicalLocation = CanonicalLocation(
+          locationLabel: _locationController.text,
+          latitude: e.latitude!,
+          longitude: e.longitude!,
+          precision: (e.locationPrecision == 'city') ? LocationPrecision.city : LocationPrecision.exact,
+          placeId: e.placeId,
+          status: LocationResolutionStatus.resolved,
+        );
+      }
       if (e.priceAmount != null && !e.isFree) {
         _priceController.text = e.priceAmount! % 1 == 0
             ? e.priceAmount!.toInt().toString()
@@ -103,6 +118,7 @@ class _CreatePublicEventScreenState extends State<CreatePublicEventScreen> {
     _venueController.dispose();
     _cityController.dispose();
     _addressController.dispose();
+    _locationController.dispose();
     _priceController.dispose();
     _shortDescController.dispose();
     _descController.dispose();
@@ -404,6 +420,11 @@ class _CreatePublicEventScreenState extends State<CreatePublicEventScreen> {
           isFree: _isFree,
           imageUrl: resolvedImageUrl ?? widget.eventToEdit!.imageUrl,
           imageFitMode: _posterFit == BoxFit.contain ? 'contain' : 'cover',
+          latitude: _canonicalLocation?.latitude,
+          longitude: _canonicalLocation?.longitude,
+          locationPrecision: _canonicalLocation?.precision.name ?? 'exact',
+          placeId: _canonicalLocation?.placeId,
+          locationStatus: _canonicalLocation?.status.name,
         );
 
         await repo.updateEvent(updatedEvent);
@@ -444,6 +465,11 @@ class _CreatePublicEventScreenState extends State<CreatePublicEventScreen> {
           imageFitMode: _posterFit == BoxFit.contain ? 'contain' : 'cover',
           createdBy: currentUid,
           createdAt: DateTime.now().millisecondsSinceEpoch,
+          latitude: _canonicalLocation?.latitude,
+          longitude: _canonicalLocation?.longitude,
+          locationPrecision: _canonicalLocation?.precision.name ?? 'exact',
+          placeId: _canonicalLocation?.placeId,
+          locationStatus: _canonicalLocation?.status.name,
         );
 
         await repo.createEvent(newEvent);
@@ -643,6 +669,19 @@ class _CreatePublicEventScreenState extends State<CreatePublicEventScreen> {
                       controller: _addressController,
                       label: 'Street Address (Optional)',
                       hint: 'e.g. Storgatan 14',
+                    ),
+                    const SizedBox(height: 16),
+                    LocationPickerField(
+                      controller: _locationController,
+                      initialLocation: _canonicalLocation,
+                      onLocationChanged: (loc) {
+                        setState(() {
+                          _canonicalLocation = loc;
+                          if (loc?.locationLabel != null && loc!.locationLabel.isNotEmpty && _cityController.text.trim().isEmpty) {
+                            _cityController.text = loc.locationLabel;
+                          }
+                        });
+                      },
                     ),
                     const SizedBox(height: 24),
 

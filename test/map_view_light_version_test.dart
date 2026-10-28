@@ -259,7 +259,7 @@ void main() {
       // Verify bottom sheet opens
       expect(find.text('Upload Map View Pin / Audio'), findsWidgets);
       expect(find.text('Publish Map View Pin / Audio'), findsOneWidget);
-      expect(find.text('Category'), findsOneWidget);
+      expect(find.text('Music Pin Type'), findsOneWidget);
       expect(find.byType(DropdownButton<String>), findsOneWidget);
     });
 
@@ -337,20 +337,21 @@ void main() {
       await tester.tap(find.text('Upload Map View Pin / Audio'));
       await tester.pump(const Duration(milliseconds: 300));
 
-      // Verify Category selector only has 'Music' and 'Sub & Member Search'
-      expect(find.widgetWithText(ChoiceChip, 'Music'), findsOneWidget);
-      expect(find.widgetWithText(ChoiceChip, 'Sub & Member Search'), findsOneWidget);
+      // Verify Music Pin Type selector and no staffing options
+      expect(find.text('Music Pin Type'), findsOneWidget);
+      expect(find.widgetWithText(ChoiceChip, 'Sub & Member Search'), findsNothing);
       expect(find.widgetWithText(ChoiceChip, 'Gig Promo'), findsNothing);
 
       // Verify Type selector under Music contains 'Demos / Recordings' and not 'Recorded Music'
       expect(find.byType(DropdownButton<String>), findsOneWidget);
       final dropdown = tester.widget<DropdownButton<String>>(find.byType(DropdownButton<String>));
       final itemValues = dropdown.items!.map((i) => i.value).toList();
-      expect(itemValues.contains('Gig / Concert'), isTrue);
-      expect(itemValues.contains('Rehearsal'), isTrue);
+      expect(itemValues.contains('Music Promotion'), isTrue);
       expect(itemValues.contains('Jam Session'), isTrue);
       expect(itemValues.contains('Demos / Recordings'), isTrue);
       expect(itemValues.contains('Recorded Music'), isFalse);
+      expect(itemValues.contains('Substitute'), isFalse);
+      expect(itemValues.contains('Band Member Search'), isFalse);
 
       // Verify Description / Details appears exactly once as an input label
       expect(find.text('Description / Details'), findsOneWidget);

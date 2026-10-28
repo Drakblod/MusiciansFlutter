@@ -21,6 +21,7 @@ import '../models/collab_session.dart';
 import '../models/collab_studio.dart';
 import '../models/app_notification.dart';
 import '../models/public_calendar_event.dart';
+import '../models/map_event_item.dart';
 import '../utils/date_parser.dart';
 
 class FirebaseService {
@@ -533,9 +534,11 @@ class FirebaseService {
   Future<String?> saveSubRequestAsync(SubRequest request) async {
     final newRef = _dbRef('SubRequests').push();
     final key = newRef.key ?? 'sub_${DateTime.now().millisecondsSinceEpoch}';
+    final requestGroupId = request.requestGroupId ?? 'grp_$key';
     final updated = SubRequest(
       id: key,
       subRequestId: key,
+      slotId: request.slotId ?? key,
       creatorUserId: currentUserId,
       userId: currentUserId,
       voicePart: request.voicePart,
@@ -559,34 +562,17 @@ class FirebaseService {
       eventTitle: request.eventTitle,
       payAmount: request.payAmount,
       currency: request.currency,
-      requestGroupId: request.requestGroupId,
+      requestGroupId: requestGroupId,
       status: 'published',
       extraFields: request.extraFields,
     );
 
-    final json = updated.toJson();
-
-    // 1. Direct write to BandEvents/PublishedSubRequests (universally accessible write/read)
-    try {
-      await _dbRef('BandEvents/PublishedSubRequests/$key').set(json);
-      await _dbRef('BandEvents/CancelledSubRequests/$key').remove();
-    } catch (e) {
-      debugPrint('[FirebaseService] Error writing BandEvents/PublishedSubRequests: $e');
-      rethrow;
-    }
-
-    // 2. Save under user's profile SubRequests
-    if (currentUserId != null) {
-      try {
-        await _dbRef('users/$currentUserId/SubRequests/$key').set(json);
-        await _dbRef('users/$currentUserId/CancelledSubRequests/$key').remove();
-      } catch (_) {}
-    }
-
-    // 3. Direct write to root SubRequests (best-effort)
-    try {
-      await newRef.set(json);
-    } catch (_) {}
+    await publishSubRequestGroupAsync(
+      bandId: updated.bandId,
+      requestGroupId: requestGroupId,
+      requests: [updated],
+      bandName: updated.bandName,
+    );
 
     return key;
   }
@@ -733,67 +719,22 @@ class FirebaseService {
   Future<List<SubRequest>> getAllSubRequestsAsync() async {
     final List<SubRequest> requests = [];
     final selfId = currentUserId;
-    final Set<String> cancelledIds = {};
-
-    // 1. Fetch global cancelled IDs
-    try {
-      final cancelSnap = await _dbRef('BandEvents/CancelledSubRequests').get();
-      if (cancelSnap.exists && cancelSnap.value is Map) {
-        (cancelSnap.value as Map).forEach((k, v) {
-          if (v == true || v == 'true' || v == 1) {
-            cancelledIds.add(k.toString());
-          }
-        });
-      }
-    } catch (_) {}
-
-    // 2. Fetch user's local cancelled IDs
-    if (selfId != null) {
-      try {
-        final userCancelSnap = await _dbRef('users/$selfId/CancelledSubRequests').get();
-        if (userCancelSnap.exists && userCancelSnap.value is Map) {
-          (userCancelSnap.value as Map).forEach((k, v) {
-            if (v == true || v == 'true' || v == 1) {
-              cancelledIds.add(k.toString());
-            }
-          });
-        }
-      } catch (_) {}
-    }
-
-    bool isCancelled(SubRequest req) {
-      final id = req.subRequestId ?? req.id ?? '';
-      final slotId = req.slotId ?? '';
-      final groupId = req.requestGroupId ?? '';
-      final st = req.status.toLowerCase();
-      if (st == 'cancelled' || st == 'deleted' || st == 'closed') return true;
-
-      if (id.isNotEmpty && cancelledIds.contains(id)) return true;
-      if (slotId.isNotEmpty && cancelledIds.contains(slotId)) return true;
-      if (groupId.isNotEmpty && cancelledIds.contains(groupId)) return true;
-
-      return false;
-    }
+    final Set<String> seenIds = {};
 
     void addValidRequest(SubRequest req) {
-      if (isCancelled(req)) return;
       final id = req.subRequestId ?? req.id;
       if (id == null || id.isEmpty) return;
-      if (requests.any((r) => (r.subRequestId ?? r.id) == id)) return;
+      if (seenIds.contains(id)) return;
+      final st = req.status.toLowerCase();
+      if (st == 'cancelled' || st == 'deleted' || st == 'closed') return;
 
-      final targets = req.targetUserIds;
-      if (targets == null || targets.isEmpty) {
-        requests.add(req);
-      } else {
-        if (selfId != null && (targets.contains(selfId) || req.creatorUserId == selfId || req.userId == selfId)) {
-          requests.add(req);
-        }
-      }
+      seenIds.add(id);
+      requests.add(req);
     }
 
-    // 4. Load from BandEvents/PublishedSubRequests (universally accessible to all users)
+    // 1. Load truly public requests from /publicSubRequests
     try {
-      final pubSnap = await _dbRef('BandEvents/PublishedSubRequests').get();
+      final pubSnap = await _dbRef('publicSubRequests').get();
       if (pubSnap.exists && pubSnap.value is Map) {
         (pubSnap.value as Map).forEach((k, v) {
           if (v is Map) {
@@ -803,105 +744,315 @@ class FirebaseService {
         });
       }
     } catch (e) {
-      debugPrint('[FirebaseService] Error querying BandEvents/PublishedSubRequests: $e');
+      debugPrint('[FirebaseService] Error reading publicSubRequests: $e');
     }
 
-    // 5. Load from root SubRequests (best-effort)
-    try {
-      final snapshot = await _dbRef('SubRequests').get();
-      if (snapshot.exists && snapshot.value is Map) {
-        (snapshot.value as Map).forEach((k, v) {
-          if (v is Map) {
-            final req = SubRequest.fromJson(v, k.toString());
-            addValidRequest(req);
-          }
-        });
-      }
-    } catch (e) {
-      debugPrint('[FirebaseService] Notice querying root SubRequests: $e');
-    }
-
-    // 6. Supplement with current user's personal SubRequests
-    if (selfId != null) {
+    // 2. Load targeted requests for current user from /userSubRequestFeed/$selfId
+    if (selfId != null && selfId.isNotEmpty) {
       try {
-        final userSubs = await getUserSubRequestsAsync(selfId);
-        for (final req in userSubs) {
-          addValidRequest(req);
+        final userFeedSnap = await _dbRef('userSubRequestFeed/$selfId').get();
+        if (userFeedSnap.exists && userFeedSnap.value is Map) {
+          (userFeedSnap.value as Map).forEach((k, v) {
+            if (v is Map) {
+              final req = SubRequest.fromJson(v, k.toString());
+              addValidRequest(req);
+            }
+          });
         }
-      } catch (_) {}
+      } catch (e) {
+        debugPrint('[FirebaseService] Error reading userSubRequestFeed: $e');
+      }
+
+      // 3. Load creator requests for current user from /creatorSubRequestFeed/$selfId
+      try {
+        final creatorFeedSnap = await _dbRef('creatorSubRequestFeed/$selfId').get();
+        if (creatorFeedSnap.exists && creatorFeedSnap.value is Map) {
+          (creatorFeedSnap.value as Map).forEach((k, v) {
+            if (v is Map) {
+              final req = SubRequest.fromJson(v, k.toString());
+              addValidRequest(req);
+            }
+          });
+        }
+      } catch (e) {
+        debugPrint('[FirebaseService] Error reading creatorSubRequestFeed: $e');
+      }
     }
 
     return requests;
   }
 
+  /// Real-time stream of merged, deduplicated, authorized SubRequests for Map View and feeds.
+  /// Exactly one listener per authorized feed.
+  /// Subscriptions are cleanly cancelled when the stream subscriber cancels.
+  Stream<List<SubRequest>> getSubRequestFeedStream({String? targetUserId}) {
+    final selfId = targetUserId ?? currentUserId;
+    late StreamController<List<SubRequest>> controller;
+
+    StreamSubscription<DatabaseEvent>? publicSub;
+    StreamSubscription<DatabaseEvent>? userSub;
+    StreamSubscription<DatabaseEvent>? creatorSub;
+
+    final Map<String, SubRequest> publicMap = {};
+    final Map<String, SubRequest> userMap = {};
+    final Map<String, SubRequest> creatorMap = {};
+
+    void emitMerged() {
+      if (controller.isClosed) return;
+      final List<SubRequest> merged = [];
+      final Set<String> seenIds = {};
+
+      void addIfValid(SubRequest r) {
+        final id = r.subRequestId ?? r.id;
+        if (id != null && !seenIds.contains(id) && r.isLive) {
+          seenIds.add(id);
+          merged.add(r);
+        }
+      }
+
+      for (final r in publicMap.values) {
+        addIfValid(r);
+      }
+      for (final r in userMap.values) {
+        addIfValid(r);
+      }
+      for (final r in creatorMap.values) {
+        addIfValid(r);
+      }
+
+      controller.add(merged);
+    }
+
+    controller = StreamController<List<SubRequest>>(
+      onListen: () {
+        publicSub = _dbRef('publicSubRequests').onValue.listen((event) {
+          publicMap.clear();
+          if (event.snapshot.exists && event.snapshot.value is Map) {
+            (event.snapshot.value as Map).forEach((k, v) {
+              if (v is Map) {
+                try {
+                  publicMap[k.toString()] = SubRequest.fromJson(v, k.toString());
+                } catch (_) {}
+              }
+            });
+          }
+          emitMerged();
+        }, onError: (e) {
+          debugPrint('[FirebaseService] publicSubRequests stream error: $e');
+        });
+
+        if (selfId != null && selfId.isNotEmpty) {
+          userSub = _dbRef('userSubRequestFeed/' + selfId).onValue.listen((event) {
+            userMap.clear();
+            if (event.snapshot.exists && event.snapshot.value is Map) {
+              (event.snapshot.value as Map).forEach((k, v) {
+                if (v is Map) {
+                  try {
+                    userMap[k.toString()] = SubRequest.fromJson(v, k.toString());
+                  } catch (_) {}
+                }
+              });
+            }
+            emitMerged();
+          }, onError: (e) {
+            debugPrint('[FirebaseService] userSubRequestFeed stream error: $e');
+          });
+
+          creatorSub = _dbRef('creatorSubRequestFeed/' + selfId).onValue.listen((event) {
+            creatorMap.clear();
+            if (event.snapshot.exists && event.snapshot.value is Map) {
+              (event.snapshot.value as Map).forEach((k, v) {
+                if (v is Map) {
+                  try {
+                    creatorMap[k.toString()] = SubRequest.fromJson(v, k.toString());
+                  } catch (_) {}
+                }
+              });
+            }
+            emitMerged();
+          }, onError: (e) {
+            debugPrint('[FirebaseService] creatorSubRequestFeed stream error: $e');
+          });
+        }
+      },
+      onCancel: () {
+        publicSub?.cancel();
+        publicSub = null;
+        userSub?.cancel();
+        userSub = null;
+        creatorSub?.cancel();
+        creatorSub = null;
+        publicMap.clear();
+        userMap.clear();
+        creatorMap.clear();
+      },
+    );
+
+    return controller.stream;
+  }
+
+
+  /// MAP-VIEW-FEED-03B: Real-time stream of server-owned public Music Promotion pins for Map View.
+  /// Reads directly from sanitized server projection /publicMapPinFeed.
+  /// Zero access to canonical /SubRequests collection.
+  /// Exactly one underlying RTDB listener per stream subscription. Cancelled cleanly when subscriber cancels.
+  /// Performs ZERO database writes while reading.
+  Stream<List<SubRequest>> getMapPinFeedStream() {
+    late StreamController<List<SubRequest>> controller;
+    StreamSubscription<DatabaseEvent>? pinSub;
+    final Map<String, SubRequest> pinMap = {};
+
+    void emitPins() {
+      if (controller.isClosed) return;
+      controller.add(pinMap.values.toList());
+    }
+
+    controller = StreamController<List<SubRequest>>(
+      onListen: () {
+        pinSub = _dbRef('publicMapPinFeed').onValue.listen((event) {
+          pinMap.clear();
+          if (event.snapshot.exists && event.snapshot.value is Map) {
+            (event.snapshot.value as Map).forEach((k, v) {
+              if (v is Map) {
+                try {
+                  final status = (v['Status'] ?? v['status'] ?? '').toString().toLowerCase();
+                  if (status != 'cancelled' && status != 'deleted' && status != 'closed') {
+                    pinMap[k.toString()] = SubRequest.fromJson(v, k.toString());
+                  }
+                } catch (_) {}
+              }
+            });
+          }
+          emitPins();
+        }, onError: (e) {
+          debugPrint('[FirebaseService] publicMapPinFeed stream error: $e');
+        });
+      },
+      onCancel: () {
+        pinSub?.cancel();
+        pinSub = null;
+        pinMap.clear();
+      },
+    );
+
+    return controller.stream;
+  }
+
+  /// MAP-VIEW-FEED-02: Lifecycle-managed Event feed stream for Map View.
+  /// Merges publicMapEventFeed and userMapEventFeed/{userId}.
+  /// Exactly one listener per feed. Subscriptions are cleanly cancelled when caller cancels.
+  /// Tolerates private feed permission errors without terminating the public feed.
+  /// Performs ZERO database writes while reading.
+  Stream<List<MapEventItem>> getMapEventFeedStream({String? targetUserId}) {
+    final selfId = targetUserId ?? currentUserId;
+    late StreamController<List<MapEventItem>> controller;
+
+    StreamSubscription<DatabaseEvent>? publicSub;
+    StreamSubscription<DatabaseEvent>? userSub;
+
+    final Map<String, MapEventItem> publicMap = {};
+    final Map<String, MapEventItem> userMap = {};
+
+    void emitMerged() {
+      if (controller.isClosed) return;
+      final List<MapEventItem> merged = [];
+      final Set<String> seenIds = {};
+
+      void addIfValid(MapEventItem item) {
+        if (!seenIds.contains(item.mapItemId)) {
+          seenIds.add(item.mapItemId);
+          merged.add(item);
+        }
+      }
+
+      for (final item in publicMap.values) {
+        addIfValid(item);
+      }
+      for (final item in userMap.values) {
+        addIfValid(item);
+      }
+
+      controller.add(merged);
+    }
+
+    controller = StreamController<List<MapEventItem>>(
+      onListen: () {
+        // 1. Subscribe once to publicMapEventFeed
+        publicSub = _dbRef('publicMapEventFeed').onValue.listen((event) {
+          publicMap.clear();
+          if (event.snapshot.exists && event.snapshot.value is Map) {
+            (event.snapshot.value as Map).forEach((k, v) {
+              if (v is Map) {
+                try {
+                  publicMap[k.toString()] = MapEventItem.fromJson(v, k.toString());
+                } catch (_) {}
+              }
+            });
+          }
+          emitMerged();
+        }, onError: (e) {
+          debugPrint('[FirebaseService] publicMapEventFeed stream notice: $e');
+        });
+
+        // 2. Subscribe once to userMapEventFeed/{selfId} if user is authenticated
+        if (selfId != null && selfId.trim().isNotEmpty) {
+          userSub = _dbRef('userMapEventFeed/${selfId.trim()}').onValue.listen((event) {
+            userMap.clear();
+            if (event.snapshot.exists && event.snapshot.value is Map) {
+              (event.snapshot.value as Map).forEach((k, v) {
+                if (v is Map) {
+                  try {
+                    userMap[k.toString()] = MapEventItem.fromJson(v, k.toString());
+                  } catch (_) {}
+                }
+              });
+            }
+            emitMerged();
+          }, onError: (e) {
+            debugPrint('[FirebaseService] userMapEventFeed stream notice (tolerated): $e');
+          });
+        }
+      },
+      onCancel: () {
+        publicSub?.cancel();
+        publicSub = null;
+        userSub?.cancel();
+        userSub = null;
+        publicMap.clear();
+        userMap.clear();
+      },
+    );
+
+    return controller.stream;
+  }
+
+
   Future<List<SubRequest>> getUserSubRequestsAsync(String userId) async {
     final List<SubRequest> requests = [];
     final selfId = currentUserId;
-    final Set<String> cancelledIds = {};
 
-    // Fetch cancelled IDs
-    try {
-      final cancelSnap = await _dbRef('BandEvents/CancelledSubRequests').get();
-      if (cancelSnap.exists && cancelSnap.value is Map) {
-        (cancelSnap.value as Map).forEach((k, v) {
-          if (v == true || v == 'true' || v == 1) {
-            cancelledIds.add(k.toString());
-          }
-        });
-      }
-    } catch (_) {}
-
-    try {
-      final snapshot = await _dbRef('users/$userId/SubRequests').get();
-      if (snapshot.exists && snapshot.value is Map) {
-        (snapshot.value as Map).forEach((k, v) {
-          if (v is Map) {
-            final req = SubRequest.fromJson(v, k.toString());
-            final id = req.subRequestId ?? req.id ?? '';
-            final groupId = req.requestGroupId ?? '';
-            final st = req.status.toLowerCase();
-            if (st == 'cancelled' || st == 'deleted' || st == 'closed') return;
-            if (id.isNotEmpty && cancelledIds.contains(id)) return;
-            if (groupId.isNotEmpty && cancelledIds.contains(groupId)) return;
-
-            final targets = req.targetUserIds;
-            if (targets == null || targets.isEmpty) {
-              requests.add(req);
-            } else {
-              if (selfId != null &&
-                  (targets.contains(selfId) || req.creatorUserId == selfId || req.userId == selfId)) {
-                requests.add(req);
-              }
-            }
-          }
-        });
-      }
-    } catch (e) {
-      debugPrint("[FirebaseService] Error loading users/$userId/SubRequests: $e");
-    }
-
-    // Also check BandEvents/PublishedSubRequests for requests created by this user
-    try {
-      final pubSnap = await _dbRef('BandEvents/PublishedSubRequests').get();
-      if (pubSnap.exists && pubSnap.value is Map) {
-        (pubSnap.value as Map).forEach((k, v) {
-          if (v is Map) {
-            final req = SubRequest.fromJson(v, k.toString());
-            final id = req.subRequestId ?? req.id ?? '';
-            final groupId = req.requestGroupId ?? '';
-            if (req.creatorUserId == userId || req.userId == userId) {
+    if (userId == selfId && selfId != null && selfId.isNotEmpty) {
+      try {
+        final creatorSnap = await _dbRef('creatorSubRequestFeed/$userId').get();
+        if (creatorSnap.exists && creatorSnap.value is Map) {
+          (creatorSnap.value as Map).forEach((k, v) {
+            if (v is Map) {
+              final req = SubRequest.fromJson(v, k.toString());
               final st = req.status.toLowerCase();
-              if (st == 'cancelled' || st == 'deleted' || st == 'closed') return;
-              if (id.isNotEmpty && cancelledIds.contains(id)) return;
-              if (groupId.isNotEmpty && cancelledIds.contains(groupId)) return;
-              if (!requests.any((r) => (r.subRequestId ?? r.id) == id)) {
+              if (st != 'cancelled' && st != 'deleted' && st != 'closed') {
                 requests.add(req);
               }
             }
-          }
-        });
+          });
+        }
+      } catch (e) {
+        debugPrint("[FirebaseService] Error loading creatorSubRequestFeed/$userId: $e");
       }
-    } catch (_) {}
+    } else {
+      // For other users, return authorized requests from the merged feed created by that user
+      final all = await getAllSubRequestsAsync();
+      return all.where((r) => r.creatorUserId == userId || r.userId == userId).toList();
+    }
 
     return requests;
   }
@@ -910,97 +1061,14 @@ class FirebaseService {
     String bandId,
     String eventId,
   ) async {
-    final List<SubRequest> requests = [];
-    final selfId = currentUserId;
-    final Set<String> cancelledIds = {};
-
-    try {
-      final cancelSnap = await _dbRef('BandEvents/CancelledSubRequests').get();
-      if (cancelSnap.exists && cancelSnap.value is Map) {
-        (cancelSnap.value as Map).forEach((k, v) {
-          if (v == true || v == 'true' || v == 1) {
-            cancelledIds.add(k.toString());
-          }
-        });
+    final all = await getAllSubRequestsAsync();
+    return all.where((r) {
+      if (r.eventId != eventId) return false;
+      if (bandId.isNotEmpty && r.bandId != null && r.bandId!.isNotEmpty && r.bandId != bandId) {
+        return false;
       }
-    } catch (_) {}
-
-    void addIfValid(SubRequest req) {
-      final id = req.subRequestId ?? req.id ?? '';
-      final groupId = req.requestGroupId ?? '';
-      final st = req.status.toLowerCase();
-      if (st == 'cancelled' || st == 'deleted' || st == 'closed') return;
-      if (id.isNotEmpty && cancelledIds.contains(id)) return;
-      if (groupId.isNotEmpty && cancelledIds.contains(groupId)) return;
-      if (requests.any((r) => (r.subRequestId ?? r.id) == id)) return;
-
-      final targets = req.targetUserIds;
-      if (targets == null || targets.isEmpty) {
-        requests.add(req);
-      } else {
-        if (selfId != null &&
-            (targets.contains(selfId) || req.creatorUserId == selfId || req.userId == selfId)) {
-          requests.add(req);
-        }
-      }
-    }
-
-    // 1. From BandEvents/PublishedSubRequests
-    try {
-      final pubSnap = await _dbRef('BandEvents/PublishedSubRequests').get();
-      if (pubSnap.exists && pubSnap.value is Map) {
-        (pubSnap.value as Map).forEach((k, v) {
-          if (v is Map) {
-            final req = SubRequest.fromJson(v, k.toString());
-            if (req.eventId == eventId && (req.bandId == bandId || bandId.isEmpty)) {
-              addIfValid(req);
-            }
-          }
-        });
-      }
-    } catch (_) {}
-
-    // 2. From SubRequests
-    try {
-      final snapshot = await _dbRef('SubRequests')
-          .orderByChild('eventId')
-          .equalTo(eventId)
-          .get();
-
-      if (snapshot.exists && snapshot.value is Map) {
-        (snapshot.value as Map).forEach((k, v) {
-          if (v is Map) {
-            final req = SubRequest.fromJson(v, k.toString());
-            if (req.bandId == bandId || bandId.isEmpty) {
-              addIfValid(req);
-            }
-          }
-        });
-      }
-    } catch (e) {
-      debugPrint("Error querying subrequests by eventId: $e");
-    }
-
-    // Fallback query for capitalized EventId if empty
-    if (requests.isEmpty) {
-      try {
-        final legacySnap = await _dbRef('SubRequests')
-            .orderByChild('EventId')
-            .equalTo(eventId)
-            .get();
-        if (legacySnap.exists && legacySnap.value is Map) {
-          (legacySnap.value as Map).forEach((k, v) {
-            if (v is Map) {
-              final req = SubRequest.fromJson(v, k.toString());
-              if ((req.bandId == bandId || bandId.isEmpty)) {
-                addIfValid(req);
-              }
-            }
-          });
-        }
-      } catch (_) {}
-    }
-    return requests;
+      return true;
+    }).toList();
   }
 
   String _sanitizeRtdbKey(String input) {
@@ -1039,24 +1107,13 @@ class FirebaseService {
 
       final json = updated.toJson();
 
-      // 1. Direct write to BandEvents/PublishedSubRequests (universally accessible for all users)
-      try {
-        await _dbRef('BandEvents/PublishedSubRequests/$key').set(json);
-        await _dbRef('BandEvents/CancelledSubRequests/$key').remove();
-        if (updated.requestGroupId != null && updated.requestGroupId!.isNotEmpty) {
-          await _dbRef('BandEvents/CancelledSubRequests/${updated.requestGroupId}').remove();
-        }
-      } catch (e) {
-        debugPrint('[FirebaseService] Error saving BandEvents/PublishedSubRequests/$key: $e');
-      }
+
 
       // 2. Direct write to user's personal /users/$currentUserId/SubRequests/$key
       if (currentUserId != null) {
         try {
           await _dbRef('users/$currentUserId/SubRequests/$key').set(json);
-          await _dbRef('users/$currentUserId/CancelledSubRequests/$key').remove();
           if (updated.requestGroupId != null && updated.requestGroupId!.isNotEmpty) {
-            await _dbRef('users/$currentUserId/CancelledSubRequests/${updated.requestGroupId}').remove();
           }
         } catch (e) {
           debugPrint('[FirebaseService] Error saving users/$currentUserId/SubRequests/$key: $e');
@@ -1139,7 +1196,6 @@ class FirebaseService {
     String? replacedMemberId,
     String? replacedMemberName,
   }) async {
-    final now = DateTime.now().millisecondsSinceEpoch;
     final actualSlotId = (slotId != null && slotId.isNotEmpty) ? slotId : subRequestId;
 
     try {
@@ -1156,142 +1212,11 @@ class FirebaseService {
         'replacedMemberId': replacedMemberId,
         'replacedMemberName': replacedMemberName,
       });
-    } catch (e) {
-      if (e is FirebaseFunctionsException) {
-        if (e.code == 'already-exists') {
-          throw StateError('Assignment conflict: Slot $subRequestId has already been assigned to another candidate.');
-        }
-        rethrow;
+    } on FirebaseFunctionsException catch (e) {
+      if (e.code == 'already-exists') {
+        throw StateError('Assignment conflict: Slot $subRequestId has already been assigned to another candidate.');
       }
-      // Direct RTDB fallback for local unit tests / mock environment
-      final canonicalRef = _dbRef('SubRequests/$subRequestId');
-      final txResult = await canonicalRef.runTransaction((currentData) {
-        if (currentData == null) {
-          return Transaction.abort();
-        }
-        final Map<String, dynamic> data = Map<String, dynamic>.from(currentData as Map);
-        final currentAssignedId = data['AssignedUserId']?.toString();
-        final isAlreadySelected = data['IsSelected'] == true || data['Status'] == 'assigned';
-
-        // Idempotent retry for the same candidate
-        if (isAlreadySelected && currentAssignedId == candidateUserId) {
-          return Transaction.success(data);
-        }
-
-        // Conflict if already assigned to another user or closed
-        if (isAlreadySelected &&
-            currentAssignedId != null &&
-            currentAssignedId.isNotEmpty &&
-            currentAssignedId != candidateUserId) {
-          return Transaction.abort();
-        }
-        if (data['Status'] == 'cancelled' || data['Status'] == 'closed') {
-          return Transaction.abort();
-        }
-
-        data['IsSelected'] = true;
-        data['Status'] = 'assigned';
-        data['AssignedUserId'] = candidateUserId;
-        if (candidateName != null) {
-          data['AssignedUserName'] = candidateName;
-        }
-        data['AssignedAt'] = now;
-        if (currentUserId != null) {
-          data['AssignedBy'] = currentUserId;
-        }
-        return Transaction.success(data);
-      });
-
-      if (!txResult.committed) {
-        final snap = await canonicalRef.get();
-        if (snap.exists && snap.value is Map) {
-          final val = snap.value as Map;
-          if (val['AssignedUserId'] == candidateUserId) {
-            // Idempotent pass
-          } else {
-            throw StateError('Assignment conflict: Slot $subRequestId has already been assigned to another candidate.');
-          }
-        } else {
-          throw StateError('Assignment conflict: Slot $subRequestId cannot be assigned.');
-        }
-      }
-
-      // Multi-location idempotent derived index updates
-      final Map<String, dynamic> updates = {};
-
-      if (currentUserId != null) {
-        updates['users/$currentUserId/SubRequests/$subRequestId/IsSelected'] = true;
-        updates['users/$currentUserId/SubRequests/$subRequestId/Status'] = 'assigned';
-        updates['users/$currentUserId/SubRequests/$subRequestId/AssignedUserId'] = candidateUserId;
-        if (candidateName != null) {
-          updates['users/$currentUserId/SubRequests/$subRequestId/AssignedUserName'] = candidateName;
-        }
-        updates['users/$currentUserId/SubRequests/$subRequestId/AssignedAt'] = now;
-        updates['users/$currentUserId/SubRequests/$subRequestId/AssignedBy'] = currentUserId;
-      }
-
-      if (bandId.isNotEmpty && eventId.isNotEmpty) {
-        updates['Bands/$bandId/Events/$eventId/substituteAssignments/$actualSlotId'] = {
-          'slotId': actualSlotId,
-          'subRequestId': subRequestId,
-          'assignedUserId': candidateUserId,
-          if (candidateName != null) 'assignedUserName': candidateName,
-          'instrument': roleOrInstrument,
-          if (replacedMemberId != null) 'replacedMemberId': replacedMemberId,
-          if (replacedMemberName != null) 'replacedMemberName': replacedMemberName,
-          'status': 'assigned',
-          'assignedAt': now,
-          if (currentUserId != null) 'assignedBy': currentUserId,
-        };
-
-        final isoTimestamp = DateTime.fromMillisecondsSinceEpoch(now).toUtc().toIso8601String();
-        updates['Bands/$bandId/Events/$eventId/Responses/$candidateUserId'] = {
-          'status': 'YES',
-          'timestamp': isoTimestamp,
-        };
-
-        updates['Bands/$bandId/Events/$eventId/externalInvitees/$candidateUserId/userId'] = candidateUserId;
-        updates['Bands/$bandId/Events/$eventId/externalInvitees/$candidateUserId/status'] = 'attending';
-        updates['Bands/$bandId/Events/$eventId/externalInvitees/$candidateUserId/instrument'] = roleOrInstrument;
-        if (candidateName != null) {
-          updates['Bands/$bandId/Events/$eventId/externalInvitees/$candidateUserId/displayName'] = candidateName;
-        }
-        updates['Bands/$bandId/Events/$eventId/externalInvitees/$candidateUserId/source'] = 'subRequest';
-        updates['Bands/$bandId/Events/$eventId/externalInvitees/$candidateUserId/subRequestId'] = subRequestId;
-        updates['Bands/$bandId/Events/$eventId/updatedAt'] = now;
-      }
-
-      if (bandId.isNotEmpty) {
-        updates['Bands/$bandId/Members_band/$candidateUserId'] = {
-          'Nickname': candidateName ?? 'Substitute',
-          'Role': 'Substitute',
-        };
-        updates['bandconversations/$bandId/members/$candidateUserId'] = true;
-      }
-
-      await _dbRef('').update(updates);
-
-      if (bandId.isNotEmpty) {
-        try {
-          final band = await getBandInfoAsync(bandId);
-          if (band != null) {
-            await _dbRef('users/$candidateUserId/Bands/$bandId').set(band.toJson());
-          }
-        } catch (e) {
-          debugPrint('[FirebaseService] Could not set users/$candidateUserId/Bands/$bandId: $e');
-        }
-
-        if (eventId.isNotEmpty) {
-          try {
-            final event = await getBandEventOnceAsync(bandId, eventId);
-            if (event?.temporaryRoomId != null && event!.temporaryRoomId!.isNotEmpty) {
-              await addMemberToEventRoomAsync(bandId, event.temporaryRoomId!, candidateUserId, 'substitute');
-            }
-          } catch (e) {
-            debugPrint('[FirebaseService] Could not add substitute to temporary room: $e');
-          }
-        }
-      }
+      rethrow;
     }
   }
 
@@ -1302,63 +1227,17 @@ class FirebaseService {
     required String eventId,
     String? slotId,
   }) async {
-    final now = DateTime.now().millisecondsSinceEpoch;
     final actualSlotId = (slotId != null && slotId.isNotEmpty) ? slotId : subRequestId;
 
-    try {
-      final callable = FirebaseFunctions.instanceFor(region: 'europe-west1')
-          .httpsCallable('revokeSubstituteAssignment');
-      await callable.call<Map<String, dynamic>>({
-        'subRequestId': subRequestId,
-        'candidateUserId': candidateUserId,
-        'bandId': bandId,
-        'eventId': eventId,
-        'slotId': actualSlotId,
-      });
-    } catch (e) {
-      final Map<String, dynamic> updates = {};
-
-      updates['SubRequests/$subRequestId/IsSelected'] = false;
-      updates['SubRequests/$subRequestId/Status'] = 'published';
-      updates['SubRequests/$subRequestId/AssignedUserId'] = null;
-      updates['SubRequests/$subRequestId/AssignedUserName'] = null;
-      updates['SubRequests/$subRequestId/AssignedAt'] = null;
-      updates['SubRequests/$subRequestId/AssignedBy'] = null;
-
-      if (currentUserId != null) {
-        updates['users/$currentUserId/SubRequests/$subRequestId/IsSelected'] = false;
-        updates['users/$currentUserId/SubRequests/$subRequestId/Status'] = 'published';
-        updates['users/$currentUserId/SubRequests/$subRequestId/AssignedUserId'] = null;
-        updates['users/$currentUserId/SubRequests/$subRequestId/AssignedUserName'] = null;
-        updates['users/$currentUserId/SubRequests/$subRequestId/AssignedAt'] = null;
-        updates['users/$currentUserId/SubRequests/$subRequestId/AssignedBy'] = null;
-      }
-
-      updates['Bands/$bandId/Events/$eventId/substituteAssignments/$actualSlotId'] = null;
-
-      // Only set externalInvitees status to pending if candidate has NO other active assignments in this event
-      try {
-        final assignSnap = await _dbRef('Bands/$bandId/Events/$eventId/substituteAssignments').get();
-        bool hasOtherAssignment = false;
-        if (assignSnap.exists && assignSnap.value is Map) {
-          (assignSnap.value as Map).forEach((k, v) {
-            if (k.toString() != actualSlotId && v is Map) {
-              if (v['assignedUserId'] == candidateUserId && v['status'] == 'assigned') {
-                hasOtherAssignment = true;
-              }
-            }
-          });
-        }
-        if (!hasOtherAssignment) {
-          updates['Bands/$bandId/Events/$eventId/externalInvitees/$candidateUserId/status'] = 'pending';
-        }
-      } catch (_) {
-        updates['Bands/$bandId/Events/$eventId/externalInvitees/$candidateUserId/status'] = 'pending';
-      }
-
-      updates['Bands/$bandId/Events/$eventId/updatedAt'] = now;
-      await _dbRef('').update(updates);
-    }
+    final callable = FirebaseFunctions.instanceFor(region: 'europe-west1')
+        .httpsCallable('revokeSubstituteAssignment');
+    await callable.call<Map<String, dynamic>>({
+      'subRequestId': subRequestId,
+      'candidateUserId': candidateUserId,
+      'bandId': bandId,
+      'eventId': eventId,
+      'slotId': actualSlotId,
+    });
   }
 
   Future<Set<String>> getUserAppliedSubRequestIdsAsync(String userId) async {
@@ -1427,28 +1306,22 @@ class FirebaseService {
     }
 
     // 5. Also record in creator's personal SubRequests if found (best-effort)
+    SubRequest? effectiveSubRequest;
     try {
-      final snapshot = await _dbRef('SubRequests/$subRequestId').get();
-      if (snapshot.exists && snapshot.value is Map) {
-        final creatorId = (snapshot.value as Map)['CreatorUserId'] ?? (snapshot.value as Map)['creatorUserId'];
-        if (creatorId != null && creatorId.toString().isNotEmpty) {
-          try {
-            await _dbRef('users/$creatorId/SubRequests/$subRequestId/Responses/$userId').set(true);
-          } catch (_) {}
-        }
+      effectiveSubRequest = await getSubRequestAsync(subRequestId);
+      final creatorId = effectiveSubRequest?.creatorUserId ?? effectiveSubRequest?.userId;
+      if (creatorId != null && creatorId.toString().isNotEmpty) {
+        try {
+          await _dbRef('users/$creatorId/SubRequests/$subRequestId/Responses/$userId').set(true);
+        } catch (_) {}
       }
     } catch (_) {}
 
     // 6. Optional event invitee linking (non-blocking for permission boundaries)
     try {
-      final snapshot = await _dbRef('SubRequests/$subRequestId').get();
-      if (snapshot.exists && snapshot.value is Map) {
-        final subRequest = SubRequest.fromJson(
-          snapshot.value as Map,
-          subRequestId,
-        );
-        final bandId = subRequest.bandId;
-        final eventId = subRequest.eventId;
+      if (effectiveSubRequest != null) {
+        final bandId = effectiveSubRequest.bandId;
+        final eventId = effectiveSubRequest.eventId;
         if (bandId != null &&
             eventId != null &&
             bandId.isNotEmpty &&
@@ -1483,18 +1356,7 @@ class FirebaseService {
 
     // 7. Insert real-time notification for the subrequest creator
     try {
-      SubRequest? subRequest = await getSubRequestAsync(subRequestId);
-      if (subRequest == null) {
-        final subSnap = await _dbRef('SubRequests/$subRequestId').get();
-        if (subSnap.exists && subSnap.value is Map) {
-          subRequest = SubRequest.fromJson(subSnap.value as Map, subRequestId);
-        } else {
-          final pubSnap = await _dbRef('BandEvents/PublishedSubRequests/$subRequestId').get();
-          if (pubSnap.exists && pubSnap.value is Map) {
-            subRequest = SubRequest.fromJson(pubSnap.value as Map, subRequestId);
-          }
-        }
-      }
+      final subRequest = effectiveSubRequest ?? await getSubRequestAsync(subRequestId);
 
       final creatorId = subRequest?.creatorUserId ?? subRequest?.userId;
       if (creatorId != null && creatorId.isNotEmpty && creatorId != userId) {
@@ -1546,27 +1408,7 @@ class FirebaseService {
   }
 
   Future<SubRequest?> getSubRequestAsync(String subRequestId) async {
-    // 0. Check if globally cancelled
-    try {
-      final cancelledSnap = await _dbRef('BandEvents/CancelledSubRequests/$subRequestId').get();
-      if (cancelledSnap.exists && cancelledSnap.value == true) {
-        return null;
-      }
-    } catch (_) {}
-
-    // 1. Check BandEvents/PublishedSubRequests
-    try {
-      final pubSnap = await _dbRef('BandEvents/PublishedSubRequests/$subRequestId').get();
-      if (pubSnap.exists && pubSnap.value is Map) {
-        final req = SubRequest.fromJson(pubSnap.value as Map, subRequestId);
-        final st = req.status.toLowerCase();
-        if (st != 'cancelled' && st != 'deleted') {
-          return req;
-        }
-      }
-    } catch (_) {}
-
-    // 2. Check root SubRequests
+    // 1. Check canonical SubRequests
     try {
       final snapshot = await _dbRef('SubRequests/$subRequestId').get();
       if (snapshot.exists && snapshot.value is Map) {
@@ -1576,16 +1418,37 @@ class FirebaseService {
           return req;
         }
       }
-    } catch (e) {
-      debugPrint('[FirebaseService] Error getting subrequest $subRequestId: $e');
-    }
+    } catch (_) {}
 
-    // 3. Check user's personal SubRequests
+    // 2. Check publicSubRequests
+    try {
+      final pubSnap = await _dbRef('publicSubRequests/$subRequestId').get();
+      if (pubSnap.exists && pubSnap.value is Map) {
+        final req = SubRequest.fromJson(pubSnap.value as Map, subRequestId);
+        final st = req.status.toLowerCase();
+        if (st != 'cancelled' && st != 'deleted') {
+          return req;
+        }
+      }
+    } catch (_) {}
+
+    // 3. Check current user feeds
     if (currentUserId != null) {
       try {
-        final userSnap = await _dbRef('users/$currentUserId/SubRequests/$subRequestId').get();
-        if (userSnap.exists && userSnap.value is Map) {
-          final req = SubRequest.fromJson(userSnap.value as Map, subRequestId);
+        final feedSnap = await _dbRef('userSubRequestFeed/$currentUserId/$subRequestId').get();
+        if (feedSnap.exists && feedSnap.value is Map) {
+          final req = SubRequest.fromJson(feedSnap.value as Map, subRequestId);
+          final st = req.status.toLowerCase();
+          if (st != 'cancelled' && st != 'deleted') {
+            return req;
+          }
+        }
+      } catch (_) {}
+
+      try {
+        final creatorSnap = await _dbRef('creatorSubRequestFeed/$currentUserId/$subRequestId').get();
+        if (creatorSnap.exists && creatorSnap.value is Map) {
+          final req = SubRequest.fromJson(creatorSnap.value as Map, subRequestId);
           final st = req.status.toLowerCase();
           if (st != 'cancelled' && st != 'deleted') {
             return req;
@@ -1593,6 +1456,19 @@ class FirebaseService {
         }
       } catch (_) {}
     }
+
+    // 4. Check publicMapPinFeed
+    try {
+      final pinSnap = await _dbRef('publicMapPinFeed/$subRequestId').get();
+      if (pinSnap.exists && pinSnap.value is Map) {
+        final req = SubRequest.fromJson(pinSnap.value as Map, subRequestId);
+        final st = req.status.toLowerCase();
+        if (st != 'cancelled' && st != 'deleted') {
+          return req;
+        }
+      }
+    } catch (_) {}
+
     return null;
   }
 
@@ -1603,60 +1479,22 @@ class FirebaseService {
     try {
       if (subRequestId.isEmpty) return false;
 
-      // 0. Lookup subrequest details first to get requestGroupId and related keys
-      String? requestGroupId;
-      try {
-        final existing = await getSubRequestAsync(subRequestId);
-        if (existing != null) {
-          requestGroupId = existing.requestGroupId;
-        }
-      } catch (_) {}
-
-      // 1. Mark in BandEvents/CancelledSubRequests (universally accessible write/read)
-      try {
-        await _dbRef('BandEvents/CancelledSubRequests/$subRequestId').set(true);
-        if (requestGroupId != null && requestGroupId.isNotEmpty) {
-          await _dbRef('BandEvents/CancelledSubRequests/$requestGroupId').set(true);
-        }
-      } catch (e) {
-        debugPrint("[FirebaseService] Error recording BandEvents/CancelledSubRequests: $e");
-      }
-
-      // 2. Remove responses from BandEvents/SubRequestResponses
-      try {
-        await _dbRef('BandEvents/SubRequestResponses/$subRequestId').remove();
-      } catch (_) {}
-
-      // 3. Update status and remove from BandEvents/PublishedSubRequests
-      try {
-        await _dbRef('BandEvents/PublishedSubRequests/$subRequestId/status').set('cancelled');
-        await _dbRef('BandEvents/PublishedSubRequests/$subRequestId/Status').set('cancelled');
-        await _dbRef('BandEvents/PublishedSubRequests/$subRequestId').remove();
-      } catch (_) {}
-
-      // 3. Mark in creator's personal CancelledSubRequests and remove from SubRequests
-      if (creatorId.isNotEmpty) {
-        try {
-          await _dbRef('users/$creatorId/CancelledSubRequests/$subRequestId').set(true);
-          if (requestGroupId != null && requestGroupId.isNotEmpty) {
-            await _dbRef('users/$creatorId/CancelledSubRequests/$requestGroupId').set(true);
-          }
-          await _dbRef('users/$creatorId/SubRequests/$subRequestId').remove();
-        } catch (_) {}
-      }
-
-      // 4. Mark as cancelled in root SubRequests (best-effort)
-      try {
-        await _dbRef('SubRequests/$subRequestId/Status').set('cancelled');
-        await _dbRef('SubRequests/$subRequestId/status').set('cancelled');
-        await _dbRef('SubRequests/$subRequestId').remove();
-      } catch (_) {}
-
-      // 5. Call Cloud Function (best-effort)
+      // 1. Server-owned callable handles atomic multi-path deletion
       try {
         final callable = _functions.httpsCallable('deleteSubRequest');
         await callable.call({'subRequestId': subRequestId});
-      } catch (_) {}
+        return true;
+      } catch (e) {
+        debugPrint("[FirebaseService] deleteSubRequest callable notice: $e");
+      }
+
+      // 2. Best-effort fallback for user's personal index
+      if (creatorId.isNotEmpty) {
+        try {
+          await _dbRef('users/$creatorId/SubRequests/$subRequestId').remove();
+          await _dbRef('creatorSubRequestFeed/$creatorId/$subRequestId').remove();
+        } catch (_) {}
+      }
 
       return true;
     } catch (e) {
@@ -2981,6 +2819,12 @@ class FirebaseService {
     'externalInvitees',
     'substituteAssignments',
     'excludedMemberIds',
+    'latitude',
+    'longitude',
+    'locationPrecision',
+    'city',
+    'placeId',
+    'locationStatus',
     'updatedAt',
   };
 
@@ -3020,6 +2864,12 @@ class FirebaseService {
       externalInvitees: event.externalInvitees,
       substituteAssignments: event.substituteAssignments,
       excludedMemberIds: event.excludedMemberIds,
+      latitude: event.latitude,
+      longitude: event.longitude,
+      locationPrecision: event.locationPrecision,
+      city: event.city,
+      placeId: event.placeId,
+      locationStatus: event.locationStatus,
     );
     await _dbRef('Bands/$bandId/Events/$eventId').set(created.toJson());
     return eventId;
@@ -3060,6 +2910,12 @@ class FirebaseService {
         'externalInvitees': event.externalInvitees.map((k, v) => MapEntry(k, v.toJson())),
         'substituteAssignments': event.substituteAssignments.map((k, v) => MapEntry(k, v.toJson())),
         'excludedMemberIds': event.excludedMemberIds,
+        if (event.latitude != null) 'latitude': event.latitude,
+        if (event.longitude != null) 'longitude': event.longitude,
+        'locationPrecision': event.locationPrecision,
+        if (event.city != null && event.city!.isNotEmpty) 'city': event.city,
+        if (event.placeId != null && event.placeId!.isNotEmpty) 'placeId': event.placeId,
+        if (event.locationStatus != null && event.locationStatus!.isNotEmpty) 'locationStatus': event.locationStatus,
       });
       return event.id!;
     }
