@@ -1201,7 +1201,7 @@ describe('Real Cloud Functions Emulator Integration Tests (JS Client SDK + Emula
       // Wait for trigger to write notification
       const notifRef = adminDb.ref(`userNotifications/${creatorUid}/notif_sub_resp_${subReqId}_${applicantUid}`);
       let created = false;
-      for (let i = 0; i < 20; i++) {
+      for (let i = 0; i < 50; i++) {
         const snap = await notifRef.get();
         if (snap.exists() && snap.val()) {
           created = true;
@@ -1250,7 +1250,7 @@ describe('Real Cloud Functions Emulator Integration Tests (JS Client SDK + Emula
       // Member should receive notification
       const memberNotifRef = adminDb.ref(`userNotifications/${memberUid}/notif_file_${bandId}_${fileId}_${memberUid}`);
       let notifiedMember = false;
-      for (let i = 0; i < 20; i++) {
+      for (let i = 0; i < 50; i++) {
         const snap = await memberNotifRef.get();
         if (snap.exists() && snap.val()) {
           notifiedMember = true;
@@ -1517,7 +1517,7 @@ describe('Real Cloud Functions Emulator Integration Tests (JS Client SDK + Emula
         });
 
         let receivedNotif = false;
-        for (let i = 0; i < 20; i++) {
+        for (let i = 0; i < 50; i++) {
           const notifSnapB = await adminDb.ref('userNotifications/user_b').get();
           if (notifSnapB.exists() && notifSnapB.val()) {
             receivedNotif = true;

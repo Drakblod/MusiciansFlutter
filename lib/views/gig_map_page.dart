@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
@@ -8,12 +7,12 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
-import 'package:http/http.dart' as http;
 import 'package:file_picker/file_picker.dart';
 import 'edit_band_info_screen.dart';
 import '../providers/app_state.dart';
 import '../theme/app_theme.dart';
 import '../models/sub_request.dart';
+import '../models/map_event_item.dart';
 import '../services/location_service.dart';
 import '../models/user_profile.dart';
 import '../config/feature_flags.dart';
@@ -570,6 +569,8 @@ class GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Rou
   SubRequest? _selectedGig;
   List<SubRequest>? _selectedGroupMembers;
   StreamSubscription<List<SubRequest>>? _feedSubscription;
+  StreamSubscription<List<MapEventItem>>? _eventFeedSubscription;
+  List<SubRequest> _eventGigs = [];
   String? _subscribedUserId;
   static bool _sessionDismissedGuideBanner = false;
   bool _showGuideBanner = false;
@@ -1182,9 +1183,10 @@ class GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Rou
         return;
       }
       final hasAnyLive = _allGigs.any(isSubRequestActive) ||
+          _eventGigs.any(isSubRequestActive) ||
           (FeatureFlags.enableMockLiveRehearsals && mockLiveRehearsals.any(isMockLiveRehearsalActive)) ||
           _activeRealBroadcasts.isNotEmpty;
-      if (hasAnyLive) {
+      if (hasAnyLive || _eventGigs.isNotEmpty) {
         setState(() {
           _liveNoteBlinkOn = !_liveNoteBlinkOn;
         });
@@ -1335,6 +1337,9 @@ class GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Rou
   void dispose() {
     _feedSubscription?.cancel();
     _feedSubscription = null;
+    _eventFeedSubscription?.cancel();
+    _eventFeedSubscription = null;
+    _eventGigs.clear();
     _subscribedUserId = null;
     appRouteObserver.unsubscribe(this);
     _liveBlinkTimer?.cancel();
@@ -1934,12 +1939,30 @@ class GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Rou
 
   BitmapDescriptor _getMarkerColor(SubRequest gig) {
     final eventType = MapEventTypeHelper.getEventType(gig);
-    final isLive = isSubRequestActive(gig);
+    final isLive = isMapEventCurrentlyActive(gig);
     return _getNoteDescriptor(eventType, isLive: isLive);
   }
 
   List<SubRequest> _getFilteredGigs(UserProfile? profile) {
-    List<SubRequest> list = _allGigs;
+    final mergedCandidateGigs = <SubRequest>[];
+    final seenCandidateIds = <String>{};
+    for (final g in _allGigs) {
+      final id = g.canonicalTargetId ?? g.id;
+      if (id != null && seenCandidateIds.add(id)) {
+        mergedCandidateGigs.add(g);
+      }
+    }
+    final now = DateTime.now();
+    for (final g in _eventGigs) {
+      final id = g.canonicalTargetId ?? g.id;
+      if (!isMapEventVisible(g, now: now)) {
+        continue;
+      }
+      if (id != null && seenCandidateIds.add(id)) {
+        mergedCandidateGigs.add(g);
+      }
+    }
+    List<SubRequest> list = mergedCandidateGigs;
 
     // 1. Primary Category Filter
     if (_selectedMainCategory == 'Music') {
@@ -2043,6 +2066,9 @@ class GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Rou
     final evId = gig.eventId?.trim();
     final bId = gig.bandId?.trim();
     if (evId != null && evId.isNotEmpty && bId != null && bId.isNotEmpty && evId != 'standalone') {
+      if (gig.extraFields['isEventProjection'] == true) {
+        return 'event_proj_${gig.canonicalTargetId ?? gig.id}';
+      }
       return 'event_${bId}_${evId}_${latStr}_${lngStr}';
     }
 
@@ -2060,9 +2086,22 @@ class GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Rou
 
     final gigMarkers = groups.values.map((memberList) {
       final primary = memberList.first;
+      LatLng markerPos = LatLng(primary.latitude!, primary.longitude!);
+      if (primary.extraFields['isEventProjection'] == true) {
+        final hasCollidingNonEvent = filteredGigs.any((other) =>
+            other.extraFields['isEventProjection'] != true &&
+            other.latitude != null &&
+            other.longitude != null &&
+            (other.latitude! - primary.latitude!).abs() < 0.00005 &&
+            (other.longitude! - primary.longitude!).abs() < 0.00005);
+        if (hasCollidingNonEvent) {
+          // Deterministic spidering offset: +0.00018 lat (~20m north)
+          markerPos = LatLng(primary.latitude! + 0.00018, primary.longitude!);
+        }
+      }
       return Marker(
         markerId: MarkerId(primary.canonicalTargetId ?? UniqueKey().toString()),
-        position: LatLng(primary.latitude!, primary.longitude!),
+        position: markerPos,
         icon: _getMarkerColor(primary),
         anchor: const Offset(0.321, 0.716),
         infoWindow: InfoWindow.noText,
@@ -2548,7 +2587,7 @@ class GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Rou
   Future<void> _showUploadEventSheet({SubRequest? editingPin}) async {
     final isEditing = editingPin != null;
     String selectedCategory = editingPin?.extraFields['subCategory']?.toString() ?? 'Music';
-    String selectedType = editingPin?.requestType ?? (selectedCategory == 'Music' ? 'Gig' : 'Substitute');
+    String selectedType = editingPin?.requestType ?? 'Music Promotion';
     List<String> selectedGenres = [
       editingPin?.extraFields['genre']?.toString() ?? editingPin?.style ?? 'Big Band Contemporary'
     ];
@@ -2611,19 +2650,13 @@ class GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Rou
       builder: (ctx) => StatefulBuilder(
         builder: (context, setSheetState) {
           final typesForCategory = [
-            'Gig / Concert',
-            'Gig',
-            'Concert',
-            'Festival',
-            'Rehearsal',
-            'Jam Session',
+            'Music Promotion',
             'Demos / Recordings',
             'Demo',
             'Recording',
+            'Jam Session',
             'Songwriting Session',
-            'Workshop',
-            'Lecture',
-            'Other'
+            'Other Promotion'
           ];
 
           return Padding(

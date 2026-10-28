@@ -32,6 +32,11 @@ class PublicCalendarEvent {
   final String? imageFitMode; // 'cover' or 'contain'
   final String? createdBy;
   final int? createdAt;
+  final double? latitude;
+  final double? longitude;
+  final String locationPrecision;
+  final String? placeId;
+  final String? locationStatus;
 
   const PublicCalendarEvent({
     required this.id,
@@ -55,6 +60,11 @@ class PublicCalendarEvent {
     this.imageFitMode = 'cover',
     this.createdBy,
     this.createdAt,
+    this.latitude,
+    this.longitude,
+    this.locationPrecision = 'exact',
+    this.placeId,
+    this.locationStatus,
   });
 
   factory PublicCalendarEvent.fromJson(Map<dynamic, dynamic> json, [String? id]) {
@@ -120,6 +130,15 @@ class PublicCalendarEvent {
       createdAt: json['createdAt'] is int
           ? json['createdAt'] as int
           : int.tryParse(json['createdAt']?.toString() ?? ''),
+      latitude: json['latitude'] is num
+          ? (json['latitude'] as num).toDouble()
+          : double.tryParse(json['latitude']?.toString() ?? ''),
+      longitude: json['longitude'] is num
+          ? (json['longitude'] as num).toDouble()
+          : double.tryParse(json['longitude']?.toString() ?? ''),
+      locationPrecision: json['locationPrecision']?.toString() ?? 'exact',
+      placeId: json['placeId']?.toString(),
+      locationStatus: json['locationStatus']?.toString(),
     );
   }
 
@@ -146,6 +165,11 @@ class PublicCalendarEvent {
       if (imageFitMode != null) 'imageFitMode': imageFitMode,
       if (createdBy != null && createdBy!.isNotEmpty) 'createdBy': createdBy,
       if (createdAt != null) 'createdAt': createdAt,
+      if (latitude != null) 'latitude': latitude,
+      if (longitude != null) 'longitude': longitude,
+      'locationPrecision': locationPrecision,
+      if (placeId != null) 'placeId': placeId,
+      if (locationStatus != null) 'locationStatus': locationStatus,
     };
   }
 
@@ -171,6 +195,11 @@ class PublicCalendarEvent {
     String? imageFitMode,
     String? createdBy,
     int? createdAt,
+    double? latitude,
+    double? longitude,
+    String? locationPrecision,
+    String? placeId,
+    String? locationStatus,
   }) {
     return PublicCalendarEvent(
       id: id ?? this.id,
@@ -194,6 +223,11 @@ class PublicCalendarEvent {
       imageFitMode: imageFitMode ?? this.imageFitMode,
       createdBy: createdBy ?? this.createdBy,
       createdAt: createdAt ?? this.createdAt,
+      latitude: latitude ?? this.latitude,
+      longitude: longitude ?? this.longitude,
+      locationPrecision: locationPrecision ?? this.locationPrecision,
+      placeId: placeId ?? this.placeId,
+      locationStatus: locationStatus ?? this.locationStatus,
     );
   }
 

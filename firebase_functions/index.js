@@ -4,6 +4,12 @@ const { onValueCreated, onValueWritten } = require('firebase-functions/v2/databa
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const logger = require('firebase-functions/logger');
 const crypto = require('crypto');
+const {
+  buildEventProjections,
+  getAuthorizedUserIdsForBandEvent,
+  calculateReconciliationDiff,
+  buildProjectionIndexKey,
+} = require('./event_projection');
 if (!admin.apps.length) {
   admin.initializeApp();
 }
@@ -327,6 +333,92 @@ exports.onBandEventCreated = functions.region(databaseTriggerRegion).database
       return null;
     }
   });
+
+/**
+ * MAP-VIEW-FEED-02:
+ * Synchronizes private band event projections with atomic index-driven reconciliation.
+ */
+exports.onBandEventWritten = functions.region(databaseTriggerRegion).database
+  .ref('/Bands/{bandId}/Events/{eventId}')
+  .onWrite(async (change, context) => {
+    const bandId = context.params.bandId;
+    const eventId = context.params.eventId;
+    const db = admin.database();
+    const sourceKey = `band:${bandId}:${eventId}`;
+
+    try {
+      const prevIndexSnap = await db.ref(`/mapEventProjectionIndex/${sourceKey}`).once('value');
+      const prevIndex = prevIndexSnap.val() || null;
+
+      let bandName = 'Band';
+      let bandData = { Members_band: {} };
+      try {
+        const bandSnap = await db.ref(`/Bands/${bandId}`).once('value');
+        if (bandSnap.exists() && bandSnap.val()) {
+          const bVal = bandSnap.val();
+          bandName = String(bVal.Name || bVal.name || 'Band').trim();
+          bandData = bVal;
+        }
+      } catch (_) {}
+
+      const eventData = change.after.exists() ? change.after.val() : null;
+
+      const { updates } = calculateReconciliationDiff({
+        source: 'private_band',
+        eventId,
+        bandId,
+        bandName,
+        bandData,
+        eventData,
+        prevIndex,
+      });
+
+      if (Object.keys(updates).length > 0) {
+        await db.ref().update(updates);
+      }
+    } catch (err) {
+      console.error(`[onBandEventWritten] Error reconciling event projections for ${sourceKey}: ${err.message}`);
+    }
+    return null;
+  });
+
+/**
+ * MAP-VIEW-FEED-02:
+ * Synchronizes public calendar event projections with atomic index-driven reconciliation.
+ */
+exports.onPublicEventWritten = functions.region(databaseTriggerRegion).database
+  .ref('/PublicEvents/{eventId}')
+  .onWrite(async (change, context) => {
+    const eventId = context.params.eventId;
+    const db = admin.database();
+    const sourceKey = `public:${eventId}`;
+
+    try {
+      const prevIndexSnap = await db.ref(`/mapEventProjectionIndex/${sourceKey}`).once('value');
+      const prevIndex = prevIndexSnap.val() || null;
+
+      const eventData = change.after.exists() ? change.after.val() : null;
+      const organizerName = eventData ? (eventData.organizerName || '') : '';
+
+      const { updates } = calculateReconciliationDiff({
+        source: 'public_calendar',
+        eventId,
+        bandId: null,
+        bandName: organizerName,
+        bandData: null,
+        eventData,
+        prevIndex,
+      });
+
+      if (Object.keys(updates).length > 0) {
+        await db.ref().update(updates);
+      }
+    } catch (err) {
+      console.error(`[onPublicEventWritten] Error reconciling public event projections for ${sourceKey}: ${err.message}`);
+    }
+    return null;
+  });
+
 
 /**
  * Triggered when a new substitute request is created under /SubRequests/{subRequestId}.
@@ -3512,63 +3604,145 @@ exports.manageBandSectionConversation = onCall({ region: 'europe-west1' }, async
 });
 
 /**
- * 10. onBandMemberRemoved
- * Cleanup trigger when a member is removed from /Bands/{bandId}/Members_band/{memberId}
+ * Core handler for band membership changes (both /Bands/{bandId}/Members_band/{memberId}
+ * and legacy /Members_band/{bandId}/{memberId}).
+ * Idempotently reconciles private event projections and conversation membership.
  */
-exports.onBandMemberRemoved = onValueWritten({
-  ref: '/Bands/{bandId}/Members_band/{memberId}',
-  region: databaseTriggerRegion
-}, async (event) => {
-  // Only trigger on deletion
-  if (event.data.after.exists()) return null;
-
+async function handleBandMemberChange(event) {
   const bandId = event.params.bandId;
   const memberId = event.params.memberId;
+  const db = admin.database();
+  const updates = {};
 
   try {
-    const bandSectionSnap = await admin.database().ref(`/bandSectionConversations/${bandId}`).once('value');
-    if (!bandSectionSnap.exists() || !bandSectionSnap.val()) return null;
+    const afterExists = event.data.after.exists();
+    const memberData = afterExists ? event.data.after.val() : null;
 
-    const convIds = Object.keys(bandSectionSnap.val());
-    const updates = {};
+    if (!afterExists) {
+      // 1. Member was removed from band
+      // Strictly scoped removal: use mapEventProjectionIndex to remove ONLY projections for this band's events
+      try {
+        const bandSnap = await db.ref(`/Bands/${bandId}`).once('value');
+        const bandVal = bandSnap.exists() ? bandSnap.val() : {};
+        const eventsSnap = await db.ref(`/Bands/${bandId}/Events`).once('value');
+        if (eventsSnap.exists() && eventsSnap.val()) {
+          const eventsObj = eventsSnap.val();
+          for (const [eventId, eventData] of Object.entries(eventsObj)) {
+            if (!eventData || typeof eventData !== 'object') continue;
 
-    for (const convId of convIds) {
-      const convSnap = await admin.database().ref(`/conversations/${convId}`).once('value');
-      if (convSnap.exists()) {
-        const convVal = convSnap.val();
-        if (convVal && convVal.participants && convVal.participants[memberId]) {
-          updates[`/conversations/${convId}/participants/${memberId}`] = null;
-          updates[`/conversations/${convId}/admins/${memberId}`] = null;
-          updates[`/userConversations/${memberId}/${convId}`] = null;
-
-          const remainingParticipants = Object.keys(convVal.participants).filter(uid => uid !== memberId && convVal.participants[uid]);
-          const newCount = remainingParticipants.length;
-          updates[`/conversations/${convId}/participantCount`] = newCount;
-
-          remainingParticipants.forEach((uid) => {
-            updates[`/userConversations/${uid}/${convId}/participantCount`] = newCount;
-          });
-
-          // Ensure group still has an admin if the removed member was the only admin
-          const remainingAdmins = Object.keys(convVal.admins || {}).filter(uid => uid !== memberId && convVal.admins[uid]);
-          if (remainingAdmins.length === 0 && remainingParticipants.length > 0) {
-            updates[`/conversations/${convId}/admins/${remainingParticipants[0]}`] = true;
+            // Check if user is still authorized via another role (creator, invitee, confirmed substitute)
+            const stillAuthorized = getAuthorizedUserIdsForBandEvent(bandVal, eventData).includes(memberId);
+            if (!stillAuthorized) {
+              const indexSnap = await db.ref(`/mapEventProjectionIndex/band:${bandId}:${eventId}`).once('value');
+              const indexVal = indexSnap.exists() ? indexSnap.val() : null;
+              const mapItemIds = indexVal && indexVal.mapItemIds ? Object.keys(indexVal.mapItemIds) : [];
+              mapItemIds.forEach((mapItemId) => {
+                updates[`/userMapEventFeed/${memberId}/${mapItemId}`] = null;
+              });
+              updates[`/mapEventProjectionIndex/band:${bandId}:${eventId}/authorizedUids/${memberId}`] = null;
+            }
           }
         }
-      }
+      } catch (_) {}
+
+      // Section conversations cleanup
+      try {
+        const bandSectionSnap = await db.ref(`/bandSectionConversations/${bandId}`).once('value');
+        if (bandSectionSnap.exists() && bandSectionSnap.val()) {
+          const convIds = Object.keys(bandSectionSnap.val());
+          for (const convId of convIds) {
+            const convSnap = await db.ref(`/conversations/${convId}`).once('value');
+            if (convSnap.exists()) {
+              const convVal = convSnap.val();
+              if (convVal && convVal.participants && convVal.participants[memberId]) {
+                updates[`/conversations/${convId}/participants/${memberId}`] = null;
+                updates[`/conversations/${convId}/admins/${memberId}`] = null;
+                updates[`/userConversations/${memberId}/${convId}`] = null;
+
+                const remainingParticipants = Object.keys(convVal.participants).filter(uid => uid !== memberId && convVal.participants[uid]);
+                const newCount = remainingParticipants.length;
+                updates[`/conversations/${convId}/participantCount`] = newCount;
+
+                remainingParticipants.forEach((uid) => {
+                  updates[`/userConversations/${uid}/${convId}/participantCount`] = newCount;
+                });
+
+                const remainingAdmins = Object.keys(convVal.admins || {}).filter(uid => uid !== memberId && convVal.admins[uid]);
+                if (remainingAdmins.length === 0 && remainingParticipants.length > 0) {
+                  updates[`/conversations/${convId}/admins/${remainingParticipants[0]}`] = true;
+                }
+              }
+            }
+          }
+        }
+      } catch (_) {}
+    } else {
+      // 2. Member was added or role/status changed
+      const memberStatus = memberData && typeof memberData === 'object'
+        ? String(memberData.Status || memberData.status || 'active').toLowerCase()
+        : 'active';
+      const isActive = memberStatus !== 'inactive' && memberStatus !== 'suspended';
+
+      let bandName = 'Band';
+      let bandVal = { Members_band: {} };
+      try {
+        const bandSnap = await db.ref(`/Bands/${bandId}`).once('value');
+        if (bandSnap.exists() && bandSnap.val()) {
+          bandVal = bandSnap.val();
+          bandName = String(bandVal.Name || bandVal.name || 'Band').trim();
+        }
+      } catch (_) {}
+
+      try {
+        const eventsSnap = await db.ref(`/Bands/${bandId}/Events`).once('value');
+        if (eventsSnap.exists() && eventsSnap.val()) {
+          const eventsObj = eventsSnap.val();
+          for (const [eventId, eventData] of Object.entries(eventsObj)) {
+            if (!eventData || typeof eventData !== 'object') continue;
+
+            const authorizedUids = getAuthorizedUserIdsForBandEvent(bandVal, eventData);
+            const isAuth = isActive && authorizedUids.includes(memberId);
+            const projections = buildEventProjections('private_band', eventData, eventId, bandId, bandName);
+
+            if (isAuth && projections.length > 0) {
+              projections.forEach((p) => {
+                updates[`/userMapEventFeed/${memberId}/${p.mapItemId}`] = p;
+              });
+              updates[`/mapEventProjectionIndex/band:${bandId}:${eventId}/authorizedUids/${memberId}`] = true;
+            } else {
+              // Not authorized: ensure no stale projections remain
+              const indexSnap = await db.ref(`/mapEventProjectionIndex/band:${bandId}:${eventId}`).once('value');
+              const indexVal = indexSnap.exists() ? indexSnap.val() : null;
+              const mapItemIds = indexVal && indexVal.mapItemIds ? Object.keys(indexVal.mapItemIds) : projections.map((p) => p.mapItemId);
+              mapItemIds.forEach((mId) => {
+                updates[`/userMapEventFeed/${memberId}/${mId}`] = null;
+              });
+              updates[`/mapEventProjectionIndex/band:${bandId}:${eventId}/authorizedUids/${memberId}`] = null;
+            }
+          }
+        }
+      } catch (_) {}
     }
 
     if (Object.keys(updates).length > 0) {
-      await admin.database().ref().update(updates);
-      console.log(`Cleaned up section conversations for removed band member ${memberId} in band ${bandId}`);
+      await db.ref().update(updates);
     }
-
     return null;
   } catch (error) {
-    console.error('Error in onBandMemberRemoved trigger:', error);
+    console.error('Error in handleBandMemberChange trigger:', error);
     return null;
   }
-});
+}
+
+/**
+ * 10. onBandMemberWritten
+ * Primary cleanup/reconciliation trigger when a member is added, updated, or removed
+ * at canonical path /Bands/{bandId}/Members_band/{memberId}
+ */
+exports.onBandMemberWritten = onValueWritten({
+  ref: '/Bands/{bandId}/Members_band/{memberId}',
+  region: databaseTriggerRegion,
+}, handleBandMemberChange);
 
 /**
  * 10. createSessionConversation
@@ -4436,6 +4610,20 @@ exports.deleteBand = onCall({ region: 'europe-west1' }, async (request) => {
       updates[`/users/${memberId}/Bands/${trimmedBandId}`] = null;
     }
 
+    // Clean up private event projections for all members of deleted band
+    for (const memberId of memberIds) {
+      try {
+        const userFeedSnap = await db.ref(`userMapEventFeed/${memberId}`).once('value');
+        if (userFeedSnap.exists() && userFeedSnap.val()) {
+          Object.keys(userFeedSnap.val()).forEach((mapItemId) => {
+            if (mapItemId.startsWith(`event:private:${trimmedBandId}:`)) {
+              updates[`/userMapEventFeed/${memberId}/${mapItemId}`] = null;
+            }
+          });
+        }
+      } catch (_) {}
+    }
+
     // 2. Remove band conversations & section conversations
     updates[`/bandconversations/${trimmedBandId}`] = null;
     updates[`/bandSectionConversations/${trimmedBandId}`] = null;
@@ -4907,3 +5095,8 @@ exports.stopLiveBroadcast = stopLiveBroadcast;
 exports.KNOWN_FEATURE_IDS = KNOWN_FEATURE_IDS;
 exports.resolveNotificationFeatureId = resolveNotificationFeatureId;
 
+
+exports.buildEventProjections = buildEventProjections;
+exports.getAuthorizedUserIdsForBandEvent = getAuthorizedUserIdsForBandEvent;
+exports.calculateReconciliationDiff = calculateReconciliationDiff;
+exports.buildProjectionIndexKey = buildProjectionIndexKey;

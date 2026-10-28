@@ -207,6 +207,20 @@
         ".write": false
       }
     },
+    "publicMapEventFeed": {
+      ".read": "auth != null",
+      ".write": false
+    },
+    "userMapEventFeed": {
+      "$userId": {
+        ".read": "auth != null && auth.uid == $userId",
+        ".write": false
+      }
+    },
+    "mapEventProjectionIndex": {
+      ".read": false,
+      ".write": false
+    },
     "userNotifications": {
       "$userId": {
         ".read": "auth != null && auth.uid == $userId",

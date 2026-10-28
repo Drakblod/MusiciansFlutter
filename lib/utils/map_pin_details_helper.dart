@@ -45,15 +45,21 @@ class MapPinDetails {
 MapPinDetails resolveMapPinDetails(SubRequest gig, {List<SubRequest>? groupedGigs}) {
   final id = gig.canonicalTargetId ?? '';
 
-  // 1. Band Name: Prefer canonical bandName, then legacy extraFields, fallback to 'Band'
-  String resolvedBandName = gig.bandName?.trim() ?? '';
-  if (resolvedBandName.isEmpty) {
-    resolvedBandName = gig.extraFields['bandName']?.toString().trim() ??
-        gig.extraFields['BandName']?.toString().trim() ??
-        '';
-  }
-  if (resolvedBandName.isEmpty) {
-    resolvedBandName = 'Band';
+  // 1. Band Name / Title: For event projections, prefer eventTitle, then bandName, then 'Event'
+  final isEventProj = gig.extraFields['isEventProjection'] == true;
+  String resolvedBandName = '';
+  if (isEventProj && gig.eventTitle != null && gig.eventTitle!.trim().isNotEmpty) {
+    resolvedBandName = gig.eventTitle!.trim();
+  } else {
+    resolvedBandName = gig.bandName?.trim() ?? '';
+    if (resolvedBandName.isEmpty) {
+      resolvedBandName = gig.extraFields['bandName']?.toString().trim() ??
+          gig.extraFields['BandName']?.toString().trim() ??
+          '';
+    }
+    if (resolvedBandName.isEmpty) {
+      resolvedBandName = isEventProj ? 'Event' : 'Band';
+    }
   }
 
   // 2. Genres / Band Types: Prefer canonical genre in extraFields, then style, fallback to null
@@ -63,6 +69,12 @@ MapPinDetails resolveMapPinDetails(SubRequest gig, {List<SubRequest>? groupedGig
       gig.style?.trim();
   if (resolvedGenre != null && resolvedGenre.isEmpty) {
     resolvedGenre = null;
+  }
+  if (isEventProj && (resolvedGenre == null || resolvedGenre.isEmpty)) {
+    final org = gig.bandName?.trim() ?? gig.extraFields['organizerName']?.toString().trim();
+    if (org != null && org.isNotEmpty && org != resolvedBandName) {
+      resolvedGenre = org;
+    }
   }
 
   // 3. Type resolution and display mapping

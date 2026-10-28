@@ -28,6 +28,14 @@ describe('Database Rules Syntax & Policy Compilation Tests', () => {
 
     // Legacy chat write access preserved in transitional phase
     assert.strictEqual(rulesObj.rules.conversations['.write'], 'auth != null');
+
+    // Event feed rules check
+    assert.strictEqual(rulesObj.rules.publicMapEventFeed['.read'], 'auth != null');
+    assert.strictEqual(rulesObj.rules.publicMapEventFeed['.write'], false);
+    assert.strictEqual(rulesObj.rules.userMapEventFeed['$userId']['.read'], 'auth != null && auth.uid == $userId');
+    assert.strictEqual(rulesObj.rules.userMapEventFeed['$userId']['.write'], false);
+    assert.strictEqual(rulesObj.rules.mapEventProjectionIndex['.read'], false);
+    assert.strictEqual(rulesObj.rules.mapEventProjectionIndex['.write'], false);
   });
 
   it('3. Verify Final Rules syntax and permission structure', () => {
@@ -44,5 +52,13 @@ describe('Database Rules Syntax & Policy Compilation Tests', () => {
     const convChildRule = rulesObj.rules.conversations['$conversationId'];
     assert.strictEqual(convChildRule['.write'], false);
     assert(convChildRule['.read'].includes('participants'));
+
+    // Event feed rules check
+    assert.strictEqual(rulesObj.rules.publicMapEventFeed['.read'], 'auth != null');
+    assert.strictEqual(rulesObj.rules.publicMapEventFeed['.write'], false);
+    assert.strictEqual(rulesObj.rules.userMapEventFeed['$userId']['.read'], 'auth != null && auth.uid == $userId');
+    assert.strictEqual(rulesObj.rules.userMapEventFeed['$userId']['.write'], false);
+    assert.strictEqual(rulesObj.rules.mapEventProjectionIndex['.read'], false);
+    assert.strictEqual(rulesObj.rules.mapEventProjectionIndex['.write'], false);
   });
 });

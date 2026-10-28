@@ -84,14 +84,94 @@ bool isMapItemActive({
   return !current.isBefore(start) && current.isBefore(end);
 }
 
-/// Evaluates whether a [SubRequest] gig or rehearsal is currently active.
-bool isSubRequestActive(SubRequest gig, {DateTime? now}) {
-  final eventType = _resolveMapEventType(gig);
-  if (eventType != MapEventType.gigConcert && eventType != MapEventType.concert && eventType != MapEventType.rehearsal) {
+/// Evaluates whether an Event pin should be visible on the Map.
+///
+/// Visibility Rules:
+/// - Future Event (`now < start` or `now < end`): visible.
+/// - Current Event (`start <= now < end`): visible.
+/// - Past Event:
+///     - If end time is available: past (not visible) once `now >= end`.
+///     - If only start time is available: past (not visible) once `now > start`.
+///     - If neither is available: visible (never invent an arbitrary expiry).
+/// - Never invent an arbitrary end duration.
+bool isMapEventVisible(SubRequest gig, {DateTime? now}) {
+  final current = now ?? DateTime.now();
+
+  DateTime? endDt;
+  DateTime? startDt;
+
+  if (gig.extraFields['endDateTime'] != null) {
+    endDt = parseDateTime(gig.extraFields['endDateTime']);
+  }
+  if (gig.extraFields['startDateTime'] != null) {
+    startDt = parseDateTime(gig.extraFields['startDateTime']);
+  }
+
+  if (endDt == null && gig.date != null && gig.endTime != null) {
+    final parsedDate = _parseDateOnly(gig.date!.trim());
+    final endComponents = _parseTimeComponents(gig.endTime);
+    if (parsedDate != null && endComponents != null) {
+      endDt = DateTime(
+        parsedDate.year,
+        parsedDate.month,
+        parsedDate.day,
+        endComponents.hour,
+        endComponents.minute,
+      );
+    }
+  }
+
+  if (startDt == null && gig.date != null && gig.startTime != null) {
+    final parsedDate = _parseDateOnly(gig.date!.trim());
+    final startComponents = _parseTimeComponents(gig.startTime);
+    if (parsedDate != null && startComponents != null) {
+      startDt = DateTime(
+        parsedDate.year,
+        parsedDate.month,
+        parsedDate.day,
+        startComponents.hour,
+        startComponents.minute,
+      );
+    }
+  }
+
+  if (endDt != null) {
+    // If midnight-crossing event:
+    if (startDt != null && !endDt.isAfter(startDt)) {
+      endDt = endDt.add(const Duration(days: 1));
+    }
+    // Expired once now >= end (strictly visible while current < endDt)
+    return current.isBefore(endDt);
+  }
+
+  if (startDt != null) {
+    // Only start provided (no valid end):
+    // Visible only while now < start; absent when now >= start.
+    return current.isBefore(startDt);
+  }
+
+  // Neither start nor end available: remain visible (never invent an arbitrary expiry)
+  return true;
+}
+
+/// Evaluates whether an Event pin is currently active (blinking).
+///
+/// Blinking Rules:
+/// - Only eligible types: Gig/Concert/Live Performance ([MapEventType.gigConcert], [MapEventType.concert])
+///   or Rehearsal ([MapEventType.rehearsal]).
+/// - All other event types (Jam Session, Recorded Music, Promo, New Member, Subs, Paid, generic Event)
+///   remain static and NEVER blink.
+/// - Boundary condition: strictly active if and only if: `start <= now < end` (strictly `< end`).
+/// - Future Events (`now < start`): visible but static (never blinking).
+/// - Past Events (`now >= end`): absent (filtered out of map).
+/// - Missing end time: strictly non-active (never blinks, never infers or invents an end duration).
+bool isMapEventCurrentlyActive(SubRequest gig, {DateTime? now}) {
+  if (gig.extraFields['isLive'] == false || gig.extraFields['isLiveBroadcast'] == false) {
     return false;
   }
 
-  if (gig.extraFields['isLive'] == false || gig.extraFields['isLiveBroadcast'] == false) {
+  final eventType = _resolveMapEventType(gig);
+  if (eventType != MapEventType.gigConcert && eventType != MapEventType.concert && eventType != MapEventType.rehearsal) {
     return false;
   }
 
@@ -115,6 +195,84 @@ bool isSubRequestActive(SubRequest gig, {DateTime? now}) {
     timeRange: gig.formattedTimeRange,
     now: now,
   );
+}
+
+/// Evaluates whether an event pin has expired (is in the past).
+///
+/// Backward-compatible alias for `!isMapEventVisible(gig, now: now)`.
+bool isEventExpired(SubRequest gig, {DateTime? now}) {
+  return !isMapEventVisible(gig, now: now);
+}
+
+/// Evaluates whether a [SubRequest] gig or rehearsal is currently active.
+///
+/// Backward-compatible alias for [isMapEventCurrentlyActive].
+bool isSubRequestActive(SubRequest gig, {DateTime? now}) {
+  return isMapEventCurrentlyActive(gig, now: now);
+}
+
+/// Calculates the nearest future boundary (start or end) across a collection of events.
+/// Returns null if no upcoming boundaries exist.
+DateTime? findNearestEventBoundary(List<SubRequest> events, {DateTime? now}) {
+  final current = now ?? DateTime.now();
+  DateTime? nearest;
+
+  for (final gig in events) {
+    DateTime? start;
+    DateTime? end;
+
+    if (gig.extraFields['startDateTime'] != null) {
+      start = parseDateTime(gig.extraFields['startDateTime']);
+    }
+    if (gig.extraFields['endDateTime'] != null) {
+      end = parseDateTime(gig.extraFields['endDateTime']);
+    }
+
+    if (end == null && gig.date != null && gig.endTime != null) {
+      final parsedDate = _parseDateOnly(gig.date!.trim());
+      final endComponents = _parseTimeComponents(gig.endTime);
+      if (parsedDate != null && endComponents != null) {
+        end = DateTime(
+          parsedDate.year,
+          parsedDate.month,
+          parsedDate.day,
+          endComponents.hour,
+          endComponents.minute,
+        );
+      }
+    }
+
+    if (start == null && gig.date != null && gig.startTime != null) {
+      final parsedDate = _parseDateOnly(gig.date!.trim());
+      final startComponents = _parseTimeComponents(gig.startTime);
+      if (parsedDate != null && startComponents != null) {
+        start = DateTime(
+          parsedDate.year,
+          parsedDate.month,
+          parsedDate.day,
+          startComponents.hour,
+          startComponents.minute,
+        );
+      }
+    }
+
+    if (start != null && end != null && !end.isAfter(start)) {
+      end = end.add(const Duration(days: 1));
+    }
+
+    if (start != null && start.isAfter(current)) {
+      if (nearest == null || start.isBefore(nearest)) {
+        nearest = start;
+      }
+    }
+    if (end != null && end.isAfter(current)) {
+      if (nearest == null || end.isBefore(nearest)) {
+        nearest = end;
+      }
+    }
+  }
+
+  return nearest;
 }
 
 /// Evaluates whether a [MockLiveRehearsal] broadcast is currently active.

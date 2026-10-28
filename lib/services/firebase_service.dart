@@ -21,6 +21,7 @@ import '../models/collab_session.dart';
 import '../models/collab_studio.dart';
 import '../models/app_notification.dart';
 import '../models/public_calendar_event.dart';
+import '../models/map_event_item.dart';
 import '../utils/date_parser.dart';
 
 class FirebaseService {
@@ -889,6 +890,96 @@ class FirebaseService {
 
     return controller.stream;
   }
+
+
+  /// MAP-VIEW-FEED-02: Lifecycle-managed Event feed stream for Map View.
+  /// Merges publicMapEventFeed and userMapEventFeed/{userId}.
+  /// Exactly one listener per feed. Subscriptions are cleanly cancelled when caller cancels.
+  /// Tolerates private feed permission errors without terminating the public feed.
+  /// Performs ZERO database writes while reading.
+  Stream<List<MapEventItem>> getMapEventFeedStream({String? targetUserId}) {
+    final selfId = targetUserId ?? currentUserId;
+    late StreamController<List<MapEventItem>> controller;
+
+    StreamSubscription<DatabaseEvent>? publicSub;
+    StreamSubscription<DatabaseEvent>? userSub;
+
+    final Map<String, MapEventItem> publicMap = {};
+    final Map<String, MapEventItem> userMap = {};
+
+    void emitMerged() {
+      if (controller.isClosed) return;
+      final List<MapEventItem> merged = [];
+      final Set<String> seenIds = {};
+
+      void addIfValid(MapEventItem item) {
+        if (!seenIds.contains(item.mapItemId)) {
+          seenIds.add(item.mapItemId);
+          merged.add(item);
+        }
+      }
+
+      for (final item in publicMap.values) {
+        addIfValid(item);
+      }
+      for (final item in userMap.values) {
+        addIfValid(item);
+      }
+
+      controller.add(merged);
+    }
+
+    controller = StreamController<List<MapEventItem>>(
+      onListen: () {
+        // 1. Subscribe once to publicMapEventFeed
+        publicSub = _dbRef('publicMapEventFeed').onValue.listen((event) {
+          publicMap.clear();
+          if (event.snapshot.exists && event.snapshot.value is Map) {
+            (event.snapshot.value as Map).forEach((k, v) {
+              if (v is Map) {
+                try {
+                  publicMap[k.toString()] = MapEventItem.fromJson(v, k.toString());
+                } catch (_) {}
+              }
+            });
+          }
+          emitMerged();
+        }, onError: (e) {
+          debugPrint('[FirebaseService] publicMapEventFeed stream notice: $e');
+        });
+
+        // 2. Subscribe once to userMapEventFeed/{selfId} if user is authenticated
+        if (selfId != null && selfId.trim().isNotEmpty) {
+          userSub = _dbRef('userMapEventFeed/${selfId.trim()}').onValue.listen((event) {
+            userMap.clear();
+            if (event.snapshot.exists && event.snapshot.value is Map) {
+              (event.snapshot.value as Map).forEach((k, v) {
+                if (v is Map) {
+                  try {
+                    userMap[k.toString()] = MapEventItem.fromJson(v, k.toString());
+                  } catch (_) {}
+                }
+              });
+            }
+            emitMerged();
+          }, onError: (e) {
+            debugPrint('[FirebaseService] userMapEventFeed stream notice (tolerated): $e');
+          });
+        }
+      },
+      onCancel: () {
+        publicSub?.cancel();
+        publicSub = null;
+        userSub?.cancel();
+        userSub = null;
+        publicMap.clear();
+        userMap.clear();
+      },
+    );
+
+    return controller.stream;
+  }
+
 
   Future<List<SubRequest>> getUserSubRequestsAsync(String userId) async {
     final List<SubRequest> requests = [];
@@ -2864,6 +2955,12 @@ class FirebaseService {
     'externalInvitees',
     'substituteAssignments',
     'excludedMemberIds',
+    'latitude',
+    'longitude',
+    'locationPrecision',
+    'city',
+    'placeId',
+    'locationStatus',
     'updatedAt',
   };
 
@@ -2903,6 +3000,12 @@ class FirebaseService {
       externalInvitees: event.externalInvitees,
       substituteAssignments: event.substituteAssignments,
       excludedMemberIds: event.excludedMemberIds,
+      latitude: event.latitude,
+      longitude: event.longitude,
+      locationPrecision: event.locationPrecision,
+      city: event.city,
+      placeId: event.placeId,
+      locationStatus: event.locationStatus,
     );
     await _dbRef('Bands/$bandId/Events/$eventId').set(created.toJson());
     return eventId;
@@ -2943,6 +3046,12 @@ class FirebaseService {
         'externalInvitees': event.externalInvitees.map((k, v) => MapEntry(k, v.toJson())),
         'substituteAssignments': event.substituteAssignments.map((k, v) => MapEntry(k, v.toJson())),
         'excludedMemberIds': event.excludedMemberIds,
+        if (event.latitude != null) 'latitude': event.latitude,
+        if (event.longitude != null) 'longitude': event.longitude,
+        'locationPrecision': event.locationPrecision,
+        if (event.city != null && event.city!.isNotEmpty) 'city': event.city,
+        if (event.placeId != null && event.placeId!.isNotEmpty) 'placeId': event.placeId,
+        if (event.locationStatus != null && event.locationStatus!.isNotEmpty) 'locationStatus': event.locationStatus,
       });
       return event.id!;
     }

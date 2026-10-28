@@ -13,23 +13,19 @@ import '../widgets/gradient_scaffold.dart';
 import '../widgets/custom_top_bar.dart';
 import '../widgets/animated_tap_detector.dart';
 import '../widgets/location_picker_field.dart';
-
 class CreateEventPage extends StatefulWidget {
   final String bandId;
   final BandEvent? existingEvent;
   final List<BandEvent>? existingGroupEvents;
-
   const CreateEventPage({
     super.key,
     required this.bandId,
     this.existingEvent,
     this.existingGroupEvents,
   });
-
   @override
   State<CreateEventPage> createState() => _CreateEventPageState();
 }
-
 class _CreateEventPageState extends State<CreateEventPage> {
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
@@ -38,7 +34,6 @@ class _CreateEventPageState extends State<CreateEventPage> {
   CanonicalLocation? _canonicalLocation;
   final _notesController = TextEditingController();
   final _customReminderController = TextEditingController();
-
   String _eventType = 'Event';
   String? _existingEventId;
   DateTime _startDate = DateTime.now().add(const Duration(days: 1));
@@ -52,10 +47,8 @@ class _CreateEventPageState extends State<CreateEventPage> {
   bool _isCustomReminderHours = false;
   bool _isSaving = false;
   bool _isLoadingRole = true;
-
   // Attached Rehearsals
   List<EventRehearsal> _rehearsals = [];
-
   // Edit Band Members for this specific event
   List<BandMember> _bandMembers = [];
   Map<String, UserProfile> _memberProfiles = {};
@@ -63,7 +56,6 @@ class _CreateEventPageState extends State<CreateEventPage> {
   Set<String> _excludedMemberIds = {};
   Map<String, ExternalInvitee> _externalInvitees = {};
   bool _isEditMembersExpanded = false;
-
   @override
   void initState() {
     super.initState();
@@ -75,13 +67,11 @@ class _CreateEventPageState extends State<CreateEventPage> {
     _checkPermission();
     _loadBandMembers();
   }
-
   void _initFromExisting() {
     final existing = widget.existingEvent ??
         (widget.existingGroupEvents != null && widget.existingGroupEvents!.isNotEmpty
             ? widget.existingGroupEvents!.first
             : null);
-
     if (existing != null) {
       _existingEventId = existing.id;
       _titleController.text = existing.title;
@@ -93,7 +83,18 @@ class _CreateEventPageState extends State<CreateEventPage> {
       _rehearsals = List<EventRehearsal>.from(existing.rehearsals);
       _excludedMemberIds = Set<String>.from(existing.excludedMemberIds);
       _externalInvitees = Map<String, ExternalInvitee>.from(existing.externalInvitees);
-
+      if (existing.latitude != null && existing.longitude != null) {
+        _canonicalLocation = CanonicalLocation(
+          locationLabel: existing.location,
+          latitude: existing.latitude,
+          longitude: existing.longitude,
+          precision: (existing.locationPrecision == 'city')
+              ? LocationPrecision.city
+              : LocationPrecision.exact,
+          placeId: existing.placeId,
+          status: LocationResolutionStatus.resolved,
+        );
+      }
       // Existing event RSVP compatibility
       final existingInterval = existing.reminderIntervalHours;
       if (existingInterval == 0) {
@@ -116,22 +117,18 @@ class _CreateEventPageState extends State<CreateEventPage> {
         _reminderIntervalHours = 48;
         _customReminderController.text = '';
       }
-
       final startLocal = DateTime.tryParse(existing.startDateTime)?.toLocal() ?? DateTime.now();
       final endLocal = DateTime.tryParse(existing.endDateTime)?.toLocal() ?? startLocal;
-
       _startDate = DateTime(startLocal.year, startLocal.month, startLocal.day);
       _endDate = DateTime(endLocal.year, endLocal.month, endLocal.day);
       _selectedDate = _startDate;
       _startTime = TimeOfDay(hour: startLocal.hour, minute: startLocal.minute);
       _endTime = TimeOfDay(hour: endLocal.hour, minute: endLocal.minute);
-
       if (_rehearsals.isNotEmpty) {
         _updateDateRangeFromRehearsals();
       }
     }
   }
-
   Future<void> _loadBandMembers() async {
     if (!mounted) return;
     setState(() => _isLoadingMembers = true);
@@ -142,7 +139,6 @@ class _CreateEventPageState extends State<CreateEventPage> {
         setState(() {
           _bandMembers = members;
         });
-
         // Load user profiles for all members
         for (final m in members) {
           final uid = m.userId;
@@ -157,7 +153,6 @@ class _CreateEventPageState extends State<CreateEventPage> {
             } catch (_) {}
           }
         }
-
         // Also fetch profiles for any external invitees
         for (final uid in _externalInvitees.keys) {
           if (uid.isNotEmpty && !_memberProfiles.containsKey(uid)) {
@@ -180,7 +175,6 @@ class _CreateEventPageState extends State<CreateEventPage> {
       }
     }
   }
-
   String _getMemberDisplayName(BandMember member) {
     final uid = member.userId;
     if (uid != null && _memberProfiles.containsKey(uid)) {
@@ -199,7 +193,6 @@ class _CreateEventPageState extends State<CreateEventPage> {
     }
     return member.userId ?? 'Member';
   }
-
   String _getMemberRoleOrInstrument(BandMember member) {
     final uid = member.userId;
     if (uid != null && _memberProfiles.containsKey(uid)) {
@@ -210,7 +203,6 @@ class _CreateEventPageState extends State<CreateEventPage> {
     }
     return member.role ?? 'Member';
   }
-
   @override
   void dispose() {
     _titleController.dispose();
@@ -220,7 +212,6 @@ class _CreateEventPageState extends State<CreateEventPage> {
     _customReminderController.dispose();
     super.dispose();
   }
-
   void _checkPermission() async {
     final appState = Provider.of<AppState>(context, listen: false);
     final userId = appState.currentUserId;
@@ -263,7 +254,6 @@ class _CreateEventPageState extends State<CreateEventPage> {
       }
     }
   }
-
   void _updateDateRangeFromRehearsals() {
     if (_rehearsals.isEmpty) return;
     DateTime? minDate;
@@ -286,7 +276,6 @@ class _CreateEventPageState extends State<CreateEventPage> {
       _selectedDate = minDate;
     }
   }
-
   String get _formattedAutoDateRange {
     if (_rehearsals.isEmpty) {
       return DateFormat('EEE, MMM d, yyyy').format(_startDate);
@@ -318,7 +307,6 @@ class _CreateEventPageState extends State<CreateEventPage> {
     }
     return '${DateFormat('EEE, MMM d, yyyy').format(minDate)} â€“ ${DateFormat('EEE, MMM d, yyyy').format(maxDate)}';
   }
-
   Future<void> _selectDate() async {
     final picked = await showDatePicker(
       context: context,
@@ -346,7 +334,6 @@ class _CreateEventPageState extends State<CreateEventPage> {
       });
     }
   }
-
   Future<void> _selectStartTime() async {
     final picked = await showTimePicker(
       context: context,
@@ -372,7 +359,6 @@ class _CreateEventPageState extends State<CreateEventPage> {
       });
     }
   }
-
   Future<void> _selectEndTime() async {
     final picked = await showTimePicker(
       context: context,
@@ -398,7 +384,6 @@ class _CreateEventPageState extends State<CreateEventPage> {
       });
     }
   }
-
   TimeOfDay _parseTimeOfDay(String timeStr, TimeOfDay defaultTime) {
     try {
       final parts = timeStr.split(':');
@@ -408,13 +393,11 @@ class _CreateEventPageState extends State<CreateEventPage> {
     } catch (_) {}
     return defaultTime;
   }
-
   String _formatTimeOfDay(TimeOfDay time) {
     final h = time.hour.toString().padLeft(2, '0');
     final m = time.minute.toString().padLeft(2, '0');
     return '$h:$m';
   }
-
   IconData _getSessionTypeIcon(String type) {
     if (type == 'Club gig') return Icons.nightlife_rounded;
     if (type == 'Concert') return Icons.stadium_rounded;
@@ -425,11 +408,9 @@ class _CreateEventPageState extends State<CreateEventPage> {
     if (type == 'Other') return Icons.more_horiz_rounded;
     return Icons.music_note_rounded;
   }
-
   void _showRehearsalDialog({int? editIndex}) {
     final isEditing = editIndex != null;
     final rehearsalToEdit = isEditing ? _rehearsals[editIndex] : null;
-
     DateTime draftDate;
     if (isEditing) {
       draftDate = DateTime.tryParse(rehearsalToEdit!.date) ?? _startDate;
@@ -439,16 +420,13 @@ class _CreateEventPageState extends State<CreateEventPage> {
     } else {
       draftDate = _startDate;
     }
-
     TimeOfDay draftStart = isEditing
         ? _parseTimeOfDay(rehearsalToEdit!.startTime, _startTime)
         : _startTime;
     TimeOfDay draftEnd = isEditing
         ? _parseTimeOfDay(rehearsalToEdit!.endTime, _endTime)
         : _endTime;
-
     String draftType = isEditing ? rehearsalToEdit!.type : 'Rehearsal';
-
     final draftTitleController = TextEditingController(
       text: isEditing ? rehearsalToEdit!.title : '',
     );
@@ -460,11 +438,9 @@ class _CreateEventPageState extends State<CreateEventPage> {
     final draftDescriptionController = TextEditingController(
       text: isEditing ? rehearsalToEdit!.description : '',
     );
-
     final availableTypes = EventRehearsal.standardSessionTypes.contains(draftType)
         ? EventRehearsal.standardSessionTypes
         : [draftType, ...EventRehearsal.standardSessionTypes];
-
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -505,7 +481,6 @@ class _CreateEventPageState extends State<CreateEventPage> {
                       ],
                     ),
                     const SizedBox(height: 14),
-
                     // 1. Name of Event / Sub-Event Title (Optional)
                     TextFormField(
                       controller: draftTitleController,
@@ -516,7 +491,6 @@ class _CreateEventPageState extends State<CreateEventPage> {
                       ),
                     ),
                     const SizedBox(height: 12),
-
                     // 2. Event Type Dropdown (Single combined list)
                     DropdownButtonFormField<String>(
                       value: availableTypes.contains(draftType)
@@ -547,7 +521,6 @@ class _CreateEventPageState extends State<CreateEventPage> {
                       },
                     ),
                     const SizedBox(height: 12),
-
                     // Date Picker Row
                     InkWell(
                       onTap: () async {
@@ -584,7 +557,6 @@ class _CreateEventPageState extends State<CreateEventPage> {
                       ),
                     ),
                     const SizedBox(height: 12),
-
                     // Times Row
                     Row(
                       children: [
@@ -640,7 +612,6 @@ class _CreateEventPageState extends State<CreateEventPage> {
                       ],
                     ),
                     const SizedBox(height: 12),
-
                     // Location
                     TextFormField(
                       controller: draftLocationController,
@@ -652,7 +623,6 @@ class _CreateEventPageState extends State<CreateEventPage> {
                       ),
                     ),
                     const SizedBox(height: 12),
-
                     // Description
                     TextFormField(
                       controller: draftDescriptionController,
@@ -674,7 +644,6 @@ class _CreateEventPageState extends State<CreateEventPage> {
                       ),
                     ),
                     const SizedBox(height: 20),
-
                     // Save / Add Button
                     SizedBox(
                       width: double.infinity,
@@ -688,11 +657,9 @@ class _CreateEventPageState extends State<CreateEventPage> {
                           final endStr = _formatTimeOfDay(draftEnd);
                           final location = draftLocationController.text.trim();
                           final description = draftDescriptionController.text.trim();
-
                           final rehearsalId = isEditing
                               ? rehearsalToEdit!.id
                               : 'reh_${DateTime.now().millisecondsSinceEpoch}';
-
                           final updatedRehearsal = EventRehearsal(
                             id: rehearsalId,
                             title: title,
@@ -703,7 +670,6 @@ class _CreateEventPageState extends State<CreateEventPage> {
                             description: description,
                             type: draftType,
                           );
-
                           setState(() {
                             if (isEditing) {
                               _rehearsals[editIndex] = updatedRehearsal;
@@ -712,7 +678,6 @@ class _CreateEventPageState extends State<CreateEventPage> {
                             }
                             _updateDateRangeFromRehearsals();
                           });
-
                           Navigator.pop(ctx);
                         },
                         child: Text(
@@ -730,7 +695,6 @@ class _CreateEventPageState extends State<CreateEventPage> {
       },
     );
   }
-
   void _showAddGuestSheet() async {
     final appState = Provider.of<AppState>(context, listen: false);
     showDialog(
@@ -740,7 +704,6 @@ class _CreateEventPageState extends State<CreateEventPage> {
         child: CircularProgressIndicator(color: AppTheme.primaryAccent),
       ),
     );
-
     List<UserProfile> allUsers = [];
     try {
       allUsers = await appState.firebaseService.getAllUsersAsync();
@@ -751,11 +714,8 @@ class _CreateEventPageState extends State<CreateEventPage> {
         Navigator.pop(context); // close loader
       }
     }
-
     if (!mounted) return;
-
     final memberUserIds = _bandMembers.map((m) => m.userId).where((uid) => uid != null).cast<String>().toSet();
-
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -780,14 +740,12 @@ class _CreateEventPageState extends State<CreateEventPage> {
       },
     );
   }
-
   Widget _buildEditBandMembersCard() {
     final includedBandMembersCount = _bandMembers
         .where((m) => !_excludedMemberIds.contains(m.userId))
         .length;
     final totalBandMembersCount = _bandMembers.length;
     final guestCount = _externalInvitees.length;
-
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
@@ -898,7 +856,6 @@ class _CreateEventPageState extends State<CreateEventPage> {
               ),
             ),
           ),
-
           // Expanded content
           if (_isEditMembersExpanded) ...[
             const Divider(height: 1, color: Color(0xFF2E2A4E)),
@@ -977,7 +934,6 @@ class _CreateEventPageState extends State<CreateEventPage> {
                       final instrument = invitee.instrument ??
                           (profile?.instruments.isNotEmpty == true ? profile!.instruments.join(', ') : 'Guest Musician');
                       final initial = name.isNotEmpty ? name.substring(0, 1).toUpperCase() : 'G';
-
                       return Container(
                         margin: const EdgeInsets.only(bottom: 6),
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
@@ -1063,11 +1019,9 @@ class _CreateEventPageState extends State<CreateEventPage> {
                         ),
                       );
                     }),
-
                   const SizedBox(height: 16),
                   const Divider(height: 1, color: Color(0xFF2E2A4E)),
                   const SizedBox(height: 14),
-
                   // SECTION: Band Members Roster (Exclude / Include)
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1096,7 +1050,6 @@ class _CreateEventPageState extends State<CreateEventPage> {
                     ],
                   ),
                   const SizedBox(height: 8),
-
                   if (_isLoadingMembers && _bandMembers.isEmpty)
                     const Center(
                       child: Padding(
@@ -1129,7 +1082,6 @@ class _CreateEventPageState extends State<CreateEventPage> {
                       final roleOrInst = _getMemberRoleOrInstrument(member);
                       final initial = name.isNotEmpty ? name.substring(0, 1).toUpperCase() : 'M';
                       final isOnHold = member.isOnHold;
-
                       return Container(
                         margin: const EdgeInsets.only(bottom: 6),
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
@@ -1255,12 +1207,9 @@ class _CreateEventPageState extends State<CreateEventPage> {
       ),
     );
   }
-
   void _saveEvent() async {
     if (!_formKey.currentState!.validate()) return;
-
     setState(() => _isSaving = true);
-
     try {
       final appState = Provider.of<AppState>(context, listen: false);
       if (_isCustomReminderHours) {
@@ -1271,9 +1220,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
         }
         _reminderIntervalHours = parsed;
       }
-
       _updateDateRangeFromRehearsals();
-
       final start = DateTime(
         _startDate.year,
         _startDate.month,
@@ -1282,7 +1229,6 @@ class _CreateEventPageState extends State<CreateEventPage> {
         0,
         0,
       );
-
       final end = DateTime(
         _endDate.year,
         _endDate.month,
@@ -1291,35 +1237,28 @@ class _CreateEventPageState extends State<CreateEventPage> {
         59,
         59,
       );
-
       final publishedAt = DateTime.now().millisecondsSinceEpoch;
       final int? rsvpDeadline = (_requireResponse && _reminderIntervalHours > 0)
           ? publishedAt + (_reminderIntervalHours * 3600 * 1000)
           : null;
-
       final nowMs = DateTime.now().millisecondsSinceEpoch;
       final creatorId = appState.currentUserId ?? '';
       final eventId = (_existingEventId != null && _existingEventId!.isNotEmpty)
           ? _existingEventId!
           : appState.firebaseService.generateEventId(widget.bandId);
-
       // Pre-process any new subs in _externalInvitees so subRequestId is linked immediately
       final Map<String, ExternalInvitee> updatedInvitees = Map.from(_externalInvitees);
       final List<SubRequest> newSubRequests = [];
-
       if (_externalInvitees.isNotEmpty) {
         final bandInfo = await appState.firebaseService.getBandInfoAsync(widget.bandId);
         final effectiveBandName = bandInfo?.name ?? appState.activeBandName ?? 'Band';
-
         for (final entry in _externalInvitees.entries) {
           final uid = entry.key;
           final invitee = entry.value;
-
           // Skip if a subRequestId is already linked
           if (invitee.subRequestId != null && invitee.subRequestId!.isNotEmpty) {
             continue;
           }
-
           final profile = _memberProfiles[uid];
           final subReqId = 'sub_${widget.bandId}_${eventId}_${uid}_$nowMs';
           final instrument = (invitee.instrument != null && invitee.instrument!.trim().isNotEmpty && invitee.instrument != 'Sub')
@@ -1333,11 +1272,9 @@ class _CreateEventPageState extends State<CreateEventPage> {
                           : (profile?.userType != null && profile!.userType!.trim().isNotEmpty
                               ? profile.userType!.trim()
                               : (invitee.instrument ?? 'Musician')))));
-
           final startTimeStr = '${_startTime.hour.toString().padLeft(2, '0')}:${_startTime.minute.toString().padLeft(2, '0')}';
           final endTimeStr = '${_endTime.hour.toString().padLeft(2, '0')}:${_endTime.minute.toString().padLeft(2, '0')}';
           final eventTitleStr = _titleController.text.trim().isNotEmpty ? _titleController.text.trim() : effectiveBandName;
-
           final subReq = SubRequest(
             id: subReqId,
             subRequestId: subReqId,
@@ -1371,9 +1308,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
               'eventType': _eventType,
             },
           );
-
           newSubRequests.add(subReq);
-
           updatedInvitees[uid] = ExternalInvitee(
             userId: uid,
             displayName: invitee.displayName,
@@ -1386,7 +1321,6 @@ class _CreateEventPageState extends State<CreateEventPage> {
           );
         }
       }
-
       final newEvent = BandEvent(
         id: eventId,
         title: _titleController.text.trim(),
@@ -1409,11 +1343,15 @@ class _CreateEventPageState extends State<CreateEventPage> {
         rehearsals: _rehearsals,
         excludedMemberIds: _excludedMemberIds.toList(),
         externalInvitees: updatedInvitees,
+        latitude: _canonicalLocation?.latitude,
+        longitude: _canonicalLocation?.longitude,
+        locationPrecision: _canonicalLocation?.precision.name ?? 'exact',
+        city: _canonicalLocation?.locationLabel,
+        placeId: _canonicalLocation?.placeId,
+        locationStatus: _canonicalLocation?.status.name,
         substituteAssignments: widget.existingEvent?.substituteAssignments ?? {},
       );
-
       final savedEventId = await appState.firebaseService.saveBandEventAsync(widget.bandId, newEvent);
-
       if (_createEventRoom && (_existingEventId == null || _existingEventId!.isEmpty)) {
         await appState.firebaseService.createTemporaryEventRoomAsync(
           bandId: widget.bandId,
@@ -1422,7 +1360,6 @@ class _CreateEventPageState extends State<CreateEventPage> {
           createdBy: creatorId,
         );
       }
-
       // Publish targeted subrequests via publishSubRequestGroupAsync
       if (newSubRequests.isNotEmpty) {
         final bandInfo = await appState.firebaseService.getBandInfoAsync(widget.bandId);
@@ -1439,7 +1376,6 @@ class _CreateEventPageState extends State<CreateEventPage> {
           debugPrint('[CreateEventPage] Error publishing subrequests: $e');
         }
       }
-
       // Cleanup subrequests if existing event had subs removed
       if (widget.existingEvent != null) {
         final creatorId = appState.currentUserId ?? '';
@@ -1456,7 +1392,6 @@ class _CreateEventPageState extends State<CreateEventPage> {
           }
         }
       }
-
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -1482,7 +1417,6 @@ class _CreateEventPageState extends State<CreateEventPage> {
       }
     }
   }
-
   @override
   Widget build(BuildContext context) {
     return GradientScaffold(
@@ -1510,7 +1444,6 @@ class _CreateEventPageState extends State<CreateEventPage> {
                       ),
                     ),
                     const SizedBox(height: 20),
-
                     // 1. Main Event Name
                     TextFormField(
                       controller: _titleController,
@@ -1527,7 +1460,6 @@ class _CreateEventPageState extends State<CreateEventPage> {
                       },
                     ),
                     const SizedBox(height: 16),
-
                     // 2. Event Description (Describe ALL parts of Main Event here)
                     TextFormField(
                       controller: _descriptionController,
@@ -1549,7 +1481,6 @@ class _CreateEventPageState extends State<CreateEventPage> {
                       ),
                     ),
                     const SizedBox(height: 16),
-
                     // 3. Location
                     LocationPickerField(
                       controller: _locationController,
@@ -1567,7 +1498,6 @@ class _CreateEventPageState extends State<CreateEventPage> {
                       },
                     ),
                     const SizedBox(height: 20),
-
                     // 4 & 5. Attached Events / Event Schedule Section
                     Container(
                       padding: const EdgeInsets.all(16),
@@ -1621,7 +1551,6 @@ class _CreateEventPageState extends State<CreateEventPage> {
                             ],
                           ),
                           const SizedBox(height: 12),
-
                           // Name of "Main event" and auto-derived Date Range on top of the schedule items
                           AnimatedBuilder(
                             animation: _titleController,
@@ -1630,7 +1559,6 @@ class _CreateEventPageState extends State<CreateEventPage> {
                               final titleDisplay = entered.isEmpty ? 'Main Event Name' : entered;
                               final hasEvents = _rehearsals.isNotEmpty;
                               final dateDisplay = _formattedAutoDateRange;
-
                               return Container(
                                 margin: const EdgeInsets.only(bottom: 12),
                                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -1698,7 +1626,6 @@ class _CreateEventPageState extends State<CreateEventPage> {
                               );
                             },
                           ),
-
                           // List of attached events
                           if (_rehearsals.isNotEmpty) ...[
                             ...List.generate(_rehearsals.length, (index) {
@@ -1708,7 +1635,6 @@ class _CreateEventPageState extends State<CreateEventPage> {
                                   ? DateFormat('EEEE, MMM d').format(parsedDate)
                                   : rehearsal.date;
                               final sessionType = rehearsal.type.isNotEmpty ? rehearsal.type : 'Event';
-
                               return Container(
                                 margin: const EdgeInsets.only(bottom: 8),
                                 padding: const EdgeInsets.all(12),
@@ -1805,7 +1731,6 @@ class _CreateEventPageState extends State<CreateEventPage> {
                             }),
                             const SizedBox(height: 8),
                           ],
-
                           // + Add Event Button or Limit Warning
                           if (_rehearsals.length < 6)
                             OutlinedButton.icon(
@@ -1849,10 +1774,8 @@ class _CreateEventPageState extends State<CreateEventPage> {
                       ),
                     ),
                     const SizedBox(height: 16),
-
                     // 7. Edit Band Members Section (Expandable)
                     _buildEditBandMembersCard(),
-
                     // 8. RSVP Deadlines Selector
                     Container(
                       padding: const EdgeInsets.all(16),
@@ -1955,7 +1878,6 @@ class _CreateEventPageState extends State<CreateEventPage> {
                       ),
                     ),
                     const SizedBox(height: 16),
-
                     // 9. Temporary Event Chat Switch
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -2015,7 +1937,6 @@ class _CreateEventPageState extends State<CreateEventPage> {
                       ),
                     ),
                     const SizedBox(height: 32),
-
                     // 10. Save Button
                     AnimatedTapDetector(
                       onTap: _saveEvent,
@@ -2045,42 +1966,34 @@ class _CreateEventPageState extends State<CreateEventPage> {
     );
   }
 }
-
 class _AddEventGuestSheet extends StatefulWidget {
   final List<UserProfile> allUsers;
   final Set<String> existingBandMemberIds;
   final Map<String, ExternalInvitee> currentExternalInvitees;
   final Function(ExternalInvitee invitee, UserProfile? profile) onGuestAdded;
-
   const _AddEventGuestSheet({
     required this.allUsers,
     required this.existingBandMemberIds,
     required this.currentExternalInvitees,
     required this.onGuestAdded,
   });
-
   @override
   State<_AddEventGuestSheet> createState() => _AddEventGuestSheetState();
 }
-
 class _AddEventGuestSheetState extends State<_AddEventGuestSheet> {
   final _searchController = TextEditingController();
   String _searchQuery = '';
   final Set<String> _addedUserIds = {};
-
   @override
   void initState() {
     super.initState();
     _addedUserIds.addAll(widget.currentExternalInvitees.keys);
   }
-
   @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
   }
-
-
   @override
   Widget build(BuildContext context) {
     final query = _searchQuery.trim().toLowerCase();
@@ -2088,22 +2001,18 @@ class _AddEventGuestSheetState extends State<_AddEventGuestSheet> {
       final uid = u.userId;
       if (uid == null || uid.isEmpty) return false;
       if (widget.existingBandMemberIds.contains(uid)) return false;
-
       if (query.isEmpty) return true;
-
       final name = (u.displayName ?? '').toLowerCase();
       final nick = (u.nickname ?? '').toLowerCase();
       final instruments = u.instruments.map((i) => i.toLowerCase()).join(' ');
       final location = (u.location ?? '').toLowerCase();
       final email = (u.email ?? '').toLowerCase();
-
       return name.contains(query) ||
           nick.contains(query) ||
           instruments.contains(query) ||
           location.contains(query) ||
           email.contains(query);
     }).toList();
-
     return Padding(
       padding: EdgeInsets.only(
         left: 20,
@@ -2134,7 +2043,6 @@ class _AddEventGuestSheetState extends State<_AddEventGuestSheet> {
               ],
             ),
             const SizedBox(height: 12),
-
             // Search Bar
             TextField(
               controller: _searchController,
@@ -2177,7 +2085,6 @@ class _AddEventGuestSheetState extends State<_AddEventGuestSheet> {
               ),
             ),
             const SizedBox(height: 8),
-
             // Search results list
             Expanded(
               child: filteredUsers.isEmpty
@@ -2196,7 +2103,6 @@ class _AddEventGuestSheetState extends State<_AddEventGuestSheet> {
                         final name = user.displayName ?? user.nickname ?? 'Musician';
                         final inst = user.instruments.isNotEmpty ? user.instruments.join(', ') : 'Musician';
                         final initial = name.isNotEmpty ? name.substring(0, 1).toUpperCase() : 'M';
-
                         return Container(
                           margin: const EdgeInsets.only(bottom: 8),
                           padding: const EdgeInsets.all(10),
