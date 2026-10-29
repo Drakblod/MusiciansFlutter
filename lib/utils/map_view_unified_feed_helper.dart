@@ -405,22 +405,45 @@ List<UnifiedMapMarkerItem> processUnifiedMapItems({
 
   // Add grouped staffing items
   groupedStaffing.forEach((groupKey, groupMembers) {
-    // Sort members deterministically so primary gig is always the same
-    groupMembers.sort((a, b) => (a.id ?? '').compareTo(b.id ?? ''));
-    final primary = groupMembers.first;
-    final markerId = 'reqgrp_$groupKey';
-    final kind = classifyMapItem(primary);
-    final origPos = LatLng(primary.latitude!, primary.longitude!);
-    final renderedPos = computeStableMarkerPosition(origPos, markerId);
-    preCollisionMarkers.add(UnifiedMapMarkerItem(
-      id: markerId,
-      primaryGig: primary,
-      groupedGigs: groupMembers,
-      kind: kind,
-      position: renderedPos,
-      originalPosition: origPos,
-      isLive: isMapEventCurrentlyActive(primary, now: current),
-    ));
+    // Partition groupMembers by geographic proximity so differing locations never collapse into one pin
+    final clusters = <LatLng, List<SubRequest>>{};
+    for (final member in groupMembers) {
+      final pos = LatLng(member.latitude!, member.longitude!);
+      LatLng? matchedPos;
+      for (final cPos in clusters.keys) {
+        if ((cPos.latitude - pos.latitude).abs() < 0.02 && (cPos.longitude - pos.longitude).abs() < 0.02) {
+          matchedPos = cPos;
+          break;
+        }
+      }
+      if (matchedPos != null) {
+        clusters[matchedPos]!.add(member);
+      } else {
+        clusters[pos] = [member];
+      }
+    }
+
+    clusters.forEach((clusterPos, members) {
+      // Sort members deterministically so primary gig is always the same
+      members.sort((a, b) => (a.id ?? '').compareTo(b.id ?? ''));
+      final primary = members.first;
+      final subKey = clusters.length > 1
+          ? '${groupKey}_${clusterPos.latitude.toStringAsFixed(2)}_${clusterPos.longitude.toStringAsFixed(2)}'
+          : groupKey;
+      final markerId = 'reqgrp_$subKey';
+      final kind = classifyMapItem(primary);
+      final origPos = LatLng(primary.latitude!, primary.longitude!);
+      final renderedPos = computeStableMarkerPosition(origPos, markerId);
+      preCollisionMarkers.add(UnifiedMapMarkerItem(
+        id: markerId,
+        primaryGig: primary,
+        groupedGigs: members,
+        kind: kind,
+        position: renderedPos,
+        originalPosition: origPos,
+        isLive: isMapEventCurrentlyActive(primary, now: current),
+      ));
+    });
   });
 
   // Add standalone items

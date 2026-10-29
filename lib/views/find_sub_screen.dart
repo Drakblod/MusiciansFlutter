@@ -299,8 +299,8 @@ class _FindSubScreenState extends State<FindSubScreen> {
     final effectiveBandId = widget.bandId ?? appState.activeBandId;
     final effectiveEventId = widget.eventId;
 
-    if (_locationController.text.isEmpty) {
-      _locationController.text = appState.currentUserProfile?.location ?? 'Stockholm, Sweden';
+    if (_locationController.text.isEmpty && effectiveEventId != null && effectiveEventId.isNotEmpty) {
+      _locationController.text = appState.currentUserProfile?.location ?? '';
     }
 
     if (effectiveBandId != null && effectiveBandId.isNotEmpty) {
@@ -417,7 +417,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
             final List<SubstituteSlotDraft> slots = [];
             for (int sIdx = 0; sIdx < existingSubRequests.length; sIdx++) {
               final subReq = existingSubRequests[sIdx];
-              if (_existingRequestGroupId == null && subReq.requestGroupId != null && subReq.requestGroupId!.isNotEmpty) {
+              if (subReq.status == 'draft' && _existingRequestGroupId == null && subReq.requestGroupId != null && subReq.requestGroupId!.isNotEmpty) {
                 _existingRequestGroupId = subReq.requestGroupId;
               }
               if (sIdx == 0) {
@@ -566,7 +566,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
         description: '',
         additionalNotes: '',
         eventType: isStandalone ? '' : 'Gig',
-        location: isStandalone ? '' : (_locationController.text.isNotEmpty ? _locationController.text : (appState.currentUserProfile?.location ?? 'Stockholm, Sweden')),
+        location: isStandalone ? '' : _locationController.text.trim(),
         startDateTime: _selectedDate.toIso8601String(),
         endDateTime: _selectedDate.add(const Duration(hours: 3)).toIso8601String(),
         createdBy: appState.currentUserId ?? 'user',
@@ -822,7 +822,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
       final safeBandId = (effectiveBandId ?? 'freelance').replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
       final parentOrEventId = _canonicalMultipleEventParentId ?? widget.eventId ?? 'event';
       final safeEventId = parentOrEventId.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
-      final groupId = _existingRequestGroupId ?? ('group_${safeBandId}_${safeEventId}');
+      final groupId = _existingRequestGroupId ?? ('req_group_${safeBandId}_${safeEventId}_${now.millisecondsSinceEpoch}');
       final payAmount = _isPaid ? (ThousandsSeparatorInputFormatter.parse(_amountController.text) ?? 0) : 0;
       final bandName = _bandName ?? appState.activeBandName ?? 'Freelance Gig';
       final pubId = 'pub_${groupId}_${now.millisecondsSinceEpoch}';
@@ -838,30 +838,37 @@ class _FindSubScreenState extends State<FindSubScreen> {
             ? section.selectedEventType!.trim()
             : (section.event.eventType.isNotEmpty ? section.event.eventType : 'Gig');
         final descStr = section.descriptionController.text.trim();
-        final locStr = section.locationController.text.trim().isNotEmpty
-            ? section.locationController.text.trim()
-            : (section.event.location.isNotEmpty ? section.event.location : (profile?.location ?? 'Stockholm, Sweden'));
         final dateStr = section.selectedDate.toIso8601String();
         final startTimeStr = (section.startTime.hour.toString().padLeft(2, '0') + ':' + section.startTime.minute.toString().padLeft(2, '0'));
         final endTimeStr = (section.endTime.hour.toString().padLeft(2, '0') + ':' + section.endTime.minute.toString().padLeft(2, '0'));
 
         CanonicalLocation? canonLoc = section.canonicalLocation;
-        if (canonLoc == null || !canonLoc.hasValidCoordinates) {
-          if (locStr.isNotEmpty && locStr != 'Stockholm, Sweden') {
-            canonLoc = LocationService.resolveKnownCity(locStr);
+        final rawInputLoc = section.locationController.text.trim();
+
+        // 1. If user confirmed valid coordinates on map/chip, prioritize canonLoc's coordinates and label
+        if (canonLoc != null && canonLoc.hasValidCoordinates) {
+          if (rawInputLoc.isEmpty || rawInputLoc == 'Stockholm, Sweden' || rawInputLoc == 'Ljusdal, Sweden') {
+            section.locationController.text = canonLoc.locationLabel;
           }
+        } else if (rawInputLoc.isNotEmpty && rawInputLoc != 'Stockholm, Sweden' && rawInputLoc != 'Ljusdal, Sweden') {
+          canonLoc = LocationService.resolveKnownCity(rawInputLoc);
         }
+
+        // 2. Linked Event coordinates may be inherited ONLY when the SubRequest has NO valid confirmed coordinates of its own
         if (canonLoc == null || !canonLoc.hasValidCoordinates) {
-          if (section.event.latitude != null && section.event.longitude != null) {
+          if (section.event.latitude != null && section.event.longitude != null &&
+              LocationService.isValidCoordinate(section.event.latitude, section.event.longitude)) {
             canonLoc = CanonicalLocation(
               latitude: section.event.latitude!,
               longitude: section.event.longitude!,
-              locationLabel: section.event.location.isNotEmpty ? section.event.location : locStr,
+              locationLabel: section.event.location.isNotEmpty ? section.event.location : rawInputLoc,
               precision: LocationPrecision.exact,
               status: LocationResolutionStatus.resolved,
             );
           }
         }
+
+        // 3. Fallbacks must NEVER replace valid coordinates or simulate false confirmation
         if (canonLoc == null || !canonLoc.hasValidCoordinates) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -871,6 +878,10 @@ class _FindSubScreenState extends State<FindSubScreen> {
           );
           return;
         }
+
+        final effectiveLocationLabel = (canonLoc.locationLabel.trim().isNotEmpty)
+            ? canonLoc.locationLabel.trim()
+            : (rawInputLoc.isNotEmpty ? rawInputLoc : (section.event.location.isNotEmpty ? section.event.location : ''));
 
         for (final slot in section.slots) {
           if (slot.status != 'draft') continue;
@@ -889,12 +900,13 @@ class _FindSubScreenState extends State<FindSubScreen> {
             date: dateStr,
             startTime: startTimeStr,
             endTime: endTimeStr,
-            location: locStr,
-            latitude: canonLoc?.latitude,
-            longitude: canonLoc?.longitude,
-            locationPrecision: canonLoc?.precision,
-            placeId: canonLoc?.placeId,
-            locationStatus: canonLoc?.status,
+            location: effectiveLocationLabel,
+            city: LocationService.extractCityLabel(effectiveLocationLabel),
+            latitude: canonLoc.latitude,
+            longitude: canonLoc.longitude,
+            locationPrecision: canonLoc.precision,
+            placeId: canonLoc.placeId,
+            locationStatus: canonLoc.status,
             isPaid: _isPaid,
             payAmount: _isPaid ? payAmount : null,
             currency: 'SEK',

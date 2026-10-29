@@ -1,5 +1,6 @@
 import '../utils/currency_formatter.dart';
 import 'canonical_location.dart';
+import '../services/location_service.dart';
 
 class SubRequest {
   final String? id;
@@ -595,14 +596,50 @@ class SubRequest {
   /// Whether this request is active and live (published).
   bool get isLive => status == 'published';
 
+  bool get hasValidCoordinates =>
+      latitude != null &&
+      longitude != null &&
+      LocationService.isValidCoordinate(latitude, longitude);
+
+  /// Centralized location precedence:
+  /// 1. If the SubRequest has its own explicitly confirmed valid coordinates,
+  ///    those coordinates and its confirmed location label MUST be used.
+  /// 2. Linked Event coordinates may be inherited ONLY when the SubRequest has
+  ///    no valid confirmed coordinates of its own.
+  /// 3. Band city, creator profile city, browser position, Ljusdal, Stockholm,
+  ///    map center or any other default must NEVER replace valid request coordinates.
+  /// 4. If neither the request nor its linked Event has valid coordinates, the
+  ///    request must remain unresolved and must not receive a fallback marker.
+  SubRequest withInheritedEventLocation({
+    double? eventLatitude,
+    double? eventLongitude,
+    String? eventLocation,
+  }) {
+    if (hasValidCoordinates) {
+      return this;
+    }
+    if (LocationService.isValidCoordinate(eventLatitude, eventLongitude)) {
+      return copyWith(
+        latitude: eventLatitude,
+        longitude: eventLongitude,
+        location: (location != null && location!.trim().isNotEmpty) ? location : eventLocation,
+        locationPrecision: LocationPrecision.exact,
+        locationStatus: LocationResolutionStatus.resolved,
+      );
+    }
+    return this;
+  }
+
   CanonicalLocation get canonicalLocation {
     return CanonicalLocation(
-      locationLabel: location ?? venue ?? '',
+      locationLabel: (location != null && location!.trim().isNotEmpty)
+          ? location!.trim()
+          : (city != null && city!.trim().isNotEmpty ? city!.trim() : (venue ?? '')),
       latitude: latitude,
       longitude: longitude,
       precision: locationPrecision ?? LocationPrecision.exact,
       placeId: placeId,
-      status: (latitude != null && longitude != null)
+      status: hasValidCoordinates
           ? (locationStatus ?? LocationResolutionStatus.resolved)
           : LocationResolutionStatus.unresolved,
     );

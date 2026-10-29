@@ -130,7 +130,11 @@ class _FindGigsScreenState extends State<FindGigsScreen>
       final key = (req.requestGroupId != null && req.requestGroupId!.isNotEmpty)
           ? req.requestGroupId!
           : (req.subRequestId ?? req.id ?? 'single_${rawList.indexOf(req)}');
-      groupsMap.putIfAbsent(key, () => []).add(req);
+      final loc = (req.location != null && req.location!.trim().isNotEmpty)
+          ? req.location!.trim().toLowerCase()
+          : '';
+      final compositeKey = '${key}_$loc';
+      groupsMap.putIfAbsent(compositeKey, () => []).add(req);
     }
 
     final List<GigGroup> groups = [];
@@ -185,12 +189,20 @@ class _FindGigsScreenState extends State<FindGigsScreen>
         orElse: () => first,
       );
 
+      final locCandidate = reqs.firstWhere(
+        (r) => r.location != null && r.location!.trim().isNotEmpty,
+        orElse: () => first,
+      );
+      final effectiveLocation = (locCandidate.location != null && locCandidate.location!.trim().isNotEmpty)
+          ? locCandidate.location!.trim()
+          : (locCandidate.city != null && locCandidate.city!.trim().isNotEmpty ? locCandidate.city!.trim() : 'Stockholm, Sweden');
+
       groups.add(
         GigGroup(
           groupId: entry.key,
           title: groupTitle,
           bandName: first.bandName,
-          location: first.location,
+          location: effectiveLocation,
           description: first.description,
           payDetails: firstWithPayDetails.payDetails,
           requests: reqs,

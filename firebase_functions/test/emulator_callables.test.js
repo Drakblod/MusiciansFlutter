@@ -2234,6 +2234,184 @@ describe('Real Cloud Functions Emulator Integration Tests (JS Client SDK + Emula
         const pub = await adminDb.ref('publicSubRequests/slot_retry_test_1').get();
         assert.strictEqual(pub.exists(), true);
       });
+
+      it('65. MAP-VIEW-LOCATION-01: Band and linked Event in Ljusdal, Substitute request confirmed in Sundsvall preserves Sundsvall across all feeds', async () => {
+        const LJUSDAL_LAT = 61.8286;
+        const LJUSDAL_LNG = 16.0958;
+        const SUNDSVALL_LAT = 62.3908;
+        const SUNDSVALL_LNG = 17.3069;
+
+        await adminDb.ref('Bands/Deku_Tree_Bongo').set({
+          Name: 'Deku Tree Bongo',
+          Location: 'Ljusdal, Sweden',
+          Members_band: {
+            user_a: { Role: 'Leader' },
+          },
+          Events: {
+            ev_ljusdal_1: {
+              Title: 'Ljusdal Gig',
+              Location: 'Ljusdal, Sweden',
+              Latitude: LJUSDAL_LAT,
+              Longitude: LJUSDAL_LNG,
+              createdBy: 'user_a',
+            },
+          },
+        });
+
+        await adminDb.ref('SubRequests/unrelated_sub_keep').set({
+          SubRequestId: 'unrelated_sub_keep',
+          Location: 'Stockholm',
+          Latitude: 59.3293,
+          Longitude: 18.0686,
+        });
+
+        const publish = httpsCallable(functionsUserA, 'publishSubRequestGroup');
+        const res = await publish({
+          bandId: 'Deku_Tree_Bongo',
+          bandName: 'Deku Tree Bongo',
+          eventId: 'ev_ljusdal_1',
+          requestGroupId: 'req_group_deku_sundsvall_1',
+          slots: [
+            {
+              subRequestId: 'sub_deku_sundsvall_pub_1',
+              slotId: 'sub_deku_sundsvall_pub_1',
+              eventId: 'ev_ljusdal_1',
+              voicePart: 'Electric Guitar',
+              searchSource: 'search_all',
+              Location: 'Sundsvall, Sweden',
+              Latitude: SUNDSVALL_LAT,
+              Longitude: SUNDSVALL_LNG,
+              LocationPrecision: 'exact',
+            },
+            {
+              subRequestId: 'sub_deku_sundsvall_direct_1',
+              slotId: 'sub_deku_sundsvall_direct_1',
+              eventId: 'ev_ljusdal_1',
+              voicePart: 'Drums',
+              type: 'direct_invitation',
+              targetUserIds: ['user_b'],
+              Location: 'Sundsvall, Sweden',
+              Latitude: SUNDSVALL_LAT,
+              Longitude: SUNDSVALL_LNG,
+              LocationPrecision: 'exact',
+            },
+          ],
+        });
+
+        assert.strictEqual(res.data.success, true);
+
+        const canonPub = (await adminDb.ref('SubRequests/sub_deku_sundsvall_pub_1').get()).val();
+        assert.strictEqual(canonPub.Location, 'Sundsvall, Sweden');
+        assert.strictEqual(canonPub.City, 'Sundsvall');
+        assert.strictEqual(canonPub.Latitude, SUNDSVALL_LAT);
+        assert.strictEqual(canonPub.Longitude, SUNDSVALL_LNG);
+
+        const pubFeed = (await adminDb.ref('publicSubRequests/sub_deku_sundsvall_pub_1').get()).val();
+        assert.strictEqual(pubFeed.location, 'Sundsvall, Sweden');
+        assert.strictEqual(pubFeed.city, 'Sundsvall');
+        assert.strictEqual(pubFeed.latitude, SUNDSVALL_LAT);
+        assert.strictEqual(pubFeed.longitude, SUNDSVALL_LNG);
+
+        const creatorFeed = (await adminDb.ref('creatorSubRequestFeed/user_a/sub_deku_sundsvall_pub_1').get()).val();
+        assert.strictEqual(creatorFeed.location, 'Sundsvall, Sweden');
+        assert.strictEqual(creatorFeed.city, 'Sundsvall');
+        assert.strictEqual(creatorFeed.latitude, SUNDSVALL_LAT);
+        assert.strictEqual(creatorFeed.longitude, SUNDSVALL_LNG);
+
+        const recipientFeed = (await adminDb.ref('userSubRequestFeed/user_b/sub_deku_sundsvall_direct_1').get()).val();
+        assert.strictEqual(recipientFeed.location, 'Sundsvall, Sweden');
+        assert.strictEqual(recipientFeed.city, 'Sundsvall');
+        assert.strictEqual(recipientFeed.latitude, SUNDSVALL_LAT);
+        assert.strictEqual(recipientFeed.longitude, SUNDSVALL_LNG);
+
+        const unrelated = (await adminDb.ref('SubRequests/unrelated_sub_keep').get()).val();
+        assert.strictEqual(unrelated.Location, 'Stockholm');
+        assert.strictEqual(unrelated.Latitude, 59.3293);
+      });
+
+      it('66. MAP-VIEW-LOCATION-01: Linked Event coordinates are inherited ONLY when SubRequest has no valid coordinates', async () => {
+        const LJUSDAL_LAT = 61.8286;
+        const LJUSDAL_LNG = 16.0958;
+
+        await adminDb.ref('Bands/Deku_Tree_Bongo').set({
+          Name: 'Deku Tree Bongo',
+          Location: 'Ljusdal, Sweden',
+          Members_band: {
+            user_a: { Role: 'Leader' },
+          },
+          Events: {
+            ev_ljusdal_inherit: {
+              Title: 'Ljusdal Gig',
+              Location: 'Ljusdal, Sweden',
+              Latitude: LJUSDAL_LAT,
+              Longitude: LJUSDAL_LNG,
+              createdBy: 'user_a',
+            },
+          },
+        });
+
+        const publish = httpsCallable(functionsUserA, 'publishSubRequestGroup');
+        await publish({
+          bandId: 'Deku_Tree_Bongo',
+          bandName: 'Deku Tree Bongo',
+          eventId: 'ev_ljusdal_inherit',
+          requestGroupId: 'req_group_deku_inherit_1',
+          slots: [
+            {
+              subRequestId: 'sub_deku_inherit_1',
+              slotId: 'sub_deku_inherit_1',
+              eventId: 'ev_ljusdal_inherit',
+              voicePart: 'Bass',
+              searchSource: 'search_all',
+            },
+          ],
+        });
+
+        const canon = (await adminDb.ref('SubRequests/sub_deku_inherit_1').get()).val();
+        assert.strictEqual(canon.Location, 'Ljusdal, Sweden');
+        assert.strictEqual(canon.Latitude, LJUSDAL_LAT);
+        assert.strictEqual(canon.Longitude, LJUSDAL_LNG);
+        assert.strictEqual(canon.LocationStatus, 'resolved');
+      });
+
+      it('67. MAP-VIEW-LOCATION-01: Missing request and Event coordinates remain unresolved with null coordinates', async () => {
+        await adminDb.ref('Bands/Deku_Tree_Bongo').set({
+          Name: 'Deku Tree Bongo',
+          Location: 'Ljusdal, Sweden',
+          Members_band: {
+            user_a: { Role: 'Leader' },
+          },
+          Events: {
+            ev_no_coords: {
+              Title: 'Unresolved Event',
+              Location: 'Ljusdal, Sweden',
+              createdBy: 'user_a',
+            },
+          },
+        });
+
+        const publish = httpsCallable(functionsUserA, 'publishSubRequestGroup');
+        await publish({
+          bandId: 'Deku_Tree_Bongo',
+          bandName: 'Deku Tree Bongo',
+          eventId: 'ev_no_coords',
+          requestGroupId: 'req_group_deku_unres_1',
+          slots: [
+            {
+              subRequestId: 'sub_deku_unres_1',
+              slotId: 'sub_deku_unres_1',
+              eventId: 'ev_no_coords',
+              voicePart: 'Saxophone',
+              searchSource: 'search_all',
+            },
+          ],
+        });
+
+        const canon = (await adminDb.ref('SubRequests/sub_deku_unres_1').get()).val();
+        assert.strictEqual(canon.Latitude ?? null, null);
+        assert.strictEqual(canon.Longitude ?? null, null);
+        assert.strictEqual(canon.LocationStatus, 'unresolved');
+      });
     });
   });
 });

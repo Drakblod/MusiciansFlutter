@@ -1024,11 +1024,100 @@ function buildSanitizedFeedItem(subRequest) {
   };
 }
 
+function isValidSubRequestCoord(lat, lng) {
+  if (lat === null || lat === undefined || lng === null || lng === undefined) return false;
+  const nLat = Number(lat);
+  const nLng = Number(lng);
+  if (!Number.isFinite(nLat) || !Number.isFinite(nLng)) return false;
+  if (nLat < -90 || nLat > 90 || nLng < -180 || nLng > 180) return false;
+  if (nLat === 0 && nLng === 0) return false;
+  return true;
+}
+
+/**
+ * Centralized location precedence for SubRequest:
+ * 1. If the SubRequest has its own explicitly confirmed valid coordinates,
+ *    those coordinates and its confirmed location label MUST be used.
+ * 2. Linked Event coordinates may be inherited ONLY when the SubRequest has
+ *    no valid confirmed coordinates of its own.
+ * 3. Band city, creator profile city, Ljusdal, Stockholm, or any other default
+ *    must NEVER replace valid request coordinates.
+ * 4. If neither the request nor its linked Event has valid coordinates, the
+ *    request remains unresolved (latitude: null, longitude: null).
+ */
+function resolveSubRequestLocation(slot, linkedEvent = null) {
+  if (!slot) return slot;
+  const slotLat = slot.Latitude ?? slot.latitude ?? null;
+  const slotLng = slot.Longitude ?? slot.longitude ?? null;
+  const rawLoc = (slot.Location || slot.location || '').toString().trim();
+
+  if (isValidSubRequestCoord(slotLat, slotLng)) {
+    const numLat = Number(slotLat);
+    const numLng = Number(slotLng);
+    const city = (slot.City || slot.city || extractCityLabel(rawLoc) || '').toString().trim();
+    return {
+      ...slot,
+      Location: rawLoc,
+      location: rawLoc,
+      City: city,
+      city: city,
+      Latitude: numLat,
+      latitude: numLat,
+      Longitude: numLng,
+      longitude: numLng,
+      LocationPrecision: slot.LocationPrecision || slot.locationPrecision || 'exact',
+      locationPrecision: slot.LocationPrecision || slot.locationPrecision || 'exact',
+      LocationStatus: 'resolved',
+      locationStatus: 'resolved',
+    };
+  }
+
+  if (linkedEvent) {
+    const evLat = linkedEvent.Latitude ?? linkedEvent.latitude ?? null;
+    const evLng = linkedEvent.Longitude ?? linkedEvent.longitude ?? null;
+    const evLoc = (linkedEvent.Location || linkedEvent.location || '').toString().trim();
+    if (isValidSubRequestCoord(evLat, evLng)) {
+      const numLat = Number(evLat);
+      const numLng = Number(evLng);
+      const finalLoc = rawLoc || evLoc;
+      const city = extractCityLabel(finalLoc);
+      return {
+        ...slot,
+        Location: finalLoc,
+        location: finalLoc,
+        City: city,
+        city: city,
+        Latitude: numLat,
+        latitude: numLat,
+        Longitude: numLng,
+        longitude: numLng,
+        LocationPrecision: slot.LocationPrecision || slot.locationPrecision || 'exact',
+        locationPrecision: slot.LocationPrecision || slot.locationPrecision || 'exact',
+        LocationStatus: 'resolved',
+        locationStatus: 'resolved',
+      };
+    }
+  }
+
+  return {
+    ...slot,
+    Location: rawLoc,
+    location: rawLoc,
+    Latitude: null,
+    latitude: null,
+    Longitude: null,
+    longitude: null,
+    LocationStatus: 'unresolved',
+    locationStatus: 'unresolved',
+  };
+}
+
 exports.SUBREQUEST_KIND = SUBREQUEST_KIND;
 exports.classifySubRequest = classifySubRequest;
 exports.buildSanitizedFeedItem = buildSanitizedFeedItem;
 exports.isNewMemberRequest = isNewMemberRequest;
 exports.extractCityLabel = extractCityLabel;
+exports.resolveSubRequestLocation = resolveSubRequestLocation;
 
 /**
  * Production callable entrypoint to publish a grouped substitute request.
@@ -1079,6 +1168,20 @@ exports.publishSubRequestGroup = onCall({ region: 'europe-west1' }, async (reque
     }
   }
 
+  // Fetch linked events if needed for fallback coordinate inheritance ONLY when slot lacks own coordinates
+  const linkedEventsMap = {};
+  if (bandId && bandId !== 'freelance' && bandId !== 'standalone') {
+    for (const slot of slots) {
+      const slotEventId = slot.eventId || slot.EventId || eventId;
+      if (slotEventId && slotEventId !== 'standalone' && !slotEventId.startsWith('freelance') && !linkedEventsMap[slotEventId]) {
+        const evSnap = await db.ref(`/Bands/${bandId}/Events/${slotEventId}`).once('value');
+        if (evSnap.exists()) {
+          linkedEventsMap[slotEventId] = evSnap.val();
+        }
+      }
+    }
+  }
+
   // 2. Fetch creator favorites to strictly validate targeted favorites
   const callerFavSnap = await db.ref(`/users/${callerId}/Favorites`).once('value');
   const callerFavorites = callerFavSnap.val() || {};
@@ -1093,14 +1196,17 @@ exports.publishSubRequestGroup = onCall({ region: 'europe-west1' }, async (reque
       slot.Id ||
       slot.key;
     const slotKey =
-      (rawKey && typeof rawKey === 'string' && rawKey.trim().length > 0 && !rawKey.startsWith('slot_') && !rawKey.startsWith('draft_'))
+      (rawKey && typeof rawKey === 'string' && rawKey.trim().length > 0 && !rawKey.startsWith('draft_'))
         ? rawKey.trim()
         : (db.ref('SubRequests').push().key || `sub_${Date.now()}_${index}`);
 
     const slotId = slot.slotId || slot.SlotId || slotKey;
+    const slotEventId = slot.eventId || slot.EventId || eventId;
+    const linkedEv = slotEventId ? linkedEventsMap[slotEventId] : null;
+    const locationResolvedSlot = resolveSubRequestLocation(slot, linkedEv);
 
     return {
-      ...slot,
+      ...locationResolvedSlot,
       subRequestId: slotKey,
       SubRequestId: slotKey,
       slotId: slotId,

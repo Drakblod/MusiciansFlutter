@@ -89,9 +89,7 @@ class LocationPickerFieldState extends State<LocationPickerField> {
   }
 
   void _useKnownCityCentroid(CanonicalLocation cityLoc) {
-    if (widget.controller.text.trim().isEmpty) {
-      widget.controller.text = cityLoc.locationLabel;
-    }
+    widget.controller.text = cityLoc.locationLabel;
     _confirmLocation(cityLoc);
   }
 
@@ -202,9 +200,18 @@ class LocationPickerFieldState extends State<LocationPickerField> {
                           ),
                         ),
                         onPressed: () {
-                          final label = widget.controller.text.trim().isNotEmpty
-                              ? widget.controller.text.trim()
-                              : (isCity ? 'City Area' : 'Map Location');
+                          final nearestCity = widget.resolver.findClosestKnownCity(selectedPos.latitude, selectedPos.longitude);
+                          String label = widget.controller.text.trim();
+                          if (label.isEmpty || label == 'Map Location' || label == 'City Area') {
+                            label = nearestCity != null ? '${nearestCity.locationLabel}, Sweden' : (isCity ? 'City Area' : 'Map Location');
+                            widget.controller.text = label;
+                          } else {
+                            final oldCity = widget.resolver.resolveKnownCity(label);
+                            if (oldCity != null && nearestCity != null && oldCity.locationLabel.toLowerCase() != nearestCity.locationLabel.toLowerCase()) {
+                              label = '${nearestCity.locationLabel}, Sweden';
+                              widget.controller.text = label;
+                            }
+                          }
 
                           final candidate = isCity
                               ? CanonicalLocation.city(

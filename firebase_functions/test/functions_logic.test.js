@@ -2562,4 +2562,76 @@ describe('MAP-VIEW-FEED-01: Final Privacy, Path & New Member Classification Audi
       assert.strictEqual(mockDb.data['/SubRequests/sub_dry/Latitude'], undefined);
     });
   });
+
+  describe('MAP-VIEW-LOCATION-01: Centralized SubRequest Location Precedence', () => {
+    const { resolveSubRequestLocation, buildSanitizedFeedItem } = require('../index.js');
+    const LJUSDAL_LAT = 61.8286;
+    const LJUSDAL_LNG = 16.0958;
+    const SUNDSVALL_LAT = 62.3908;
+    const SUNDSVALL_LNG = 17.3069;
+
+    it('1. Confirmed SubRequest coordinates in Sundsvall take strict precedence over Ljusdal linked Event', () => {
+      const slot = {
+        subRequestId: 'sub_sundsvall_1',
+        Location: 'Sundsvall, Sweden',
+        Latitude: SUNDSVALL_LAT,
+        Longitude: SUNDSVALL_LNG,
+        LocationPrecision: 'exact',
+      };
+      const linkedEvent = {
+        Location: 'Ljusdal, Sweden',
+        Latitude: LJUSDAL_LAT,
+        Longitude: LJUSDAL_LNG,
+      };
+
+      const resolved = resolveSubRequestLocation(slot, linkedEvent);
+      assert.strictEqual(resolved.Location, 'Sundsvall, Sweden');
+      assert.strictEqual(resolved.City, 'Sundsvall');
+      assert.strictEqual(resolved.Latitude, SUNDSVALL_LAT);
+      assert.strictEqual(resolved.Longitude, SUNDSVALL_LNG);
+      assert.strictEqual(resolved.LocationStatus, 'resolved');
+
+      const sanitized = buildSanitizedFeedItem(resolved);
+      assert.strictEqual(sanitized.location, 'Sundsvall, Sweden');
+      assert.strictEqual(sanitized.city, 'Sundsvall');
+      assert.strictEqual(sanitized.latitude, SUNDSVALL_LAT);
+      assert.strictEqual(sanitized.longitude, SUNDSVALL_LNG);
+    });
+
+    it('2. Linked Event coordinates are inherited ONLY when SubRequest has no valid coordinates', () => {
+      const slot = {
+        subRequestId: 'sub_inherit_ev',
+        Location: '',
+        Latitude: null,
+        Longitude: null,
+      };
+      const linkedEvent = {
+        Location: 'Ljusdal, Sweden',
+        Latitude: LJUSDAL_LAT,
+        Longitude: LJUSDAL_LNG,
+      };
+
+      const resolved = resolveSubRequestLocation(slot, linkedEvent);
+      assert.strictEqual(resolved.Location, 'Ljusdal, Sweden');
+      assert.strictEqual(resolved.City, 'Ljusdal');
+      assert.strictEqual(resolved.Latitude, LJUSDAL_LAT);
+      assert.strictEqual(resolved.Longitude, LJUSDAL_LNG);
+      assert.strictEqual(resolved.LocationStatus, 'resolved');
+    });
+
+    it('3. Missing request and Event coordinates remain unresolved with null coordinates', () => {
+      const slot = {
+        subRequestId: 'sub_unresolved_1',
+        Location: 'Unknown Venue',
+      };
+      const linkedEvent = {
+        Location: 'Ljusdal, Sweden',
+      };
+
+      const resolved = resolveSubRequestLocation(slot, linkedEvent);
+      assert.strictEqual(resolved.Latitude, null);
+      assert.strictEqual(resolved.Longitude, null);
+      assert.strictEqual(resolved.LocationStatus, 'unresolved');
+    });
+  });
 });

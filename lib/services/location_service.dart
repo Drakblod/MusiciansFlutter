@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import '../models/canonical_location.dart';
 
 /// Clean interface abstraction for coordinate validation and location resolution.
@@ -13,6 +14,9 @@ abstract class LocationResolver {
 
   /// Resolves a known city to its approximate centroid coordinates offline.
   CanonicalLocation? resolveKnownCity(String label);
+
+  /// Finds the closest known Swedish city within [maxDistanceKm], or null if none within range.
+  CanonicalLocation? findClosestKnownCity(double? lat, double? lng, {double maxDistanceKm = 40.0});
 }
 
 /// Default offline location resolver.
@@ -39,6 +43,8 @@ class DefaultLocationResolver implements LocationResolver {
     'borås': (lat: 57.7210, lng: 12.9401, name: 'Borås'),
     'halmstad': (lat: 56.6745, lng: 12.8578, name: 'Halmstad'),
     'karlstad': (lat: 59.3793, lng: 13.5036, name: 'Karlstad'),
+    'sundsvall': (lat: 62.3908, lng: 17.3069, name: 'Sundsvall'),
+    'ljusdal': (lat: 61.8286, lng: 16.0958, name: 'Ljusdal'),
   };
 
   @override
@@ -96,6 +102,27 @@ class DefaultLocationResolver implements LocationResolver {
     }
     return null;
   }
+
+  @override
+  CanonicalLocation? findClosestKnownCity(double? lat, double? lng, {double maxDistanceKm = 40.0}) {
+    if (!isValidCoordinate(lat, lng)) return null;
+    CanonicalLocation? closest;
+    double minDistance = double.infinity;
+    for (final entry in _swedishCities.values) {
+      final dLat = (entry.lat - lat!) * 111.0;
+      final dLng = (entry.lng - lng!) * 111.0 * math.cos(lat * math.pi / 180.0);
+      final distKm = math.sqrt(dLat * dLat + dLng * dLng);
+      if (distKm < minDistance && distKm <= maxDistanceKm) {
+        minDistance = distKm;
+        closest = CanonicalLocation.city(
+          cityName: entry.name,
+          latitude: entry.lat,
+          longitude: entry.lng,
+        );
+      }
+    }
+    return closest;
+  }
 }
 
 /// Centralized service for address lookup and coordinate validation.
@@ -117,6 +144,11 @@ class LocationService {
   /// Resolves a known city centroid offline.
   static CanonicalLocation? resolveKnownCity(String label, {LocationResolver? resolver}) {
     return (resolver ?? defaultResolver).resolveKnownCity(label);
+  }
+
+  /// Finds the closest known city within [maxDistanceKm], or null if none within range.
+  static CanonicalLocation? findClosestKnownCity(double? lat, double? lng, {double maxDistanceKm = 40.0, LocationResolver? resolver}) {
+    return (resolver ?? defaultResolver).findClosestKnownCity(lat, lng, maxDistanceKm: maxDistanceKm);
   }
 
   /// Extracts the city label from a full address string by stripping street numbers and street names.
