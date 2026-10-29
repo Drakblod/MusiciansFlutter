@@ -54,13 +54,15 @@ class _SubRequestResponsesScreenState extends State<SubRequestResponsesScreen>
       // 1. Fetch user's sub requests
       final list = await appState.firebaseService.getUserSubRequestsAsync(userId);
       
-      // 2. Filter requests matching the selected band
-      final bandRequests = list.where((req) {
-        if (req.bandId != null && req.bandId == widget.bandId) return true;
-        if (req.bandName == null) return false;
-        final cleanBandName = req.bandName!.replaceAll(' ', '_');
-        return cleanBandName == widget.bandId || req.bandName == widget.bandId;
-      }).toList();
+      // 2. Filter requests matching the selected band (or show all if bandId is empty or 'all')
+      final bandRequests = (widget.bandId.isEmpty || widget.bandId == 'all')
+          ? list
+          : list.where((req) {
+              if (req.bandId != null && req.bandId == widget.bandId) return true;
+              if (req.bandName == null) return false;
+              final cleanBandName = req.bandName!.replaceAll(' ', '_');
+              return cleanBandName == widget.bandId || req.bandName == widget.bandId;
+            }).toList();
 
       // 3. Concurrently fetch responses count for each request
       final Map<String, int> counts = {};

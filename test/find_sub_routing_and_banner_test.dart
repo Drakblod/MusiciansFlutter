@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:firebase_core/firebase_core.dart' hide FirebaseService;
 import 'package:firebase_core_platform_interface/test.dart';
 import 'package:provider/provider.dart';
+import 'package:musicians_flutter/models/app_notification.dart';
 import 'package:musicians_flutter/models/band.dart';
 import 'package:musicians_flutter/models/band_event.dart';
 import 'package:musicians_flutter/models/sub_request.dart';
@@ -23,6 +24,9 @@ class MockRoutingFirebaseService extends Fake implements FirebaseService {
 
   @override
   Stream<bool> subscribeToUnreadNotifications() => const Stream.empty();
+
+  @override
+  Stream<List<AppNotification>> subscribeToUserNotifications([String? userId]) => const Stream.empty();
 
   @override
   Stream<int> subscribeToUnreadNotificationCount([String? userId]) => Stream.value(0);
@@ -125,7 +129,7 @@ void main() {
     );
 
     await tester.pump();
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 200));
 
     // Check that active requests banner is present
     expect(find.text('1 Active Request'), findsOneWidget);
@@ -146,7 +150,7 @@ void main() {
     );
 
     await tester.pump();
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 200));
 
     // Check that active sub requests banner is NOT present
     expect(find.textContaining('active sub-request'), findsNothing);

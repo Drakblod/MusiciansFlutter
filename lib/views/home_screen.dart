@@ -310,7 +310,8 @@ class HomeScreen extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Manage Active Requests',
+                              'Manage Requests',
+                              key: const Key('home_manage_requests_option'),
                               style: GoogleFonts.outfit(
                                 fontSize: 15,
                                 fontWeight: FontWeight.bold,
@@ -766,7 +767,7 @@ class HomeScreen extends StatelessWidget {
                   child: Padding(
                     padding: const EdgeInsets.only(bottom: 10, right: 10),
                     child: Text(
-                      '2.78.5',
+                      '2.78.6',
                       style: GoogleFonts.inter(
                         color: AppTheme.textSecondary.withOpacity(0.5),
                         fontSize: 12,
@@ -2015,7 +2016,7 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
                                 }
                               },
                               child: Text(
-                                '2.78.5',
+                                '2.78.6',
                                 style: GoogleFonts.inter(
                                   color: AppTheme.textSecondary.withOpacity(0.5),
                                   fontSize: 12,
