@@ -7,6 +7,7 @@ import '../providers/app_state.dart';
 import '../theme/app_theme.dart';
 import '../models/message.dart';
 import '../models/agreement.dart';
+import '../utils/sub_request_card_helper.dart';
 import '../widgets/gradient_scaffold.dart';
 import '../widgets/custom_top_bar.dart';
 import '../widgets/animated_tap_detector.dart';
@@ -221,7 +222,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                               ),
                               const SizedBox(width: 8),
                               Text(
-                                'CONFIRMED GIG AGREEMENT',
+                                'CONFIRMED AGREEMENT',
                                 style: GoogleFonts.outfit(
                                   fontSize: 13,
                                   fontWeight: FontWeight.bold,
@@ -278,44 +279,66 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                               width: 1,
                             ),
                           ),
-                          child: Column(
-                            children: [
-                              _buildAgreementRow(
+                          child: () {
+                            final rows = <Widget>[];
+                            if (agreement.bandName != null &&
+                                agreement.bandName!.trim().isNotEmpty) {
+                              rows.add(_buildAgreementRow(
                                 Icons.music_note_rounded,
                                 'Band / Project',
-                                agreement.bandName ?? 'N/A',
-                              ),
-                              const SizedBox(height: 8),
-                              _buildAgreementRow(
+                                agreement.bandName!.trim(),
+                              ));
+                            }
+                            if (agreement.voicePart != null &&
+                                agreement.voicePart!.trim().isNotEmpty) {
+                              rows.add(_buildAgreementRow(
                                 Icons.person_search_rounded,
                                 'Role / Instrument',
-                                agreement.voicePart ?? 'N/A',
-                              ),
-                              const SizedBox(height: 8),
-                              _buildAgreementRow(
+                                agreement.voicePart!.trim(),
+                              ));
+                            }
+                            final payment = formatAgreementPayment(agreement);
+                            if (payment != null && payment.isNotEmpty) {
+                              rows.add(_buildAgreementRow(
+                                Icons.payments_rounded,
+                                'Compensation',
+                                payment,
+                              ));
+                            }
+                            final dt = _formatAgreementDateTime(agreement);
+                            if (dt != null && dt.isNotEmpty) {
+                              rows.add(_buildAgreementRow(
                                 Icons.calendar_today_rounded,
                                 'Date & Time',
-                                _formatAgreementDateTime(agreement),
-                              ),
-                              const SizedBox(height: 8),
-                              _buildAgreementRow(
+                                dt,
+                              ));
+                            }
+                            if (agreement.location != null &&
+                                agreement.location!.trim().isNotEmpty) {
+                              rows.add(_buildAgreementRow(
                                 Icons.location_on_rounded,
-                                'Location',
-                                agreement.location ?? 'N/A',
-                              ),
-                              if (agreement.additionalTerms != null &&
-                                  agreement.additionalTerms!
-                                      .trim()
-                                      .isNotEmpty) ...[
-                                const SizedBox(height: 8),
-                                _buildAgreementRow(
-                                  Icons.description_rounded,
-                                  'Additional Terms',
-                                  agreement.additionalTerms!,
-                                ),
+                                'Location / Venue',
+                                agreement.location!.trim(),
+                              ));
+                            }
+                            if (agreement.additionalTerms != null &&
+                                agreement.additionalTerms!.trim().isNotEmpty) {
+                              rows.add(_buildAgreementRow(
+                                Icons.description_rounded,
+                                'Description / Details',
+                                agreement.additionalTerms!.trim(),
+                              ));
+                            }
+
+                            return Column(
+                              children: [
+                                for (int i = 0; i < rows.length; i++) ...[
+                                  if (i > 0) const SizedBox(height: 8),
+                                  rows[i],
+                                ],
                               ],
-                            ],
-                          ),
+                            );
+                          }(),
                         ),
                       ] else ...[
                         // Collapsed Quick Summary
@@ -570,42 +593,27 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     );
   }
 
-  String _formatAgreementDateTime(Agreement agreement) {
-    String dateStr = agreement.date?.trim() ?? '';
-    if (dateStr.isNotEmpty) {
-      final parsedDate = DateTime.tryParse(dateStr);
-      if (parsedDate != null) {
-        dateStr = DateFormat('EEEE, MMM d, yyyy').format(parsedDate.toLocal());
-      }
-    }
-
-    final hasStart = agreement.startTime != null && agreement.startTime!.trim().isNotEmpty;
-    final hasEnd = agreement.endTime != null && agreement.endTime!.trim().isNotEmpty;
-
-    if (dateStr.isNotEmpty && (hasStart || hasEnd)) {
-      final timeStr = '${agreement.startTime ?? "—"} – ${agreement.endTime ?? "—"}';
-      return '$dateStr ($timeStr)';
-    } else if (dateStr.isNotEmpty) {
-      return dateStr;
-    } else if (hasStart || hasEnd) {
-      return '${agreement.startTime ?? "—"} – ${agreement.endTime ?? "—"}';
-    }
-    return 'N/A';
+  String? _formatAgreementDateTime(Agreement agreement) {
+    return formatSubRequestDateTime(
+      date: agreement.date,
+      startTime: agreement.startTime,
+      endTime: agreement.endTime,
+    );
   }
 
   String _formatAgreementCollapsed(Agreement agreement) {
-    final band = agreement.bandName ?? "Band";
-    final part = agreement.voicePart ?? "Sub";
-    String dateStr = agreement.date?.trim() ?? '';
-    if (dateStr.isNotEmpty) {
-      final parsedDate = DateTime.tryParse(dateStr);
-      if (parsedDate != null) {
-        dateStr = DateFormat('MMM d, yyyy').format(parsedDate.toLocal());
-      }
-    } else {
-      dateStr = 'No Date';
+    final parts = <String>[];
+    if (agreement.bandName != null && agreement.bandName!.trim().isNotEmpty) {
+      parts.add(agreement.bandName!.trim());
     }
-    return '$band • $part • $dateStr';
+    if (agreement.voicePart != null && agreement.voicePart!.trim().isNotEmpty) {
+      parts.add(agreement.voicePart!.trim());
+    }
+    final dt = _formatAgreementDateTime(agreement);
+    if (dt != null && dt.isNotEmpty) {
+      parts.add(dt);
+    }
+    return parts.join(' · ');
   }
 
   Widget _buildAgreementRow(IconData icon, String label, String value) {
@@ -614,21 +622,27 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       children: [
         Icon(icon, size: 16, color: Colors.greenAccent.withOpacity(0.7)),
         const SizedBox(width: 8),
-        Text(
-          '$label:  ',
-          style: GoogleFonts.inter(
-            fontSize: 12,
-            color: Colors.greenAccent.withOpacity(0.7),
-            fontWeight: FontWeight.w600,
-          ),
-        ),
         Expanded(
-          child: Text(
-            value,
-            style: GoogleFonts.inter(
-              fontSize: 12,
-              color: Colors.white,
-              fontWeight: FontWeight.w500,
+          child: Text.rich(
+            TextSpan(
+              children: [
+                TextSpan(
+                  text: '$label:  ',
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    color: Colors.greenAccent.withOpacity(0.7),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                TextSpan(
+                  text: value,
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    color: Colors.white,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
             ),
           ),
         ),

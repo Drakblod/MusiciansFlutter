@@ -7,6 +7,7 @@ import '../theme/app_theme.dart';
 import '../widgets/gradient_scaffold.dart';
 import '../widgets/custom_top_bar.dart';
 import '../models/agreement.dart';
+import '../utils/sub_request_card_helper.dart';
 import '../utils/date_parser.dart';
 import '../widgets/create_band_section_sheet.dart';
 
@@ -61,6 +62,363 @@ class _InboxScreenState extends State<InboxScreen> {
     } else {
       return DateFormat('MMM dd').format(dt);
     }
+  }
+
+  Future<void> _openConversation({
+    required String conversationId,
+    required String otherUserId,
+    required String otherUserName,
+    required AppState appState,
+  }) async {
+    await appState.firebaseService.markConversationAsRead(conversationId);
+    appState.refreshProfile();
+
+    if (!mounted) return;
+    await Navigator.pushNamed(
+      context,
+      '/chat-detail',
+      arguments: {
+        'conversationId': conversationId,
+        'receiverId': otherUserId,
+        'receiverName': otherUserName,
+      },
+    );
+    if (!mounted) return;
+    _loadThreads();
+  }
+
+  Widget _buildCompactAgreementCard({
+    required BuildContext context,
+    required AppState appState,
+    required Map<String, dynamic> thread,
+    required Agreement agreement,
+    required String conversationId,
+    required String otherUserId,
+    required String otherUserName,
+    required bool hasUnread,
+    required DateTime? timestamp,
+  }) {
+    final dateTimeText = formatSubRequestDateTime(
+      date: agreement.date,
+      startTime: agreement.startTime,
+      endTime: agreement.endTime,
+    );
+    final paymentText = formatAgreementPayment(agreement);
+    final locationText = agreement.location?.trim();
+
+    final rawAgreementBand = agreement.bandName?.trim();
+    final rawThreadBand = (thread['bandName'] as String?)?.trim();
+    final rawThreadTitle = (thread['title'] as String?)?.trim();
+
+    String? bandTitle;
+    if (rawAgreementBand != null &&
+        rawAgreementBand.isNotEmpty &&
+        rawAgreementBand.toLowerCase() != 'null' &&
+        rawAgreementBand.toLowerCase() != 'n/a' &&
+        rawAgreementBand.toLowerCase() != 'band / project' &&
+        rawAgreementBand.toLowerCase() != 'unknown band') {
+      bandTitle = rawAgreementBand;
+    } else if (rawThreadBand != null &&
+        rawThreadBand.isNotEmpty &&
+        rawThreadBand.toLowerCase() != 'null' &&
+        rawThreadBand.toLowerCase() != 'band' &&
+        rawThreadBand.toLowerCase() != 'n/a' &&
+        rawThreadBand.toLowerCase() != 'band / project' &&
+        rawThreadBand.toLowerCase() != 'unknown band') {
+      bandTitle = rawThreadBand;
+    } else if (rawThreadTitle != null &&
+        rawThreadTitle.isNotEmpty &&
+        rawThreadTitle.toLowerCase() != 'null' &&
+        rawThreadTitle.toLowerCase() != 'band' &&
+        rawThreadTitle.toLowerCase() != 'n/a' &&
+        rawThreadTitle.toLowerCase() != 'band / project' &&
+        rawThreadTitle.toLowerCase() != 'unknown band') {
+      bandTitle = rawThreadTitle;
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0A1C12),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: hasUnread
+              ? AppTheme.primaryAccent.withOpacity(0.5)
+              : const Color(0xFF0F4D25).withOpacity(0.6),
+          width: hasUnread ? 1.5 : 1.0,
+        ),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () => _openConversation(
+            conversationId: conversationId,
+            otherUserId: otherUserId,
+            otherUserName: otherUserName,
+            appState: appState,
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // 1. Counterpart / participant header row with Agreement badge
+                Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 16,
+                      backgroundColor: const Color(0xFF0D3A20).withOpacity(0.5),
+                      child: Text(
+                        otherUserName.isNotEmpty
+                            ? otherUserName.substring(0, 1).toUpperCase()
+                            : 'U',
+                        style: GoogleFonts.inter(
+                          color: Colors.greenAccent,
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              otherUserName,
+                              style: GoogleFonts.outfit(
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF0F4D25),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                color: Colors.greenAccent.withOpacity(0.3),
+                                width: 0.8,
+                              ),
+                            ),
+                            child: Text(
+                              'Agreement',
+                              style: GoogleFonts.inter(
+                                color: Colors.greenAccent,
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (timestamp != null)
+                      Text(
+                        _formatTimestamp(timestamp),
+                        style: GoogleFonts.inter(
+                          fontSize: 11,
+                          color: hasUnread
+                              ? AppTheme.primaryAccent
+                              : AppTheme.textMuted,
+                          fontWeight: hasUnread
+                              ? FontWeight.bold
+                              : FontWeight.normal,
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+
+                // 2. Band / Project (only if a reliable name exists)
+                if (bandTitle != null && bandTitle.isNotEmpty) ...[
+                  Text(
+                    bandTitle,
+                    style: GoogleFonts.outfit(
+                      fontSize: 17,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                ],
+
+                // 3. Role / Instrument
+                if (agreement.voicePart != null &&
+                    agreement.voicePart!.trim().isNotEmpty) ...[
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.person_search_rounded,
+                        size: 14,
+                        color: AppTheme.secondaryAccent,
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          agreement.voicePart!.trim(),
+                          style: GoogleFonts.inter(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: AppTheme.secondaryAccent,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                ],
+
+                // 4. Date & Time
+                if (dateTimeText != null && dateTimeText.isNotEmpty) ...[
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.access_time_rounded,
+                        size: 14,
+                        color: AppTheme.textSecondary,
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          dateTimeText,
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            color: AppTheme.textSecondary,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                ],
+
+                // 5. Location / Venue
+                if (locationText != null && locationText.isNotEmpty) ...[
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.location_on_outlined,
+                        size: 14,
+                        color: AppTheme.textSecondary,
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          locationText,
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            color: AppTheme.textSecondary,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                ],
+
+                // 6. Payment (if present)
+                if (paymentText != null && paymentText.isNotEmpty) ...[
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.payments_outlined,
+                        size: 14,
+                        color: Colors.greenAccent,
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          paymentText,
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.greenAccent,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                ],
+
+                const SizedBox(height: 8),
+
+                // 7. Compact Action Row: View Agreement
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    ElevatedButton(
+                      key: Key('inbox_agreement_open_$conversationId'),
+                      onPressed: () => _openConversation(
+                        conversationId: conversationId,
+                        otherUserId: otherUserId,
+                        otherUserName: otherUserName,
+                        appState: appState,
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF143E24),
+                        foregroundColor: Colors.greenAccent,
+                        side: BorderSide(
+                          color: Colors.greenAccent.withOpacity(0.4),
+                          width: 1,
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 8,
+                        ),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'View Agreement',
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.greenAccent,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          const Icon(
+                            Icons.arrow_forward_rounded,
+                            size: 14,
+                            color: Colors.greenAccent,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -295,6 +653,20 @@ class _InboxScreenState extends State<InboxScreen> {
                           final lastMessage = (thread['lastMessageText'] as String?) ?? '';
                           final conversationId = (thread['conversationId'] as String?) ?? '';
                           final agreement = thread['agreement'] as Agreement?;
+
+                          if (agreement != null) {
+                            return _buildCompactAgreementCard(
+                              context: context,
+                              appState: appState,
+                              thread: thread,
+                              agreement: agreement,
+                              conversationId: conversationId,
+                              otherUserId: otherUserId,
+                              otherUserName: otherUserName,
+                              hasUnread: hasUnread,
+                              timestamp: timestamp,
+                            );
+                          }
 
                           final isAgreement = agreement != null;
                           final cardBorderColor = hasUnread

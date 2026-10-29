@@ -1,5 +1,27 @@
 import 'package:intl/intl.dart';
 import '../models/sub_request.dart';
+import '../models/agreement.dart';
+
+/// Formats agreement payment if present and positive (> 0).
+/// E.g. "Paid · 1,500 SEK" or "Paid · 1,500" if currency is absent or malformed.
+/// Returns null if payAmount is null or <= 0.
+String? formatAgreementPayment(Agreement agreement) {
+  final amount = agreement.payAmount;
+  if (amount == null || amount <= 0) return null;
+  final formattedAmount = NumberFormat('#,##0', 'en_US').format(amount);
+  final rawCurr = agreement.currency?.trim();
+  String? curr;
+  if (rawCurr != null && rawCurr.isNotEmpty && rawCurr.toLowerCase() != 'null') {
+    final cleaned = rawCurr.toUpperCase();
+    if (RegExp(r'^[A-Z]{3}$').hasMatch(cleaned)) {
+      curr = cleaned;
+    }
+  }
+  if (curr != null) {
+    return 'Paid · $formattedAmount $curr';
+  }
+  return 'Paid · $formattedAmount';
+}
 
 /// Formats a time string (e.g. '18:00', '18.00', '18:00:00') to dot notation '18.00'.
 String formatSubRequestTime(String time) {
