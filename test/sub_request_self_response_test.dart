@@ -148,8 +148,9 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
 
-      // Verify that "Your Request" badge is shown instead of "Apply"
-      expect(find.text('Your Request'), findsOneWidget);
+      // Verify that "Manage Request" action is shown instead of "Apply"
+      expect(find.text('Manage Request'), findsWidgets);
+      expect(find.text('Your Request'), findsNothing);
       expect(find.text('Apply'), findsNothing);
     });
 
@@ -195,10 +196,10 @@ void main() {
       await tester.pump(const Duration(milliseconds: 400));
 
       // Verify "Apply" button is visible for candidate
-      expect(find.text('Apply'), findsOneWidget);
+      expect(find.text('Apply'), findsWidgets);
       expect(find.text('Your Request'), findsNothing);
 
-      await tester.tap(find.text('Apply'));
+      await tester.tap(find.text('Apply').last);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 

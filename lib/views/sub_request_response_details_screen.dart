@@ -11,6 +11,7 @@ import '../widgets/custom_top_bar.dart';
 import '../widgets/gradient_scaffold.dart';
 import '../widgets/animated_tap_detector.dart';
 import 'chat_detail_screen.dart';
+import '../utils/sub_request_card_helper.dart';
 
 class SubRequestResponseDetailsScreen extends StatefulWidget {
   final SubRequest subRequest;
@@ -402,19 +403,142 @@ class _SubRequestResponseDetailsScreenState
     }
   }
 
-  String get _headerTitle {
-    final band = widget.subRequest.bandName ?? 'Band';
-    final roleOrInst = widget.subRequest.voicePart ?? widget.subRequest.role ?? '';
-    final isMember = widget.subRequest.role == 'New Member' || widget.subRequest.role == 'Member';
-    if (isMember) {
-      return roleOrInst.isNotEmpty
-          ? '$band: New Member request for $roleOrInst'
-          : '$band: New Member request';
-    } else {
-      return roleOrInst.isNotEmpty
-          ? '$band: Substitute request for $roleOrInst'
-          : '$band: Substitute request';
-    }
+  Widget _buildRequestSummaryHeader() {
+    final presentation = SubRequestCardPresentation.fromSubRequest(widget.subRequest);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppTheme.cardBackground,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFF231F45), width: 1),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 1. Band / Project
+          Text(
+            presentation.bandName,
+            style: GoogleFonts.outfit(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 4),
+
+          // 2. Request Type + Role / Instrument
+          Text(
+            '${presentation.requestType} · ${presentation.roleInstrument}',
+            style: GoogleFonts.inter(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: presentation.requestType == 'New Band Member'
+                  ? AppTheme.primaryAccent
+                  : const Color(0xFF90CAF9),
+            ),
+          ),
+
+          // 3. Event Type + Paid status/payment amount
+          if (presentation.eventTypeAndPaymentLine != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              presentation.eventTypeAndPaymentLine!,
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: presentation.isPaid ? AppTheme.primaryAccent : Colors.white70,
+              ),
+            ),
+          ],
+
+          // 4. Date & Time
+          if (presentation.formattedDateTime != null) ...[
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                const Icon(Icons.access_time_rounded, color: AppTheme.textSecondary, size: 14),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    presentation.formattedDateTime!,
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      color: AppTheme.textSecondary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+
+          // 5. full Location / Venue
+          if (presentation.locationVenue != null) ...[
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                const Icon(Icons.location_on_outlined, color: AppTheme.textSecondary, size: 14),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'Location / Venue: ${presentation.locationVenue!}',
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      color: AppTheme.textSecondary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+
+          // 6. Description / Details
+          if (presentation.description != null) ...[
+            const SizedBox(height: 10),
+            Text(
+              'Description / Details',
+              style: GoogleFonts.outfit(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: Colors.white70,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              presentation.description!,
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                color: AppTheme.textSecondary,
+                height: 1.3,
+              ),
+            ),
+          ],
+
+          // 7. Payment Details, when present
+          if (presentation.payDetails != null) ...[
+            const SizedBox(height: 10),
+            Text(
+              'Payment Details',
+              style: GoogleFonts.outfit(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: Colors.white70,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              presentation.payDetails!,
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                color: AppTheme.textSecondary,
+                height: 1.3,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
   }
 
   @override
@@ -427,34 +551,29 @@ class _SubRequestResponseDetailsScreenState
           child: Column(
             children: [
               const SizedBox(height: 8),
-              Text(
-                'CANDIDATES & RESPONSES',
-                style: GoogleFonts.outfit(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: AppTheme.primaryAccent,
-                  letterSpacing: 1.5,
+              _buildRequestSummaryHeader(),
+              const SizedBox(height: 16),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'CANDIDATES & RESPONSES',
+                  style: GoogleFonts.outfit(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.primaryAccent,
+                    letterSpacing: 1.5,
+                  ),
                 ),
               ),
-              const SizedBox(height: 4),
-              Text(
-                _headerTitle,
-                style: GoogleFonts.outfit(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
               if (widget.subRequest.role == 'New Member' || widget.subRequest.role == 'Member')
                 Container(
                   margin: const EdgeInsets.only(bottom: 12),
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: AppTheme.primaryAccent.withOpacity(0.12),
+                    color: AppTheme.primaryAccent.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.3)),
+                    border: Border.all(color: AppTheme.primaryAccent.withValues(alpha: 0.3)),
                   ),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -466,7 +585,7 @@ class _SubRequestResponseDetailsScreenState
                           'You may communicate with several prospective members, arrange a time for an audition, and ultimately make your selection through messaging. MUSICIANS will not create a formal Agreement.',
                           style: GoogleFonts.inter(
                             fontSize: 12,
-                            color: Colors.white.withOpacity(0.9),
+                            color: Colors.white.withValues(alpha: 0.9),
                             height: 1.4,
                           ),
                         ),
@@ -553,10 +672,10 @@ class _SubRequestResponseDetailsScreenState
                                   Container(
                                     padding: const EdgeInsets.all(12),
                                     decoration: BoxDecoration(
-                                      color: Colors.white.withOpacity(0.02),
+                                      color: Colors.white.withValues(alpha: 0.02),
                                       borderRadius: BorderRadius.circular(10),
                                       border: Border.all(
-                                        color: Colors.white.withOpacity(0.05),
+                                        color: Colors.white.withValues(alpha: 0.05),
                                         width: 1,
                                       ),
                                     ),

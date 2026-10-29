@@ -1,14 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../providers/app_state.dart';
 import '../theme/app_theme.dart';
 import '../models/sub_request.dart';
 import '../widgets/custom_top_bar.dart';
 import '../widgets/gradient_scaffold.dart';
-import '../widgets/animated_tap_detector.dart';
+import '../utils/sub_request_card_helper.dart';
 
 class SubRequestResponsesScreen extends StatefulWidget {
   final String bandId;
@@ -29,6 +28,7 @@ class _SubRequestResponsesScreenState extends State<SubRequestResponsesScreen>
   List<SubRequest> _memberRequests = [];
   Map<String, int> _responseCounts = {};
   Map<String, int> _viewedResponseCounts = {};
+  bool _isBandAdmin = false;
   bool _isLoading = true;
 
   @override
@@ -60,6 +60,7 @@ class _SubRequestResponsesScreenState extends State<SubRequestResponsesScreen>
       if (widget.bandId.isNotEmpty && widget.bandId != 'all') {
         try {
           final isBandAdmin = await appState.firebaseService.isBandLeaderOrAdminAsync(widget.bandId, userId);
+          _isBandAdmin = isBandAdmin;
           if (isBandAdmin) {
             final allRequests = await appState.firebaseService.getAllSubRequestsAsync();
             for (final req in allRequests) {
@@ -176,6 +177,7 @@ class _SubRequestResponsesScreenState extends State<SubRequestResponsesScreen>
     );
 
     if (confirm != true) return;
+    if (!mounted) return;
 
     setState(() => _isLoading = true);
     try {
@@ -212,10 +214,7 @@ class _SubRequestResponsesScreenState extends State<SubRequestResponsesScreen>
     }
   }
 
-  DateTime _getGigDate(SubRequest req) {
-    if (req.date == null) return DateTime.now();
-    return DateTime.tryParse(req.date!) ?? DateTime.now();
-  }
+
 
   bool _requestHasActivity(SubRequest req) {
     final reqId = req.subRequestId ?? req.id ?? '';
@@ -240,6 +239,7 @@ class _SubRequestResponsesScreenState extends State<SubRequestResponsesScreen>
       }
 
       // Mark matching unread response notifications as read
+      if (!mounted) return;
       try {
         final appState = Provider.of<AppState>(context, listen: false);
         for (final notif in appState.userNotifications) {
@@ -278,12 +278,15 @@ class _SubRequestResponsesScreenState extends State<SubRequestResponsesScreen>
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      'Manage Requests',
-                      style: GoogleFonts.outfit(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
+                    Expanded(
+                      child: Text(
+                        'Manage Requests',
+                        style: GoogleFonts.outfit(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                     IconButton(
@@ -298,44 +301,51 @@ class _SubRequestResponsesScreenState extends State<SubRequestResponsesScreen>
                 indicatorColor: AppTheme.primaryAccent,
                 labelColor: Colors.white,
                 unselectedLabelColor: AppTheme.textSecondary,
-                labelStyle: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 14),
+                labelPadding: const EdgeInsets.symmetric(horizontal: 4),
+                labelStyle: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 13),
                 tabs: [
                   Tab(
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Text('1. Substitutes'),
-                        if (_hasSubstituteActivity) ...[
-                          const SizedBox(width: 6),
-                          Container(
-                            width: 8,
-                            height: 8,
-                            decoration: const BoxDecoration(
-                              color: Color(0xFFE11D48),
-                              shape: BoxShape.circle,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text('1. Substitutes'),
+                          if (_hasSubstituteActivity) ...[
+                            const SizedBox(width: 6),
+                            Container(
+                              width: 8,
+                              height: 8,
+                              decoration: const BoxDecoration(
+                                color: Color(0xFFE11D48),
+                                shape: BoxShape.circle,
+                              ),
                             ),
-                          ),
+                          ],
                         ],
-                      ],
+                      ),
                     ),
                   ),
                   Tab(
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Text('2. Members'),
-                        if (_hasMemberActivity) ...[
-                          const SizedBox(width: 6),
-                          Container(
-                            width: 8,
-                            height: 8,
-                            decoration: const BoxDecoration(
-                              color: Color(0xFFE11D48),
-                              shape: BoxShape.circle,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text('2. Members'),
+                          if (_hasMemberActivity) ...[
+                            const SizedBox(width: 6),
+                            Container(
+                              width: 8,
+                              height: 8,
+                              decoration: const BoxDecoration(
+                                color: Color(0xFFE11D48),
+                                shape: BoxShape.circle,
+                              ),
                             ),
-                          ),
+                          ],
                         ],
-                      ],
+                      ),
                     ),
                   ),
                 ],
@@ -379,156 +389,169 @@ class _SubRequestResponsesScreenState extends State<SubRequestResponsesScreen>
           final req = list[index];
           final reqId = req.subRequestId ?? req.id ?? '';
           final responseCount = _responseCounts[reqId] ?? 0;
-          final date = _getGigDate(req);
+          final appState = Provider.of<AppState>(context, listen: false);
+          final currentUserId = appState.currentUserId;
+          final presentation = SubRequestCardPresentation.fromSubRequest(
+            req,
+            currentUserId: currentUserId,
+            isBandAdmin: _isBandAdmin,
+          );
 
-          return AnimatedTapDetector(
-            onTap: () => _openRequestDetails(req),
-            child: Container(
-              margin: const EdgeInsets.only(bottom: 16),
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: AppTheme.cardBackground,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFF231F45), width: 1),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Date badge
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: AppTheme.primaryAccent.withOpacity(0.12),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Column(
-                      children: [
-                        Text(
-                          DateFormat('MMM').format(date).toUpperCase(),
-                          style: GoogleFonts.inter(
-                            fontSize: 10,
-                            color: AppTheme.primaryAccent,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        Text(
-                          DateFormat('dd').format(date),
-                          style: GoogleFonts.outfit(
-                            fontSize: 20,
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
+          return Container(
+            margin: const EdgeInsets.only(bottom: 16),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppTheme.cardBackground,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFF231F45), width: 1),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // 1. Band / Project
+                Text(
+                  presentation.bandName,
+                  style: GoogleFonts.outfit(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
                   ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          req.bandName ?? 'Unknown Band',
-                          style: GoogleFonts.outfit(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                        const SizedBox(height: 3),
-                        Text(
-                          '”${req.role ?? req.voicePart ?? "Substitute Request"}”',
-                          style: GoogleFonts.inter(
-                            fontSize: 14,
-                            color: AppTheme.primaryAccent,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          'Location: ${req.location ?? "N/A"}',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+
+                // 2. Request Type + Role / Instrument
+                Text(
+                  '${presentation.requestType} · ${presentation.roleInstrument}',
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: presentation.requestType == 'New Band Member'
+                        ? AppTheme.primaryAccent
+                        : const Color(0xFF90CAF9),
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+
+                // 3. Event Type + Paid status/payment amount
+                if (presentation.eventTypeAndPaymentLine != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    presentation.eventTypeAndPaymentLine!,
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: presentation.isPaid ? AppTheme.primaryAccent : Colors.white70,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+
+                // 4. Weekday, date and time
+                if (presentation.formattedDateTime != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    presentation.formattedDateTime!,
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      color: AppTheme.textSecondary,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+
+                // Location / Venue when available
+                if (presentation.locationVenue != null) ...[
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      const Icon(Icons.location_on_outlined, color: AppTheme.textSecondary, size: 14),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          presentation.locationVenue!,
                           style: GoogleFonts.inter(
                             fontSize: 12,
                             color: AppTheme.textSecondary,
                           ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        if (req.startTime != null && req.endTime != null) ...[
-                          const SizedBox(height: 2),
-                          Text(
-                            'Time: ${req.startTime} - ${req.endTime}',
-                            style: GoogleFonts.inter(
-                              fontSize: 12,
-                              color: AppTheme.textSecondary,
-                            ),
+                      ),
+                    ],
+                  ),
+                ],
+
+                const SizedBox(height: 14),
+
+                // 5. Contextual action: View Responses + Secondary Delete action
+                Row(
+                  children: [
+                    Expanded(
+                      child: InkWell(
+                        key: ValueKey('view_responses_$reqId'),
+                        onTap: () => _openRequestDetails(req),
+                        borderRadius: BorderRadius.circular(10),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          decoration: BoxDecoration(
+                            gradient: AppTheme.primaryGradient,
+                            borderRadius: BorderRadius.circular(10),
                           ),
-                        ],
-                        const SizedBox(height: 16),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(vertical: 10),
-                                decoration: BoxDecoration(
-                                  gradient: AppTheme.primaryGradient,
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: Center(
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Text(
-                                        'View Responses ($responseCount)',
-                                        style: GoogleFonts.inter(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 13,
-                                        ),
-                                      ),
-                                      if (_requestHasActivity(req)) ...[
-                                        const SizedBox(width: 8),
-                                        Container(
-                                          width: 8,
-                                          height: 8,
-                                          decoration: const BoxDecoration(
-                                            color: Color(0xFFE11D48),
-                                            shape: BoxShape.circle,
-                                          ),
-                                        ),
-                                      ],
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            AnimatedTapDetector(
-                              onTap: () => _deleteRequest(req),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                                decoration: BoxDecoration(
-                                  color: AppTheme.danger.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(color: AppTheme.danger.withOpacity(0.3)),
-                                ),
-                                child: Center(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Flexible(
                                   child: Text(
-                                    'DELETE',
+                                    'View Responses ($responseCount)',
+                                    overflow: TextOverflow.ellipsis,
                                     style: GoogleFonts.inter(
-                                      color: AppTheme.danger,
+                                      color: Colors.white,
                                       fontWeight: FontWeight.bold,
                                       fontSize: 13,
                                     ),
                                   ),
                                 ),
-                              ),
+                                if (_requestHasActivity(req)) ...[
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    width: 8,
+                                    height: 8,
+                                    decoration: const BoxDecoration(
+                                      color: Color(0xFFE11D48),
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
+                                ],
+                              ],
                             ),
-                          ],
+                          ),
                         ),
-                      ],
+                      ),
                     ),
-                  ),
-                ],
-              ),
+                    const SizedBox(width: 8),
+                    IconButton(
+                      key: ValueKey('delete_request_$reqId'),
+                      icon: const Icon(Icons.delete_outline_rounded, color: AppTheme.danger, size: 20),
+                      tooltip: 'Delete request',
+                      onPressed: () => _deleteRequest(req),
+                      style: IconButton.styleFrom(
+                        backgroundColor: AppTheme.danger.withValues(alpha: 0.1),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          side: BorderSide(color: AppTheme.danger.withValues(alpha: 0.3)),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
           );
         },

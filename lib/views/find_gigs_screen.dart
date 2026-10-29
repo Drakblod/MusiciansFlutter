@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:intl/intl.dart';
 import '../providers/app_state.dart';
 import '../theme/app_theme.dart';
 import '../models/sub_request.dart';
 import '../widgets/custom_top_bar.dart';
 import '../widgets/gradient_scaffold.dart';
 import '../config/feature_toggles.dart';
+import '../utils/sub_request_card_helper.dart';
+import 'sub_request_response_details_screen.dart';
 
 class GigGroup {
   final String groupId;
@@ -94,6 +95,8 @@ class GigGroup {
   String get roleInstrumentDisplay => distinctRoles.join(', ');
 }
 
+enum BandAdminStatus { unknown, authorized, unauthorized, failed }
+
 class FindGigsScreen extends StatefulWidget {
   const FindGigsScreen({super.key});
 
@@ -106,6 +109,10 @@ class _FindGigsScreenState extends State<FindGigsScreen>
   late TabController _tabController;
   final Set<String> _savedGigIds = {};
   final Set<String> _appliedGigIds = {};
+  final Map<String, BandAdminStatus> _adminStatusCache = {}; // key: '$userId/$bandId'
+  final Map<String, int> _inFlightLookups = {}; // key: '$userId/$bandId', value: generation
+  int _authGeneration = 0;
+  String? _activeUserId;
   List<GigGroup> _substituteGigGroups = [];
   List<GigGroup> _newMemberGigGroups = [];
   List<GigGroup> _appliedGigGroups = [];
@@ -118,10 +125,42 @@ class _FindGigsScreenState extends State<FindGigsScreen>
     _loadSubRequests();
   }
 
+  void _resetAuth({required String? newUserId}) {
+    _authGeneration++;
+    _adminStatusCache.clear();
+    _inFlightLookups.clear();
+    _activeUserId = newUserId;
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final appState = Provider.of<AppState>(context);
+    if (appState.currentUserId != _activeUserId && _activeUserId != null) {
+      _resetAuth(newUserId: appState.currentUserId);
+      _loadSubRequests();
+    }
+  }
+
   @override
   void dispose() {
     _tabController.dispose();
+    _adminStatusCache.clear();
+    _inFlightLookups.clear();
     super.dispose();
+  }
+
+  BandAdminStatus _getBandAdminStatus(String? bandId, String? currentUserId) {
+    if (currentUserId == null || currentUserId.isEmpty) return BandAdminStatus.unauthorized;
+    if (bandId == null ||
+        bandId.isEmpty ||
+        bandId == 'freelance' ||
+        bandId == 'standalone' ||
+        bandId == 'all') {
+      return BandAdminStatus.unauthorized;
+    }
+    final key = '$currentUserId/$bandId';
+    return _adminStatusCache[key] ?? BandAdminStatus.unknown;
   }
 
   List<GigGroup> _groupSubRequests(List<SubRequest> rawList) {
@@ -298,37 +337,6 @@ class _FindGigsScreenState extends State<FindGigsScreen>
     return false;
   }
 
-  String _formatReqDateTime(SubRequest r) {
-    String dStr = '';
-    if (r.date != null && r.date!.trim().isNotEmpty) {
-      final parsed = DateTime.tryParse(r.date!.trim());
-      if (parsed != null) {
-        dStr = DateFormat('EEE, MMM d').format(parsed);
-      } else {
-        dStr = r.date!.trim();
-      }
-    }
-    final hasStart = r.startTime != null && r.startTime!.trim().isNotEmpty;
-    final hasEnd = r.endTime != null && r.endTime!.trim().isNotEmpty;
-    String tStr = '';
-    if (hasStart && hasEnd) {
-      tStr = '${r.startTime!.trim()} - ${r.endTime!.trim()}';
-    } else if (hasStart) {
-      tStr = r.startTime!.trim();
-    } else if (hasEnd) {
-      tStr = r.endTime!.trim();
-    }
-
-    if (dStr.isNotEmpty && tStr.isNotEmpty) {
-      return '$dStr · $tStr';
-    } else if (dStr.isNotEmpty) {
-      return dStr;
-    } else if (tStr.isNotEmpty) {
-      return tStr;
-    } else {
-      return 'Not provided';
-    }
-  }
 
   Future<void> _loadSubRequests() async {
     setState(() => _isLoading = true);
@@ -336,6 +344,9 @@ class _FindGigsScreenState extends State<FindGigsScreen>
       final appState = Provider.of<AppState>(context, listen: false);
       final list = await appState.firebaseService.getUserSubRequestFeedAsync();
       final currentUserId = appState.currentUserId;
+      if (currentUserId != _activeUserId) {
+        _resetAuth(newUserId: currentUserId);
+      }
 
       _appliedGigIds.addAll(appState.sessionAppliedSubRequestIds);
       if (currentUserId != null) {
@@ -421,11 +432,79 @@ class _FindGigsScreenState extends State<FindGigsScreen>
         _substituteGigGroups = _groupSubRequests(upcomingSubstituteRequests);
         _newMemberGigGroups = _groupSubRequests(upcomingNewMemberRequests);
         _appliedGigGroups = _groupSubRequests(appliedRequests);
+        _isLoading = false;
       });
+
+      _fetchAdminBands(list, currentUserId);
     } catch (e) {
       debugPrint("Error fetching sub requests: $e");
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted && _isLoading) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  void _fetchAdminBands(List<SubRequest> list, String? currentUserId, {bool forceRetry = false}) async {
+    if (currentUserId == null) return;
+    final capturedUserId = currentUserId;
+    final capturedGeneration = _authGeneration;
+    final uniqueBandIds = list
+        .map((g) => g.bandId?.trim())
+        .where((b) => b != null && b.isNotEmpty && b != 'freelance' && b != 'standalone' && b != 'all')
+        .cast<String>()
+        .toSet();
+    if (uniqueBandIds.isEmpty) return;
+
+    final appState = Provider.of<AppState>(context, listen: false);
+    for (final bId in uniqueBandIds) {
+      final key = '$capturedUserId/$bId';
+      if (_inFlightLookups[key] == capturedGeneration) continue;
+      if (!forceRetry) {
+        final cached = _adminStatusCache[key];
+        if (cached != null && cached != BandAdminStatus.unknown && cached != BandAdminStatus.failed) {
+          continue;
+        }
+      }
+      _inFlightLookups[key] = capturedGeneration;
+      if (forceRetry && _adminStatusCache[key] == BandAdminStatus.failed) {
+        if (mounted && _activeUserId == capturedUserId && _authGeneration == capturedGeneration) {
+          setState(() {
+            _adminStatusCache[key] = BandAdminStatus.unknown;
+          });
+        }
+      }
+      try {
+        final isAdmin = await appState.firebaseService.isBandLeaderOrAdminAsync(bId, capturedUserId);
+        if (_inFlightLookups[key] == capturedGeneration) {
+          _inFlightLookups.remove(key);
+        }
+        if (!mounted || _activeUserId != capturedUserId || _authGeneration != capturedGeneration) return;
+        setState(() {
+          _adminStatusCache[key] = isAdmin ? BandAdminStatus.authorized : BandAdminStatus.unauthorized;
+        });
+      } catch (_) {
+        if (_inFlightLookups[key] == capturedGeneration) {
+          _inFlightLookups.remove(key);
+        }
+        if (!mounted || _activeUserId != capturedUserId || _authGeneration != capturedGeneration) return;
+        setState(() {
+          _adminStatusCache[key] = BandAdminStatus.failed;
+        });
+      }
+    }
+  }
+
+  void _retryBandAdminLookup(String? bandId) {
+    final appState = Provider.of<AppState>(context, listen: false);
+    final currentUserId = appState.currentUserId;
+    if (currentUserId == null || bandId == null) return;
+    final allRequests = [..._substituteGigGroups, ..._newMemberGigGroups, ..._appliedGigGroups]
+        .expand((g) => g.requests)
+        .where((r) => r.bandId == bandId)
+        .toList();
+    if (allRequests.isNotEmpty) {
+      _fetchAdminBands(allRequests, currentUserId, forceRetry: true);
     }
   }
 
@@ -437,6 +516,53 @@ class _FindGigsScreenState extends State<FindGigsScreen>
         _savedGigIds.add(id);
       }
     });
+  }
+
+  void _openManageRequest(SubRequest req) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => SubRequestResponseDetailsScreen(subRequest: req),
+        settings: const RouteSettings(name: '/sub-request-response-details'),
+      ),
+    );
+  }
+
+  void _openManageRequestGroup(GigGroup group) {
+    if (group.requests.length == 1) {
+      _openManageRequest(group.requests.first);
+    } else {
+      _showGigDetailsBottomSheet(group);
+    }
+  }
+
+  Future<void> _applyToSingleSubRequest(SubRequest req) async {
+    final appState = Provider.of<AppState>(context, listen: false);
+    final currentUserId = appState.currentUserId;
+    if (currentUserId == null) return;
+    final reqId = req.subRequestId ?? req.id ?? '';
+    try {
+      await appState.firebaseService.addResponseToSubRequestAsync(
+        reqId,
+        currentUserId,
+      );
+      setState(() {
+        _appliedGigIds.add(reqId);
+        req.responses[currentUserId] = true;
+      });
+      appState.markSubRequestApplied(reqId);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Applied for position!'), backgroundColor: AppTheme.success),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to apply: $e'), backgroundColor: AppTheme.danger),
+        );
+      }
+    }
   }
 
   void _showGigDetailsBottomSheet(GigGroup group) {
@@ -456,32 +582,16 @@ class _FindGigsScreenState extends State<FindGigsScreen>
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setModalState) {
-            final distinctSequences = group.requests.map((r) => r.eventSequence).whereType<int>().toSet();
-            final distinctDates = group.requests.map((r) => r.date).where((d) => d != null && d.trim().isNotEmpty).toSet();
-            final distinctEventIds = group.requests.map((r) => r.eventId).where((e) => e != null && e.trim().isNotEmpty).toSet();
-            final distinctEventTitles = group.requests
-                .map((r) => r.eventTitle?.trim())
-                .where((t) => t != null && t.isNotEmpty)
-                .cast<String>()
-                .toSet();
-            final bool hasMultipleDistinctEvents = group.eventCount > 1 ||
-                distinctSequences.length > 1 ||
-                distinctDates.length > 1 ||
-                distinctEventIds.length > 1 ||
-                distinctEventTitles.length > 1;
-
-            String? resolvedEventType;
-            for (final r in group.requests) {
-              final ev = r.resolvedEventType;
-              if (ev != null && ev.trim().isNotEmpty) {
-                resolvedEventType = ev.trim();
-                break;
-              }
-            }
-
-            final groupDateTimeDisplay = group.requests.isNotEmpty
-                ? _formatReqDateTime(group.requests.first)
-                : 'Not provided';
+            final presentation = SubRequestCardPresentation.fromRequests(
+              group.requests,
+              bandNameOverride: group.bandName,
+              locationOverride: group.location,
+              descriptionOverride: group.description,
+              payDetailsOverride: group.payDetails,
+              currentUserId: currentUserId,
+              isBandAdmin: group.requests.any((r) => r.bandId != null && _getBandAdminStatus(r.bandId, currentUserId) == BandAdminStatus.authorized),
+              appliedIds: _appliedGigIds,
+            );
 
             return ConstrainedBox(
               constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.85),
@@ -508,76 +618,14 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                         ),
                       ),
                       const SizedBox(height: 20),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Expanded(
-                            child: Text(
-                              group.title,
-                              style: GoogleFonts.outfit(
-                                fontSize: 22,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ),
-                          if (group.isPaid && group.formattedPayment.isNotEmpty)
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: AppTheme.primaryAccent.withOpacity(0.15),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Text(
-                                group.formattedPayment,
-                                style: GoogleFonts.inter(
-                                  fontSize: 11,
-                                  color: AppTheme.primaryAccent,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      if (group.bandName != null && group.bandName != group.title) ...[
-                        Text(
-                          group.bandName!,
-                          style: GoogleFonts.inter(
-                            fontSize: 16,
-                            color: AppTheme.primaryAccent,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                      ],
 
-                      if (group.isMultiple) ...[
-                        Text(
-                          '${group.eventCount} events · ${group.totalPositions} positions (${group.filledPositions} filled)',
-                          style: GoogleFonts.inter(color: Colors.white70, fontSize: 12),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 12),
-                      ],
-
-                      const SizedBox(height: 8),
-
-                      // 1. Event Type
+                      // 1. Band / Project
                       Text(
-                        'Event Type',
+                        presentation.bandName,
                         style: GoogleFonts.outfit(
-                          fontSize: 16,
+                          fontSize: 22,
                           fontWeight: FontWeight.bold,
                           color: Colors.white,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        resolvedEventType ?? 'Not provided',
-                        style: GoogleFonts.inter(
-                          fontSize: 14,
-                          color: AppTheme.textSecondary,
                         ),
                       ),
                       const SizedBox(height: 16),
@@ -593,7 +641,7 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        group.requestTypeLabel,
+                        presentation.requestType,
                         style: GoogleFonts.inter(
                           fontSize: 14,
                           color: AppTheme.textSecondary,
@@ -601,74 +649,7 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                       ),
                       const SizedBox(height: 16),
 
-                      // 3. Location
-                      Text(
-                        'Location',
-                        style: GoogleFonts.outfit(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          const Icon(Icons.location_on_outlined, color: AppTheme.textSecondary, size: 18),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: Text(
-                              (group.location != null && group.location!.trim().isNotEmpty)
-                                  ? group.location!.trim()
-                                  : 'Stockholm, Sweden',
-                              style: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 14),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-
-                      // 4. Date & Time
-                      Text(
-                        'Date & Time',
-                        style: GoogleFonts.outfit(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        groupDateTimeDisplay,
-                        style: GoogleFonts.inter(
-                          fontSize: 14,
-                          color: AppTheme.textSecondary,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-
-                      // 5. Description (optional)
-                      Text(
-                        'Description (optional)',
-                        style: GoogleFonts.outfit(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        (group.description != null && group.description!.trim().isNotEmpty)
-                            ? group.description!.trim()
-                            : 'Not provided',
-                        style: GoogleFonts.inter(
-                          fontSize: 14,
-                          color: AppTheme.textSecondary,
-                          height: 1.4,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-
-                      // 6. Role / Instrument
+                      // 3. Role / Instrument
                       Text(
                         'Role / Instrument',
                         style: GoogleFonts.outfit(
@@ -681,8 +662,16 @@ class _FindGigsScreenState extends State<FindGigsScreen>
 
                       ...group.requests.map((req) {
                         final reqId = req.subRequestId ?? req.id ?? '';
-                        final isCreator = currentUserId != null && (req.creatorUserId == currentUserId || req.userId == currentUserId);
-                        final hasApplied = currentUserId != null && !isCreator && (req.responses.containsKey(currentUserId) || _appliedGigIds.contains(reqId));
+                        final isReqCreator = isCreatorOfSubRequest(req, currentUserId);
+                        final bandAdminStatus = (req.bandId != null)
+                            ? _getBandAdminStatus(req.bandId, currentUserId)
+                            : BandAdminStatus.unauthorized;
+                        final isReqAdmin = isReqCreator || bandAdminStatus == BandAdminStatus.authorized;
+                        final isReqPending = !isReqCreator && bandAdminStatus == BandAdminStatus.unknown;
+                        final isReqFailed = !isReqCreator && bandAdminStatus == BandAdminStatus.failed;
+                        final hasApplied = currentUserId != null &&
+                            !isReqAdmin &&
+                            (req.responses.containsKey(currentUserId) || _appliedGigIds.contains(reqId));
                         final isAssigned = req.status == 'assigned' || req.assignedUserId != null;
 
                         return Container(
@@ -700,55 +689,20 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Row(
-                                      children: [
-                                        if (hasMultipleDistinctEvents && req.eventSequence != null)
-                                          Container(
-                                            margin: const EdgeInsets.only(right: 6),
-                                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                                            decoration: BoxDecoration(
-                                              color: AppTheme.primaryAccent.withOpacity(0.2),
-                                              borderRadius: BorderRadius.circular(4),
-                                            ),
-                                            child: Text(
-                                              'Event #${req.eventSequence}',
-                                              style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.bold, color: AppTheme.primaryAccent),
-                                            ),
-                                          ),
-                                        Expanded(
-                                          child: Text(
-                                            req.voicePart ??
-                                                ((req.role != null &&
-                                                        req.role!.trim().toLowerCase() != 'substitute' &&
-                                                        req.role!.trim().toLowerCase() != 'new member' &&
-                                                        req.role!.trim().toLowerCase() != 'other')
-                                                    ? req.role!
-                                                    : 'Musician'),
-                                            style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 2),
                                     Text(
-                                      _formatReqDateTime(req),
-                                      style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
+                                      resolveSingleRole(req),
+                                      style: GoogleFonts.inter(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
                                     ),
-                                    if (req.replacedMemberName != null)
+                                    if (req.replacedMemberName != null && req.replacedMemberName!.trim().isNotEmpty) ...[
+                                      const SizedBox(height: 2),
                                       Text(
-                                        'Replacing: ${req.replacedMemberName}',
+                                        'Replacing: ${req.replacedMemberName!.trim()}',
                                         style: GoogleFonts.inter(fontSize: 11, color: Colors.white60),
-                                      ),
-                                    if (hasMultipleDistinctEvents && req.eventTitle != null && req.eventTitle!.trim().isNotEmpty) ...[
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        'Event name',
-                                        style: GoogleFonts.inter(fontSize: 10, color: AppTheme.textSecondary, fontWeight: FontWeight.w600),
-                                      ),
-                                      Text(
-                                        req.eventTitle!.trim(),
-                                        style: GoogleFonts.inter(fontSize: 12, color: Colors.white, fontWeight: FontWeight.bold),
                                       ),
                                     ],
                                   ],
@@ -758,20 +712,81 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                   decoration: BoxDecoration(
-                                    color: AppTheme.success.withOpacity(0.2),
+                                    color: AppTheme.success.withValues(alpha: 0.2),
                                     borderRadius: BorderRadius.circular(6),
                                   ),
-                                  child: Text('Filled', style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.success)),
+                                  child: Text(
+                                    'Filled',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppTheme.success,
+                                    ),
+                                  ),
                                 )
-                              else if (isCreator)
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: AppTheme.primaryAccent.withOpacity(0.15),
-                                    borderRadius: BorderRadius.circular(6),
-                                    border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.4)),
+                              else if (isReqAdmin)
+                                ElevatedButton(
+                                  key: ValueKey('details_manage_request_$reqId'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: AppTheme.primaryAccent,
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                                   ),
-                                  child: Text('Your Request', style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.primaryAccent)),
+                                  onPressed: () {
+                                    Navigator.pop(context);
+                                    _openManageRequest(req);
+                                  },
+                                  child: Text(
+                                    'Manage Request',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                )
+                              else if (isReqPending)
+                                SizedBox(
+                                  key: ValueKey('details_auth_pending_$reqId'),
+                                  height: 28,
+                                  width: 60,
+                                  child: Center(
+                                    child: SizedBox(
+                                      width: 12,
+                                      height: 12,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: AppTheme.primaryAccent.withValues(alpha: 0.6),
+                                      ),
+                                    ),
+                                  ),
+                                )
+                              else if (isReqFailed)
+                                OutlinedButton.icon(
+                                  key: ValueKey('details_auth_retry_$reqId'),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: AppTheme.textSecondary,
+                                    side: BorderSide(color: AppTheme.textSecondary.withValues(alpha: 0.4)),
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                  ),
+                                  onPressed: () {
+                                    setModalState(() {
+                                      _retryBandAdminLookup(req.bandId);
+                                    });
+                                  },
+                                  icon: const Icon(Icons.refresh_rounded, size: 12, color: AppTheme.textSecondary),
+                                  label: Tooltip(
+                                    message: 'Could not verify permissions. Retry',
+                                    child: Text(
+                                      'Retry',
+                                      semanticsLabel: 'Could not verify permissions. Retry',
+                                      style: GoogleFonts.inter(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                        color: AppTheme.textSecondary,
+                                      ),
+                                    ),
+                                  ),
                                 )
                               else if (hasApplied)
                                 Container(
@@ -780,10 +795,18 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                                     color: Colors.white12,
                                     borderRadius: BorderRadius.circular(6),
                                   ),
-                                  child: Text('Applied', style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white70)),
+                                  child: Text(
+                                    'Applied',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white70,
+                                    ),
+                                  ),
                                 )
                               else
                                 ElevatedButton(
+                                  key: ValueKey('details_apply_$reqId'),
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: AppTheme.primaryAccent,
                                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -806,71 +829,173 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                                       appState.markSubRequestApplied(reqId);
                                       if (context.mounted) {
                                         ScaffoldMessenger.of(context).showSnackBar(
-                                          const SnackBar(content: Text('Applied for position!'), backgroundColor: AppTheme.success),
+                                          const SnackBar(
+                                            content: Text('Applied for position!'),
+                                            backgroundColor: AppTheme.success,
+                                          ),
                                         );
                                         Navigator.pop(context);
                                       }
                                     } catch (e) {
                                       if (context.mounted) {
                                         ScaffoldMessenger.of(context).showSnackBar(
-                                          SnackBar(content: Text('Failed to apply: $e'), backgroundColor: AppTheme.danger),
+                                          SnackBar(
+                                            content: Text('Failed to apply: $e'),
+                                            backgroundColor: AppTheme.danger,
+                                          ),
                                         );
                                       }
                                     }
                                   },
-                                  child: Text('Apply', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white)),
+                                  child: Text(
+                                    'Apply',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
+                                  ),
                                 ),
                             ],
                           ),
                         );
                       }),
+                      const SizedBox(height: 16),
 
-                      // Paid amount & Details placed after the six requested fields
-                      if (group.isPaid || (group.payDetails != null && group.payDetails!.trim().isNotEmpty)) ...[
-                        const SizedBox(height: 10),
-                        if (group.formattedPayment.isNotEmpty) ...[
-                          Text(
-                            'Payment',
-                            style: GoogleFonts.outfit(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
+                      // 4. Event Type and Paid status (omit Event Type for New Band Member)
+                      if (presentation.requestType != 'New Band Member') ...[
+                        Text(
+                          'Event Type',
+                          style: GoogleFonts.outfit(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            group.formattedPayment,
-                            style: GoogleFonts.inter(
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                              color: AppTheme.primaryAccent,
-                            ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          presentation.eventType ?? 'Not provided',
+                          style: GoogleFonts.inter(
+                            fontSize: 14,
+                            color: AppTheme.textSecondary,
                           ),
-                          const SizedBox(height: 12),
-                        ],
-                        if (group.payDetails != null && group.payDetails!.trim().isNotEmpty) ...[
-                          Text(
-                            'Details',
-                            style: GoogleFonts.outfit(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            group.payDetails!.trim(),
-                            style: GoogleFonts.inter(
-                              fontSize: 14,
-                              color: AppTheme.textSecondary,
-                              height: 1.4,
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                        ],
+                        ),
+                        const SizedBox(height: 16),
                       ],
 
-                      const SizedBox(height: 20),
+                      if (presentation.isPaid && presentation.formattedPayment != null) ...[
+                        Text(
+                          'Payment',
+                          style: GoogleFonts.outfit(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          presentation.formattedPayment!,
+                          style: GoogleFonts.inter(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: AppTheme.primaryAccent,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+
+                      // 5. Date & Time
+                      if (presentation.requestType != 'New Band Member' || presentation.formattedDateTime != null) ...[
+                        Text(
+                          'Date & Time',
+                          style: GoogleFonts.outfit(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          presentation.formattedDateTime ?? 'Not provided',
+                          style: GoogleFonts.inter(
+                            fontSize: 14,
+                            color: AppTheme.textSecondary,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+
+                      // 6. Location / Venue
+                      Text(
+                        'Location / Venue',
+                        style: GoogleFonts.outfit(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          const Icon(Icons.location_on_outlined, color: AppTheme.textSecondary, size: 18),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              (presentation.locationVenue != null && presentation.locationVenue!.trim().isNotEmpty)
+                                  ? presentation.locationVenue!.trim()
+                                  : 'Stockholm, Sweden',
+                              style: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 14),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+
+                      // 7. Description / Details
+                      Text(
+                        'Description / Details',
+                        style: GoogleFonts.outfit(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        (presentation.description != null && presentation.description!.trim().isNotEmpty)
+                            ? presentation.description!.trim()
+                            : 'Not provided',
+                        style: GoogleFonts.inter(
+                          fontSize: 14,
+                          color: AppTheme.textSecondary,
+                          height: 1.4,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // 8. Payment Details, when present
+                      if (presentation.payDetails != null && presentation.payDetails!.trim().isNotEmpty) ...[
+                        Text(
+                          'Payment Details',
+                          style: GoogleFonts.outfit(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          presentation.payDetails!.trim(),
+                          style: GoogleFonts.inter(
+                            fontSize: 14,
+                            color: AppTheme.textSecondary,
+                            height: 1.4,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+
+                      const SizedBox(height: 10),
                     ],
                   ),
                 ),
@@ -932,10 +1057,10 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                             ),
                             style: TextButton.styleFrom(
                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              backgroundColor: AppTheme.primaryAccent.withOpacity(0.12),
+                              backgroundColor: AppTheme.primaryAccent.withValues(alpha: 0.12),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(10),
-                                side: BorderSide(color: AppTheme.primaryAccent.withOpacity(0.3)),
+                                side: BorderSide(color: AppTheme.primaryAccent.withValues(alpha: 0.3)),
                               ),
                             ),
                           ),
@@ -1043,11 +1168,65 @@ class _FindGigsScreenState extends State<FindGigsScreen>
         itemBuilder: (context, index) {
           final group = groupList[index];
           final id = group.groupId;
+          final primaryReqId = group.requests.isNotEmpty
+              ? (group.requests.first.subRequestId ?? group.requests.first.id ?? id)
+              : id;
           final isSaved = _savedGigIds.contains(id);
-          final date = group.earliestDate;
 
           final hasDirectInvite = group.requests.any(
             (r) => r.targetUserIds != null && currentUserId != null && r.targetUserIds!.contains(currentUserId),
+          );
+
+          final isCreator = group.requests.any((r) => isCreatorOfSubRequest(r, currentUserId));
+          final relevantBandIds = group.requests
+              .map((r) => r.bandId?.trim())
+              .where((b) => b != null && b.isNotEmpty && b != 'freelance' && b != 'standalone' && b != 'all')
+              .cast<String>()
+              .toSet();
+
+          final bool isAdmin;
+          final bool isAuthPending;
+          final bool isAuthFailed;
+          if (isCreator) {
+            isAdmin = true;
+            isAuthPending = false;
+            isAuthFailed = false;
+          } else if (relevantBandIds.isEmpty) {
+            isAdmin = false;
+            isAuthPending = false;
+            isAuthFailed = false;
+          } else {
+            final statuses = relevantBandIds.map((bId) => _getBandAdminStatus(bId, currentUserId)).toList();
+            if (statuses.any((s) => s == BandAdminStatus.authorized)) {
+              isAdmin = true;
+              isAuthPending = false;
+              isAuthFailed = false;
+            } else if (statuses.any((s) => s == BandAdminStatus.unknown)) {
+              isAdmin = false;
+              isAuthPending = true;
+              isAuthFailed = false;
+            } else if (statuses.any((s) => s == BandAdminStatus.failed)) {
+              isAdmin = false;
+              isAuthPending = false;
+              isAuthFailed = true;
+            } else {
+              isAdmin = false;
+              isAuthPending = false;
+              isAuthFailed = false;
+            }
+          }
+
+          final presentation = SubRequestCardPresentation.fromRequests(
+            group.requests,
+            bandNameOverride: group.bandName,
+            locationOverride: group.location,
+            descriptionOverride: group.description,
+            payDetailsOverride: group.payDetails,
+            currentUserId: currentUserId,
+            isBandAdmin: isAdmin,
+            isBandAdminPending: isAuthPending,
+            isBandAdminFailed: isAuthFailed,
+            appliedIds: _appliedGigIds,
           );
 
           return GestureDetector(
@@ -1060,239 +1239,238 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(color: const Color(0xFF231F45), width: 1),
               ),
-              child: Row(
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Date badge container
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: AppTheme.primaryAccent.withOpacity(0.12),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Column(
-                      children: [
-                        Text(
-                          DateFormat('MMM').format(date).toUpperCase(),
-                          style: GoogleFonts.inter(
-                            fontSize: 10,
-                            color: AppTheme.primaryAccent,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        Text(
-                          DateFormat('dd').format(date),
+                  // 1. Band / Project name + Bookmark icon
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          presentation.bandName,
                           style: GoogleFonts.outfit(
-                            fontSize: 20,
-                            color: Colors.white,
+                            fontSize: 18,
                             fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: () => _toggleSaveGig(id),
+                        child: Icon(
+                          isSaved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+                          color: isSaved ? AppTheme.primaryAccent : Colors.white,
+                          size: 22,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+
+                  // 2. Request Type + Role / Instrument
+                  Text(
+                    '${presentation.requestType} · ${presentation.roleInstrument}',
+                    style: GoogleFonts.inter(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: presentation.requestType == 'New Band Member'
+                          ? AppTheme.primaryAccent
+                          : const Color(0xFF90CAF9),
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+
+                  // 3. Event Type + Paid status/payment amount
+                  if (presentation.eventTypeAndPaymentLine != null) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      presentation.eventTypeAndPaymentLine!,
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: presentation.isPaid ? AppTheme.primaryAccent : Colors.white70,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+
+                  // 4. Weekday, date and time
+                  if (presentation.formattedDateTime != null) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      presentation.formattedDateTime!,
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        color: AppTheme.textSecondary,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+
+                  // 5. Location / Venue
+                  if (presentation.locationVenue != null) ...[
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        const Icon(Icons.location_on_outlined, color: AppTheme.textSecondary, size: 14),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            presentation.locationVenue!,
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              color: AppTheme.textSecondary,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       ],
                     ),
-                  ),
-                  const SizedBox(width: 16),
+                  ],
 
-                  // Gig Information
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    group.title,
-                                    style: GoogleFonts.outfit(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.white,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            // Bookmark icon button
-                            GestureDetector(
-                              onTap: () => _toggleSaveGig(id),
-                              child: Icon(
-                                isSaved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
-                                color: isSaved ? AppTheme.primaryAccent : Colors.white,
-                                size: 22,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          group.requestTypeLabel,
-                          style: GoogleFonts.inter(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: group.isNewMember ? AppTheme.primaryAccent : const Color(0xFF90CAF9),
+                  const SizedBox(height: 12),
+
+                  // 6. Contextual Action
+                  Row(
+                    children: [
+                      if (isCreator || isAdmin)
+                        ElevatedButton(
+                          key: ValueKey('find_gigs_manage_request_$primaryReqId'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppTheme.primaryAccent,
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                           ),
-                        ),
-                        const SizedBox(height: 2),
-                        if (group.bandName != null && group.bandName != group.title) ...[
-                          Text(
-                            group.bandName!,
-                            style: GoogleFonts.inter(
-                              fontSize: 13,
-                              color: AppTheme.primaryAccent,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                        ],
-                        Text(
-                          group.location ?? 'Stockholm, Sweden',
-                          style: GoogleFonts.inter(
-                            fontSize: 12,
-                            color: AppTheme.textSecondary,
-                          ),
-                        ),
-                        if (group.isMultiple) ...[
-                          const SizedBox(height: 4),
-                          Text(
-                            '${group.eventCount} event${group.eventCount == 1 ? "" : "s"} · ${group.totalPositions} position${group.totalPositions == 1 ? "" : "s"}',
+                          onPressed: () => _openManageRequestGroup(group),
+                          child: Text(
+                            'Manage Request',
                             style: GoogleFonts.inter(
                               fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.white70,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
                             ),
                           ),
-                          Text(
-                            '${group.filledPositions} of ${group.totalPositions} positions filled',
-                            style: GoogleFonts.inter(
-                              fontSize: 11,
-                              color: group.filledPositions == group.totalPositions ? AppTheme.success : AppTheme.textSecondary,
-                            ),
-                          ),
-                        ],
-                        const SizedBox(height: 10),
-
-                        // Tags row
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 6,
-                          children: [
-                            // Sub / New Member Tag
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: group.isNewMember
-                                    ? AppTheme.primaryAccent.withValues(alpha: 0.18)
-                                    : const Color(0xFF64B5F6).withValues(alpha: 0.15),
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(
-                                  color: group.isNewMember
-                                      ? AppTheme.primaryAccent.withValues(alpha: 0.45)
-                                      : const Color(0xFF64B5F6).withValues(alpha: 0.4),
-                                ),
+                        )
+                      else if (isAuthPending)
+                        SizedBox(
+                          key: ValueKey('find_gigs_auth_pending_$primaryReqId'),
+                          height: 34,
+                          width: 80,
+                          child: Center(
+                            child: SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: AppTheme.primaryAccent.withValues(alpha: 0.6),
                               ),
-                              child: Text(
-                                group.isNewMember ? 'New Member' : 'Sub',
+                            ),
+                          ),
+                        )
+                      else if (isAuthFailed)
+                        OutlinedButton.icon(
+                          key: ValueKey('find_gigs_auth_retry_$primaryReqId'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppTheme.textSecondary,
+                            side: BorderSide(color: AppTheme.textSecondary.withValues(alpha: 0.4)),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          onPressed: () {
+                            final bId = group.requests.firstWhere((r) => r.bandId != null, orElse: () => group.requests.first).bandId;
+                            _retryBandAdminLookup(bId);
+                          },
+                          icon: const Icon(Icons.refresh_rounded, size: 14, color: AppTheme.textSecondary),
+                          label: Tooltip(
+                            message: 'Could not verify permissions. Retry',
+                            child: Text(
+                              'Retry',
+                              semanticsLabel: 'Could not verify permissions. Retry',
+                              style: GoogleFonts.inter(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: AppTheme.textSecondary,
+                              ),
+                            ),
+                          ),
+                        )
+                      else if (presentation.hasApplied)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: AppTheme.success.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: AppTheme.success.withValues(alpha: 0.45)),
+                          ),
+                          child: Text(
+                            'Applied',
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: AppTheme.success,
+                            ),
+                          ),
+                        )
+                      else
+                        ElevatedButton(
+                          key: ValueKey('find_gigs_apply_$primaryReqId'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppTheme.primaryAccent,
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          onPressed: () {
+                            if (group.requests.length == 1) {
+                              _applyToSingleSubRequest(group.requests.first);
+                            } else {
+                              _showGigDetailsBottomSheet(group);
+                            }
+                          },
+                          child: Text(
+                            'Apply',
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      if (hasDirectInvite) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFFFFD700), Color(0xFFFFA500)],
+                            ),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.star_rounded, color: Colors.white, size: 12),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Direct Invite',
                                 style: GoogleFonts.inter(
                                   fontSize: 10,
-                                  color: group.isNewMember ? AppTheme.primaryAccent : const Color(0xFF90CAF9),
+                                  color: Colors.white,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
-                            ),
-
-                            // Applied Tag
-                            if (group.requests.any((r) => _appliedGigIds.contains(r.subRequestId) || _appliedGigIds.contains(r.id) || (currentUserId != null && r.responses.containsKey(currentUserId))))
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: AppTheme.success.withValues(alpha: 0.15),
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(
-                                    color: AppTheme.success.withValues(alpha: 0.45),
-                                  ),
-                                ),
-                                child: Text(
-                                  'Applied',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 10,
-                                    color: AppTheme.success,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-
-                            // Paid / Payment tag
-                            if (group.isPaid && group.formattedPayment.isNotEmpty)
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: AppTheme.primaryAccent.withOpacity(0.15),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Text(
-                                  group.formattedPayment,
-                                  style: GoogleFonts.inter(
-                                    fontSize: 10,
-                                    color: AppTheme.primaryAccent,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-
-                            // Roles tag summary
-                            if (group.roleInstrumentDisplay.isNotEmpty)
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF1E1A3A),
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: const Color(0xFF2E2A4E)),
-                                ),
-                                child: Text(
-                                  group.roleInstrumentDisplay,
-                                  style: GoogleFonts.inter(
-                                    fontSize: 10,
-                                    color: AppTheme.secondaryAccent,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-
-                            // Direct Invite Tag
-                            if (hasDirectInvite)
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                decoration: BoxDecoration(
-                                  gradient: const LinearGradient(
-                                    colors: [Color(0xFFFFD700), Color(0xFFFFA500)],
-                                  ),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    const Icon(Icons.star_rounded, color: Colors.white, size: 10),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      'Direct Invite',
-                                      style: GoogleFonts.inter(
-                                        fontSize: 10,
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                          ],
+                            ],
+                          ),
                         ),
                       ],
-                    ),
+                    ],
                   ),
                 ],
               ),
