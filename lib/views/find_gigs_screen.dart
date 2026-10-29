@@ -337,10 +337,12 @@ class _FindGigsScreenState extends State<FindGigsScreen>
       final list = await appState.firebaseService.getUserSubRequestFeedAsync();
       final currentUserId = appState.currentUserId;
 
+      _appliedGigIds.addAll(appState.sessionAppliedSubRequestIds);
       if (currentUserId != null) {
         try {
           final applied = await appState.firebaseService.getUserAppliedSubRequestIdsAsync(currentUserId);
           _appliedGigIds.addAll(applied);
+          appState.markSubRequestsApplied(applied, notify: false);
         } catch (e) {
           debugPrint("Error fetching applied gig IDs: $e");
         }
@@ -801,6 +803,7 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                                         _appliedGigIds.add(reqId);
                                         req.responses[currentUserId] = true;
                                       });
+                                      appState.markSubRequestApplied(reqId);
                                       if (context.mounted) {
                                         ScaffoldMessenger.of(context).showSnackBar(
                                           const SnackBar(content: Text('Applied for position!'), backgroundColor: AppTheme.success),

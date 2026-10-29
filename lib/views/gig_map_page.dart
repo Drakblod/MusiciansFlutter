@@ -1484,10 +1484,26 @@ class GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Rou
     final appState = Provider.of<AppState>(context, listen: false);
     final visibleItems = _getFilteredGigs(appState.currentUserProfile);
     final currentSelectedId = _selectedGig?.canonicalTargetId ?? _selectedGig?.id;
+    final currentGroupId = _selectedGig?.requestGroupId?.trim();
 
-    final isStillVisible = visibleItems.any((g) => (g.canonicalTargetId ?? g.id) == currentSelectedId);
+    // Find matching item by canonicalTargetId/id or by requestGroupId if primary slot in group changed
+    SubRequest? updatedSelection;
+    for (final g in visibleItems) {
+      if ((g.canonicalTargetId ?? g.id) == currentSelectedId) {
+        updatedSelection = g;
+        break;
+      }
+    }
+    if (updatedSelection == null && currentGroupId != null && currentGroupId.isNotEmpty) {
+      for (final g in visibleItems) {
+        if (g.requestGroupId?.trim() == currentGroupId) {
+          updatedSelection = g;
+          break;
+        }
+      }
+    }
 
-    if (!isStillVisible) {
+    if (updatedSelection == null) {
       setState(() {
         _selectedGig = null;
         _selectedGroupMembers = [];
@@ -1501,7 +1517,37 @@ class GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Rou
         _liveKitAudioController?.disconnect();
         _currentlyListeningBroadcast = null;
       }
+      return;
     }
+
+    // Refresh _selectedGig and _selectedGroupMembers with latest live data
+    List<SubRequest> updatedGroup = [];
+    final grpId = updatedSelection.requestGroupId?.trim();
+    if (grpId != null && grpId.isNotEmpty) {
+      final ownerScope = (updatedSelection.bandId ?? updatedSelection.creatorUserId ?? '').trim();
+      updatedGroup = visibleItems.where((g) {
+        if (g.requestGroupId?.trim() != grpId) return false;
+        final gScope = (g.bandId ?? g.creatorUserId ?? '').trim();
+        if (ownerScope.isNotEmpty && gScope.isNotEmpty && ownerScope != gScope) {
+          return false;
+        }
+        if (updatedSelection!.latitude != null &&
+            updatedSelection.longitude != null &&
+            g.latitude != null &&
+            g.longitude != null) {
+          if ((updatedSelection.latitude! - g.latitude!).abs() >= 0.02 ||
+              (updatedSelection.longitude! - g.longitude!).abs() >= 0.02) {
+            return false;
+          }
+        }
+        return true;
+      }).toList();
+    }
+
+    setState(() {
+      _selectedGig = updatedSelection;
+      _selectedGroupMembers = updatedGroup;
+    });
   }
 
   @override
@@ -1552,6 +1598,7 @@ class GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Rou
       if (currentUserId != null) {
         final applied = await appState.firebaseService.getUserAppliedSubRequestIdsAsync(currentUserId);
         _appliedGigIds.addAll(applied);
+        appState.markSubRequestsApplied(applied, notify: false);
       }
       final rawGigs = await appState.firebaseService.getAllSubRequestsAsync();
       
@@ -2163,12 +2210,37 @@ class GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Rou
 
     if (bestTarget.id != currentSelectedId) {
       setState(() {
-        if (bestTarget.kind == MapTargetKind.subRequest) {
-          _selectedGig = bestTarget.subRequest;
+        if (bestTarget.kind == MapTargetKind.subRequest && bestTarget.subRequest != null) {
+          final targetSub = bestTarget.subRequest!;
+          _selectedGig = targetSub;
+          final grpId = targetSub.requestGroupId?.trim();
+          if (grpId != null && grpId.isNotEmpty) {
+            final ownerScope = (targetSub.bandId ?? targetSub.creatorUserId ?? '').trim();
+            _selectedGroupMembers = filteredGigs.where((g) {
+              if (g.requestGroupId?.trim() != grpId) return false;
+              final gScope = (g.bandId ?? g.creatorUserId ?? '').trim();
+              if (ownerScope.isNotEmpty && gScope.isNotEmpty && ownerScope != gScope) {
+                return false;
+              }
+              if (targetSub.latitude != null &&
+                  targetSub.longitude != null &&
+                  g.latitude != null &&
+                  g.longitude != null) {
+                if ((targetSub.latitude! - g.latitude!).abs() >= 0.02 ||
+                    (targetSub.longitude! - g.longitude!).abs() >= 0.02) {
+                  return false;
+                }
+              }
+              return true;
+            }).toList();
+          } else {
+            _selectedGroupMembers = [];
+          }
           _selectedRehearsal = null;
         } else {
           _selectedRehearsal = bestTarget.rehearsal;
           _selectedGig = null;
+          _selectedGroupMembers = [];
         }
         _isAutoSelected = true;
         _manuallyClosedTargetId = null;
@@ -4306,35 +4378,50 @@ class GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Rou
   }
 
   Widget _buildBottomCardContent(SubRequest gig, AppState appState) {
-    return MapPinDetailsCard(
-      gig: gig,
-      groupedGigs: _selectedGroupMembers,
-      appState: appState,
-      focusedTargetId: _focusedTargetId,
-      onClose: () {
-        final closedId = _selectedGig?.canonicalTargetId;
-        if (FeatureFlags.enableMockLiveRehearsals) {
-          _audioController?.setFocusedTargetId(null);
-        }
-        setState(() {
-          _selectedGig = null;
-          _focusedTargetId = null;
-          _isAutoSelected = false;
-          _manuallyClosedTargetId = closedId;
-        });
-      },
-      onOpenBandProfile: (ctx, bandId) {
-        _openBandProfile(
-          context: ctx,
-          bandId: bandId,
-        );
-      },
-      onEditPin: (pin) {
-        _showUploadEventSheet(editingPin: pin);
-      },
-      onDeletePin: (pin) {
-        _confirmDeletePin(pin);
-      },
+    final screenHeight = MediaQuery.of(context).size.height;
+    final maxCardHeight = (screenHeight * 0.58).clamp(220.0, 520.0);
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxHeight: maxCardHeight),
+      child: SingleChildScrollView(
+        physics: const ClampingScrollPhysics(),
+        child: MapPinDetailsCard(
+          gig: gig,
+          groupedGigs: _selectedGroupMembers,
+          appState: appState,
+          focusedTargetId: _focusedTargetId,
+          onClose: () {
+            final closedId = _selectedGig?.canonicalTargetId;
+            if (FeatureFlags.enableMockLiveRehearsals) {
+              _audioController?.setFocusedTargetId(null);
+            }
+            setState(() {
+              _selectedGig = null;
+              _focusedTargetId = null;
+              _isAutoSelected = false;
+              _manuallyClosedTargetId = closedId;
+            });
+          },
+          onOpenBandProfile: (ctx, bandId) {
+            _openBandProfile(
+              context: ctx,
+              bandId: bandId,
+            );
+          },
+          onEditPin: (pin) {
+            _showUploadEventSheet(editingPin: pin);
+          },
+          onDeletePin: (pin) {
+            _confirmDeletePin(pin);
+          },
+          onAppliedSuccess: (subRequestId) {
+            if (mounted) {
+              setState(() {
+                _appliedGigIds.add(subRequestId);
+              });
+            }
+          },
+        ),
+      ),
     );
   }
 

@@ -1410,10 +1410,11 @@ exports.respondToSubRequest = onCall({ region: 'europe-west1' }, async (request)
     throw new HttpsError('unauthenticated', 'User must be authenticated.');
   }
   const userId = request.auth.uid;
-  const subRequestId = request.data?.subRequestId;
-  if (!subRequestId) {
+  const rawSubRequestId = request.data?.subRequestId;
+  if (!rawSubRequestId || typeof rawSubRequestId !== 'string' || !rawSubRequestId.trim()) {
     throw new HttpsError('invalid-argument', 'subRequestId is required.');
   }
+  const subRequestId = rawSubRequestId.trim();
 
   const db = admin.database();
   const subSnap = await db.ref(`SubRequests/${subRequestId}`).get();
@@ -1421,15 +1422,86 @@ exports.respondToSubRequest = onCall({ region: 'europe-west1' }, async (request)
     throw new HttpsError('not-found', 'SubRequest not found.');
   }
 
-  const updates = {};
-  updates[`SubRequests/${subRequestId}/Responses/${userId}`] = true;
-  updates[`subRequestAudience/${subRequestId}/${userId}`] = true;
-
   const val = subSnap.val() || {};
+
+  // 1. Reject promotional map-only pins
+  const mode = (val.NotificationMode || val.notificationMode || '').toString().trim().toLowerCase();
+  if (mode === 'map_pin') {
+    throw new HttpsError('failed-precondition', 'Cannot apply to a promotional map pin.');
+  }
+
+  // 2. Reject self-application by creator
   const creatorId = val.CreatorUserId || val.creatorUserId || val.UserId || val.userId;
   if (creatorId && creatorId === userId) {
     throw new HttpsError('permission-denied', 'You cannot respond to your own substitute request.');
   }
+
+  // 3. Reject Band Leader or Admin of the band that owns the request
+  const bandId = (val.BandId || val.bandId || '').toString().trim();
+  if (bandId && bandId !== 'freelance' && bandId !== 'standalone') {
+    const roleSnap = await db.ref(`Bands/${bandId}/Members_band/${userId}/Role`).get();
+    const roleVal = roleSnap.exists() ? String(roleSnap.val() || '').trim() : '';
+    if (roleVal === 'Leader' || roleVal === 'Admin') {
+      throw new HttpsError('permission-denied', 'Band administrators should manage rather than apply to their band requests.');
+    }
+  }
+
+  // 4. Reject non-open status or already-assigned requests
+  const rawStatus = (val.Status || val.status || 'published').toString().trim().toLowerCase();
+  const assignedUserId = (val.AssignedUserId || val.assignedUserId || '').toString().trim();
+  const isSelected = val.IsSelected === true || val.isSelected === true;
+  if (
+    rawStatus === 'assigned' ||
+    rawStatus === 'cancelled' ||
+    rawStatus === 'deleted' ||
+    rawStatus === 'closed' ||
+    rawStatus === 'archived' ||
+    (rawStatus !== 'published' && rawStatus !== 'open' && rawStatus !== 'active') ||
+    assignedUserId.length > 0 ||
+    isSelected
+  ) {
+    throw new HttpsError('failed-precondition', 'This request is no longer open for applications.');
+  }
+
+  // 5. Enforce audience authorization for private / targeted requests
+  const kind = classifySubRequest(val);
+  if (kind === SUBREQUEST_KIND.DIRECT_INVITATION || kind === SUBREQUEST_KIND.FAVORITES_ONLY) {
+    const rawTargets = val.TargetUserIds || val.targetUserIds;
+    const inTargetList = Array.isArray(rawTargets) && rawTargets.includes(userId);
+    let inAudienceIndex = false;
+    if (!inTargetList) {
+      const audSnap = await db.ref(`subRequestAudience/${subRequestId}/${userId}`).get();
+      inAudienceIndex = audSnap.exists() && audSnap.val() === true;
+    }
+    if (!inTargetList && !inAudienceIndex) {
+      throw new HttpsError('permission-denied', 'You are not authorized to apply to this private request.');
+    }
+  }
+
+  // 6. Idempotency check: if user already applied to this exact subRequestId, ensure user AppliedSubRequests is synced and return without duplicate notifications
+  const existingResponses = val.Responses || val.responses || {};
+  const alreadyApplied =
+    existingResponses[userId] === true ||
+    existingResponses[userId] === 'true' ||
+    (typeof existingResponses[userId] === 'object' && existingResponses[userId] !== null);
+
+  if (alreadyApplied) {
+    const idempotentUpdates = {};
+    idempotentUpdates[`users/${userId}/AppliedSubRequests/${subRequestId}`] = true;
+    idempotentUpdates[`subRequestAudience/${subRequestId}/${userId}`] = true;
+    await db.ref().update(idempotentUpdates);
+    return { success: true, alreadyApplied: true, subRequestId };
+  }
+
+  const now = Date.now();
+  const updates = {};
+  updates[`SubRequests/${subRequestId}/Responses/${userId}`] = true;
+  updates[`subRequestAudience/${subRequestId}/${userId}`] = true;
+  updates[`users/${userId}/AppliedSubRequests/${subRequestId}`] = true;
+  updates[`BandEvents/SubRequestResponses/${subRequestId}/${userId}`] = {
+    userId: userId,
+    appliedAt: now,
+  };
 
   if (creatorId) {
     updates[`users/${creatorId}/SubRequests/${subRequestId}/Responses/${userId}`] = true;
@@ -1467,7 +1539,7 @@ exports.respondToSubRequest = onCall({ region: 'europe-west1' }, async (request)
       category: 'requests',
       title: notificationTitle,
       body: notificationBody,
-      createdAt: Date.now(),
+      createdAt: now,
       isRead: false,
       readAt: null,
       data: {
@@ -1525,7 +1597,7 @@ exports.respondToSubRequest = onCall({ region: 'europe-west1' }, async (request)
   }
 
   await db.ref().update(updates);
-  return { success: true };
+  return { success: true, alreadyApplied: false, subRequestId };
 });
 
 /**

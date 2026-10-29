@@ -53,6 +53,29 @@ class _SubRequestResponsesScreenState extends State<SubRequestResponsesScreen>
 
       // 1. Fetch user's sub requests
       final list = await appState.firebaseService.getUserSubRequestsAsync(userId);
+      final seenIds = list.map((r) => r.subRequestId ?? r.id ?? '').where((id) => id.isNotEmpty).toSet();
+
+      // If a specific bandId is requested and the current user is an admin/leader of that band,
+      // also include open requests belonging to that band so band admins can manage requests created by co-leaders.
+      if (widget.bandId.isNotEmpty && widget.bandId != 'all') {
+        try {
+          final isBandAdmin = await appState.firebaseService.isBandLeaderOrAdminAsync(widget.bandId, userId);
+          if (isBandAdmin) {
+            final allRequests = await appState.firebaseService.getAllSubRequestsAsync();
+            for (final req in allRequests) {
+              final reqId = req.subRequestId ?? req.id ?? '';
+              if (reqId.isEmpty || seenIds.contains(reqId)) continue;
+              final matchesBand = (req.bandId != null && req.bandId == widget.bandId) ||
+                  (req.bandName != null &&
+                      (req.bandName!.replaceAll(' ', '_') == widget.bandId || req.bandName == widget.bandId));
+              if (matchesBand) {
+                seenIds.add(reqId);
+                list.add(req);
+              }
+            }
+          }
+        } catch (_) {}
+      }
       
       // 2. Filter requests matching the selected band (or show all if bandId is empty or 'all')
       final bandRequests = (widget.bandId.isEmpty || widget.bandId == 'all')

@@ -75,6 +75,42 @@ class AppState extends ChangeNotifier {
   bool _isWhiteMapTheme = true;
   bool get isWhiteMapTheme => _isWhiteMapTheme;
 
+  /// Session-cached set of subRequestIds the current user has applied to.
+  /// Updated when Find Gigs or Map View details card resolves or submits an application.
+  final Set<String> _sessionAppliedSubRequestIds = {};
+  Set<String> get sessionAppliedSubRequestIds =>
+      Set.unmodifiable(_sessionAppliedSubRequestIds);
+
+  bool hasAppliedToSubRequest(String? subRequestId) {
+    if (subRequestId == null || subRequestId.trim().isEmpty) return false;
+    return _sessionAppliedSubRequestIds.contains(subRequestId.trim());
+  }
+
+  void markSubRequestApplied(String subRequestId) {
+    final clean = subRequestId.trim();
+    if (clean.isEmpty) return;
+    if (_sessionAppliedSubRequestIds.add(clean)) {
+      notifyListeners();
+    }
+  }
+
+  void markSubRequestsApplied(Iterable<String> subRequestIds, {bool notify = true}) {
+    bool changed = false;
+    for (final raw in subRequestIds) {
+      final clean = raw.trim();
+      if (clean.isNotEmpty && _sessionAppliedSubRequestIds.add(clean)) {
+        changed = true;
+      }
+    }
+    if (changed && notify) {
+      notifyListeners();
+    }
+  }
+
+  void clearSessionAppliedSubRequestsForTest() {
+    _sessionAppliedSubRequestIds.clear();
+  }
+
   Future<void> loadMapThemePref() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -297,6 +333,7 @@ class AppState extends ChangeNotifier {
     _unreadNotificationCount = 0;
     _userNotifications = [];
     _buttonClicks = {};
+    _sessionAppliedSubRequestIds.clear();
     _unreadSubscription?.cancel();
     _unreadSubscription = null;
     _unreadNotificationsSubscription?.cancel();

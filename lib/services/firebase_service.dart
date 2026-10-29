@@ -1266,8 +1266,10 @@ class FirebaseService {
   }
 
   Future<Set<String>> getUserAppliedSubRequestIdsAsync(String userId) async {
+    final uid = userId.trim();
+    if (uid.isEmpty) return {};
     try {
-      final snap = await _dbRef('users/$userId/AppliedSubRequests').get();
+      final snap = await _dbRef('users/$uid/AppliedSubRequests').get();
       if (snap.exists && snap.value is Map) {
         return (snap.value as Map).keys.map((k) => k.toString()).toSet();
       }
@@ -1277,15 +1279,102 @@ class FirebaseService {
     return {};
   }
 
+  /// One-shot lookup of the current user's applied state for the specific subRequestIds
+  /// shown in an opened Map View details card.
+  /// Does NOT create persistent RTDB listeners and only reads user-authorized nodes.
+  Future<Set<String>> resolveAppliedSubRequestIdsForCardAsync({
+    required String userId,
+    required Iterable<String> subRequestIds,
+  }) async {
+    final uid = userId.trim();
+    final targetIds = subRequestIds
+        .map((id) => id.trim())
+        .where((id) => id.isNotEmpty)
+        .toSet();
+    if (uid.isEmpty || targetIds.isEmpty) return {};
+
+    final resolved = <String>{};
+
+    // 1. Check user's own AppliedSubRequests map via getUserAppliedSubRequestIdsAsync
+    try {
+      final userApplied = await getUserAppliedSubRequestIdsAsync(uid);
+      for (final id in targetIds) {
+        if (userApplied.contains(id)) {
+          resolved.add(id);
+        }
+      }
+    } catch (_) {}
+
+    // 2. For any remaining IDs, check the user's own authorized leaf SubRequests/$id/Responses/$uid
+    final remaining = targetIds.difference(resolved);
+    for (final id in remaining) {
+      try {
+        final leafSnap = await _dbRef('SubRequests/$id/Responses/$uid').get();
+        if (leafSnap.exists &&
+            (leafSnap.value == true ||
+                leafSnap.value == 'true' ||
+                leafSnap.value is Map)) {
+          resolved.add(id);
+        }
+      } catch (_) {}
+    }
+
+    // 3. For any still-remaining IDs, check BandEvents/SubRequestResponses/$id/$uid
+    final stillRemaining = targetIds.difference(resolved);
+    for (final id in stillRemaining) {
+      try {
+        final legacySnap = await _dbRef('BandEvents/SubRequestResponses/$id/$uid').get();
+        if (legacySnap.exists && legacySnap.value != null) {
+          resolved.add(id);
+        }
+      } catch (_) {}
+    }
+
+    return resolved;
+  }
+
+  /// One-shot check whether [userId] is a Leader or Admin of [bandId].
+  Future<bool> isBandLeaderOrAdminAsync(String bandId, String userId) async {
+    final bId = bandId.trim();
+    final uid = userId.trim();
+    if (bId.isEmpty ||
+        uid.isEmpty ||
+        bId == 'freelance' ||
+        bId == 'standalone' ||
+        bId == 'all') {
+      return false;
+    }
+    try {
+      final roleSnap = await _dbRef('Bands/$bId/Members_band/$uid/Role').get();
+      if (roleSnap.exists && roleSnap.value != null) {
+        final role = roleSnap.value.toString().trim().toLowerCase();
+        return role == 'leader' || role == 'admin';
+      }
+    } catch (_) {}
+    return false;
+  }
+
   Future<void> addResponseToSubRequestAsync(
     String subRequestId,
     String userId,
   ) async {
-    // 0. Prevent replying to own subrequest
+    final cleanSubId = subRequestId.trim();
+    final cleanUserId = userId.trim();
+    if (cleanSubId.isEmpty) {
+      throw ArgumentError('subRequestId is required.');
+    }
+    if (cleanUserId.isEmpty) {
+      throw FirebaseFunctionsException(
+        code: 'unauthenticated',
+        message: 'User must be authenticated.',
+      );
+    }
+
+    // 0. Prevent replying to own subrequest before invoking backend
     try {
-      final sub = await getSubRequestAsync(subRequestId);
+      final sub = await getSubRequestAsync(cleanSubId);
       final creatorId = sub?.creatorUserId ?? sub?.userId;
-      if (creatorId != null && creatorId.isNotEmpty && creatorId == userId) {
+      if (creatorId != null && creatorId.isNotEmpty && creatorId == cleanUserId) {
         throw Exception('You cannot respond to your own substitute request.');
       }
     } catch (e) {
@@ -1296,53 +1385,55 @@ class FirebaseService {
 
     final now = DateTime.now().millisecondsSinceEpoch;
 
-    // 1. User's own applied subrequests tracking (guaranteed write permission under auth.uid)
+    // 1. Direct persistent writes permitted by security rules
     try {
-      await _dbRef('users/$userId/AppliedSubRequests/$subRequestId').set(true);
+      await _dbRef('users/$cleanUserId/AppliedSubRequests/$cleanSubId').set(true);
     } catch (e) {
-      debugPrint('[FirebaseService] Could not write users/$userId/AppliedSubRequests: $e');
+      debugPrint('[FirebaseService] Write users/$cleanUserId/AppliedSubRequests notice: $e');
     }
 
-    // 2. Direct write to BandEvents / SubRequestResponses (universally accessible write permission)
     try {
-      await _dbRef('BandEvents/SubRequestResponses/$subRequestId/$userId').set({
-        'userId': userId,
-        'appliedAt': now,
-      });
-    } catch (e) {
-      debugPrint('[FirebaseService] Could not write BandEvents/SubRequestResponses: $e');
-    }
-
-    // 3. Direct write to canonical SubRequests Responses (best-effort)
-    try {
-      await _dbRef('SubRequests/$subRequestId/Responses/$userId').set(true);
+      await _dbRef('SubRequests/$cleanSubId/Responses/$cleanUserId').set(true);
     } catch (e) {
       debugPrint('[FirebaseService] Direct RTDB write for response notice: $e');
     }
 
-    // 4. Optional server-side Cloud Function callable (best-effort)
     try {
-      final callable = _functions.httpsCallable('respondToSubRequest');
-      await callable.call<Map<String, dynamic>>({
-        'subRequestId': subRequestId,
+      await _dbRef('BandEvents/SubRequestResponses/$cleanSubId/$cleanUserId').set({
+        'userId': cleanUserId,
+        'appliedAt': now,
       });
-    } catch (cfError) {
-      debugPrint('[FirebaseService] Cloud Function respondToSubRequest notice: $cfError');
+    } catch (e) {
+      debugPrint('[FirebaseService] Write BandEvents/SubRequestResponses notice: $e');
     }
 
-    // 5. Also record in creator's personal SubRequests if found (best-effort)
+    // 2. Authoritative server-side Cloud Function callable respondToSubRequest (best-effort)
+    try {
+      final callable = _functions.httpsCallable('respondToSubRequest');
+      await callable.call({
+        'subRequestId': cleanSubId,
+      });
+    } on FirebaseFunctionsException catch (e) {
+      if (e.code != 'already-exists') {
+        debugPrint('[FirebaseService] Cloud Function respondToSubRequest notice: $e');
+      }
+    } catch (e) {
+      debugPrint('[FirebaseService] Cloud Function respondToSubRequest notice: $e');
+    }
+
+    // 3. Also record in creator's personal SubRequests if found (best-effort)
     SubRequest? effectiveSubRequest;
     try {
-      effectiveSubRequest = await getSubRequestAsync(subRequestId);
+      effectiveSubRequest = await getSubRequestAsync(cleanSubId);
       final creatorId = effectiveSubRequest?.creatorUserId ?? effectiveSubRequest?.userId;
       if (creatorId != null && creatorId.toString().isNotEmpty) {
         try {
-          await _dbRef('users/$creatorId/SubRequests/$subRequestId/Responses/$userId').set(true);
+          await _dbRef('users/$creatorId/SubRequests/$cleanSubId/Responses/$cleanUserId').set(true);
         } catch (_) {}
       }
     } catch (_) {}
 
-    // 6. Optional event invitee linking (non-blocking for permission boundaries)
+    // 4. Optional event invitee linking (non-blocking for permission boundaries)
     try {
       if (effectiveSubRequest != null) {
         final bandId = effectiveSubRequest.bandId;
@@ -1351,27 +1442,27 @@ class FirebaseService {
             eventId != null &&
             bandId.isNotEmpty &&
             eventId.isNotEmpty) {
-          final profile = await getUserProfileAsync(userId);
+          final profile = await getUserProfileAsync(cleanUserId);
           final invitee = ExternalInvitee(
-            userId: userId,
+            userId: cleanUserId,
             status: 'pending',
             instrument: profile?.instruments.isNotEmpty == true
                 ? profile?.instruments.first
                 : profile?.userType,
             invitedAt: now,
             source: 'subRequest',
-            subRequestId: subRequestId,
+            subRequestId: cleanSubId,
             displayName: profile?.displayName ?? profile?.nickname,
           );
           try {
             await _dbRef(
-              'Bands/$bandId/Events/$eventId/externalInvitees/$userId',
+              'Bands/$bandId/Events/$eventId/externalInvitees/$cleanUserId',
             ).set(invitee.toJson());
             await _dbRef(
               'Bands/$bandId/Events/$eventId/updatedAt',
             ).set(now);
           } catch (e) {
-            debugPrint('[FirebaseService] External invitee linking skipped (normal for candidate): $e');
+            debugPrint('[FirebaseService] External invitee linking skipped: $e');
           }
         }
       }
@@ -1379,13 +1470,13 @@ class FirebaseService {
       debugPrint("[FirebaseService] Error in addResponseToSubRequestAsync linking event: $e");
     }
 
-    // 7. Insert real-time notification for the subrequest creator
+    // 5. Insert real-time notification for the subrequest creator
     try {
-      final subRequest = effectiveSubRequest ?? await getSubRequestAsync(subRequestId);
+      final subRequest = effectiveSubRequest ?? await getSubRequestAsync(cleanSubId);
 
       final creatorId = subRequest?.creatorUserId ?? subRequest?.userId;
-      if (creatorId != null && creatorId.isNotEmpty && creatorId != userId) {
-        final applicantProfile = await getUserProfileAsync(userId);
+      if (creatorId != null && creatorId.isNotEmpty && creatorId != cleanUserId) {
+        final applicantProfile = await getUserProfileAsync(cleanUserId);
         final applicantName = applicantProfile?.displayName ?? applicantProfile?.nickname ?? 'A musician';
         final role = subRequest?.role ?? subRequest?.voicePart ?? 'Musician';
         final bandName = subRequest?.bandName ?? 'Band';
@@ -1395,7 +1486,7 @@ class FirebaseService {
         final dateTimeStr = (dateStr.isNotEmpty && timeStr.isNotEmpty)
             ? '$dateStr $timeStr'
             : (dateStr.isNotEmpty ? dateStr : (timeStr.isNotEmpty ? timeStr : 'Date & Time TBD'));
-        final notifId = 'notif_sub_resp_${subRequestId}_$userId';
+        final notifId = 'notif_sub_resp_${cleanSubId}_$cleanUserId';
         final notifMap = {
           'id': notifId,
           'type': 'sub_request_response',
@@ -1405,8 +1496,8 @@ class FirebaseService {
           'createdAt': DateTime.now().millisecondsSinceEpoch,
           'isRead': false,
           'data': {
-            'subRequestId': subRequestId,
-            'applicantId': userId,
+            'subRequestId': cleanSubId,
+            'applicantId': cleanUserId,
             'applicantName': applicantName,
             'bandId': subRequest?.bandId ?? '',
             'eventId': subRequest?.eventId ?? '',

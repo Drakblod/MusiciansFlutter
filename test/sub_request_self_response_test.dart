@@ -27,6 +27,9 @@ class MockSelfResponseFirebaseService extends FirebaseService {
   bool get isLoggedIn => true;
 
   @override
+  Future<void> initializePushNotifications() async {}
+
+  @override
   Future<UserProfile?> getUserProfileAsync([String? userId]) async {
     return UserProfile(
       userId: userId ?? _currentUserId,
@@ -136,12 +139,14 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
 
       // Open the gig details bottom sheet
       expect(find.text('The Rockers'), findsOneWidget);
       await tester.tap(find.text('The Rockers'));
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
 
       // Verify that "Your Request" badge is shown instead of "Apply"
       expect(find.text('Your Request'), findsOneWidget);
@@ -180,19 +185,22 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
 
       // Open the gig details bottom sheet
       expect(find.text('The Rockers'), findsOneWidget);
       await tester.tap(find.text('The Rockers'));
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
 
       // Verify "Apply" button is visible for candidate
       expect(find.text('Apply'), findsOneWidget);
       expect(find.text('Your Request'), findsNothing);
 
       await tester.tap(find.text('Apply'));
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
 
       expect(find.text('Applied for position!'), findsOneWidget);
     });
@@ -230,7 +238,8 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
 
       expect(find.text('Your Request'), findsOneWidget);
       expect(find.text('Apply for Gig'), findsNothing);
