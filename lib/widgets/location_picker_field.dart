@@ -29,7 +29,7 @@ class LocationPickerField extends StatefulWidget {
   const LocationPickerField({
     super.key,
     required this.controller,
-    this.label = 'Location',
+    this.label = 'Location / Venue',
     this.hint = 'e.g. Fasching, Kungsgatan 63, Stockholm',
     this.hintText,
     this.cityOnly = false,
@@ -69,6 +69,30 @@ class LocationPickerFieldState extends State<LocationPickerField> {
     super.dispose();
   }
 
+  @override
+  void didUpdateWidget(LocationPickerField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.effectiveCityOnly != widget.effectiveCityOnly) {
+      // Precision requirement changed (e.g. switching between exact venue and city location).
+      // Invalidate confirmed coordinates so that exact venue coordinates never leak into
+      // city mode, and city-level coordinates never satisfy exact venue requirements.
+      if (_currentLocation != null && _currentLocation!.hasValidCoordinates) {
+        setState(() {
+          _currentLocation = CanonicalLocation.unresolved(widget.controller.text.trim());
+          _lastConfirmedText = widget.controller.text.trim();
+        });
+        widget.onLocationChanged?.call(_currentLocation!);
+      }
+    } else if (widget.initialLocation != oldWidget.initialLocation) {
+      if (widget.initialLocation == null || !widget.initialLocation!.hasValidCoordinates) {
+        setState(() {
+          _currentLocation = widget.initialLocation ?? CanonicalLocation.unresolved(widget.controller.text.trim());
+          _lastConfirmedText = widget.controller.text.trim();
+        });
+      }
+    }
+  }
+
   void _onTextChanged() {
     final currentText = widget.controller.text.trim();
     // Invalidate previously confirmed coordinates if the user changed the text
@@ -87,6 +111,9 @@ class LocationPickerFieldState extends State<LocationPickerField> {
     });
     widget.onLocationChanged?.call(location);
   }
+
+  @visibleForTesting
+  void confirmLocationForTesting(CanonicalLocation location) => _confirmLocation(location);
 
   void _useKnownCityCentroid(CanonicalLocation cityLoc) {
     widget.controller.text = cityLoc.locationLabel;

@@ -868,11 +868,12 @@ class _FindSubScreenState extends State<FindSubScreen> {
           }
         }
 
-        // 3. Fallbacks must NEVER replace valid coordinates or simulate false confirmation
-        if (canonLoc == null || !canonLoc.hasValidCoordinates) {
+        // 3. Fallbacks must NEVER replace valid coordinates or simulate false confirmation.
+        // Substitute strictly requires exact venue precision. City-level coarsened coordinates are rejected.
+        if (canonLoc == null || !canonLoc.hasValidCoordinates || canonLoc.precision == LocationPrecision.city) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Please confirm a valid location with coordinates before publishing.'),
+              content: Text('Please confirm a valid venue location with exact coordinates before publishing.'),
               backgroundColor: AppTheme.danger,
             ),
           );
@@ -1340,13 +1341,16 @@ class _FindSubScreenState extends State<FindSubScreen> {
                       ),
                     ],
 
-                    ..._eventSections.map((sec) => _buildEventInformationCard(sec, context)),
-
-                    if (_selectedRequestType == 'New Member' || _currentMode == 'new_member')
-                      _buildNewMemberView(context, appState)
-                    else if (_selectedRequestType == 'Other' || _currentMode == 'other')
-                      _buildOtherView(context, appState)
-                    else ...[
+                    if (_selectedRequestType == 'New Member' || _currentMode == 'new_member') ...[
+                      _buildEventInformationCard(_eventSections.first, context),
+                      const SizedBox(height: 24),
+                      _buildPublishButton('PUBLISH NEW BAND MEMBER SEARCH', onPressed: _submitNewMemberRequest),
+                      const SizedBox(height: 30),
+                    ] else if (_selectedRequestType == 'Other' || _currentMode == 'other') ...[
+                      ..._eventSections.map((sec) => _buildEventInformationCard(sec, context)),
+                      _buildOtherView(context, appState),
+                    ] else ...[
+                      ..._eventSections.map((sec) => _buildEventInformationCard(sec, context)),
                       ..._eventSections.map((sec) => _buildSubstituteSectionCard(sec)),
                       _buildPaidGigSection(),
                       const SizedBox(height: 24),
@@ -1434,6 +1438,8 @@ class _FindSubScreenState extends State<FindSubScreen> {
   }
 
   Widget _buildEventInformationCard(EventStaffingSection section, BuildContext context) {
+    final isNewMember = _selectedRequestType == 'New Member' || _currentMode == 'new_member';
+
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
@@ -1444,7 +1450,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (_eventSections.length > 1)
+          if (_eventSections.length > 1 && !isNewMember)
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: const BoxDecoration(
@@ -1473,281 +1479,504 @@ class _FindSubScreenState extends State<FindSubScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // 1. Event Type
-                Text(
-                  'Event Type',
-                  style: GoogleFonts.inter(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: AppTheme.textSecondary,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                DropdownButtonFormField<String>(
-                  isExpanded: true,
-                  value: (section.selectedEventType != null && section.selectedEventType!.isNotEmpty) ? section.selectedEventType : null,
-                  dropdownColor: const Color(0xFF1E1A3A),
-                  style: GoogleFonts.inter(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
-                  hint: Text('Select Event Type', style: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 14)),
-                  decoration: InputDecoration(
-                    filled: true,
-                    fillColor: const Color(0xFF1E1A3A),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: const BorderSide(color: Color(0xFF2E2A4E)),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: const BorderSide(color: Color(0xFF2E2A4E)),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: const BorderSide(color: AppTheme.primaryAccent, width: 1.5),
+                // 1. Request Type (always at the very top of the form)
+                if (section.sequence == 1) ...[
+                  Text(
+                    'Request Type',
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.textSecondary,
                     ),
                   ),
-                  items: () {
-                    final types = List<String>.from(BandEvent.standardEventTypes);
-                    if (section.selectedEventType != null &&
-                        section.selectedEventType!.isNotEmpty &&
-                        !types.contains(section.selectedEventType)) {
-                      types.add(section.selectedEventType!);
-                    }
-                    return types.map((t) => DropdownMenuItem<String>(
-                      value: t,
-                      child: Text(t, style: GoogleFonts.inter(color: Colors.white, fontSize: 14), overflow: TextOverflow.ellipsis),
-                    )).toList();
-                  }(),
-                  onChanged: (val) {
-                    setState(() {
-                      section.selectedEventType = val;
-                    });
-                  },
-                ),
-                const SizedBox(height: 14),
-
-                // 2. Request Type
-                Text(
-                  'Request Type',
-                  style: GoogleFonts.inter(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: AppTheme.textSecondary,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                DropdownButtonFormField<String>(
-                  isExpanded: true,
-                  value: _selectedRequestType,
-                  dropdownColor: const Color(0xFF1E1A3A),
-                  style: GoogleFonts.inter(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
-                  decoration: InputDecoration(
-                    filled: true,
-                    fillColor: const Color(0xFF1E1A3A),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: const BorderSide(color: Color(0xFF2E2A4E)),
+                  const SizedBox(height: 6),
+                  DropdownButtonFormField<String>(
+                    isExpanded: true,
+                    value: _selectedRequestType,
+                    dropdownColor: const Color(0xFF1E1A3A),
+                    style: GoogleFonts.inter(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
+                    decoration: InputDecoration(
+                      filled: true,
+                      fillColor: const Color(0xFF1E1A3A),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: Color(0xFF2E2A4E)),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: Color(0xFF2E2A4E)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: AppTheme.primaryAccent, width: 1.5),
+                      ),
                     ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: const BorderSide(color: Color(0xFF2E2A4E)),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: const BorderSide(color: AppTheme.primaryAccent, width: 1.5),
-                    ),
-                  ),
-                  items: const [
-                    DropdownMenuItem(
-                      value: 'Substitute',
-                      child: Text('Substitute', style: TextStyle(color: Colors.white)),
-                    ),
-                    DropdownMenuItem(
-                      value: 'New Member',
-                      child: Text('New Member', style: TextStyle(color: Colors.white)),
-                    ),
-                    DropdownMenuItem(
-                      value: 'Other',
-                      child: Text('Other', style: TextStyle(color: Colors.white)),
-                    ),
-                  ],
-                  onChanged: (val) {
-                    if (val != null && val != _selectedRequestType) {
-                      setState(() {
-                        final prevType = _selectedRequestType;
-                        _selectedRequestType = val;
-                        if (val == 'Substitute') {
-                          _currentMode = 'substitute';
-                          // Changing from New Member to Substitute: do not silently reuse coarsened city coordinates
-                          if (prevType == 'New Member') {
+                    items: const [
+                      DropdownMenuItem(
+                        value: 'Substitute',
+                        child: Text('Substitute', style: TextStyle(color: Colors.white)),
+                      ),
+                      DropdownMenuItem(
+                        value: 'New Member',
+                        child: Text('New Band Member', style: TextStyle(color: Colors.white)),
+                      ),
+                      DropdownMenuItem(
+                        value: 'Other',
+                        child: Text('Other', style: TextStyle(color: Colors.white)),
+                      ),
+                    ],
+                    onChanged: (val) {
+                      if (val != null && val != _selectedRequestType) {
+                        setState(() {
+                          _selectedRequestType = val;
+                          if (val == 'Substitute') {
+                            _currentMode = 'substitute';
+                            // Changing to Substitute: invalidate city-level coordinates so they cannot be silently used as exact venue
                             for (final s in _eventSections) {
-                              if (s.canonicalLocation?.precision == LocationPrecision.city) {
-                                s.canonicalLocation = null;
+                              if (s.canonicalLocation != null && (s.canonicalLocation!.precision == LocationPrecision.city || !s.canonicalLocation!.hasValidCoordinates)) {
+                                s.canonicalLocation = CanonicalLocation.unresolved(s.locationController.text);
+                              }
+                            }
+                          } else if (val == 'New Member') {
+                            _currentMode = 'new_member';
+                            // Changing to New Member: invalidate exact venue coordinates and require city-level confirmation
+                            _newMemberCanonicalLocation = null;
+                            for (final s in _eventSections) {
+                              s.canonicalLocation = CanonicalLocation.unresolved(s.locationController.text);
+                            }
+                          } else {
+                            _currentMode = 'other';
+                            for (final s in _eventSections) {
+                              if (s.canonicalLocation != null && (s.canonicalLocation!.precision == LocationPrecision.city || !s.canonicalLocation!.hasValidCoordinates)) {
+                                s.canonicalLocation = CanonicalLocation.unresolved(s.locationController.text);
                               }
                             }
                           }
-                        } else if (val == 'New Member') {
-                          _currentMode = 'new_member';
-                          // Changing to New Member: invalidate exact venue selection and require city-level confirmation
-                          _newMemberCanonicalLocation = null;
-                          for (final s in _eventSections) {
-                            if (s.canonicalLocation?.precision == LocationPrecision.exact) {
-                              s.canonicalLocation = null;
-                            }
-                          }
-                        } else {
-                          _currentMode = 'other';
-                        }
-                      });
-                    }
-                  },
-                ),
-                const SizedBox(height: 14),
-
-                // 3. Location
-                LocationPickerField(
-                  controller: section.locationController,
-                  initialLocation: section.canonicalLocation,
-                  onLocationChanged: (loc) => section.canonicalLocation = loc,
-                ),
-                const SizedBox(height: 14),
-
-                // 4. Date & Time
-                Text(
-                  'Date & Time',
-                  style: GoogleFonts.inter(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: AppTheme.textSecondary,
+                        });
+                      }
+                    },
                   ),
-                ),
-                const SizedBox(height: 6),
-                Column(
-                  children: [
-                    InkWell(
-                      onTap: () => _pickDateForSection(section),
-                      borderRadius: BorderRadius.circular(10),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF1E1A3A),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: const Color(0xFF2E2A4E)),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.calendar_today_rounded, color: AppTheme.primaryAccent, size: 18),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                DateFormat('EEEE, MMMM d, yyyy').format(section.selectedDate),
-                                style: GoogleFonts.inter(color: Colors.white, fontSize: 13.5, fontWeight: FontWeight.w500),
-                                overflow: TextOverflow.ellipsis,
-                              ),
+                  const SizedBox(height: 14),
+                ],
+
+                if (isNewMember) ...[
+                  // 2. Role / Instrument
+                  Text(
+                    'Role / Instrument',
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  InkWell(
+                    onTap: _openNewMemberInstrumentPicker,
+                    borderRadius: BorderRadius.circular(10),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1E1A3A),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xFF2E2A4E)),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              _selectedNewMemberInstrument,
+                              style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                              overflow: TextOverflow.ellipsis,
                             ),
-                          ],
-                        ),
+                          ),
+                          const Icon(Icons.arrow_drop_down, color: AppTheme.primaryAccent),
+                        ],
                       ),
                     ),
+                  ),
+                  const SizedBox(height: 14),
+
+                  // 3. Search Source
+                  Text(
+                    'Search Source',
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: InkWell(
+                          onTap: () {
+                            setState(() {
+                              if (_newMemberSource != 'favorites') {
+                                _newMemberSource = 'favorites';
+                                _isNewMemberFavoritesOpen = true;
+                              } else {
+                                _isNewMemberFavoritesOpen = !_isNewMemberFavoritesOpen;
+                              }
+                            });
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            decoration: BoxDecoration(
+                              color: _newMemberSource == 'favorites'
+                                  ? AppTheme.primaryAccent.withValues(alpha: 0.2)
+                                  : const Color(0xFF1E1A3A),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: _newMemberSource == 'favorites'
+                                    ? AppTheme.primaryAccent
+                                    : const Color(0xFF2E2A4E),
+                              ),
+                            ),
+                            child: Center(
+                              child: Text(
+                                'Favorites List',
+                                style: GoogleFonts.inter(
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.bold,
+                                  color: _newMemberSource == 'favorites' ? Colors.white : AppTheme.textSecondary,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: InkWell(
+                          onTap: () {
+                            setState(() {
+                              _newMemberSource = 'search_all';
+                              _isNewMemberFavoritesOpen = false;
+                            });
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            decoration: BoxDecoration(
+                              color: _newMemberSource == 'search_all'
+                                  ? AppTheme.primaryAccent.withValues(alpha: 0.2)
+                                  : const Color(0xFF1E1A3A),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: _newMemberSource == 'search_all'
+                                    ? AppTheme.primaryAccent
+                                    : const Color(0xFF2E2A4E),
+                              ),
+                            ),
+                            child: Center(
+                              child: Text(
+                                'Search All',
+                                style: GoogleFonts.inter(
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.bold,
+                                  color: _newMemberSource == 'search_all' ? Colors.white : AppTheme.textSecondary,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (_newMemberSource == 'favorites' && _isNewMemberFavoritesOpen) ...[
                     const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: InkWell(
-                            onTap: () => _pickTimeForSection(section, true),
-                            borderRadius: BorderRadius.circular(10),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF1E1A3A),
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(color: const Color(0xFF2E2A4E)),
-                              ),
-                              child: Row(
-                                children: [
-                                  const Icon(Icons.access_time_rounded, color: AppTheme.primaryAccent, size: 18),
-                                  const SizedBox(width: 6),
-                                  Expanded(
-                                    child: Text(
-                                      section.startTime.format(context),
-                                      style: GoogleFonts.inter(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500),
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: InkWell(
-                            onTap: () => _pickTimeForSection(section, false),
-                            borderRadius: BorderRadius.circular(10),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF1E1A3A),
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(color: const Color(0xFF2E2A4E)),
-                              ),
-                              child: Row(
-                                children: [
-                                  const Icon(Icons.access_time_rounded, color: AppTheme.primaryAccent, size: 18),
-                                  const SizedBox(width: 6),
-                                  Expanded(
-                                    child: Text(
-                                      section.endTime.format(context),
-                                      style: GoogleFonts.inter(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500),
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
+                    _buildFavoritesListPanel(
+                      filterInstrument: _selectedNewMemberInstrument,
+                      isSingleSelect: false,
+                      selectedIds: _selectedNewMemberFavorites,
+                      onSelect: (uid, selected) {
+                        setState(() {
+                          if (selected) {
+                            _selectedNewMemberFavorites.add(uid);
+                          } else {
+                            _selectedNewMemberFavorites.remove(uid);
+                          }
+                        });
+                      },
+                      onSelectAllFavorites: () {
+                        setState(() {
+                          final allFavIds = _getFilteredFavoritesForInstrument(_selectedNewMemberInstrument)
+                              .map((f) => f.userId)
+                              .where((id) => id != null && id.isNotEmpty)
+                              .cast<String>()
+                              .toSet();
+                          _selectedNewMemberFavorites.addAll(allFavIds);
+                        });
+                      },
+                      isAddFavoriteOpen: _isNewMemberAddFavoriteOpen,
+                      onToggleAddFavorite: () {
+                        setState(() {
+                          _isNewMemberAddFavoriteOpen = !_isNewMemberAddFavoriteOpen;
+                        });
+                      },
+                      addFavoriteQuery: _newMemberAddFavoriteQuery,
+                      onAddFavoriteQueryChanged: (val) {
+                        setState(() {
+                          _newMemberAddFavoriteQuery = val;
+                        });
+                      },
+                      onFavoriteAdded: () {
+                        setState(() {
+                          _isNewMemberFavoritesOpen = true;
+                        });
+                      },
                     ),
                   ],
-                ),
-                const SizedBox(height: 14),
+                  const SizedBox(height: 14),
 
-                // 5. Description (optional)
-                Text(
-                  'Description (optional)',
-                  style: GoogleFonts.inter(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: AppTheme.textSecondary,
+                  // 4. Location / Venue (City precision enforced for New Band Member)
+                  LocationPickerField(
+                    key: ValueKey('location_picker_new_member_'),
+                    controller: section.locationController,
+                    initialLocation: section.canonicalLocation,
+                    onLocationChanged: (loc) => section.canonicalLocation = loc,
+                    cityPrecisionOnly: true,
+                    label: 'Location / Venue',
                   ),
-                ),
-                const SizedBox(height: 6),
-                TextField(
-                  controller: section.descriptionController,
-                  maxLines: 2,
-                  style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
-                  decoration: InputDecoration(
-                    hintText: 'Add description',
-                    hintStyle: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 14),
-                    filled: true,
-                    fillColor: const Color(0xFF1E1A3A),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: const BorderSide(color: Color(0xFF2E2A4E)),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: const BorderSide(color: Color(0xFF2E2A4E)),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: const BorderSide(color: AppTheme.primaryAccent, width: 1.5),
+                  const SizedBox(height: 14),
+
+                  // 5. Description / Details
+                  Text(
+                    'Description / Details',
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.textSecondary,
                     ),
                   ),
-                ),
+                  const SizedBox(height: 6),
+                  TextField(
+                    controller: section.descriptionController,
+                    maxLines: 2,
+                    style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
+                    decoration: InputDecoration(
+                      hintText: 'Add description',
+                      hintStyle: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 14),
+                      filled: true,
+                      fillColor: const Color(0xFF1E1A3A),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: Color(0xFF2E2A4E)),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: Color(0xFF2E2A4E)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: AppTheme.primaryAccent, width: 1.5),
+                      ),
+                    ),
+                  ),
+                ] else ...[
+                  // For Substitute and Other:
+                  // 2. Event Type
+                  Text(
+                    'Event Type',
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  DropdownButtonFormField<String>(
+                    isExpanded: true,
+                    value: (section.selectedEventType != null && section.selectedEventType!.isNotEmpty) ? section.selectedEventType : null,
+                    dropdownColor: const Color(0xFF1E1A3A),
+                    style: GoogleFonts.inter(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
+                    hint: Text('Select Event Type', style: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 14)),
+                    decoration: InputDecoration(
+                      filled: true,
+                      fillColor: const Color(0xFF1E1A3A),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: Color(0xFF2E2A4E)),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: Color(0xFF2E2A4E)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: AppTheme.primaryAccent, width: 1.5),
+                      ),
+                    ),
+                    items: () {
+                      final types = List<String>.from(BandEvent.standardEventTypes);
+                      if (section.selectedEventType != null &&
+                          section.selectedEventType!.isNotEmpty &&
+                          !types.contains(section.selectedEventType)) {
+                        types.add(section.selectedEventType!);
+                      }
+                      return types.map((t) => DropdownMenuItem<String>(
+                        value: t,
+                        child: Text(t, style: GoogleFonts.inter(color: Colors.white, fontSize: 14), overflow: TextOverflow.ellipsis),
+                      )).toList();
+                    }(),
+                    onChanged: (val) {
+                      setState(() {
+                        section.selectedEventType = val;
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 14),
+
+                  // 3. Date & Time
+                  Text(
+                    'Date & Time',
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Column(
+                    children: [
+                      InkWell(
+                        onTap: () => _pickDateForSection(section),
+                        borderRadius: BorderRadius.circular(10),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF1E1A3A),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: const Color(0xFF2E2A4E)),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.calendar_today_rounded, color: AppTheme.primaryAccent, size: 18),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  DateFormat('EEEE, MMMM d, yyyy').format(section.selectedDate),
+                                  style: GoogleFonts.inter(color: Colors.white, fontSize: 13.5, fontWeight: FontWeight.w500),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: InkWell(
+                              onTap: () => _pickTimeForSection(section, true),
+                              borderRadius: BorderRadius.circular(10),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF1E1A3A),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: const Color(0xFF2E2A4E)),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.access_time_rounded, color: AppTheme.primaryAccent, size: 18),
+                                    const SizedBox(width: 6),
+                                    Expanded(
+                                      child: Text(
+                                        section.startTime.format(context),
+                                        style: GoogleFonts.inter(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: InkWell(
+                              onTap: () => _pickTimeForSection(section, false),
+                              borderRadius: BorderRadius.circular(10),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF1E1A3A),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: const Color(0xFF2E2A4E)),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.access_time_rounded, color: AppTheme.primaryAccent, size: 18),
+                                    const SizedBox(width: 6),
+                                    Expanded(
+                                      child: Text(
+                                        section.endTime.format(context),
+                                        style: GoogleFonts.inter(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+
+                  // 4. Location / Venue
+                  LocationPickerField(
+                    key: ValueKey('location_picker_substitute_'),
+                    controller: section.locationController,
+                    initialLocation: section.canonicalLocation,
+                    onLocationChanged: (loc) => section.canonicalLocation = loc,
+                    label: 'Location / Venue',
+                  ),
+                  const SizedBox(height: 14),
+
+                  // 5. Description / Details
+                  Text(
+                    'Description / Details',
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  TextField(
+                    controller: section.descriptionController,
+                    maxLines: 2,
+                    style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
+                    decoration: InputDecoration(
+                      hintText: 'Add description',
+                      hintStyle: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 14),
+                      filled: true,
+                      fillColor: const Color(0xFF1E1A3A),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: Color(0xFF2E2A4E)),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: Color(0xFF2E2A4E)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: AppTheme.primaryAccent, width: 1.5),
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -2686,7 +2915,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
             ),
             const SizedBox(height: 12),
             Text(
-              'Details',
+              'Payment Details',
               style: GoogleFonts.inter(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
@@ -2724,7 +2953,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
     );
   }
 
-  Widget _buildPublishButton(String publishButtonLabel) {
+  Widget _buildPublishButton(String publishButtonLabel, {VoidCallback? onPressed}) {
     return SizedBox(
       width: double.infinity,
       height: 52,
@@ -2734,7 +2963,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           elevation: 4,
         ),
-        onPressed: _isSubmitting ? null : _publishAllDraftRequests,
+        onPressed: _isSubmitting ? null : (onPressed ?? _publishAllDraftRequests),
         child: _isSubmitting
             ? const SizedBox(
                 width: 24,
@@ -2751,216 +2980,6 @@ class _FindSubScreenState extends State<FindSubScreen> {
                 ),
               ),
       ),
-    );
-  }
-
-  Widget _buildNewMemberView(BuildContext context, AppState appState) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: AppTheme.cardBackground,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFF2E2A4E), width: 1.5),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'New Band Member Recruitment',
-                style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Publish an open position to find a new band member.',
-                style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
-              ),
-              const SizedBox(height: 16),
-
-              Text(
-                'Role / Instrument',
-                style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: AppTheme.textSecondary),
-              ),
-              const SizedBox(height: 6),
-              InkWell(
-                onTap: _openNewMemberInstrumentPicker,
-                borderRadius: BorderRadius.circular(10),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1E1A3A),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: const Color(0xFF2E2A4E)),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          _selectedNewMemberInstrument,
-                          style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      const Icon(Icons.arrow_drop_down, color: AppTheme.primaryAccent),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              Text(
-                'Search Source',
-                style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: AppTheme.textSecondary),
-              ),
-              const SizedBox(height: 6),
-              Row(
-                children: [
-                  Expanded(
-                    child: InkWell(
-                      onTap: () {
-                        setState(() {
-                          if (_newMemberSource != 'favorites') {
-                            _newMemberSource = 'favorites';
-                            _isNewMemberFavoritesOpen = true;
-                          } else {
-                            _isNewMemberFavoritesOpen = !_isNewMemberFavoritesOpen;
-                          }
-                        });
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 10),
-                        decoration: BoxDecoration(
-                          color: _newMemberSource == 'favorites'
-                              ? AppTheme.primaryAccent.withValues(alpha: 0.2)
-                              : const Color(0xFF1E1A3A),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                            color: _newMemberSource == 'favorites'
-                                ? AppTheme.primaryAccent
-                                : const Color(0xFF2E2A4E),
-                          ),
-                        ),
-                        child: Center(
-                          child: Text(
-                            'Favorites List',
-                            style: GoogleFonts.inter(
-                              fontSize: 12.5,
-                              fontWeight: FontWeight.bold,
-                              color: _newMemberSource == 'favorites' ? Colors.white : AppTheme.textSecondary,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: InkWell(
-                      onTap: () {
-                        setState(() {
-                          _newMemberSource = 'search_all';
-                          _isNewMemberFavoritesOpen = false;
-                        });
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 10),
-                        decoration: BoxDecoration(
-                          color: _newMemberSource == 'search_all'
-                              ? AppTheme.primaryAccent.withValues(alpha: 0.2)
-                              : const Color(0xFF1E1A3A),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                            color: _newMemberSource == 'search_all'
-                                ? AppTheme.primaryAccent
-                                : const Color(0xFF2E2A4E),
-                          ),
-                        ),
-                        child: Center(
-                          child: Text(
-                            'Search All',
-                            style: GoogleFonts.inter(
-                              fontSize: 12.5,
-                              fontWeight: FontWeight.bold,
-                              color: _newMemberSource == 'search_all' ? Colors.white : AppTheme.textSecondary,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              if (_newMemberSource == 'favorites' && _isNewMemberFavoritesOpen) ...[
-                const SizedBox(height: 10),
-                _buildFavoritesListPanel(
-                  filterInstrument: _selectedNewMemberInstrument,
-                  isSingleSelect: false,
-                  selectedIds: _selectedNewMemberFavorites,
-                  onSelect: (uid, selected) {
-                    setState(() {
-                      if (selected) {
-                        _selectedNewMemberFavorites.add(uid);
-                      } else {
-                        _selectedNewMemberFavorites.remove(uid);
-                      }
-                    });
-                  },
-                  onSelectAllFavorites: () {
-                    setState(() {
-                      final allFavIds = _getFilteredFavoritesForInstrument(_selectedNewMemberInstrument)
-                          .map((f) => f.userId)
-                          .where((id) => id != null && id.isNotEmpty)
-                          .cast<String>()
-                          .toSet();
-                      _selectedNewMemberFavorites.addAll(allFavIds);
-                    });
-                  },
-                  isAddFavoriteOpen: _isNewMemberAddFavoriteOpen,
-                  onToggleAddFavorite: () {
-                    setState(() {
-                      _isNewMemberAddFavoriteOpen = !_isNewMemberAddFavoriteOpen;
-                    });
-                  },
-                  addFavoriteQuery: _newMemberAddFavoriteQuery,
-                  onAddFavoriteQueryChanged: (val) {
-                    setState(() {
-                      _newMemberAddFavoriteQuery = val;
-                    });
-                  },
-                  onFavoriteAdded: () {
-                    setState(() {
-                      _isNewMemberFavoritesOpen = true;
-                    });
-                  },
-                ),
-              ],
-            ],
-          ),
-        ),
-        const SizedBox(height: 24),
-
-        SizedBox(
-          width: double.infinity,
-          height: 50,
-          child: ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppTheme.primaryAccent,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-            onPressed: _isSubmitting ? null : _submitNewMemberRequest,
-            child: _isSubmitting
-                ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                : Text(
-                    'PUBLISH NEW MEMBER SEARCH',
-                    style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
-                  ),
-          ),
-        ),
-        const SizedBox(height: 30),
-      ],
     );
   }
 
@@ -2991,31 +3010,6 @@ class _FindSubScreenState extends State<FindSubScreen> {
     final profile = appState.currentUserProfile;
     final effectiveBandId = widget.bandId ?? appState.activeBandId;
 
-    if (_eventSections.isNotEmpty) {
-      final sec = _eventSections.first;
-      if (sec.selectedEventType == null || sec.selectedEventType!.trim().isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Please select an Event Type before publishing.'),
-            backgroundColor: AppTheme.danger,
-          ),
-        );
-        return;
-      }
-
-      final startMin = sec.startTime.hour * 60 + sec.startTime.minute;
-      final endMin = sec.endTime.hour * 60 + sec.endTime.minute;
-      if (endMin <= startMin) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('End time must be after start time.'),
-            backgroundColor: AppTheme.danger,
-          ),
-        );
-        return;
-      }
-    }
-
     if (_selectedNewMemberInstrument.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -3043,40 +3037,17 @@ class _FindSubScreenState extends State<FindSubScreen> {
       final newMemberDesc = (sec != null && sec.descriptionController.text.trim().isNotEmpty)
           ? sec.descriptionController.text.trim()
           : _newMemberDescriptionController.text.trim();
-      final newMemberLoc = _newMemberLocationController.text.trim().isNotEmpty
-          ? _newMemberLocationController.text.trim()
-          : ((sec != null && sec.locationController.text.trim().isNotEmpty)
-              ? sec.locationController.text.trim()
+      final newMemberLoc = (sec != null && sec.locationController.text.trim().isNotEmpty)
+          ? sec.locationController.text.trim()
+          : (_newMemberLocationController.text.trim().isNotEmpty
+              ? _newMemberLocationController.text.trim()
               : (_locationController.text.trim().isNotEmpty
                   ? _locationController.text.trim()
                   : (profile?.location ?? 'Stockholm, Sweden')));
-      final effectiveCanon = _newMemberCanonicalLocation ?? sec?.canonicalLocation;
-      double? mLat = effectiveCanon?.latitude;
-      double? mLng = effectiveCanon?.longitude;
-      LocationPrecision? mPrec = effectiveCanon?.precision;
-      String? mPlaceId = effectiveCanon?.placeId;
-      LocationResolutionStatus? mStatus = effectiveCanon?.status;
-      if (mLat == null && newMemberLoc.isNotEmpty) {
-        final resolved = LocationService.resolveKnownCity(newMemberLoc);
-        if (resolved != null) {
-          mLat = resolved.latitude;
-          mLng = resolved.longitude;
-          mPrec = LocationPrecision.city;
-          mPlaceId = resolved.placeId;
-          mStatus = resolved.status;
-        }
-      }
-      if (mLat == null && sec != null && sec.event.latitude != null && sec.event.longitude != null) {
-        mLat = sec.event.latitude;
-        mLng = sec.event.longitude;
-        mPrec = LocationPrecision.city;
-      }
-      if (mLat != null && mLng != null) {
-        mLat = double.parse(mLat.toStringAsFixed(1));
-        mLng = double.parse(mLng.toStringAsFixed(1));
-        mPrec = LocationPrecision.city;
-        mPlaceId = null; // strip residential placeId
-      } else {
+      final effectiveCanon = sec?.canonicalLocation ?? _newMemberCanonicalLocation;
+      // New Band Member strictly requires confirmed city-level location.
+      // Exact venue coordinates from a previous selection or unconfirmed text must never be silently accepted.
+      if (effectiveCanon == null || !effectiveCanon.hasValidCoordinates || effectiveCanon.precision != LocationPrecision.city) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Please confirm a valid city or location before publishing.'),
@@ -3085,36 +3056,29 @@ class _FindSubScreenState extends State<FindSubScreen> {
         );
         return;
       }
+
+      double mLat = double.parse(effectiveCanon.latitude!.toStringAsFixed(1));
+      double mLng = double.parse(effectiveCanon.longitude!.toStringAsFixed(1));
+      LocationPrecision mPrec = LocationPrecision.city;
+      String? mPlaceId; // Stale placeId and exact-address metadata are cleared for New Band Member
+      LocationResolutionStatus mStatus = LocationResolutionStatus.resolved;
       final cleanCityLabel = LocationService.extractCityLabel(newMemberLoc);
       final finalLocLabel = cleanCityLabel.isNotEmpty ? cleanCityLabel : (newMemberLoc.isNotEmpty ? newMemberLoc : 'Stockholm');
-      final evType = (sec?.selectedEventType != null && sec!.selectedEventType!.trim().isNotEmpty)
-          ? sec.selectedEventType!.trim()
-          : 'Recruitment';
-      final dateStr = sec != null ? sec.selectedDate.toIso8601String() : _selectedDate.toIso8601String();
-      final startTimeStr = sec != null
-          ? '${sec.startTime.hour.toString().padLeft(2, '0')}:${sec.startTime.minute.toString().padLeft(2, '0')}'
-          : '${_startTime.hour.toString().padLeft(2, '0')}:${_startTime.minute.toString().padLeft(2, '0')}';
-      final endTimeStr = sec != null
-          ? '${sec.endTime.hour.toString().padLeft(2, '0')}:${sec.endTime.minute.toString().padLeft(2, '0')}'
-          : '${_endTime.hour.toString().padLeft(2, '0')}:${_endTime.minute.toString().padLeft(2, '0')}';
       final effectiveBandName = _bandName ?? appState.activeBandName ?? 'Freelance Band';
-      final evId = sec?.event.id ?? widget.eventId;
-      final evTitle = (sec != null && sec.titleController.text.trim().isNotEmpty)
-          ? sec.titleController.text.trim()
-          : (sec?.event.title.isNotEmpty == true ? sec!.event.title : effectiveBandName);
       final now = DateTime.now();
-      final groupId = 'req_group_member_${now.millisecondsSinceEpoch}';
-      final pubId = 'pub_member_${now.millisecondsSinceEpoch}';
+      final groupId = 'req_group_member_';
+      final pubId = 'pub_member_';
 
       final req = SubRequest(
         role: 'New Member',
         requestType: 'New Member',
         voicePart: _selectedNewMemberInstrument,
         description: newMemberDesc,
-        date: dateStr,
-        startTime: startTimeStr,
-        endTime: endTimeStr,
+        date: null,
+        startTime: null,
+        endTime: null,
         location: finalLocLabel,
+        city: cleanCityLabel.isNotEmpty ? cleanCityLabel : finalLocLabel,
         latitude: mLat,
         longitude: mLng,
         locationPrecision: mPrec,
@@ -3122,14 +3086,14 @@ class _FindSubScreenState extends State<FindSubScreen> {
         locationStatus: mStatus,
         bandId: effectiveBandId,
         bandName: effectiveBandName,
-        eventId: evId,
-        eventTitle: evTitle,
+        eventId: null,
+        eventTitle: effectiveBandName,
         searchSource: _newMemberSource,
         targetUserIds: _newMemberSource == 'favorites' ? _selectedNewMemberFavorites.toList() : null,
         status: 'published',
         requestGroupId: groupId,
         createdAt: now.millisecondsSinceEpoch,
-        extraFields: {'eventType': evType, 'PublicationId': pubId},
+        extraFields: {'PublicationId': pubId},
       );
 
       await appState.firebaseService.publishSubRequestGroupAsync(
