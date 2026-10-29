@@ -1160,26 +1160,51 @@ class FirebaseService {
     required List<SubRequest> requests,
     String? bandName,
   }) async {
-    // 1. Direct write to canonical RTDB /SubRequests and /users/$currentUserId/SubRequests
-    final savedIds = await saveSubRequestsBatchAsync(requests);
+    final currentUserId = _auth.currentUser?.uid;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final List<SubRequest> updatedRequests = [];
 
-    // 2. Attempt cloud function for push notifications / background tasks
-    try {
-      final callable = FirebaseFunctions.instanceFor(region: 'europe-west1')
-          .httpsCallable('publishSubRequestGroup');
-      await callable.call<Map<dynamic, dynamic>>({
-        'bandId': bandId,
-        'requestGroupId': requestGroupId,
-        'bandName': bandName,
-        'slots': requests.map((r) => r.toJson()).toList(),
-      });
-    } catch (e) {
-      debugPrint('[FirebaseService] publishSubRequestGroup callable exception: $e');
+    for (final req in requests) {
+      final cleanBandId = req.bandId != null ? _sanitizeRtdbKey(req.bandId!) : (currentUserId != null ? _sanitizeRtdbKey(currentUserId) : 'band');
+      final cleanEventId = req.eventId != null ? _sanitizeRtdbKey(req.eventId!) : 'standalone';
+      final cleanSlotId = req.slotId != null ? _sanitizeRtdbKey(req.slotId!) : '${DateTime.now().millisecondsSinceEpoch}';
+
+      final key = (req.subRequestId != null &&
+              req.subRequestId!.isNotEmpty &&
+              !req.subRequestId!.startsWith('slot_') &&
+              !req.subRequestId!.startsWith('initial_') &&
+              !req.subRequestId!.startsWith('draft_'))
+          ? req.subRequestId!
+          : 'sub_${cleanBandId}_${cleanEventId}_${cleanSlotId}_$now';
+
+      final updated = req.copyWith(
+        id: key,
+        subRequestId: key,
+        slotId: req.slotId ?? key,
+        creatorUserId: currentUserId,
+        userId: currentUserId,
+        createdAt: req.createdAt ?? now,
+        status: 'published',
+      );
+      updatedRequests.add(updated);
     }
+
+    // 1. Write to user's personal mirror (for backwards compatibility)
+    final savedIds = await saveSubRequestsBatchAsync(updatedRequests);
+
+    // 2. Cloud function for atomic canonical publication and feed projections
+    final callable = FirebaseFunctions.instanceFor(region: 'europe-west1')
+        .httpsCallable('publishSubRequestGroup');
+    await callable.call<Map<dynamic, dynamic>>({
+      'bandId': bandId,
+      'requestGroupId': requestGroupId,
+      'bandName': bandName,
+      'slots': updatedRequests.map((r) => r.toJson()).toList(),
+    });
 
     return savedIds.isNotEmpty
         ? savedIds
-        : requests
+        : updatedRequests
             .map((r) => r.subRequestId ?? r.slotId ?? r.id ?? '')
             .where((id) => id.isNotEmpty)
             .toList();

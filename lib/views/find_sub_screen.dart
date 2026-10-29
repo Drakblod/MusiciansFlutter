@@ -851,6 +851,26 @@ class _FindSubScreenState extends State<FindSubScreen> {
             canonLoc = LocationService.resolveKnownCity(locStr);
           }
         }
+        if (canonLoc == null || !canonLoc.hasValidCoordinates) {
+          if (section.event.latitude != null && section.event.longitude != null) {
+            canonLoc = CanonicalLocation(
+              latitude: section.event.latitude!,
+              longitude: section.event.longitude!,
+              locationLabel: section.event.location.isNotEmpty ? section.event.location : locStr,
+              precision: LocationPrecision.exact,
+              status: LocationResolutionStatus.resolved,
+            );
+          }
+        }
+        if (canonLoc == null || !canonLoc.hasValidCoordinates) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Please confirm a valid location with coordinates before publishing.'),
+              backgroundColor: AppTheme.danger,
+            ),
+          );
+          return;
+        }
 
         for (final slot in section.slots) {
           if (slot.status != 'draft') continue;
@@ -1171,14 +1191,50 @@ class _FindSubScreenState extends State<FindSubScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'FIND MUSICIAN/VOCALIST',
-                      style: GoogleFonts.outfit(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                        letterSpacing: 1.2,
-                      ),
+                    Wrap(
+                      alignment: WrapAlignment.spaceBetween,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        Text(
+                          'FIND MUSICIAN/VOCALIST',
+                          style: GoogleFonts.outfit(
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
+                        TextButton.icon(
+                          key: const Key('manage_requests_btn'),
+                          style: TextButton.styleFrom(
+                            backgroundColor: AppTheme.primaryAccent.withOpacity(0.15),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              side: BorderSide(color: AppTheme.primaryAccent.withOpacity(0.4)),
+                            ),
+                          ),
+                          icon: const Icon(Icons.assignment_ind_outlined, size: 16, color: AppTheme.primaryAccent),
+                          label: Text(
+                            'Manage Requests',
+                            style: GoogleFonts.inter(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                          onPressed: () {
+                            final effectiveBandId = widget.bandId ?? appState.activeBandId ?? '';
+                            Navigator.pushNamed(
+                              context,
+                              '/sub-request-responses',
+                              arguments: {'bandId': effectiveBandId},
+                            );
+                          },
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 16),
 
@@ -2998,11 +3054,24 @@ class _FindSubScreenState extends State<FindSubScreen> {
           mStatus = resolved.status;
         }
       }
+      if (mLat == null && sec != null && sec.event.latitude != null && sec.event.longitude != null) {
+        mLat = sec.event.latitude;
+        mLng = sec.event.longitude;
+        mPrec = LocationPrecision.city;
+      }
       if (mLat != null && mLng != null) {
         mLat = double.parse(mLat.toStringAsFixed(1));
         mLng = double.parse(mLng.toStringAsFixed(1));
         mPrec = LocationPrecision.city;
         mPlaceId = null; // strip residential placeId
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please confirm a valid city or location before publishing.'),
+            backgroundColor: AppTheme.danger,
+          ),
+        );
+        return;
       }
       final cleanCityLabel = LocationService.extractCityLabel(newMemberLoc);
       final finalLocLabel = cleanCityLabel.isNotEmpty ? cleanCityLabel : (newMemberLoc.isNotEmpty ? newMemberLoc : 'Stockholm');
@@ -3385,6 +3454,20 @@ class _FindSubScreenState extends State<FindSubScreen> {
           oPlaceId = resolved.placeId;
           oStatus = resolved.status;
         }
+      }
+      if (oLat == null && sec != null && sec.event.latitude != null && sec.event.longitude != null) {
+        oLat = sec.event.latitude;
+        oLng = sec.event.longitude;
+        oPrec = LocationPrecision.exact;
+      }
+      if (oLat == null || oLng == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please confirm a valid location with coordinates before publishing.'),
+            backgroundColor: AppTheme.danger,
+          ),
+        );
+        return;
       }
       final evType = (sec?.selectedEventType != null && sec!.selectedEventType!.trim().isNotEmpty)
           ? sec.selectedEventType!.trim()

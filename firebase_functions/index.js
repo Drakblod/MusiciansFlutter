@@ -1083,15 +1083,40 @@ exports.publishSubRequestGroup = onCall({ region: 'europe-west1' }, async (reque
   const callerFavSnap = await db.ref(`/users/${callerId}/Favorites`).once('value');
   const callerFavorites = callerFavSnap.val() || {};
 
-  const slotIds = slots.map(s => s.subRequestId || s.slotId).filter(Boolean);
+  const resolvedSlots = slots.map((slot, index) => {
+    const rawKey =
+      slot.subRequestId ||
+      slot.SubRequestId ||
+      slot.slotId ||
+      slot.SlotId ||
+      slot.id ||
+      slot.Id ||
+      slot.key;
+    const slotKey =
+      (rawKey && typeof rawKey === 'string' && rawKey.trim().length > 0 && !rawKey.startsWith('slot_') && !rawKey.startsWith('draft_'))
+        ? rawKey.trim()
+        : (db.ref('SubRequests').push().key || `sub_${Date.now()}_${index}`);
+
+    const slotId = slot.slotId || slot.SlotId || slotKey;
+
+    return {
+      ...slot,
+      subRequestId: slotKey,
+      SubRequestId: slotKey,
+      slotId: slotId,
+      SlotId: slotId,
+    };
+  });
+
+  const slotIds = resolvedSlots.map(s => s.subRequestId).filter(Boolean);
   const publicationId = computeStablePublicationId(requestGroupId, slotIds);
 
   const updates = {};
   const now = Date.now();
 
   // 3. Write each canonical SubRequest & Creator feed
-  slots.forEach((slot) => {
-    const slotKey = slot.subRequestId || slot.slotId;
+  resolvedSlots.forEach((slot) => {
+    const slotKey = slot.subRequestId;
     const canonicalItem = {
       ...slot,
       SubRequestId: slotKey,
@@ -1117,7 +1142,7 @@ exports.publishSubRequestGroup = onCall({ region: 'europe-west1' }, async (reque
     bandId: bandId || null,
     bandName: bandName || 'Freelance Gig',
     publishedAt: now,
-    slots: slots.map(s => ({
+    slots: resolvedSlots.map(s => ({
       slotId: s.slotId || s.subRequestId,
       subRequestId: s.subRequestId || s.slotId,
       voicePart: s.voicePart || s.VoicePart || '',
@@ -1176,8 +1201,8 @@ exports.publishSubRequestGroup = onCall({ region: 'europe-west1' }, async (reque
   const usersSnap = await db.ref('/users').once('value');
   const users = usersSnap.val() || {};
 
-  for (const slot of slots) {
-    const slotKey = slot.subRequestId || slot.slotId;
+  for (const slot of resolvedSlots) {
+    const slotKey = slot.subRequestId;
     const sanitizedItem = buildSanitizedFeedItem({
       ...slot,
       SubRequestId: slotKey,
