@@ -1572,8 +1572,11 @@ class FirebaseService {
         final invSnap = await _dbRef('Bands/${sub.bandId}/Events/${sub.eventId}/externalInvitees').get();
         if (invSnap.exists && invSnap.value is Map) {
           (invSnap.value as Map).forEach((k, v) {
-            if (v is Map && (v['subRequestId'] == subRequestId || v['source'] == 'subRequest')) {
-              combined[k.toString()] = true;
+            if (v is Map) {
+              final linkedSubId = v['subRequestId'] ?? v['SubRequestId'];
+              if (linkedSubId != null && linkedSubId.toString() == subRequestId) {
+                combined[k.toString()] = true;
+              }
             }
           });
         }
