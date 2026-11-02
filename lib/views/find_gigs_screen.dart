@@ -34,7 +34,7 @@ class GigGroup {
   }) : _isMultiple = isMultiple;
 
   int get totalPositions => requests.length;
-  int get filledPositions => requests.where((r) => r.status == 'assigned' || r.assignedUserId != null).length;
+  int get filledPositions => requests.where((r) => r.status == 'assigned' || (r.assignedUserId != null && r.assignedUserId!.trim().isNotEmpty)).length;
   int get eventCount {
     final eventIds = requests.map((r) => r.eventId ?? r.date ?? '').where((s) => s.isNotEmpty).toSet();
     return eventIds.isEmpty ? 1 : eventIds.length;
@@ -112,7 +112,9 @@ class _FindGigsScreenState extends State<FindGigsScreen>
   final Map<String, BandAdminStatus> _adminStatusCache = {}; // key: '$userId/$bandId'
   final Map<String, int> _inFlightLookups = {}; // key: '$userId/$bandId', value: generation
   int _authGeneration = 0;
+  int _feedLoadGeneration = 0;
   String? _activeUserId;
+  List<SubRequest> _rawFeedRequests = [];
   List<GigGroup> _substituteGigGroups = [];
   List<GigGroup> _newMemberGigGroups = [];
   List<GigGroup> _appliedGigGroups = [];
@@ -127,8 +129,14 @@ class _FindGigsScreenState extends State<FindGigsScreen>
 
   void _resetAuth({required String? newUserId}) {
     _authGeneration++;
+    _feedLoadGeneration++;
     _adminStatusCache.clear();
     _inFlightLookups.clear();
+    _appliedGigIds.clear();
+    _appliedGigGroups = [];
+    _substituteGigGroups = [];
+    _newMemberGigGroups = [];
+    _rawFeedRequests = [];
     _activeUserId = newUserId;
   }
 
@@ -136,7 +144,7 @@ class _FindGigsScreenState extends State<FindGigsScreen>
   void didChangeDependencies() {
     super.didChangeDependencies();
     final appState = Provider.of<AppState>(context);
-    if (appState.currentUserId != _activeUserId && _activeUserId != null) {
+    if (appState.currentUserId != _activeUserId) {
       _resetAuth(newUserId: appState.currentUserId);
       _loadSubRequests();
     }
@@ -338,20 +346,58 @@ class _FindGigsScreenState extends State<FindGigsScreen>
   }
 
 
+  void _rebuildAppliedGroups() {
+    final appState = Provider.of<AppState>(context, listen: false);
+    final currentUserId = appState.currentUserId;
+    if (currentUserId == null) {
+      setState(() => _appliedGigGroups = []);
+      return;
+    }
+    final now = DateTime.now();
+    final List<SubRequest> appliedList = [];
+    final Set<String> seenIds = {};
+    for (final gig in _rawFeedRequests) {
+      final reqId = gig.subRequestId ?? gig.id ?? '';
+      if (isActiveAppliedRequest(
+        gig,
+        currentUserId: currentUserId,
+        now: now,
+        appliedIds: _appliedGigIds,
+      )) {
+        if (reqId.isNotEmpty && seenIds.add(reqId)) {
+          appliedList.add(gig);
+        }
+      }
+    }
+    setState(() {
+      _appliedGigGroups = _groupSubRequests(appliedList);
+    });
+  }
+
   Future<void> _loadSubRequests() async {
+    final appState = Provider.of<AppState>(context, listen: false);
+    final currentUserId = appState.currentUserId;
+    if (currentUserId != _activeUserId) {
+      _resetAuth(newUserId: currentUserId);
+    }
+    final currentGeneration = ++_feedLoadGeneration;
+    final capturedUserId = currentUserId;
+
     setState(() => _isLoading = true);
     try {
-      final appState = Provider.of<AppState>(context, listen: false);
       final list = await appState.firebaseService.getUserSubRequestFeedAsync();
-      final currentUserId = appState.currentUserId;
-      if (currentUserId != _activeUserId) {
-        _resetAuth(newUserId: currentUserId);
+      if (!mounted || _feedLoadGeneration != currentGeneration || _activeUserId != capturedUserId) {
+        return;
       }
+      _rawFeedRequests = list;
 
       _appliedGigIds.addAll(appState.sessionAppliedSubRequestIds);
       if (currentUserId != null) {
         try {
           final applied = await appState.firebaseService.getUserAppliedSubRequestIdsAsync(currentUserId);
+          if (!mounted || _feedLoadGeneration != currentGeneration || _activeUserId != capturedUserId) {
+            return;
+          }
           _appliedGigIds.addAll(applied);
           appState.markSubRequestsApplied(applied, notify: false);
         } catch (e) {
@@ -377,22 +423,32 @@ class _FindGigsScreenState extends State<FindGigsScreen>
       final List<SubRequest> upcomingSubstituteRequests = [];
       final List<SubRequest> upcomingNewMemberRequests = [];
       final List<SubRequest> appliedRequests = [];
+      final Set<String> seenAppliedIds = {};
 
       for (final gig in list) {
-        final st = gig.status.toLowerCase();
+        final st = normalizeSubRequestStatus(gig.status);
         if (st == 'cancelled' || st == 'deleted') continue;
 
         // Defensive exclusion for ordinary Map View pins
         if (gig.isMapOnlyPin) continue;
 
         final reqId = gig.subRequestId ?? gig.id ?? '';
-        final hasApplied = (currentUserId != null && gig.responses.containsKey(currentUserId)) ||
-            _appliedGigIds.contains(reqId);
-        if (hasApplied) {
-          appliedRequests.add(gig);
+
+        // Deterministic active applied filtering
+        if (currentUserId != null &&
+            isActiveAppliedRequest(
+              gig,
+              currentUserId: currentUserId,
+              now: now,
+              appliedIds: _appliedGigIds,
+            )) {
+          if (reqId.isNotEmpty && seenAppliedIds.add(reqId)) {
+            appliedRequests.add(gig);
+          }
         }
 
-        if (st == 'closed') continue;
+        // For upcoming feeds, skip closed/assigned/filled/archived
+        if (st == 'closed' || st == 'assigned' || st == 'filled' || st == 'archived') continue;
 
         if (gig.date != null && gig.date!.trim().isNotEmpty) {
           final gigDate = _parseGigDate(gig.date);
@@ -402,10 +458,9 @@ class _FindGigsScreenState extends State<FindGigsScreen>
           }
         }
 
-        final reqTypeLower = gig.requestType?.trim().toLowerCase();
-        final roleLower = gig.role?.trim().toLowerCase();
-        final isNewMember = reqTypeLower == 'new member' || (reqTypeLower == null && roleLower == 'new member');
+        final isNewMember = gig.isNewMember;
 
+        final roleLower = gig.role?.trim().toLowerCase();
         final instToCheck = (gig.voicePart != null && gig.voicePart!.trim().isNotEmpty)
             ? gig.voicePart
             : ((gig.role != null &&
@@ -439,7 +494,7 @@ class _FindGigsScreenState extends State<FindGigsScreen>
     } catch (e) {
       debugPrint("Error fetching sub requests: $e");
     } finally {
-      if (mounted && _isLoading) {
+      if (mounted && _isLoading && _feedLoadGeneration == currentGeneration) {
         setState(() => _isLoading = false);
       }
     }
@@ -551,6 +606,7 @@ class _FindGigsScreenState extends State<FindGigsScreen>
         req.responses[currentUserId] = true;
       });
       appState.markSubRequestApplied(reqId);
+      _rebuildAppliedGroups();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Applied for position!'), backgroundColor: AppTheme.success),
@@ -672,7 +728,7 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                         final hasApplied = currentUserId != null &&
                             !isReqAdmin &&
                             (req.responses.containsKey(currentUserId) || _appliedGigIds.contains(reqId));
-                        final isAssigned = req.status == 'assigned' || req.assignedUserId != null;
+                        final isAssigned = req.status == 'assigned' || (req.assignedUserId != null && req.assignedUserId!.trim().isNotEmpty);
 
                         return Container(
                           margin: const EdgeInsets.only(bottom: 10),
@@ -827,6 +883,7 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                                         req.responses[currentUserId] = true;
                                       });
                                       appState.markSubRequestApplied(reqId);
+                                      _rebuildAppliedGroups();
                                       if (context.mounted) {
                                         ScaffoldMessenger.of(context).showSnackBar(
                                           const SnackBar(
@@ -1009,8 +1066,6 @@ class _FindGigsScreenState extends State<FindGigsScreen>
 
   @override
   Widget build(BuildContext context) {
-    final appState = Provider.of<AppState>(context);
-    final currentUserId = appState.currentUserId;
     return GradientScaffold(
       appBar: const CustomTopBar(
         title: 'Find Gigs',
@@ -1117,20 +1172,7 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                         children: [
                           _buildGigsList(_substituteGigGroups),
                           _buildGigsList(_newMemberGigGroups),
-                          _buildGigsList(
-                            () {
-                              final Map<String, GigGroup> map = {};
-                              for (final g in _appliedGigGroups) {
-                                map[g.groupId] = g;
-                              }
-                              for (final g in [..._substituteGigGroups, ..._newMemberGigGroups]) {
-                                if (g.requests.any((r) => _appliedGigIds.contains(r.subRequestId) || _appliedGigIds.contains(r.id) || (currentUserId != null && r.responses.containsKey(currentUserId)))) {
-                                  map[g.groupId] = g;
-                                }
-                              }
-                              return map.values.toList();
-                            }(),
-                          ),
+                          _buildGigsList(_appliedGigGroups),
                           _buildGigsList(
                             [..._substituteGigGroups, ..._newMemberGigGroups]
                                 .where((g) => _savedGigIds.contains(g.groupId))

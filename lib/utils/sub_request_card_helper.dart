@@ -283,7 +283,7 @@ class SubRequestCardPresentation {
 
     final creator = isCreatorOfSubRequest(req, currentUserId);
     final applied = hasAppliedToSubRequest(req, currentUserId, appliedIds: appliedIds);
-    final assigned = req.status == 'assigned' || req.assignedUserId != null;
+    final assigned = req.status == 'assigned' || (req.assignedUserId != null && req.assignedUserId!.trim().isNotEmpty);
 
     final desc = (req.description != null && req.description!.trim().isNotEmpty)
         ? req.description!.trim()
@@ -429,7 +429,7 @@ class SubRequestCardPresentation {
 
     final creator = requests.any((r) => isCreatorOfSubRequest(r, currentUserId));
     final applied = requests.any((r) => hasAppliedToSubRequest(r, currentUserId, appliedIds: appliedIds));
-    final assigned = requests.every((r) => r.status == 'assigned' || r.assignedUserId != null);
+    final assigned = requests.every((r) => r.status == 'assigned' || (r.assignedUserId != null && r.assignedUserId!.trim().isNotEmpty));
 
     final desc = (descriptionOverride != null && descriptionOverride.trim().isNotEmpty)
         ? descriptionOverride.trim()
@@ -465,4 +465,225 @@ class SubRequestCardPresentation {
       isAssigned: assigned,
     );
   }
+}
+
+/// Internal helper for time-of-day parsing.
+class SubRequestTimeOfDay {
+  final int hour;
+  final int minute;
+  const SubRequestTimeOfDay(this.hour, this.minute);
+}
+
+/// Parses time strings (e.g. '18:00', '18.00', '18:00:00', '02:30', '24:00').
+/// Returns null if string is missing, malformed or out of bounds.
+SubRequestTimeOfDay? parseSubRequestTimeOfDay(String? raw) {
+  if (raw == null || raw.trim().isEmpty) return null;
+  final clean = raw.trim();
+  final match = RegExp(r'^(\d{1,2})[:.](\d{2})(?::\d{2})?$').firstMatch(clean);
+  if (match == null) return null;
+  final h = int.tryParse(match.group(1)!);
+  final m = int.tryParse(match.group(2)!);
+  if (h == null || m == null) return null;
+  if (h == 24 && m == 0) {
+    return const SubRequestTimeOfDay(24, 0);
+  }
+  if (h < 0 || h > 23 || m < 0 || m > 59) return null;
+  return SubRequestTimeOfDay(h, m);
+}
+
+/// Parses calendar dates in ISO (YYYY-MM-DD), YYYY/MM/DD, or DD/MM/YYYY formats.
+/// Returns a [DateTime] normalized to local midnight (year, month, day), or null if invalid.
+DateTime? parseSubRequestCalendarDate(String? raw) {
+  if (raw == null || raw.trim().isEmpty) return null;
+  final str = raw.trim();
+  final parsed = DateTime.tryParse(str);
+  if (parsed != null) {
+    final local = parsed.toLocal();
+    return DateTime(local.year, local.month, local.day);
+  }
+  if (str.contains('/')) {
+    final parts = str.split('/');
+    if (parts.length == 3) {
+      try {
+        if (parts[0].length == 4) {
+          return DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
+        } else if (parts[2].length == 4) {
+          final p0 = int.parse(parts[0]);
+          final p1 = int.parse(parts[1]);
+          final p2 = int.parse(parts[2]);
+          if (p0 > 12) {
+            return DateTime(p2, p1, p0);
+          } else {
+            return DateTime(p2, p0, p1);
+          }
+        }
+      } catch (_) {}
+    }
+  }
+  return null;
+}
+
+/// Normalizes a raw status string to a lowercase canonical value.
+String normalizeSubRequestStatus(String? status) {
+  if (status == null) return '';
+  final s = status.trim().toLowerCase();
+  if (s == 'canceled') return 'cancelled';
+  return s;
+}
+
+/// Checks whether a normalized status represents an explicitly active/open request.
+/// Returns true ONLY for: 'published', 'open', 'active'.
+/// Unknown, empty, or other status values return false without mutation.
+bool isSubRequestStatusActive(String? status) {
+  final s = normalizeSubRequestStatus(status);
+  return s == 'published' || s == 'open' || s == 'active';
+}
+
+/// Checks whether a SubRequest has reached or passed its end boundary.
+///
+/// For dated staffing requests:
+/// - Future request: not expired (returns false).
+/// - Current request before its end boundary: not expired (returns false).
+/// - At exact end boundary: expired (returns true).
+/// - Past request: expired (returns true).
+///
+/// If valid end time exists:
+/// - boundary is on event date at endTime.
+/// - If endTime is earlier than startTime (midnight-crossing), boundary is on the
+///   next local calendar day at endTime.
+///
+/// If date exists but end time is missing or unparsable:
+/// - boundary is next local calendar day at 00:00 (end of event calendar date).
+///
+/// If date is missing or unparsable:
+/// - does not expire by date (returns false).
+bool isSubRequestExpired(
+  SubRequest req, {
+  DateTime? now,
+}) {
+  final clock = now ?? DateTime.now();
+  final rawDate = req.date?.trim();
+  if (rawDate == null || rawDate.isEmpty) {
+    return false;
+  }
+
+  final parsedDate = parseSubRequestCalendarDate(rawDate);
+  if (parsedDate == null) {
+    return false;
+  }
+
+  final parsedEndTime = parseSubRequestTimeOfDay(req.endTime);
+  if (parsedEndTime != null) {
+    final parsedStartTime = parseSubRequestTimeOfDay(req.startTime);
+    final crossesMidnight = parsedStartTime != null &&
+        (parsedEndTime.hour < parsedStartTime.hour ||
+            (parsedEndTime.hour == parsedStartTime.hour && parsedEndTime.minute <= parsedStartTime.minute));
+
+    final endCalendarDay = crossesMidnight
+        ? DateTime(parsedDate.year, parsedDate.month, parsedDate.day + 1)
+        : parsedDate;
+
+    final boundary = parsedEndTime.hour == 24
+        ? DateTime(endCalendarDay.year, endCalendarDay.month, endCalendarDay.day + 1, 0, 0)
+        : DateTime(
+            endCalendarDay.year,
+            endCalendarDay.month,
+            endCalendarDay.day,
+            parsedEndTime.hour,
+            parsedEndTime.minute,
+          );
+
+    return !clock.isBefore(boundary);
+  }
+
+  // Exact no-end boundary: next local calendar day at 00:00 (absent beginning at next local midnight)
+  final nextDayMidnight = DateTime(
+    parsedDate.year,
+    parsedDate.month,
+    parsedDate.day + 1,
+    0,
+    0,
+    0,
+  );
+  return !clock.isBefore(nextDayMidnight);
+}
+
+/// Central pure policy determining whether a SubRequest is an active application
+/// for the current musician under Find Gigs -> Applied.
+///
+/// Conditions for active Applied status:
+/// 1. [currentUserId] is non-empty.
+/// 2. Current user has actually applied to this exact [subRequestId].
+/// 3. Request is not a map-only pin.
+/// 4. Normalized status is explicitly active ('published', 'open', 'active').
+/// 5. Request has not been cancelled, deleted, closed, archived, filled, or assigned.
+/// 6. Request has not been assigned to anyone (assigned status, assignedUserId present, or isSelected).
+/// 7. New Band Member requests (identified via [SubRequest.isNewMemberRecord]):
+///    remain active while status is active; do not expire merely because date is absent.
+/// 8. Dated staffing requests: have not reached or passed their deterministic lifecycle boundary.
+bool isActiveAppliedRequest(
+  SubRequest request, {
+  required String? currentUserId,
+  DateTime? now,
+  Set<String>? appliedIds,
+}) {
+  if (currentUserId == null || currentUserId.trim().isEmpty) return false;
+  final uid = currentUserId.trim();
+
+  // 1. Verify user applied to this exact subRequestId
+  if (!hasAppliedToSubRequest(request, uid, appliedIds: appliedIds)) {
+    return false;
+  }
+
+  // 2. Defensive exclusion for map pins
+  if (request.isMapOnlyPin) return false;
+
+  // 3. Status checking & normalization
+  final normStatus = normalizeSubRequestStatus(request.status);
+
+  // Inactive / terminal statuses
+  if (normStatus == 'cancelled' ||
+      normStatus == 'deleted' ||
+      normStatus == 'closed' ||
+      normStatus == 'archived' ||
+      normStatus == 'filled' ||
+      normStatus == 'assigned' ||
+      normStatus == 'draft' ||
+      normStatus == 'expired') {
+    return false;
+  }
+
+  // Must be explicitly recognized active status
+  if (!isSubRequestStatusActive(normStatus)) {
+    return false;
+  }
+
+  // 4. Assignment checking (whether assigned to current user or someone else)
+  if (request.isSelected == true) return false;
+  final assignedTo = request.assignedUserId?.trim() ??
+      request.extraFields['assignedUserId']?.toString().trim() ??
+      request.extraFields['AssignedUserId']?.toString().trim();
+  if (assignedTo != null && assignedTo.isNotEmpty) {
+    return false;
+  }
+
+  // 5. New Band Member vs Dated requests:
+  // Use existing centralized New Member classifier from SubRequest model
+  if (request.isNewMember) {
+    // New Band Member does not expire by date; if date is absent, remains visible while status is active.
+    // If a date is explicitly provided, verify it has not expired.
+    if (request.date != null && request.date!.trim().isNotEmpty) {
+      if (isSubRequestExpired(request, now: now)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  // 6. Dated staffing request: verify deterministic lifecycle boundary
+  if (isSubRequestExpired(request, now: now)) {
+    return false;
+  }
+
+  return true;
 }
