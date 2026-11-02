@@ -1205,6 +1205,9 @@ class FirebaseService {
         .toList();
   }
 
+  String? _lastAssignedAgreementConversationId;
+  String? get lastAssignedAgreementConversationId => _lastAssignedAgreementConversationId;
+
   Future<void> assignSubstituteCandidateAsync({
     required String subRequestId,
     required String candidateUserId,
@@ -1217,11 +1220,12 @@ class FirebaseService {
     String? replacedMemberName,
   }) async {
     final actualSlotId = (slotId != null && slotId.isNotEmpty) ? slotId : subRequestId;
+    _lastAssignedAgreementConversationId = null;
 
     try {
       final callable = FirebaseFunctions.instanceFor(region: 'europe-west1')
           .httpsCallable('assignSubstitute');
-      await callable.call<Map<String, dynamic>>({
+      final result = await callable.call<Map<String, dynamic>>({
         'subRequestId': subRequestId,
         'candidateUserId': candidateUserId,
         'candidateName': candidateName,
@@ -1232,6 +1236,8 @@ class FirebaseService {
         'replacedMemberId': replacedMemberId,
         'replacedMemberName': replacedMemberName,
       });
+      final convId = result.data['conversationId']?.toString() ?? '';
+      _lastAssignedAgreementConversationId = convId.isNotEmpty ? convId : null;
     } on FirebaseFunctionsException catch (e) {
       if (e.code == 'already-exists') {
         throw StateError('Assignment conflict: Slot $subRequestId has already been assigned to another candidate.');
@@ -1683,86 +1689,13 @@ class FirebaseService {
     Agreement agreement,
     Message message,
   ) async {
-    String conversationId = '';
-    try {
-      final subRequestId = agreement.subRequestId ?? '';
-      conversationId = await createAgreementConversationAsync(
-        subRequestId,
-        receiverId,
-        agreement: agreement,
-      );
-      if (conversationId.isEmpty) {
-        final uids = [senderId, receiverId]..sort();
-        conversationId = 'direct_${uids[0]}_${uids[1]}';
-      }
-
-      final agreementJson = agreement.toJson();
-      final now = DateTime.now().millisecondsSinceEpoch;
-
-      // 1. Save to BandEvents/Agreements/$conversationId (universally accessible)
-      try {
-        await _dbRef('BandEvents/Agreements/$conversationId').set(agreementJson);
-      } catch (e) {
-        debugPrint('[FirebaseService] Could not save BandEvents/Agreements: $e');
-      }
-
-      // 2. Save to users/$senderId/Agreements/$conversationId and users/$receiverId/Agreements/$conversationId
-      try {
-        await _dbRef('users/$senderId/Agreements/$conversationId').set(agreementJson);
-      } catch (_) {}
-      try {
-        await _dbRef('users/$receiverId/Agreements/$conversationId').set(agreementJson);
-      } catch (_) {}
-
-      // 3. Save into userConversations for both users with agreement data embedded
-      final senderProfile = await getUserProfileAsync(senderId);
-      final receiverProfile = await getUserProfileAsync(receiverId);
-
-      final msgText = (message.text != null && message.text!.isNotEmpty)
-          ? message.text!
-          : '${receiverProfile?.displayName ?? "Musician"} has been chosen to attend the rehearsal.';
-
-      try {
-        await _dbRef('userConversations/$senderId/$conversationId').update({
-          'conversationId': conversationId,
-          'conversationType': 'direct',
-          'otherUserId': receiverId,
-          'otherUserName': receiverProfile?.displayName ?? receiverProfile?.nickname ?? 'Musician',
-          'lastMessageText': msgText,
-          'lastMessageTimestamp': now,
-          'agreement': agreementJson,
-          'hasUnread': false,
-        });
-      } catch (_) {}
-
-      try {
-        await _dbRef('userConversations/$receiverId/$conversationId').update({
-          'conversationId': conversationId,
-          'conversationType': 'direct',
-          'otherUserId': senderId,
-          'otherUserName': senderProfile?.displayName ?? senderProfile?.nickname ?? 'Leader',
-          'lastMessageText': msgText,
-          'lastMessageTimestamp': now,
-          'agreement': agreementJson,
-          'hasUnread': true,
-        });
-      } catch (_) {}
-
-      // 4. Send the message if callable available
-      try {
-        await sendConversationMessageAsync(
-          conversationId,
-          msgText,
-          receiverId,
-          message.senderName ?? senderProfile?.displayName ?? 'System',
-        );
-      } catch (msgErr) {
-        debugPrint('[FirebaseService] sendConversationMessageAsync notice: $msgErr');
-      }
-    } catch (e) {
-      debugPrint('[FirebaseService] Error creating agreement chat: $e');
-    }
-    return conversationId.isNotEmpty ? conversationId : 'conv_${senderId}_$receiverId';
+    final subRequestId = agreement.subRequestId ?? '';
+    final conversationId = await createAgreementConversationAsync(
+      subRequestId,
+      receiverId,
+      agreement: agreement,
+    );
+    return conversationId;
   }
 
   // ==========================================
@@ -1774,46 +1707,20 @@ class FirebaseService {
     String applicantId, {
     Agreement? agreement,
   }) async {
-    try {
-      if (subRequestId.isNotEmpty) {
-        final result = await _functions
-            .httpsCallable('createAgreementConversation')
-            .call({
-              'subRequestId': subRequestId,
-              'applicantId': applicantId,
-              if (agreement != null) 'agreement': agreement.toJson(),
-            });
-        final convId = result.data['conversationId']?.toString() ?? '';
-        if (convId.isNotEmpty) {
-          try {
-            if (agreement != null) {
-              await _dbRef('conversations/$convId/agreement').update(agreement.toJson());
-              await _dbRef('conversations/$convId/Agreement').update(agreement.toJson());
-            }
-          } catch (_) {}
-          return convId;
-        }
-      }
-    } catch (e) {
-      debugPrint('[FirebaseService] createAgreementConversation error: $e. Falling back to direct conversation.');
+    if (subRequestId.isEmpty || applicantId.isEmpty) {
+      throw ArgumentError('subRequestId and applicantId must not be empty.');
     }
-    try {
-      final directId = await getOrCreateDirectConversationAsync(
-        currentUserId ?? '',
-        applicantId,
-      );
-      if (directId.isNotEmpty && agreement != null) {
-        try {
-          await _dbRef('conversations/$directId/agreement').update(agreement.toJson());
-          await _dbRef('conversations/$directId/Agreement').update(agreement.toJson());
-        } catch (_) {}
-      }
-      return directId;
-    } catch (e) {
-      debugPrint('[FirebaseService] getOrCreateDirectConversation error: $e');
-      final uids = [currentUserId ?? '', applicantId]..sort();
-      return 'direct_${uids[0]}_${uids[1]}';
+    final result = await _functions
+        .httpsCallable('createAgreementConversation')
+        .call({
+          'subRequestId': subRequestId,
+          'applicantId': applicantId,
+        });
+    final convId = result.data['conversationId']?.toString() ?? '';
+    if (convId.isEmpty) {
+      throw StateError('Server failed to return conversationId for agreement.');
     }
+    return convId;
   }
 
   // ==========================================
@@ -2335,20 +2242,6 @@ class FirebaseService {
             try {
               agreement = Agreement.fromJson(agreementRaw);
             } catch (_) {}
-          } else if (item['lastMessageText']?.toString().contains('chosen to attend') == true && agreementsMap.isNotEmpty) {
-            // Match with any agreement for this user pair
-            for (final agr in agreementsMap.values) {
-              if (agr is Map) {
-                final lId = agr['ChoirLeaderId']?.toString() ?? agr['choirLeaderId']?.toString();
-                final vId = agr['VocalistId']?.toString() ?? agr['vocalistId']?.toString();
-                if ((selfId == lId && otherUserId == vId) || (selfId == vId && otherUserId == lId)) {
-                  try {
-                    agreement = Agreement.fromJson(agr);
-                    break;
-                  } catch (_) {}
-                }
-              }
-            }
           }
 
           conversations.add({
@@ -2398,7 +2291,7 @@ class FirebaseService {
             'otherUserId': otherId ?? '',
             'otherUserName': otherName,
             'otherUserProfilePicture': profilePic,
-            'lastMessageText': '$otherName has been chosen to attend the rehearsal.',
+            'lastMessageText': 'Confirmed Agreement: ${agreement.voicePart ?? "Gig"}',
             'lastMessageTimestamp': '',
             'timestamp': DateTime.now(),
             'hasUnread': false,

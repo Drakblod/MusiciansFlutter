@@ -242,31 +242,170 @@ async function handleCreateAgreementConversation(request, db) {
   const subSnap = await db.ref(`SubRequests/${subRequestId}`).get();
   if (!subSnap.exists()) throw new Error('not-found');
   const subData = subSnap.val();
+  const creatorUid = subData.CreatorUserId || subData.createdBy || subData.userId;
 
-  let receiverUserId = null;
-  if (subData.createdBy === uid) {
-    receiverUserId = applicantId;
-  } else if (applicantId === uid) {
-    receiverUserId = subData.createdBy;
-  } else {
+  const targetBandId = subData.bandId || subData.BandId;
+  let isAuthorized = (creatorUid === uid);
+  if (!isAuthorized && targetBandId) {
+    const memberSnap = await db.ref(`Bands/${targetBandId}/Members_band/${uid}`).get();
+    if (memberSnap.exists()) {
+      const role = memberSnap.val()?.Role || memberSnap.val()?.role;
+      if (role === 'Leader' || role === 'Admin') {
+        isAuthorized = true;
+      }
+    }
+  }
+
+  // Applicants cannot self-create agreements
+  if (!isAuthorized) {
     throw new Error('permission-denied');
   }
 
+  // Precondition: SubRequest must already be assigned or filled to applicantId
+  const currentAssignedId = subData.AssignedUserId || subData.assignedUserId;
+  const currentStatus = subData.Status || subData.status;
+  if (currentStatus !== 'assigned' && currentStatus !== 'filled') {
+    throw new Error('failed-precondition: SubRequest is not assigned or filled.');
+  }
+  if (currentAssignedId !== applicantId) {
+    throw new Error('failed-precondition: Applicant does not match assigned user.');
+  }
+
   const conversationId = `agreement_${subRequestId}_${applicantId}`;
+  const agreementRole = subData.VoicePart || subData.role || 'Musician';
+  const agreementPayload = {
+    subRequestId,
+    applicantId,
+    creatorId: creatorUid,
+    role: agreementRole,
+    voicePart: agreementRole,
+    status: 'confirmed',
+  };
+
   await db.ref(`conversations/${conversationId}`).set({
-    participants: { [uid]: true, [receiverUserId]: true },
-    agreement: { subRequestId, applicantId, creatorId: subData.createdBy }
+    participants: { [creatorUid]: true, [applicantId]: true },
+    agreement: agreementPayload,
   });
 
-  await db.ref(`userConversations/${uid}/${conversationId}`).set({
-    otherUserId: receiverUserId,
-    lastMessageText: 'Agreement created',
-    lastMessageTimestamp: new Date().toISOString(),
+  await db.ref(`userConversations/${creatorUid}/${conversationId}`).set({
+    otherUserId: applicantId,
+    lastMessageText: `Confirmed Agreement: ${agreementRole}`,
+    conversationType: 'agreement',
+  });
+  await db.ref(`userConversations/${applicantId}/${conversationId}`).set({
+    otherUserId: creatorUid,
+    lastMessageText: `Confirmed Agreement: ${agreementRole}`,
+    conversationType: 'agreement',
+  });
+
+  return { conversationId, agreement: agreementPayload };
+}
+
+async function handleAssignSubstitute(request, db) {
+  const uid = request.auth?.uid;
+  if (!uid) throw new Error('unauthenticated');
+  const { subRequestId, candidateUserId, candidateName, bandId, eventId, roleOrInstrument } = request.data || {};
+  if (!subRequestId || !candidateUserId) throw new Error('invalid-argument');
+
+  const subSnap = await db.ref(`SubRequests/${subRequestId}`).get();
+  if (!subSnap.exists()) throw new Error('not-found');
+  const subData = subSnap.val();
+  const creatorUid = subData.CreatorUserId || subData.createdBy || subData.userId;
+
+  if (candidateUserId === creatorUid) {
+    throw new Error('invalid-argument: Creator cannot assign themselves as substitute.');
+  }
+
+  const targetBandId = bandId || subData.bandId || subData.BandId;
+  let isAuthorized = (creatorUid === uid);
+  if (!isAuthorized && targetBandId) {
+    const memberSnap = await db.ref(`Bands/${targetBandId}/Members_band/${uid}`).get();
+    if (memberSnap.exists()) {
+      const role = memberSnap.val()?.Role || memberSnap.val()?.role;
+      if (role === 'Leader' || role === 'Admin') {
+        isAuthorized = true;
+      }
+    }
+  }
+
+  if (!isAuthorized) {
+    throw new Error('permission-denied');
+  }
+
+  const currentAssignedId = subData.AssignedUserId || subData.assignedUserId;
+  const isAssigned = (subData.Status === 'assigned' || subData.status === 'assigned');
+  if (isAssigned && currentAssignedId && currentAssignedId !== candidateUserId) {
+    throw new Error('already-exists: Slot has already been assigned to another candidate.');
+  }
+
+  const responsesSnap = await db.ref(`SubRequests/${subRequestId}/Responses/${candidateUserId}`).get();
+  const legacyResponsesSnap = await db.ref(`BandEvents/SubRequestResponses/${subRequestId}/${candidateUserId}`).get();
+  const audienceSnap = await db.ref(`subRequestAudience/${subRequestId}/${candidateUserId}`).get();
+  const extraTargets = Array.isArray(subData.TargetUserIds) ? subData.TargetUserIds : [];
+  const isEligible = responsesSnap.exists() || legacyResponsesSnap.exists() || audienceSnap.exists() || extraTargets.includes(candidateUserId) || currentAssignedId === candidateUserId;
+
+  if (!isEligible) {
+    throw new Error('failed-precondition: Candidate has not applied or been invited for this request.');
+  }
+
+  const now = Date.now();
+  const conversationId = `agreement_${subRequestId}_${candidateUserId}`;
+  const agreementRole = roleOrInstrument || subData.VoicePart || subData.role || 'Musician';
+  const resolvedBandName = subData.BandName || subData.bandName || null;
+
+  const agreementPayload = {
+    subRequestId,
+    bandId: targetBandId || null,
+    bandName: resolvedBandName,
+    role: agreementRole,
+    voicePart: agreementRole,
+    choirLeaderId: creatorUid,
+    vocalistId: candidateUserId,
+    status: 'confirmed',
+    createdAt: now,
+  };
+
+  const updates = {};
+  updates[`SubRequests/${subRequestId}/Status`] = 'assigned';
+  updates[`SubRequests/${subRequestId}/AssignedUserId`] = candidateUserId;
+  updates[`SubRequests/${subRequestId}/IsSelected`] = true;
+  updates[`publicSubRequests/${subRequestId}`] = null;
+  updates[`conversations/${conversationId}/agreement`] = agreementPayload;
+  updates[`conversations/${conversationId}/participants`] = { [creatorUid]: true, [candidateUserId]: true };
+  updates[`userConversations/${creatorUid}/${conversationId}`] = {
+    conversationId,
+    conversationType: 'agreement',
+    otherUserId: candidateUserId,
+    lastMessageText: `Confirmed Agreement: ${agreementRole}`,
     hasUnread: false,
-    conversationType: 'agreement'
-  });
+    agreement: agreementPayload,
+    bandName: resolvedBandName,
+    bandId: targetBandId || null,
+  };
+  updates[`userConversations/${candidateUserId}/${conversationId}`] = {
+    conversationId,
+    conversationType: 'agreement',
+    otherUserId: creatorUid,
+    lastMessageText: `Confirmed Agreement: ${agreementRole}`,
+    hasUnread: true,
+    agreement: agreementPayload,
+    bandName: resolvedBandName,
+    bandId: targetBandId || null,
+  };
+  updates[`BandEvents/Agreements/${conversationId}`] = agreementPayload;
+  updates[`users/${creatorUid}/Agreements/${conversationId}`] = agreementPayload;
+  updates[`users/${candidateUserId}/Agreements/${conversationId}`] = agreementPayload;
 
-  return { conversationId };
+  await db.ref().update(updates);
+
+  return {
+    success: true,
+    subRequestId,
+    assignedUserId: candidateUserId,
+    status: 'assigned',
+    conversationId,
+    agreement: agreementPayload,
+  };
 }
 
 async function handleSendDirectMessage(request, db) {
@@ -768,15 +907,29 @@ describe('v2 Callable Cloud Functions Logic Tests', function () {
     );
   });
 
-  it('5. Agreement-chat authorization verifies sub-request creator or applicant', async () => {
-    db.data['SubRequests/sub_1'] = { createdBy: 'leader_1' };
+  it('5. Agreement-chat authorization rejects applicant self-creation and unassigned requests', async () => {
+    db.data['SubRequests/sub_1'] = {
+      createdBy: 'leader_1',
+      Status: 'assigned',
+      AssignedUserId: 'applicant_1',
+      VoicePart: 'Tenor Sax',
+    };
 
-    // Authorized applicant
+    // Authorized creator
     const res = await handleCreateAgreementConversation(
-      { auth: { uid: 'applicant_1' }, data: { subRequestId: 'sub_1', applicantId: 'applicant_1' } },
+      { auth: { uid: 'leader_1' }, data: { subRequestId: 'sub_1', applicantId: 'applicant_1' } },
       db
     );
     assert.strictEqual(res.conversationId, 'agreement_sub_1_applicant_1');
+
+    // Applicant cannot self-create or alter agreement
+    await assert.rejects(
+      handleCreateAgreementConversation(
+        { auth: { uid: 'applicant_1' }, data: { subRequestId: 'sub_1', applicantId: 'applicant_1' } },
+        db
+      ),
+      /permission-denied/
+    );
 
     // Unauthorized outsider
     await assert.rejects(
@@ -785,6 +938,16 @@ describe('v2 Callable Cloud Functions Logic Tests', function () {
         db
       ),
       /permission-denied/
+    );
+
+    // Unassigned request cannot create agreement conversation
+    db.data['SubRequests/sub_open'] = { createdBy: 'leader_1', Status: 'published' };
+    await assert.rejects(
+      handleCreateAgreementConversation(
+        { auth: { uid: 'leader_1' }, data: { subRequestId: 'sub_open', applicantId: 'applicant_1' } },
+        db
+      ),
+      /failed-precondition/
     );
   });
 
@@ -2635,4 +2798,254 @@ describe('MAP-VIEW-FEED-01: Final Privacy, Path & New Member Classification Audi
       assert.strictEqual(resolved.LocationStatus, 'unresolved');
     });
   });
+
+  describe('AGREEMENT-INTEGRITY-01: Server-Authoritative Agreement Operation & Security Tests', () => {
+    let db;
+
+    beforeEach(() => {
+      db = new MockDatabase();
+    });
+
+    it('49. assignSubstitute: creator assigns eligible applicant atomically', async () => {
+      db.data['SubRequests/sub_req_1'] = {
+        CreatorUserId: 'creator_1',
+        BandId: 'band_alpha',
+        BandName: 'The Alphas',
+        VoicePart: 'Guitar',
+        Date: '2026-11-20',
+        Status: 'published',
+      };
+      db.data['SubRequests/sub_req_1/Responses/musician_b'] = true;
+
+      const res = await handleAssignSubstitute({
+        auth: { uid: 'creator_1' },
+        data: {
+          subRequestId: 'sub_req_1',
+          candidateUserId: 'musician_b',
+          candidateName: 'Bob Musician',
+        }
+      }, db);
+
+      assert.strictEqual(res.success, true);
+      assert.strictEqual(res.status, 'assigned');
+      assert.strictEqual(res.assignedUserId, 'musician_b');
+      assert.strictEqual(res.conversationId, 'agreement_sub_req_1_musician_b');
+      assert.strictEqual(res.agreement.bandName, 'The Alphas');
+      assert.strictEqual(res.agreement.role, 'Guitar');
+
+      // Atomic conversation record exists with agreement key
+      const convSnap = await db.ref('conversations/' + res.conversationId).get();
+      assert.strictEqual(convSnap.exists(), true);
+      assert.strictEqual(convSnap.val().agreement.bandName, 'The Alphas');
+      assert.strictEqual(convSnap.val().participants['creator_1'], true);
+      assert.strictEqual(convSnap.val().participants['musician_b'], true);
+
+      // User inboxes populated with agreement conversationType and summary
+      const uCreator = await db.ref('userConversations/creator_1/' + res.conversationId).get();
+      assert.strictEqual(uCreator.val().otherUserId, 'musician_b');
+      assert.strictEqual(uCreator.val().conversationType, 'agreement');
+
+      const uMusician = await db.ref('userConversations/musician_b/' + res.conversationId).get();
+      assert.strictEqual(uMusician.val().otherUserId, 'creator_1');
+      assert.strictEqual(uMusician.val().hasUnread, true);
+
+      // Legacy mirrors synchronized server-side
+      const bandAgSnap = await db.ref('BandEvents/Agreements/' + res.conversationId).get();
+      assert.strictEqual(bandAgSnap.exists(), true);
+      assert.strictEqual(bandAgSnap.val().role, 'Guitar');
+    });
+
+    it('50. assignSubstitute: unauthorized caller rejected', async () => {
+      db.data['SubRequests/sub_req_2'] = {
+        CreatorUserId: 'creator_1',
+        Status: 'published',
+      };
+      db.data['SubRequests/sub_req_2/Responses/musician_b'] = true;
+
+      await assert.rejects(
+        handleAssignSubstitute({
+          auth: { uid: 'stranger' },
+          data: { subRequestId: 'sub_req_2', candidateUserId: 'musician_b' }
+        }, db),
+        /permission-denied/
+      );
+    });
+
+    it('51. assignSubstitute: applicant cannot assign themselves or self-create', async () => {
+      db.data['SubRequests/sub_req_3'] = {
+        CreatorUserId: 'creator_1',
+        Status: 'published',
+      };
+      db.data['SubRequests/sub_req_3/Responses/musician_b'] = true;
+
+      await assert.rejects(
+        handleAssignSubstitute({
+          auth: { uid: 'musician_b' },
+          data: { subRequestId: 'sub_req_3', candidateUserId: 'musician_b' }
+        }, db),
+        /permission-denied/
+      );
+    });
+
+    it('52. assignSubstitute: creator cannot assign themselves as candidate', async () => {
+      db.data['SubRequests/sub_req_4'] = {
+        CreatorUserId: 'creator_1',
+        Status: 'published',
+      };
+      db.data['SubRequests/sub_req_4/Responses/creator_1'] = true;
+
+      await assert.rejects(
+        handleAssignSubstitute({
+          auth: { uid: 'creator_1' },
+          data: { subRequestId: 'sub_req_4', candidateUserId: 'creator_1' }
+        }, db),
+        /Creator cannot assign themselves/
+      );
+    });
+
+    it('53. assignSubstitute: invalid candidate who has not applied is rejected', async () => {
+      db.data['SubRequests/sub_req_5'] = {
+        CreatorUserId: 'creator_1',
+        Status: 'published',
+      };
+      // No response recorded for stranger_musician
+
+      await assert.rejects(
+        handleAssignSubstitute({
+          auth: { uid: 'creator_1' },
+          data: { subRequestId: 'sub_req_5', candidateUserId: 'stranger_musician' }
+        }, db),
+        /Candidate has not applied or been invited/
+      );
+
+      // Verify zero conversations or inboxes created on failure
+      const convSnap = await db.ref('conversations/agreement_sub_req_5_stranger_musician').get();
+      assert.strictEqual(convSnap.exists(), false);
+    });
+
+    it('54. assignSubstitute: retry on same candidate is idempotent and preserves conversationId', async () => {
+      db.data['SubRequests/sub_req_6'] = {
+        CreatorUserId: 'creator_1',
+        VoicePart: 'Bass',
+        Status: 'published',
+      };
+      db.data['SubRequests/sub_req_6/Responses/musician_b'] = true;
+
+      const call1 = await handleAssignSubstitute({
+        auth: { uid: 'creator_1' },
+        data: { subRequestId: 'sub_req_6', candidateUserId: 'musician_b' }
+      }, db);
+
+      const call2 = await handleAssignSubstitute({
+        auth: { uid: 'creator_1' },
+        data: { subRequestId: 'sub_req_6', candidateUserId: 'musician_b' }
+      }, db);
+
+      assert.strictEqual(call1.conversationId, call2.conversationId);
+      assert.strictEqual(call2.status, 'assigned');
+    });
+
+    it('55. assignSubstitute: assigning already assigned slot to different candidate throws conflict', async () => {
+      db.data['SubRequests/sub_req_7'] = {
+        CreatorUserId: 'creator_1',
+        Status: 'assigned',
+        AssignedUserId: 'musician_b',
+      };
+      db.data['SubRequests/sub_req_7/Responses/musician_c'] = true;
+
+      await assert.rejects(
+        handleAssignSubstitute({
+          auth: { uid: 'creator_1' },
+          data: { subRequestId: 'sub_req_7', candidateUserId: 'musician_c' }
+        }, db),
+        /already-exists/
+      );
+    });
+
+    it('56. Cross-band regression: Band 26 and Band 27 agreements for same users remain isolated', async () => {
+      db.data['SubRequests/sub_band_26'] = {
+        CreatorUserId: 'user_a',
+        BandId: 'band_26',
+        BandName: 'Band 26',
+        VoicePart: 'Trumpet',
+        Status: 'published',
+      };
+      db.data['SubRequests/sub_band_26/Responses/user_b'] = true;
+
+      db.data['SubRequests/sub_band_27'] = {
+        CreatorUserId: 'user_a',
+        BandId: 'band_27',
+        BandName: 'Band 27',
+        VoicePart: 'Trombone',
+        Status: 'published',
+      };
+      db.data['SubRequests/sub_band_27/Responses/user_b'] = true;
+
+      const res26 = await handleAssignSubstitute({
+        auth: { uid: 'user_a' },
+        data: { subRequestId: 'sub_band_26', candidateUserId: 'user_b' }
+      }, db);
+
+      const res27 = await handleAssignSubstitute({
+        auth: { uid: 'user_a' },
+        data: { subRequestId: 'sub_band_27', candidateUserId: 'user_b' }
+      }, db);
+
+      // Must be distinct conversations
+      assert.notStrictEqual(res26.conversationId, res27.conversationId);
+
+      // Verify Band 26 never contains Band 27
+      const conv26 = (await db.ref('conversations/' + res26.conversationId).get()).val();
+      assert.strictEqual(conv26.agreement.bandName, 'Band 26');
+      assert.strictEqual(conv26.agreement.role, 'Trumpet');
+
+      // Verify Band 27 never contains Band 26
+      const conv27 = (await db.ref('conversations/' + res27.conversationId).get()).val();
+      assert.strictEqual(conv27.agreement.bandName, 'Band 27');
+      assert.strictEqual(conv27.agreement.role, 'Trombone');
+    });
+
+    it('57. Multi-slot regression: Guitar and Drums slots under one requestGroup assign independently', async () => {
+      db.data['SubRequests/slot_guitar'] = {
+        CreatorUserId: 'creator_1',
+        RequestGroupId: 'group_rock_fest',
+        VoicePart: 'Lead Guitar',
+        Status: 'published',
+      };
+      db.data['SubRequests/slot_guitar/Responses/guitarist_bob'] = true;
+
+      db.data['SubRequests/slot_drums'] = {
+        CreatorUserId: 'creator_1',
+        RequestGroupId: 'group_rock_fest',
+        VoicePart: 'Drums',
+        Status: 'published',
+      };
+      db.data['SubRequests/slot_drums/Responses/drummer_dave'] = true;
+
+      // Assign guitar only
+      const resGuitar = await handleAssignSubstitute({
+        auth: { uid: 'creator_1' },
+        data: { subRequestId: 'slot_guitar', candidateUserId: 'guitarist_bob' }
+      }, db);
+
+      assert.strictEqual(resGuitar.agreement.role, 'Lead Guitar');
+      assert.strictEqual(resGuitar.agreement.vocalistId, 'guitarist_bob');
+
+      // Drums slot remains published and unaffected
+      const drumsSnap = await db.ref('SubRequests/slot_drums').get();
+      assert.strictEqual(drumsSnap.val().Status, 'published');
+      assert.strictEqual(drumsSnap.val().AssignedUserId, undefined);
+
+      // Now assign drums to drummer_dave
+      const resDrums = await handleAssignSubstitute({
+        auth: { uid: 'creator_1' },
+        data: { subRequestId: 'slot_drums', candidateUserId: 'drummer_dave' }
+      }, db);
+
+      assert.strictEqual(resDrums.agreement.role, 'Drums');
+      assert.strictEqual(resDrums.agreement.vocalistId, 'drummer_dave');
+      assert.notStrictEqual(resGuitar.conversationId, resDrums.conversationId);
+    });
+  });
+
 });

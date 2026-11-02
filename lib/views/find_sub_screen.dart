@@ -5,10 +5,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
-import '../models/agreement.dart';
 import '../models/band.dart';
 import '../models/band_event.dart';
-import '../models/message.dart';
 import '../data/skills_taxonomy.dart';
 import '../models/sub_request.dart';
 import '../models/canonical_location.dart';
@@ -998,8 +996,6 @@ class _FindSubScreenState extends State<FindSubScreen> {
       final bandId = widget.bandId ?? appState.activeBandId ?? '';
       final eventId = slot.eventId ?? widget.eventId ?? '';
       final subRequestId = slot.subRequestId ?? slot.slotId;
-      final authorName = appState.currentUserProfile?.displayName ?? 'Organizer';
-      final bandName = _bandName ?? appState.activeBandName ?? 'Freelance Gig';
 
       setState(() => _isLoading = true);
       try {
@@ -1016,76 +1012,20 @@ class _FindSubScreenState extends State<FindSubScreen> {
             replacedMemberName: slot.replacedMemberName,
           );
 
-          try {
-            final sectionLoc = section.locationController.text.trim().isNotEmpty
-                ? section.locationController.text.trim()
-                : (section.event.location.isNotEmpty
-                    ? section.event.location
-                    : _locationController.text.trim());
-            final sectionStartTimeStr = (section.startTime.hour.toString().padLeft(2, '0') + ':' + section.startTime.minute.toString().padLeft(2, '0'));
-            final sectionEndTimeStr = (section.endTime.hour.toString().padLeft(2, '0') + ':' + section.endTime.minute.toString().padLeft(2, '0'));
+          if (!mounted) return;
+          setState(() {
+            slot.status = 'assigned';
+            slot.assignedUserId = candidate.userId;
+            slot.assignedUserName = candidate.name;
+            slot.assignedAt = DateTime.now().millisecondsSinceEpoch;
+          });
 
-            final agreement = Agreement(
-              choirLeaderId: currentUserId,
-              vocalistId: candidate.userId,
-              voicePart: slot.instrument,
-              date: section.selectedDate.toIso8601String(),
-              startTime: sectionStartTimeStr,
-              endTime: sectionEndTimeStr,
-              location: sectionLoc,
-              additionalTerms: 'Substitute staffing assignment.',
-              bandName: bandName,
-              subRequestId: subRequestId,
-            );
-
-            final message = Message(
-              id: '',
-              senderId: currentUserId,
-              receiverId: candidate.userId,
-              text: candidate.name + ' has been chosen as substitute for ' + slot.instrument + '.',
-              timestamp: DateTime.now(),
-              isRead: false,
-              senderName: authorName,
-            );
-
-            await appState.firebaseService.createAgreementChatAsync(
-              currentUserId,
-              candidate.userId,
-              agreement,
-              message,
-            );
-
-            if (!mounted) return;
-            setState(() {
-              slot.status = 'assigned';
-              slot.assignedUserId = candidate.userId;
-              slot.assignedUserName = candidate.name;
-              slot.assignedAt = DateTime.now().millisecondsSinceEpoch;
-            });
-
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(candidate.name + ' successfully assigned as substitute!'),
-                backgroundColor: AppTheme.success,
-              ),
-            );
-          } catch (chatError) {
-            debugPrint('Warning: Agreement chat creation deferred/failed: ' + chatError.toString());
-            if (!mounted) return;
-            setState(() {
-              slot.status = 'assigned';
-              slot.assignedUserId = candidate.userId;
-              slot.assignedUserName = candidate.name;
-              slot.assignedAt = DateTime.now().millisecondsSinceEpoch;
-            });
-
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(candidate.name + ' assigned successfully (chat notification deferred).'),
-                backgroundColor: AppTheme.success,
-              ),
-            );
-          }
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(candidate.name + ' successfully assigned as substitute!'),
+              backgroundColor: AppTheme.success,
+            ),
+          );
         }
       } catch (e) {
         if (mounted) {

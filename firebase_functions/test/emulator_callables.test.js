@@ -213,13 +213,24 @@ describe('Real Cloud Functions Emulator Integration Tests (JS Client SDK + Emula
       SubRequestId: 'sub_200',
       VoicePart: 'Tenor',
       BandName: 'Gospel Choir',
+      Status: 'assigned',
+      AssignedUserId: 'user_b',
+      Responses: {
+        user_b: true,
+      },
     });
 
     const callableAgreementA = httpsCallable(functionsUserA, 'createAgreementConversation');
     const callableAgreementB = httpsCallable(functionsUserB, 'createAgreementConversation');
 
-    // First call by applicant User B
-    const res1 = await callableAgreementB({ subRequestId: 'sub_200', applicantId: 'user_b' });
+    // Applicant User B self-creation is rejected (must be creator/leader/admin)
+    await assert.rejects(
+      callableAgreementB({ subRequestId: 'sub_200', applicantId: 'user_b' }),
+      (err) => isPermissionError(err)
+    );
+
+    // Creator User A succeeds
+    const res1 = await callableAgreementA({ subRequestId: 'sub_200', applicantId: 'user_b' });
     const convId1 = res1.data.conversationId;
     assert(convId1);
 
@@ -227,17 +238,19 @@ describe('Real Cloud Functions Emulator Integration Tests (JS Client SDK + Emula
     const res2 = await callableAgreementA({ subRequestId: 'sub_200', applicantId: 'user_b' });
     assert.strictEqual(res2.data.conversationId, convId1);
 
-    // Concurrent call returns the exact same conversation ID
+    // Concurrent calls by creator return the exact same conversation ID
     const [resConcurrent1, resConcurrent2] = await Promise.all([
-      callableAgreementB({ subRequestId: 'sub_200', applicantId: 'user_b' }),
+      callableAgreementA({ subRequestId: 'sub_200', applicantId: 'user_b' }),
       callableAgreementA({ subRequestId: 'sub_200', applicantId: 'user_b' }),
     ]);
     assert.strictEqual(resConcurrent1.data.conversationId, convId1);
     assert.strictEqual(resConcurrent2.data.conversationId, convId1);
 
-    // Different applicant User C receives a different agreement conversation ID
-    const resC = await callableAgreementA({ subRequestId: 'sub_200', applicantId: 'user_c' });
-    assert.notStrictEqual(resC.data.conversationId, convId1);
+    // Unassigned applicant User C is rejected
+    await assert.rejects(
+      callableAgreementA({ subRequestId: 'sub_200', applicantId: 'user_c' }),
+      (err) => err && (err.code === 'functions/failed-precondition' || err.code === 'failed-precondition')
+    );
 
     // Unauthorized third user C rejected when trying to forge applicant reference
     const callableAgreementC = httpsCallable(functionsUserC, 'createAgreementConversation');
@@ -855,7 +868,7 @@ describe('Real Cloud Functions Emulator Integration Tests (JS Client SDK + Emula
     // Authorize user_b as Band Admin alongside Leader user_a
     await adminDb.ref('Bands/band_tour_test/Members_band/user_b').set({ Role: 'Admin' });
 
-    // Seed unassigned subrequest slot
+    // Seed unassigned subrequest slot with eligible candidates
     await adminDb.ref('SubRequests/slot_race_guitar').set({
       SubRequestId: 'slot_race_guitar',
       SlotId: 'slot_race_guitar',
@@ -864,6 +877,10 @@ describe('Real Cloud Functions Emulator Integration Tests (JS Client SDK + Emula
       eventId: 'event_day1',
       VoicePart: 'Electric Guitar',
       Status: 'published',
+      Responses: {
+        user_cand_1: true,
+        user_cand_2: true,
+      },
     });
 
     const assignLeaderFn = httpsCallable(functionsUserA, 'assignSubstitute');
@@ -2084,6 +2101,8 @@ describe('Real Cloud Functions Emulator Integration Tests (JS Client SDK + Emula
           }],
         });
 
+        await adminDb.ref('SubRequests/slot_assign_test_1/Responses/user_b').set(true);
+
         const assign = httpsCallable(functionsUserA, 'assignSubstitute');
         const res = await assign({
           subRequestId: 'slot_assign_test_1',
@@ -2115,6 +2134,8 @@ describe('Real Cloud Functions Emulator Integration Tests (JS Client SDK + Emula
             searchSource: 'search_all',
           }],
         });
+
+        await adminDb.ref('SubRequests/slot_revoke_test_1/Responses/user_b').set(true);
 
         const assign = httpsCallable(functionsUserA, 'assignSubstitute');
         await assign({
@@ -2768,6 +2789,283 @@ describe('Real Cloud Functions Emulator Integration Tests (JS Client SDK + Emula
         assert.strictEqual(pub.isPaid, false);
         assert.strictEqual(pub.payAmount ?? null, null);
         assert.strictEqual(pub.payDetails ?? null, null);
+      });
+
+      describe('AGREEMENT-INTEGRITY-01: Server-Authoritative Agreement & Assignment Integrity', () => {
+        it('72. assignSubstitute atomically creates Agreement conversation, canonical snapshot, and legacy mirrors', async () => {
+          await adminDb.ref('Bands/band_26').set({
+            Name: 'Band 26',
+            Members_band: { user_a: { Role: 'Leader' } },
+          });
+          await adminDb.ref('users/user_a/info').set({ displayName: 'Alice Leader' });
+          await adminDb.ref('users/user_b/info').set({ displayName: 'Bob Musician' });
+
+          await adminDb.ref('SubRequests/sub_agr_26').set({
+            SubRequestId: 'sub_agr_26',
+            RequestGroupId: 'grp_26',
+            CreatorUserId: 'user_a',
+            BandId: 'band_26',
+            BandName: 'Band 26',
+            RequestType: 'Substitute',
+            EventType: 'Concert',
+            VoicePart: 'Trumpet',
+            Date: '2026-11-25',
+            StartTime: '19:00',
+            EndTime: '22:00',
+            Location: 'Stockholm Konserthuset',
+            Description: 'Brass section lead',
+            PayDetails: 'Invoice 30 days',
+            IsPaid: true,
+            PayAmount: 2500,
+            Currency: 'SEK',
+            Status: 'published',
+            Responses: { user_b: true },
+          });
+
+          const assignFn = httpsCallable(functionsUserA, 'assignSubstitute');
+          const res = await assignFn({
+            subRequestId: 'sub_agr_26',
+            candidateUserId: 'user_b',
+          });
+
+          assert.strictEqual(res.data.success, true);
+          assert.strictEqual(res.data.assignedUserId, 'user_b');
+          assert(res.data.conversationId);
+          const convId = res.data.conversationId;
+
+          // Verify canonical agreement inside conversation
+          const convSnap = await adminDb.ref(`conversations/${convId}`).get();
+          assert.strictEqual(convSnap.exists(), true);
+          const agr = convSnap.val().agreement;
+          assert.strictEqual(agr.subRequestId, 'sub_agr_26');
+          assert.strictEqual(agr.bandId, 'band_26');
+          assert.strictEqual(agr.bandName, 'Band 26');
+          assert.strictEqual(agr.requestType, 'Substitute');
+          assert.strictEqual(agr.eventType, 'Concert');
+          assert.strictEqual(agr.voicePart, 'Trumpet');
+          assert.strictEqual(agr.date, '2026-11-25');
+          assert.strictEqual(agr.startTime, '19:00');
+          assert.strictEqual(agr.endTime, '22:00');
+          assert.strictEqual(agr.location, 'Stockholm Konserthuset');
+          assert.strictEqual(agr.description, 'Brass section lead');
+          assert.strictEqual(agr.payDetails, 'Invoice 30 days');
+          assert.strictEqual(agr.payAmount, 2500);
+          assert.strictEqual(agr.currency, 'SEK');
+          assert.strictEqual(agr.choirLeaderId, 'user_a');
+          assert.strictEqual(agr.vocalistId, 'user_b');
+          assert.strictEqual(agr.choirLeaderName, 'Alice Leader');
+          assert.strictEqual(agr.vocalistName, 'Bob Musician');
+
+          // Verify userConversations indexes for both parties
+          const idxA = (await adminDb.ref(`userConversations/user_a/${convId}`).get()).val();
+          const idxB = (await adminDb.ref(`userConversations/user_b/${convId}`).get()).val();
+          assert.strictEqual(idxA.otherUserId, 'user_b');
+          assert.strictEqual(idxA.bandName, 'Band 26');
+          assert.strictEqual(idxB.otherUserId, 'user_a');
+          assert.strictEqual(idxB.bandName, 'Band 26');
+
+          // Verify legacy mirrors are written by server
+          const bandEventMirror = (await adminDb.ref(`BandEvents/Agreements/${convId}`).get()).val();
+          const userAMirror = (await adminDb.ref(`users/user_a/Agreements/${convId}`).get()).val();
+          const userBMirror = (await adminDb.ref(`users/user_b/Agreements/${convId}`).get()).val();
+          assert.strictEqual(bandEventMirror.BandName, 'Band 26');
+          assert.strictEqual(userAMirror.BandName, 'Band 26');
+          assert.strictEqual(userBMirror.BandName, 'Band 26');
+
+          // Retry is idempotent and returns identical conversationId
+          const retryRes = await assignFn({
+            subRequestId: 'sub_agr_26',
+            candidateUserId: 'user_b',
+          });
+          assert.strictEqual(retryRes.data.conversationId, convId);
+        });
+
+        it('73. assignSubstitute rejects ineligible candidate who never applied or was targeted, leaving zero Agreement records', async () => {
+          await adminDb.ref('SubRequests/sub_ineligible_test').set({
+            SubRequestId: 'sub_ineligible_test',
+            CreatorUserId: 'user_a',
+            BandName: 'Band 26',
+            VoicePart: 'Drums',
+            Status: 'published',
+            Responses: { user_b: true },
+          });
+
+          const assignFn = httpsCallable(functionsUserA, 'assignSubstitute');
+          await assert.rejects(
+            assignFn({
+              subRequestId: 'sub_ineligible_test',
+              candidateUserId: 'user_c', // user_c never applied
+            }),
+            (err) => err && (err.code === 'functions/failed-precondition' || err.code === 'failed-precondition')
+          );
+
+          // Verify zero partial agreement records created
+          const convs = (await adminDb.ref('conversations').get()).val();
+          assert.strictEqual(convs, null);
+          const mirrors = (await adminDb.ref('BandEvents/Agreements').get()).val();
+          assert.strictEqual(mirrors, null);
+        });
+
+        it('74. Cross-band isolation and multi-slot isolation across Band 26, Band 27, Guitar, and Drums', async () => {
+          await adminDb.ref('Bands/band_26').set({ Name: 'Band 26', Members_band: { user_a: { Role: 'Leader' } } });
+          await adminDb.ref('Bands/band_27').set({ Name: 'Band 27', Members_band: { user_a: { Role: 'Leader' } } });
+
+          await adminDb.ref('SubRequests/sub_b26').set({
+            SubRequestId: 'sub_b26',
+            CreatorUserId: 'user_a',
+            BandId: 'band_26',
+            BandName: 'Band 26',
+            VoicePart: 'Guitar',
+            Status: 'published',
+            Responses: { user_b: true },
+          });
+          await adminDb.ref('SubRequests/sub_b27').set({
+            SubRequestId: 'sub_b27',
+            CreatorUserId: 'user_a',
+            BandId: 'band_27',
+            BandName: 'Band 27',
+            VoicePart: 'Drums',
+            Status: 'published',
+            Responses: { user_b: true },
+          });
+
+          const assignFn = httpsCallable(functionsUserA, 'assignSubstitute');
+          const res26 = await assignFn({ subRequestId: 'sub_b26', candidateUserId: 'user_b' });
+          const res27 = await assignFn({ subRequestId: 'sub_b27', candidateUserId: 'user_b' });
+
+          assert.notStrictEqual(res26.data.conversationId, res27.data.conversationId);
+          assert.strictEqual(res26.data.agreement.bandName, 'Band 26');
+          assert.strictEqual(res27.data.agreement.bandName, 'Band 27');
+          assert.strictEqual(res26.data.agreement.voicePart, 'Guitar');
+          assert.strictEqual(res27.data.agreement.voicePart, 'Drums');
+        });
+
+        it('75. Authorization Matrix A–G: Band Admin succeeds; Ordinary Member, Leader of another band, and Accepted Applicant rejected; RTDB read restricted to participants', async () => {
+          const fs = require('fs');
+          const path = require('path');
+          const { initializeTestEnvironment, assertSucceeds, assertFails } = require('@firebase/rules-unit-testing');
+
+          const rules = fs.readFileSync(path.join(__dirname, '../../database.rules.json'), 'utf8');
+          const rulesEnv = await initializeTestEnvironment({
+            projectId: PROJECT_ID,
+            database: { host: DB_HOST, port: DB_PORT, rules },
+          });
+
+          try {
+            await adminDb.ref('Bands/band_26').set({
+              Name: 'Band 26',
+              Members_band: {
+                user_a: { Role: 'Admin' },  // Active Band Admin of owning band (Case B)
+                user_c: { Role: 'Member' }, // Ordinary band member (Case D)
+              },
+            });
+            await adminDb.ref('Bands/band_27').set({
+              Name: 'Band 27',
+              Members_band: {
+                user_c: { Role: 'Leader' }, // Leader of a DIFFERENT band (Case F)
+              },
+            });
+
+            await adminDb.ref('SubRequests/sub_matrix_test').set({
+              SubRequestId: 'sub_matrix_test',
+              CreatorUserId: 'creator_other',
+              BandId: 'band_26',
+              BandName: 'Band 26',
+              VoicePart: 'Violin',
+              Status: 'published',
+              Responses: { user_b: true },
+            });
+
+            const assignA = httpsCallable(functionsUserA, 'assignSubstitute');
+            const assignB = httpsCallable(functionsUserB, 'assignSubstitute');
+            const assignC = httpsCallable(functionsUserC, 'assignSubstitute');
+            const createAgrB = httpsCallable(functionsUserB, 'createAgreementConversation');
+            const createAgrC = httpsCallable(functionsUserC, 'createAgreementConversation');
+
+            // Case C: Applicant user_b cannot assign self or create own Agreement
+            await assert.rejects(
+              assignB({ subRequestId: 'sub_matrix_test', candidateUserId: 'user_b' }),
+              (err) => isPermissionError(err)
+            );
+            await assert.rejects(
+              createAgrB({ subRequestId: 'sub_matrix_test', applicantId: 'user_b' }),
+              (err) => isPermissionError(err)
+            );
+
+            // Case D & F: Ordinary member of band_26 / Leader of band_27 (user_c) cannot assign or create Agreement for band_26
+            await assert.rejects(
+              assignC({ subRequestId: 'sub_matrix_test', candidateUserId: 'user_b' }),
+              (err) => isPermissionError(err)
+            );
+            await assert.rejects(
+              createAgrC({ subRequestId: 'sub_matrix_test', applicantId: 'user_b' }),
+              (err) => isPermissionError(err)
+            );
+
+            // Case B: Active Admin of band_26 (user_a) succeeds in assigning eligible applicant user_b
+            const resAdmin = await assignA({ subRequestId: 'sub_matrix_test', candidateUserId: 'user_b' });
+            assert.strictEqual(resAdmin.data.success, true);
+            const convId = resAdmin.data.conversationId;
+            assert(convId);
+
+            const userBDb = rulesEnv.authenticatedContext('user_b').database();
+            const userCDb = rulesEnv.authenticatedContext('user_c').database();
+
+            // Case C (Post-Assignment): Accepted applicant user_b can read own Agreement conversation & userConversations, but cannot alter or call createAgreementConversation
+            await assertSucceeds(userBDb.ref(`conversations/${convId}`).get());
+            await assertSucceeds(userBDb.ref(`userConversations/user_b/${convId}`).get());
+            await assertFails(userBDb.ref(`conversations/${convId}/agreement/payAmount`).set(999999));
+
+            await assert.rejects(
+              createAgrB({ subRequestId: 'sub_matrix_test', applicantId: 'user_b' }),
+              (err) => isPermissionError(err)
+            );
+
+            // Case E: Unrelated authenticated user (user_c) denied RTDB read on canonical conversation and participant userConversations
+            await assertFails(userCDb.ref(`conversations/${convId}`).get());
+            await assertFails(userCDb.ref(`userConversations/user_b/${convId}`).get());
+          } finally {
+            await rulesEnv.cleanup();
+          }
+        });
+
+        it('76. Interrupted reservation recovery: pre-existing agreementConversationKeys reservation before root update is recovered and completed atomically', async () => {
+          const crypto = require('crypto');
+          const subRequestId = 'sub_interrupted_recovery';
+          const candidateUserId = 'user_b';
+          const keyHash = crypto.createHash('sha256').update(`agreement_${subRequestId}_${candidateUserId}`).digest('hex');
+          const preReservedConvId = '-PreReservedInterruptedConvId';
+
+          // Simulate interrupted state: agreementConversationKeys/{hash} exists, but root update has NOT run yet
+          await adminDb.ref(`agreementConversationKeys/${keyHash}`).set({
+            conversationId: preReservedConvId,
+            createdTimestamp: new Date().toISOString(),
+          });
+          await adminDb.ref(`SubRequests/${subRequestId}`).set({
+            SubRequestId: subRequestId,
+            CreatorUserId: 'user_a',
+            BandId: 'band_26',
+            BandName: 'Band 26',
+            VoicePart: 'Saxophone',
+            Status: 'published',
+            Responses: { user_b: true },
+          });
+
+          const assignFn = httpsCallable(functionsUserA, 'assignSubstitute');
+          const res = await assignFn({ subRequestId, candidateUserId });
+
+          assert.strictEqual(res.data.success, true);
+          assert.strictEqual(res.data.conversationId, preReservedConvId);
+
+          // Verify the pre-reserved conversationId was populated atomically in /conversations, /userConversations, and legacy mirrors
+          const convSnap = await adminDb.ref(`conversations/${preReservedConvId}`).get();
+          assert.strictEqual(convSnap.exists(), true);
+          assert.strictEqual(convSnap.val().agreement.voicePart, 'Saxophone');
+          const idxB = await adminDb.ref(`userConversations/user_b/${preReservedConvId}`).get();
+          assert.strictEqual(idxB.exists(), true);
+          const mirrorB = await adminDb.ref(`users/user_b/Agreements/${preReservedConvId}`).get();
+          assert.strictEqual(mirrorB.exists(), true);
+        });
       });
     });
   });

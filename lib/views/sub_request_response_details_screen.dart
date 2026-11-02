@@ -5,7 +5,6 @@ import 'package:intl/intl.dart';
 import '../providers/app_state.dart';
 import '../theme/app_theme.dart';
 import '../models/sub_request.dart';
-import '../models/agreement.dart';
 import '../models/message.dart';
 import '../widgets/custom_top_bar.dart';
 import '../widgets/gradient_scaffold.dart';
@@ -279,68 +278,30 @@ class _SubRequestResponseDetailsScreenState
         } catch (_) {}
       }
 
-      // 1. Create the Agreement
-      final agreement = Agreement(
-        choirLeaderId: currentUserId,
-        vocalistId: selectedSub.userId,
-        voicePart: effectiveReq.voicePart,
-        date: effectiveReq.date,
-        startTime: effectiveReq.startTime,
-        endTime: effectiveReq.endTime,
-        location: effectiveReq.location,
-        additionalTerms: effectiveReq.description?.isNotEmpty == true
-            ? effectiveReq.description
-            : "Substitute staffing agreement.",
-        bandName: effectiveReq.bandName,
-        subRequestId: reqId,
-        payAmount: effectiveReq.payAmount,
-        currency: effectiveReq.currency,
-      );
-
-      // 2. Create the system message for the conversation
-      final message = Message(
-        id: '', // key is created dynamically in Firebase push
-        senderId: currentUserId,
-        receiverId: selectedSub.userId,
-        text: "${selectedSub.name} has been chosen to attend the rehearsal.",
-        timestamp: DateTime.now(),
-        isRead: false,
-        senderName: appState.currentUserProfile?.displayName ?? 'System',
-      );
-
-      // 3. Save agreement chat (safe non-blocking fallback)
+      // Server-authoritative assignment & Agreement creation
       String conversationId = '';
       try {
-        conversationId = await appState.firebaseService
-            .createAgreementChatAsync(
-              currentUserId,
-              selectedSub.userId,
-              agreement,
-              message,
-            );
+        await appState.firebaseService.assignSubstituteCandidateAsync(
+          subRequestId: reqId,
+          candidateUserId: selectedSub.userId,
+          bandId: effectiveReq.bandId ?? '',
+          eventId: effectiveReq.eventId ?? '',
+          roleOrInstrument: effectiveReq.voicePart ?? effectiveReq.role ?? '',
+          candidateName: selectedSub.name,
+        );
+        conversationId = appState.firebaseService.lastAssignedAgreementConversationId ?? '';
       } catch (e) {
-        debugPrint("[SubRequestResponseDetailsScreen] createAgreementChatAsync notice: $e");
-        conversationId = 'conv_${currentUserId}_${selectedSub.userId}';
+        debugPrint("[SubRequestResponseDetailsScreen] assignSubstituteCandidateAsync notice: $e");
+        rethrow;
       }
 
-      // If connected to event, update external invitee status to attending
+      // If connected to event, add substitute to temporary event room when present
       if (widget.subRequest.bandId != null &&
           widget.subRequest.eventId != null &&
           widget.subRequest.bandId!.isNotEmpty &&
           widget.subRequest.eventId!.isNotEmpty) {
         final bandId = widget.subRequest.bandId!;
         final eventId = widget.subRequest.eventId!;
-
-        try {
-          await appState.firebaseService.updateExternalInviteeResponseAsync(
-            bandId,
-            eventId,
-            selectedSub.userId,
-            'attending',
-          );
-        } catch (e) {
-          debugPrint("[SubRequestResponseDetailsScreen] updateExternalInviteeResponseAsync notice: $e");
-        }
 
         try {
           final event = await appState.firebaseService.getBandEventOnceAsync(
@@ -363,15 +324,7 @@ class _SubRequestResponseDetailsScreenState
         }
       }
 
-      // 4. Remove sub request globally and locally
-      try {
-        await appState.firebaseService.deleteSubRequestAsync(
-          currentUserId,
-          reqId,
-        );
-      } catch (delErr) {
-        debugPrint("[SubRequestResponseDetailsScreen] deleteSubRequestAsync notice: $delErr");
-      }
+      // 4. SubRequest is marked assigned by the server operation
 
       // 5. Navigate to Receipt Screen
       if (mounted) {
@@ -380,10 +333,10 @@ class _SubRequestResponseDetailsScreenState
           '/receipt',
           arguments: {
             'name': selectedSub.name,
-            'voicePart': agreement.voicePart ?? 'Substitute',
-            'date': agreement.date ?? '',
-            'startTime': agreement.startTime ?? '',
-            'endTime': agreement.endTime ?? '',
+            'voicePart': effectiveReq.voicePart ?? 'Substitute',
+            'date': effectiveReq.date ?? '',
+            'startTime': effectiveReq.startTime ?? '',
+            'endTime': effectiveReq.endTime ?? '',
             'conversationId': conversationId,
             'receiverUserId': selectedSub.userId,
           },

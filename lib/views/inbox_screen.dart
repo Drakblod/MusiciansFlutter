@@ -98,6 +98,34 @@ class _InboxScreenState extends State<InboxScreen> {
     required bool hasUnread,
     required DateTime? timestamp,
   }) {
+    // Authoritative participant & counterpart derivation
+    final currentUserId = appState.currentUserId;
+    final leaderId = agreement.choirLeaderId;
+    final vocalistId = agreement.vocalistId;
+
+    if (currentUserId != null && leaderId != null && vocalistId != null) {
+      if (currentUserId != leaderId && currentUserId != vocalistId) {
+        // Unrelated third-party rejected from viewing this agreement
+        return const SizedBox.shrink();
+      }
+    }
+
+    String resolvedCounterpartId = otherUserId;
+    String resolvedCounterpartName = otherUserName;
+    if (currentUserId != null) {
+      if (currentUserId == leaderId && vocalistId != null && vocalistId.isNotEmpty) {
+        resolvedCounterpartId = vocalistId;
+        if (agreement.vocalistName != null && agreement.vocalistName!.trim().isNotEmpty) {
+          resolvedCounterpartName = agreement.vocalistName!.trim();
+        }
+      } else if (currentUserId == vocalistId && leaderId != null && leaderId.isNotEmpty) {
+        resolvedCounterpartId = leaderId;
+        if (agreement.choirLeaderName != null && agreement.choirLeaderName!.trim().isNotEmpty) {
+          resolvedCounterpartName = agreement.choirLeaderName!.trim();
+        }
+      }
+    }
+
     final dateTimeText = formatSubRequestDateTime(
       date: agreement.date,
       startTime: agreement.startTime,
@@ -106,34 +134,52 @@ class _InboxScreenState extends State<InboxScreen> {
     final paymentText = formatAgreementPayment(agreement);
     final locationText = agreement.location?.trim();
 
+    // Band authority: Never use activeBandName or generic 'Gig Agreement'
     final rawAgreementBand = agreement.bandName?.trim();
     final rawThreadBand = (thread['bandName'] as String?)?.trim();
-    final rawThreadTitle = (thread['title'] as String?)?.trim();
 
     String? bandTitle;
     if (rawAgreementBand != null &&
         rawAgreementBand.isNotEmpty &&
         rawAgreementBand.toLowerCase() != 'null' &&
         rawAgreementBand.toLowerCase() != 'n/a' &&
+        rawAgreementBand.toLowerCase() != 'gig agreement' &&
         rawAgreementBand.toLowerCase() != 'band / project' &&
-        rawAgreementBand.toLowerCase() != 'unknown band') {
+        rawAgreementBand.toLowerCase() != 'unknown band' &&
+        rawAgreementBand.toLowerCase() != 'band') {
       bandTitle = rawAgreementBand;
     } else if (rawThreadBand != null &&
         rawThreadBand.isNotEmpty &&
         rawThreadBand.toLowerCase() != 'null' &&
         rawThreadBand.toLowerCase() != 'band' &&
         rawThreadBand.toLowerCase() != 'n/a' &&
+        rawThreadBand.toLowerCase() != 'gig agreement' &&
         rawThreadBand.toLowerCase() != 'band / project' &&
         rawThreadBand.toLowerCase() != 'unknown band') {
       bandTitle = rawThreadBand;
-    } else if (rawThreadTitle != null &&
-        rawThreadTitle.isNotEmpty &&
-        rawThreadTitle.toLowerCase() != 'null' &&
-        rawThreadTitle.toLowerCase() != 'band' &&
-        rawThreadTitle.toLowerCase() != 'n/a' &&
-        rawThreadTitle.toLowerCase() != 'band / project' &&
-        rawThreadTitle.toLowerCase() != 'unknown band') {
-      bandTitle = rawThreadTitle;
+    }
+
+    // Row 3: Request Type · Role / Instrument
+    final reqType = agreement.requestType?.trim();
+    final role = agreement.voicePart?.trim();
+    String? requestTypeAndRole;
+    if (reqType != null && reqType.isNotEmpty && role != null && role.isNotEmpty) {
+      requestTypeAndRole = '$reqType · $role';
+    } else if (role != null && role.isNotEmpty) {
+      requestTypeAndRole = role;
+    } else if (reqType != null && reqType.isNotEmpty) {
+      requestTypeAndRole = reqType;
+    }
+
+    // Row 4: Event Type · Paid summary
+    final evType = agreement.eventType?.trim();
+    String? eventTypeAndPayment;
+    if (evType != null && evType.isNotEmpty && paymentText != null && paymentText.isNotEmpty) {
+      eventTypeAndPayment = '$evType · $paymentText';
+    } else if (evType != null && evType.isNotEmpty) {
+      eventTypeAndPayment = evType;
+    } else if (paymentText != null && paymentText.isNotEmpty) {
+      eventTypeAndPayment = paymentText;
     }
 
     return Container(
@@ -154,8 +200,8 @@ class _InboxScreenState extends State<InboxScreen> {
           borderRadius: BorderRadius.circular(16),
           onTap: () => _openConversation(
             conversationId: conversationId,
-            otherUserId: otherUserId,
-            otherUserName: otherUserName,
+            otherUserId: resolvedCounterpartId,
+            otherUserName: resolvedCounterpartName,
             appState: appState,
           ),
           child: Padding(
@@ -170,8 +216,8 @@ class _InboxScreenState extends State<InboxScreen> {
                       radius: 16,
                       backgroundColor: const Color(0xFF0D3A20).withOpacity(0.5),
                       child: Text(
-                        otherUserName.isNotEmpty
-                            ? otherUserName.substring(0, 1).toUpperCase()
+                        resolvedCounterpartName.isNotEmpty
+                            ? resolvedCounterpartName.substring(0, 1).toUpperCase()
                             : 'U',
                         style: GoogleFonts.inter(
                           color: Colors.greenAccent,
@@ -186,7 +232,7 @@ class _InboxScreenState extends State<InboxScreen> {
                         children: [
                           Flexible(
                             child: Text(
-                              otherUserName,
+                              resolvedCounterpartName,
                               style: GoogleFonts.outfit(
                                 fontSize: 15,
                                 fontWeight: FontWeight.bold,
@@ -253,9 +299,8 @@ class _InboxScreenState extends State<InboxScreen> {
                   const SizedBox(height: 4),
                 ],
 
-                // 3. Role / Instrument
-                if (agreement.voicePart != null &&
-                    agreement.voicePart!.trim().isNotEmpty) ...[
+                // 3. Request Type · Role / Instrument
+                if (requestTypeAndRole != null && requestTypeAndRole.isNotEmpty) ...[
                   Row(
                     children: [
                       const Icon(
@@ -266,7 +311,7 @@ class _InboxScreenState extends State<InboxScreen> {
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(
-                          agreement.voicePart!.trim(),
+                          requestTypeAndRole,
                           style: GoogleFonts.inter(
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
@@ -281,7 +326,34 @@ class _InboxScreenState extends State<InboxScreen> {
                   const SizedBox(height: 4),
                 ],
 
-                // 4. Date & Time
+                // 4. Event Type · Paid summary
+                if (eventTypeAndPayment != null && eventTypeAndPayment.isNotEmpty) ...[
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.event_note_rounded,
+                        size: 14,
+                        color: Colors.greenAccent,
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          eventTypeAndPayment,
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.greenAccent,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                ],
+
+                // 5. Date & Time
                 if (dateTimeText != null && dateTimeText.isNotEmpty) ...[
                   Row(
                     children: [
@@ -307,7 +379,7 @@ class _InboxScreenState extends State<InboxScreen> {
                   const SizedBox(height: 4),
                 ],
 
-                // 5. Location / Venue
+                // 6. Location / Venue
                 if (locationText != null && locationText.isNotEmpty) ...[
                   Row(
                     children: [
@@ -333,33 +405,6 @@ class _InboxScreenState extends State<InboxScreen> {
                   const SizedBox(height: 4),
                 ],
 
-                // 6. Payment (if present)
-                if (paymentText != null && paymentText.isNotEmpty) ...[
-                  Row(
-                    children: [
-                      const Icon(
-                        Icons.payments_outlined,
-                        size: 14,
-                        color: Colors.greenAccent,
-                      ),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          paymentText,
-                          style: GoogleFonts.inter(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                            color: Colors.greenAccent,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                ],
-
                 const SizedBox(height: 8),
 
                 // 7. Compact Action Row: View Agreement
@@ -370,8 +415,8 @@ class _InboxScreenState extends State<InboxScreen> {
                       key: Key('inbox_agreement_open_$conversationId'),
                       onPressed: () => _openConversation(
                         conversationId: conversationId,
-                        otherUserId: otherUserId,
-                        otherUserName: otherUserName,
+                        otherUserId: resolvedCounterpartId,
+                        otherUserName: resolvedCounterpartName,
                         appState: appState,
                       ),
                       style: ElevatedButton.styleFrom(

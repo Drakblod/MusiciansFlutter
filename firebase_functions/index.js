@@ -1828,7 +1828,11 @@ exports.assignSubstitute = onCall({ region: 'europe-west1' }, async (request) =>
   const subReqData = subReqSnap.val();
   const targetBandId = bandId || subReqData.bandId || subReqData.BandId;
   const targetEventId = eventId || subReqData.eventId || subReqData.EventId;
-  const creatorUserId = subReqData.CreatorUserId || subReqData.UserId;
+  const creatorUserId = subReqData.CreatorUserId || subReqData.UserId || subReqData.createdBy || subReqData.userId || subReqData.creatorUserId;
+
+  if (candidateUserId === creatorUserId) {
+    throw new HttpsError('invalid-argument', 'Creator cannot assign themselves as substitute.');
+  }
 
   // Authorization check: Caller must be creator OR Band Leader/Admin of the request's band
   let isAuthorized = (creatorUserId === callerId);
@@ -1844,6 +1848,22 @@ exports.assignSubstitute = onCall({ region: 'europe-west1' }, async (request) =>
 
   if (!isAuthorized) {
     throw new HttpsError('permission-denied', 'Only Band Leaders, Band Admins, or the Request Creator can assign substitutes.');
+  }
+
+  // Candidate eligibility check: candidate must have applied/responded, be targeted, or invited
+  const currentAssignedIdCheck = subReqData.AssignedUserId || subReqData.assignedUserId;
+  const responsesSnap = await db.ref(`/SubRequests/${subRequestId}/Responses/${candidateUserId}`).once('value');
+  const legacyResponsesSnap = await db.ref(`/BandEvents/SubRequestResponses/${subRequestId}/${candidateUserId}`).once('value');
+  const audienceSnapCheck = await db.ref(`/subRequestAudience/${subRequestId}/${candidateUserId}`).once('value');
+  const extraTargetsCheck = Array.isArray(subReqData.TargetUserIds) ? subReqData.TargetUserIds : (Array.isArray(subReqData.targetUserIds) ? subReqData.targetUserIds : []);
+  const isCandidateEligible = responsesSnap.exists() ||
+    legacyResponsesSnap.exists() ||
+    audienceSnapCheck.exists() ||
+    extraTargetsCheck.includes(candidateUserId) ||
+    currentAssignedIdCheck === candidateUserId;
+
+  if (!isCandidateEligible) {
+    throw new HttpsError('failed-precondition', 'Candidate has not applied or been invited for this request.');
   }
 
   const now = Date.now();
@@ -1987,6 +2007,174 @@ exports.assignSubstitute = onCall({ region: 'europe-west1' }, async (request) =>
     updates[`/creatorSubRequestFeed/${actualCreatorId}/${subRequestId}/assignedAt`] = now;
     updates[`/creatorSubRequestFeed/${actualCreatorId}/${subRequestId}/assignedBy`] = callerId;
   }
+
+  // Deterministic, idempotent Agreement conversation ID reservation
+  const agreementConvKeyRaw = `agreement_${subRequestId}_${candidateUserId}`;
+  const agreementConvHash = crypto.createHash('sha256').update(agreementConvKeyRaw).digest('hex');
+  const agreementKeyRef = db.ref(`/agreementConversationKeys/${agreementConvHash}`);
+
+  let conversationId;
+  const txResult = await agreementKeyRef.transaction((current) => {
+    if (current && current.conversationId) {
+      return current;
+    }
+    const newId = db.ref('/conversations').push().key;
+    return {
+      conversationId: newId,
+      createdTimestamp: new Date().toISOString(),
+    };
+  });
+
+  const keyVal = txResult.snapshot.val();
+  conversationId = keyVal ? keyVal.conversationId : null;
+  if (!conversationId) {
+    throw new HttpsError('internal', 'Failed to resolve agreement conversation ID.');
+  }
+
+  // Resolve band authority strictly
+  let resolvedBandName = null;
+  if (targetBandId) {
+    try {
+      const bSnap = await db.ref(`/Bands/${targetBandId}`).once('value');
+      if (bSnap.exists()) {
+        const bData = bSnap.val() || {};
+        const cand = bData.BandName || bData.bandName || bData.Name || bData.name;
+        if (cand && typeof cand === 'string' && cand.trim().length > 0) {
+          resolvedBandName = cand.trim();
+        }
+      }
+    } catch (_) {}
+  }
+  if (!resolvedBandName) {
+    const rawBName = subReqData.BandName || subReqData.bandName;
+    if (rawBName && typeof rawBName === 'string') {
+      const lower = rawBName.trim().toLowerCase();
+      if (lower !== 'null' && lower !== 'n/a' && lower !== 'gig agreement' && lower !== 'band / project' && lower !== 'unknown band' && lower !== 'band') {
+        resolvedBandName = rawBName.trim();
+      }
+    }
+  }
+
+  let creatorName = 'Organizer';
+  try {
+    const cSnap = await db.ref(`/users/${actualCreatorId}`).once('value');
+    if (cSnap.exists()) {
+      const cVal = cSnap.val() || {};
+      const cInfo = cVal.info || {};
+      creatorName = cVal.displayName || cVal.nickname || cVal.DisplayName || cInfo.displayName || cInfo.nickname || cInfo.DisplayName || cInfo.Name || 'Organizer';
+    }
+  } catch (_) {}
+
+  let candidateDisplayName = candidateName || 'Musician';
+  try {
+    const uSnap = await db.ref(`/users/${candidateUserId}`).once('value');
+    if (uSnap.exists()) {
+      const uVal = uSnap.val() || {};
+      const uInfo = uVal.info || {};
+      candidateDisplayName = uVal.displayName || uVal.nickname || uVal.DisplayName || uInfo.displayName || uInfo.nickname || uInfo.DisplayName || uInfo.Name || candidateDisplayName;
+    }
+  } catch (_) {}
+
+  const agreementRole = roleOrInstrument || subReqData.VoicePart || subReqData.voicePart || subReqData.Role || subReqData.role || 'Musician';
+  const agreementDate = subReqData.Date || subReqData.date || subReqData.startDateTime || null;
+  const agreementStartTime = subReqData.StartTime || subReqData.startTime || null;
+  const agreementEndTime = subReqData.EndTime || subReqData.endTime || null;
+  const agreementLocation = subReqData.Location || subReqData.location || null;
+  const agreementDesc = subReqData.Description || subReqData.description || null;
+  const agreementPayDetails = subReqData.PayDetails || subReqData.payDetails || null;
+  const agreementTerms = subReqData.AdditionalTerms || subReqData.additionalTerms || 'Substitute staffing assignment.';
+  const agreementPay = subReqData.PayAmount !== undefined ? subReqData.PayAmount : (subReqData.payAmount !== undefined ? subReqData.payAmount : null);
+  const agreementCurrency = subReqData.Currency || subReqData.currency || null;
+  const agreementReqType = subReqData.RequestType || subReqData.requestType || 'Substitute';
+  const agreementEventType = subReqData.EventType || subReqData.eventType || null;
+  const agreementReqGroupId = subReqData.RequestGroupId || subReqData.requestGroupId || null;
+
+  const agreementPayload = {
+    subRequestId: subRequestId,
+    requestGroupId: agreementReqGroupId,
+    eventId: targetEventId || null,
+    bandId: targetBandId || null,
+    bandName: resolvedBandName,
+    requestType: agreementReqType,
+    eventType: agreementEventType,
+    role: agreementRole,
+    voicePart: agreementRole,
+    date: agreementDate,
+    startTime: agreementStartTime,
+    endTime: agreementEndTime,
+    location: agreementLocation,
+    description: agreementDesc,
+    payDetails: agreementPayDetails,
+    additionalTerms: agreementTerms,
+    payAmount: agreementPay,
+    currency: agreementCurrency,
+    choirLeaderId: actualCreatorId,
+    vocalistId: candidateUserId,
+    choirLeaderName: creatorName,
+    vocalistName: candidateDisplayName,
+    status: 'confirmed',
+    createdAt: now,
+
+    // Legacy PascalCase aliases for backward compatibility
+    ChoirLeaderId: actualCreatorId,
+    VocalistId: candidateUserId,
+    VoicePart: agreementRole,
+    Date: agreementDate,
+    StartTime: agreementStartTime,
+    EndTime: agreementEndTime,
+    Location: agreementLocation,
+    AdditionalTerms: agreementTerms,
+    BandName: resolvedBandName,
+    SubRequestId: subRequestId,
+    PayAmount: agreementPay,
+    Currency: agreementCurrency,
+    Description: agreementDesc,
+    PayDetails: agreementPayDetails,
+    RequestType: agreementReqType,
+    EventType: agreementEventType,
+    BandId: targetBandId || null,
+    EventId: targetEventId || null,
+  };
+
+  // Atomic root multi-path conversation, inbox, and mirror updates
+  updates[`/conversations/${conversationId}/agreement`] = agreementPayload;
+  updates[`/conversations/${conversationId}/Agreement`] = agreementPayload;
+  updates[`/conversations/${conversationId}/participants`] = { [actualCreatorId]: true, [candidateUserId]: true };
+  updates[`/conversations/${conversationId}/Participants`] = [actualCreatorId, candidateUserId];
+  updates[`/conversations/${conversationId}/createdTimestamp`] = new Date(now).toISOString();
+  updates[`/conversations/${conversationId}/lastActivity`] = now;
+
+  const summaryMsg = `Confirmed Agreement: ${agreementRole}`;
+  updates[`/userConversations/${actualCreatorId}/${conversationId}`] = {
+    conversationId: conversationId,
+    conversationType: 'agreement',
+    otherUserId: candidateUserId,
+    otherUserName: candidateDisplayName,
+    lastMessageText: summaryMsg,
+    lastMessageTimestamp: new Date(now).toISOString(),
+    hasUnread: false,
+    agreement: agreementPayload,
+    bandName: resolvedBandName,
+    bandId: targetBandId || null,
+  };
+  updates[`/userConversations/${candidateUserId}/${conversationId}`] = {
+    conversationId: conversationId,
+    conversationType: 'agreement',
+    otherUserId: actualCreatorId,
+    otherUserName: creatorName,
+    lastMessageText: summaryMsg,
+    lastMessageTimestamp: new Date(now).toISOString(),
+    hasUnread: true,
+    agreement: agreementPayload,
+    bandName: resolvedBandName,
+    bandId: targetBandId || null,
+  };
+
+  // Retained legacy mirrors synchronized server-side from same canonical object
+  updates[`/BandEvents/Agreements/${conversationId}`] = agreementPayload;
+  updates[`/users/${actualCreatorId}/Agreements/${conversationId}`] = agreementPayload;
+  updates[`/users/${candidateUserId}/Agreements/${conversationId}`] = agreementPayload;
+
   if (Object.keys(updates).length > 0) {
     await db.ref().update(updates);
   }
@@ -2050,6 +2238,8 @@ exports.assignSubstitute = onCall({ region: 'europe-west1' }, async (request) =>
     subRequestId,
     assignedUserId: candidateUserId,
     status: 'assigned',
+    conversationId,
+    agreement: agreementPayload,
   };
 });
 
@@ -2839,13 +3029,33 @@ exports.createAgreementConversation = onCall({ region: 'europe-west1' }, async (
     throw new HttpsError('failed-precondition', 'SubRequest has no valid creator.');
   }
 
-  // Caller must be either creatorUid or applicantId
-  if (callerUid !== creatorUid && callerUid !== applicantId) {
-    throw new HttpsError('permission-denied', 'You are not authorized for this agreement conversation.');
+  // Authorization check: Caller must be creator OR Band Leader/Admin of the request's band
+  // APPLICANTS CANNOT SELF-CREATE OR ALTER AGREEMENTS
+  const targetBandId = subReqData.bandId || subReqData.BandId;
+  let isAuthorized = (creatorUid === callerUid);
+  if (!isAuthorized && targetBandId) {
+    const memberSnap = await admin.database().ref(`/Bands/${targetBandId}/Members_band/${callerUid}`).once('value');
+    if (memberSnap.exists()) {
+      const role = memberSnap.val()?.Role || memberSnap.val()?.role;
+      if (role === 'Leader' || role === 'Admin') {
+        isAuthorized = true;
+      }
+    }
   }
 
-  // Receiver is the other party
-  const receiverUid = (callerUid === applicantId) ? creatorUid : applicantId;
+  if (!isAuthorized) {
+    throw new HttpsError('permission-denied', 'Only Band Leaders, Band Admins, or the Request Creator can create agreement conversations.');
+  }
+
+  // Precondition: SubRequest must already be assigned or filled to applicantId
+  const currentAssignedId = subReqData.AssignedUserId || subReqData.assignedUserId;
+  const currentStatus = subReqData.Status || subReqData.status;
+  if (currentStatus !== 'assigned' && currentStatus !== 'filled') {
+    throw new HttpsError('failed-precondition', `SubRequest ${subRequestId} is not assigned or filled.`);
+  }
+  if (currentAssignedId !== applicantId) {
+    throw new HttpsError('failed-precondition', `Applicant ${applicantId} does not match assigned user.`);
+  }
 
   const agreementConvKeyRaw = `agreement_${subRequestId}_${applicantId}`;
   const agreementConvHash = crypto.createHash('sha256').update(agreementConvKeyRaw).digest('hex');
@@ -2870,67 +3080,153 @@ exports.createAgreementConversation = onCall({ region: 'europe-west1' }, async (
     throw new HttpsError('internal', 'Failed to resolve agreement conversation ID.');
   }
 
-  const clientAgreement = request.data?.agreement || {};
+  let resolvedBandName = null;
+  if (targetBandId) {
+    try {
+      const bSnap = await admin.database().ref(`/Bands/${targetBandId}`).once('value');
+      if (bSnap.exists()) {
+        const bData = bSnap.val() || {};
+        const cand = bData.BandName || bData.bandName || bData.Name || bData.name;
+        if (cand && typeof cand === 'string' && cand.trim().length > 0) {
+          resolvedBandName = cand.trim();
+        }
+      }
+    } catch (_) {}
+  }
+  if (!resolvedBandName) {
+    const rawBName = subReqData.BandName || subReqData.bandName;
+    if (rawBName && typeof rawBName === 'string') {
+      const lower = rawBName.trim().toLowerCase();
+      if (lower !== 'null' && lower !== 'n/a' && lower !== 'gig agreement' && lower !== 'band / project' && lower !== 'unknown band' && lower !== 'band') {
+        resolvedBandName = rawBName.trim();
+      }
+    }
+  }
+
+  let creatorName = 'Organizer';
+  try {
+    const cSnap = await admin.database().ref(`/users/${creatorUid}`).once('value');
+    if (cSnap.exists()) {
+      const cVal = cSnap.val() || {};
+      const cInfo = cVal.info || {};
+      creatorName = cVal.displayName || cVal.nickname || cVal.DisplayName || cInfo.displayName || cInfo.nickname || cInfo.DisplayName || cInfo.Name || 'Organizer';
+    }
+  } catch (_) {}
+
+  let applicantDisplayName = 'Musician';
+  try {
+    const uSnap = await admin.database().ref(`/users/${applicantId}`).once('value');
+    if (uSnap.exists()) {
+      const uVal = uSnap.val() || {};
+      const uInfo = uVal.info || {};
+      applicantDisplayName = uVal.displayName || uVal.nickname || uVal.DisplayName || uInfo.displayName || uInfo.nickname || uInfo.DisplayName || uInfo.Name || applicantDisplayName;
+    }
+  } catch (_) {}
+
+  const now = Date.now();
+  const agreementRole = subReqData.VoicePart || subReqData.voicePart || subReqData.Role || subReqData.role || 'Musician';
+  const agreementDate = subReqData.Date || subReqData.date || subReqData.startDateTime || null;
+  const agreementStartTime = subReqData.StartTime || subReqData.startTime || null;
+  const agreementEndTime = subReqData.EndTime || subReqData.endTime || null;
+  const agreementLocation = subReqData.Location || subReqData.location || null;
+  const agreementDesc = subReqData.Description || subReqData.description || null;
+  const agreementPayDetails = subReqData.PayDetails || subReqData.payDetails || null;
+  const agreementTerms = subReqData.AdditionalTerms || subReqData.additionalTerms || 'Substitute staffing assignment.';
+  const agreementPay = subReqData.PayAmount !== undefined ? subReqData.PayAmount : (subReqData.payAmount !== undefined ? subReqData.payAmount : null);
+  const agreementCurrency = subReqData.Currency || subReqData.currency || null;
+  const agreementReqType = subReqData.RequestType || subReqData.requestType || 'Substitute';
+  const agreementEventType = subReqData.EventType || subReqData.eventType || null;
+  const agreementReqGroupId = subReqData.RequestGroupId || subReqData.requestGroupId || null;
+  const targetEventId = subReqData.EventId || subReqData.eventId || null;
+
+  // CANONICAL SNAPSHOT: Caller-supplied fields NEVER override canonical fields
   const agreementPayload = {
     subRequestId: subRequestId,
-    applicantId: applicantId,
-    creatorId: creatorUid,
-    bandName: subReqData.BandName || subReqData.bandName || clientAgreement.BandName || clientAgreement.bandName || 'Gig Agreement',
-    voicePart: subReqData.VoicePart || subReqData.voicePart || subReqData.Role || subReqData.role || clientAgreement.VoicePart || clientAgreement.voicePart || 'Musician',
-    date: subReqData.Date || subReqData.date || subReqData.startDateTime || clientAgreement.Date || clientAgreement.date || null,
-    startTime: subReqData.StartTime || subReqData.startTime || clientAgreement.StartTime || clientAgreement.startTime || null,
-    endTime: subReqData.EndTime || subReqData.endTime || clientAgreement.EndTime || clientAgreement.endTime || null,
-    location: subReqData.Location || subReqData.location || clientAgreement.Location || clientAgreement.location || null,
-    additionalTerms: subReqData.AdditionalTerms || subReqData.additionalTerms || clientAgreement.AdditionalTerms || clientAgreement.additionalTerms || 'Substitute staffing assignment.',
-    payAmount: subReqData.PayAmount || subReqData.payAmount || clientAgreement.PayAmount || clientAgreement.payAmount || null,
-    currency: subReqData.Currency || subReqData.currency || clientAgreement.Currency || clientAgreement.currency || null,
+    requestGroupId: agreementReqGroupId,
+    eventId: targetEventId,
+    bandId: targetBandId || null,
+    bandName: resolvedBandName,
+    requestType: agreementReqType,
+    eventType: agreementEventType,
+    role: agreementRole,
+    voicePart: agreementRole,
+    date: agreementDate,
+    startTime: agreementStartTime,
+    endTime: agreementEndTime,
+    location: agreementLocation,
+    description: agreementDesc,
+    payDetails: agreementPayDetails,
+    additionalTerms: agreementTerms,
+    payAmount: agreementPay,
+    currency: agreementCurrency,
+    choirLeaderId: creatorUid,
+    vocalistId: applicantId,
+    choirLeaderName: creatorName,
+    vocalistName: applicantDisplayName,
     status: 'confirmed',
+    createdAt: now,
+
+    ChoirLeaderId: creatorUid,
+    VocalistId: applicantId,
+    VoicePart: agreementRole,
+    Date: agreementDate,
+    StartTime: agreementStartTime,
+    EndTime: agreementEndTime,
+    Location: agreementLocation,
+    AdditionalTerms: agreementTerms,
+    BandName: resolvedBandName,
+    SubRequestId: subRequestId,
+    PayAmount: agreementPay,
+    Currency: agreementCurrency,
+    Description: agreementDesc,
+    PayDetails: agreementPayDetails,
+    RequestType: agreementReqType,
+    EventType: agreementEventType,
+    BandId: targetBandId || null,
+    EventId: targetEventId || null,
   };
 
-  const convRef = admin.database().ref(`/conversations/${conversationId}`);
-  const convSnap = await convRef.once('value');
+  const atomicUpdates = {};
+  atomicUpdates[`/conversations/${conversationId}/agreement`] = agreementPayload;
+  atomicUpdates[`/conversations/${conversationId}/Agreement`] = agreementPayload;
+  atomicUpdates[`/conversations/${conversationId}/participants`] = { [creatorUid]: true, [applicantId]: true };
+  atomicUpdates[`/conversations/${conversationId}/Participants`] = [creatorUid, applicantId];
+  atomicUpdates[`/conversations/${conversationId}/createdTimestamp`] = new Date(now).toISOString();
+  atomicUpdates[`/conversations/${conversationId}/lastActivity`] = now;
 
-  if (!convSnap.exists()) {
-    await convRef.set({
-      participants: { [callerUid]: true, [receiverUid]: true },
-      Participants: [callerUid, receiverUid],
-      createdTimestamp: new Date().toISOString(),
-      agreement: agreementPayload,
-      Agreement: agreementPayload,
-    });
-  } else {
-    // Update or enrich existing agreement record
-    await convRef.child('agreement').update(agreementPayload);
-    await convRef.child('Agreement').update(agreementPayload);
-  }
+  const summaryMsg = `Confirmed Agreement: ${agreementRole}`;
+  atomicUpdates[`/userConversations/${creatorUid}/${conversationId}`] = {
+    conversationId: conversationId,
+    conversationType: 'agreement',
+    otherUserId: applicantId,
+    otherUserName: applicantDisplayName,
+    lastMessageText: summaryMsg,
+    lastMessageTimestamp: new Date(now).toISOString(),
+    hasUnread: false,
+    agreement: agreementPayload,
+    bandName: resolvedBandName,
+    bandId: targetBandId || null,
+  };
+  atomicUpdates[`/userConversations/${applicantId}/${conversationId}`] = {
+    conversationId: conversationId,
+    conversationType: 'agreement',
+    otherUserId: creatorUid,
+    otherUserName: creatorName,
+    lastMessageText: summaryMsg,
+    lastMessageTimestamp: new Date(now).toISOString(),
+    hasUnread: true,
+    agreement: agreementPayload,
+    bandName: resolvedBandName,
+    bandId: targetBandId || null,
+  };
 
-  // Idempotent user index repair
-  const u1Ref = admin.database().ref(`/userConversations/${callerUid}/${conversationId}`);
-  const u2Ref = admin.database().ref(`/userConversations/${receiverUid}/${conversationId}`);
+  atomicUpdates[`/BandEvents/Agreements/${conversationId}`] = agreementPayload;
+  atomicUpdates[`/users/${creatorUid}/Agreements/${conversationId}`] = agreementPayload;
+  atomicUpdates[`/users/${applicantId}/Agreements/${conversationId}`] = agreementPayload;
 
-  const [u1Snap, u2Snap] = await Promise.all([u1Ref.once('value'), u2Ref.once('value')]);
+  await admin.database().ref().update(atomicUpdates);
 
-  if (!u1Snap.exists()) {
-    await u1Ref.set({
-      otherUserId: receiverUid,
-      lastMessageText: `Agreement Request: ${subReqData.VoicePart || 'Gig'}`,
-      lastMessageTimestamp: new Date().toISOString(),
-      hasUnread: false,
-      conversationType: 'agreement',
-    });
-  }
-
-  if (!u2Snap.exists()) {
-    await u2Ref.set({
-      otherUserId: callerUid,
-      lastMessageText: `Agreement Request: ${subReqData.VoicePart || 'Gig'}`,
-      lastMessageTimestamp: new Date().toISOString(),
-      hasUnread: true,
-      conversationType: 'agreement',
-    });
-  }
-
-  return { conversationId };
+  return { conversationId, agreement: agreementPayload };
 });
 
 /**
