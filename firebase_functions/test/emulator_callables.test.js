@@ -2413,5 +2413,362 @@ describe('Real Cloud Functions Emulator Integration Tests (JS Client SDK + Emula
         assert.strictEqual(canon.LocationStatus, 'unresolved');
       });
     });
+    describe('SUBREQUEST-DATA-CONSISTENCY-01: End-to-End Field Value Preservation and Classification', () => {
+      it('68. Full Substitute request: field value preservation across canonical and feed projections', async () => {
+        const publish = httpsCallable(functionsUserA, 'publishSubRequestGroup');
+        const res = await publish({
+          bandId: 'band_consist_1',
+          bandName: 'Consistency Band',
+          eventId: 'ev_consist_1',
+          requestGroupId: 'req_group_consist_1',
+          slots: [
+            {
+              subRequestId: 'sub_consist_sub_1',
+              slotId: 'sub_consist_sub_1',
+              eventId: 'ev_consist_1',
+              eventTitle: 'Autumn Jazz Gala',
+              RequestType: 'Substitute',
+              EventType: 'Concert',
+              voicePart: 'Tenor Sax',
+              Date: '2026-11-20',
+              StartTime: '18:00',
+              EndTime: '21:30',
+              Location: 'Fasching, Kungsgatan 63, Stockholm',
+              Latitude: 59.3333,
+              Longitude: 18.0555,
+              LocationPrecision: 'exact',
+              IsPaid: true,
+              PayAmount: 1500,
+              PayAmountMinor: 150000,
+              Currency: 'SEK',
+              PayDetails: 'Paid after completed performance',
+              Description: 'Controlled QA description',
+              searchSource: 'search_all',
+            },
+          ],
+        });
+
+        assert.strictEqual(res.data.success, true);
+
+        // 1. Verify Canonical /SubRequests/sub_consist_sub_1
+        const canon = (await adminDb.ref('SubRequests/sub_consist_sub_1').get()).val();
+        assert.ok(canon, 'Canonical record must exist');
+        assert.strictEqual(canon.RequestType, 'Substitute');
+        assert.strictEqual(canon.EventType, 'Concert');
+        assert.strictEqual(canon.VoicePart || canon.voicePart, 'Tenor Sax');
+        assert.strictEqual(canon.Date, '2026-11-20');
+        assert.strictEqual(canon.StartTime, '18:00');
+        assert.strictEqual(canon.EndTime, '21:30');
+        assert.strictEqual(canon.Location, 'Fasching, Kungsgatan 63, Stockholm');
+        assert.strictEqual(canon.IsPaid, true);
+        assert.strictEqual(canon.PayAmount, 1500);
+        assert.strictEqual(canon.Currency, 'SEK');
+        assert.strictEqual(canon.PayDetails, 'Paid after completed performance');
+        assert.strictEqual(canon.Description, 'Controlled QA description');
+
+        // 2. Verify Public Feed /publicSubRequests/sub_consist_sub_1
+        const pub = (await adminDb.ref('publicSubRequests/sub_consist_sub_1').get()).val();
+        assert.ok(pub, 'Public feed record must exist');
+        assert.strictEqual(pub.requestType, 'Substitute');
+        assert.strictEqual(pub.eventType, 'Concert');
+        assert.strictEqual(pub.voicePart, 'Tenor Sax');
+        assert.strictEqual(pub.date, '2026-11-20');
+        assert.strictEqual(pub.startTime, '18:00');
+        assert.strictEqual(pub.endTime, '21:30');
+        assert.strictEqual(pub.location, 'Fasching, Kungsgatan 63, Stockholm');
+        assert.strictEqual(pub.isPaid, true);
+        assert.strictEqual(pub.payAmount, 1500);
+        assert.strictEqual(pub.currency, 'SEK');
+        assert.strictEqual(pub.payDetails, 'Paid after completed performance');
+        assert.strictEqual(pub.description, 'Controlled QA description');
+        assert.strictEqual(pub.notes, undefined, 'notes key must not be projected for newly written feed records');
+
+        // 3. Verify Creator Feed /creatorSubRequestFeed/user_a/sub_consist_sub_1
+        const creatorFeed = (await adminDb.ref('creatorSubRequestFeed/user_a/sub_consist_sub_1').get()).val();
+        assert.ok(creatorFeed, 'Creator feed record must exist');
+        assert.strictEqual(creatorFeed.requestType, 'Substitute');
+        assert.strictEqual(creatorFeed.eventType, 'Concert');
+        assert.strictEqual(creatorFeed.voicePart, 'Tenor Sax');
+        assert.strictEqual(creatorFeed.date, '2026-11-20');
+        assert.strictEqual(creatorFeed.startTime, '18:00');
+        assert.strictEqual(creatorFeed.endTime, '21:30');
+        assert.strictEqual(creatorFeed.location, 'Fasching, Kungsgatan 63, Stockholm');
+        assert.strictEqual(creatorFeed.description, 'Controlled QA description');
+        assert.strictEqual(creatorFeed.payDetails, 'Paid after completed performance');
+      });
+
+      it('69. New Band Member privacy: city centroid preferred, street and house number obliterated', async () => {
+        const publish = httpsCallable(functionsUserA, 'publishSubRequestGroup');
+        const res = await publish({
+          bandId: 'band_consist_1',
+          bandName: 'Consistency Band',
+          requestGroupId: 'req_group_mem_priv_1',
+          slots: [
+            {
+              subRequestId: 'sub_consist_mem_1',
+              slotId: 'sub_consist_mem_1',
+              RequestType: 'New Band Member',
+              voicePart: 'Drummer',
+              Location: 'Sveavägen 42, lgh 1201, 111 34 Stockholm, Sweden',
+              Latitude: 59.337123,
+              Longitude: 18.059432,
+              PlaceId: 'residential_place_id_leak',
+              Description: 'Recruiting a permanent drummer for rehearsals once a week.',
+              searchSource: 'search_all',
+              Date: '2026-11-20',
+              Time: '19:00',
+              StartTime: '19:00',
+              EndTime: '21:00',
+              EventType: 'Concert',
+            },
+            {
+              subRequestId: 'sub_consist_mem_centroid_1',
+              slotId: 'sub_consist_mem_centroid_1',
+              RequestType: 'New Band Member',
+              voicePart: 'Guitarist',
+              Location: 'Stockholm, Sweden',
+              Latitude: null,
+              Longitude: null,
+              Description: 'Recruiting lead guitar',
+              searchSource: 'search_all',
+            },
+            {
+              subRequestId: 'sub_consist_mem_fallback_1',
+              slotId: 'sub_consist_mem_fallback_1',
+              RequestType: 'New Band Member',
+              voicePart: 'Bassist',
+              Location: 'Storgatan 5, Småby',
+              Latitude: 57.123456,
+              Longitude: 14.654321,
+              Description: 'Bassist recruitment in custom area',
+              searchSource: 'search_all',
+            },
+          ],
+        });
+
+        assert.strictEqual(res.data.success, true);
+
+        // 1. Verify Canonical for Exact Coordinates: coarsened to 1 decimal place, street obliterated
+        const canon = (await adminDb.ref('SubRequests/sub_consist_mem_1').get()).val();
+        assert.strictEqual(canon.RequestType, 'New Band Member');
+        assert.strictEqual(canon.EventType ?? null, null);
+        assert.strictEqual(canon.StartTime ?? null, null);
+        assert.strictEqual(canon.EndTime ?? null, null);
+        assert.strictEqual(canon.Date, undefined);
+        assert.strictEqual(canon.Time, undefined);
+        assert.strictEqual(canon.PlaceId, undefined);
+        assert.strictEqual(canon.placeId, undefined);
+        assert.strictEqual(canon.Location, 'Stockholm');
+        assert.strictEqual(canon.LocationPrecision, 'city');
+        assert.strictEqual(canon.Latitude, 59.3);
+        assert.strictEqual(canon.Longitude, 18.1);
+
+        // 2. Verify Public Feed for Exact Coordinates
+        const pub = (await adminDb.ref('publicSubRequests/sub_consist_mem_1').get()).val();
+        assert.strictEqual(pub.requestType, 'New Band Member');
+        assert.strictEqual(pub.eventType ?? null, null);
+        assert.strictEqual(pub.startTime ?? null, null);
+        assert.strictEqual(pub.endTime ?? null, null);
+        assert.strictEqual(pub.date, '');
+        assert.strictEqual(pub.time, '');
+        assert.strictEqual(pub.eventId, '');
+        assert.strictEqual(pub.eventTitle, '');
+        assert.strictEqual(pub.location, 'Stockholm');
+        assert.strictEqual(pub.locationPrecision, 'city');
+        assert.strictEqual(pub.latitude, 59.3);
+        assert.strictEqual(pub.longitude, 18.1);
+        assert.strictEqual(pub.placeId, undefined);
+
+        // 3. Verify Creator Feed for Exact Coordinates
+        const creatorFeed = (await adminDb.ref('creatorSubRequestFeed/user_a/sub_consist_mem_1').get()).val();
+        assert.strictEqual(creatorFeed.requestType, 'New Band Member');
+        assert.strictEqual(creatorFeed.eventType ?? null, null);
+        assert.strictEqual(creatorFeed.startTime ?? null, null);
+        assert.strictEqual(creatorFeed.endTime ?? null, null);
+        assert.strictEqual(creatorFeed.location, 'Stockholm');
+        assert.strictEqual(creatorFeed.locationPrecision, 'city');
+        assert.strictEqual(creatorFeed.latitude, 59.3);
+        assert.strictEqual(creatorFeed.longitude, 18.1);
+        assert.strictEqual(creatorFeed.placeId, undefined);
+
+        // 4. Verify Preferred Known City Centroid when no coordinates provided
+        const canonCentroid = (await adminDb.ref('SubRequests/sub_consist_mem_centroid_1').get()).val();
+        assert.strictEqual(canonCentroid.Location, 'Stockholm');
+        assert.strictEqual(canonCentroid.LocationPrecision, 'city');
+        assert.strictEqual(canonCentroid.Latitude, 59.3293);
+        assert.strictEqual(canonCentroid.Longitude, 18.0686);
+        const pubCentroid = (await adminDb.ref('publicSubRequests/sub_consist_mem_centroid_1').get()).val();
+        assert.strictEqual(pubCentroid.location, 'Stockholm');
+        assert.strictEqual(pubCentroid.latitude, 59.3293);
+        assert.strictEqual(pubCentroid.longitude, 18.0686);
+
+        // 5. Verify Fallback for Non-Centroid City (Småby): at most 1 decimal degree
+        const canonFallback = (await adminDb.ref('SubRequests/sub_consist_mem_fallback_1').get()).val();
+        assert.strictEqual(canonFallback.Location, 'Småby');
+        assert.strictEqual(canonFallback.LocationPrecision, 'city');
+        assert.strictEqual(canonFallback.Latitude, 57.1);
+        assert.strictEqual(canonFallback.Longitude, 14.7);
+        const pubFallback = (await adminDb.ref('publicSubRequests/sub_consist_mem_fallback_1').get()).val();
+        assert.strictEqual(pubFallback.location, 'Småby');
+        assert.strictEqual(pubFallback.locationPrecision, 'city');
+        assert.strictEqual(pubFallback.latitude, 57.1);
+        assert.strictEqual(pubFallback.longitude, 14.7);
+      });
+
+      it('70. Audience classification and isolation: 6-point verification gate', async () => {
+        // Setup user_a favorites: only user_b is a favorite
+        await adminDb.ref('users/user_a/Favorites').set({
+          user_b: true,
+        });
+
+        const publish = httpsCallable(functionsUserA, 'publishSubRequestGroup');
+
+        // 1. search_all with empty target list -> public
+        const resPub = await publish({
+          bandId: 'band_consist_1',
+          bandName: 'Consistency Band',
+          requestGroupId: 'req_grp_pub_empty_target',
+          slots: [
+            {
+              subRequestId: 'sub_pub_empty_target_1',
+              slotId: 'sub_pub_empty_target_1',
+              RequestType: 'Substitute',
+              voicePart: 'Keyboardist',
+              searchSource: 'search_all',
+              targetUserIds: [],
+              Description: 'Public gig with empty targets',
+            },
+          ],
+        });
+        assert.strictEqual(resPub.data.success, true);
+        const pubItem = (await adminDb.ref('publicSubRequests/sub_pub_empty_target_1').get()).val();
+        assert.ok(pubItem, 'search_all with empty targets must enter publicSubRequests');
+        assert.strictEqual(pubItem.description, 'Public gig with empty targets');
+
+        // 2. favorites with recipients -> private (distributed to recipients + creator)
+        const resFavRecip = await publish({
+          bandId: 'band_consist_1',
+          bandName: 'Consistency Band',
+          requestGroupId: 'req_grp_fav_recip',
+          slots: [
+            {
+              subRequestId: 'sub_fav_with_recip_1',
+              slotId: 'sub_fav_with_recip_1',
+              RequestType: 'Substitute',
+              voicePart: 'Bassist',
+              searchSource: 'favorites',
+              targetUserIds: ['user_b'],
+              Description: 'Favorites targeted invite',
+            },
+          ],
+        });
+        assert.strictEqual(resFavRecip.data.success, true);
+        const favRecipPub = (await adminDb.ref('publicSubRequests/sub_fav_with_recip_1').get()).val();
+        assert.strictEqual(favRecipPub, null, 'Favorites request must NEVER enter publicSubRequests');
+        const favRecipItem = (await adminDb.ref('userSubRequestFeed/user_b/sub_fav_with_recip_1').get()).val();
+        assert.ok(favRecipItem, 'Authorized favorite recipient must receive feed item');
+        assert.strictEqual(favRecipItem.description, 'Favorites targeted invite');
+
+        // 3. favorites with empty target list -> never public
+        const resFavEmpty = await publish({
+          bandId: 'band_consist_1',
+          bandName: 'Consistency Band',
+          requestGroupId: 'req_grp_fav_empty',
+          slots: [
+            {
+              subRequestId: 'sub_fav_empty_target_1',
+              slotId: 'sub_fav_empty_target_1',
+              RequestType: 'Substitute',
+              voicePart: 'Bassist',
+              searchSource: 'favorites',
+              targetUserIds: [],
+              Description: 'Favorites empty targets',
+            },
+          ],
+        });
+        assert.strictEqual(resFavEmpty.data.success, true);
+        const favEmptyPub = (await adminDb.ref('publicSubRequests/sub_fav_empty_target_1').get()).val();
+        assert.strictEqual(favEmptyPub, null, 'Favorites with empty target list must NEVER enter public feed');
+
+        // 4. direct invitation with one target -> private
+        const resDirect = await publish({
+          bandId: 'band_consist_1',
+          bandName: 'Consistency Band',
+          requestGroupId: 'req_grp_direct',
+          slots: [
+            {
+              subRequestId: 'sub_direct_target_1',
+              slotId: 'sub_direct_target_1',
+              RequestType: 'Substitute',
+              IsDirectInvitation: true,
+              voicePart: 'Bassist',
+              targetUserIds: ['user_b'],
+              searchSource: 'search_all',
+              Description: 'Direct invitation invite',
+            },
+          ],
+        });
+        assert.strictEqual(resDirect.data.success, true);
+        const directPub = (await adminDb.ref('publicSubRequests/sub_direct_target_1').get()).val();
+        assert.strictEqual(directPub, null, 'Direct invitation must NEVER enter publicSubRequests');
+        const directRecipItem = (await adminDb.ref('userSubRequestFeed/user_b/sub_direct_target_1').get()).val();
+        assert.ok(directRecipItem, 'Target user must receive direct invitation in userSubRequestFeed');
+        assert.strictEqual(directRecipItem.description, 'Direct invitation invite');
+
+        // 5. Unrelated authenticated user (user_c) cannot read either private request
+        const userCUserFeedFav = (await adminDb.ref('userSubRequestFeed/user_c/sub_fav_with_recip_1').get()).val();
+        assert.strictEqual(userCUserFeedFav, null, 'Unrelated user must NOT receive favorite feed entry');
+        const userCUserFeedDirect = (await adminDb.ref('userSubRequestFeed/user_c/sub_direct_target_1').get()).val();
+        assert.strictEqual(userCUserFeedDirect, null, 'Unrelated user must NOT receive direct feed entry');
+
+        // 6. Private records never exist under /publicSubRequests
+        const pubFavRecip = (await adminDb.ref('publicSubRequests/sub_fav_with_recip_1').get()).val();
+        const pubFavEmpty = (await adminDb.ref('publicSubRequests/sub_fav_empty_target_1').get()).val();
+        const pubDirect = (await adminDb.ref('publicSubRequests/sub_direct_target_1').get()).val();
+        assert.strictEqual(pubFavRecip, null);
+        assert.strictEqual(pubFavEmpty, null);
+        assert.strictEqual(pubDirect, null);
+      });
+
+      it('71. Event-generated staffing request: preserves event details and does not invent payment info', async () => {
+        const publish = httpsCallable(functionsUserA, 'publishSubRequestGroup');
+        const res = await publish({
+          bandId: 'band_consist_1',
+          bandName: 'Consistency Band',
+          requestGroupId: 'req_group_event_gen_1',
+          slots: [
+            {
+              subRequestId: 'sub_event_gen_1',
+              slotId: 'sub_event_gen_1',
+              RequestType: 'Substitute',
+              EventType: 'Rehearsal',
+              voicePart: 'Keyboardist',
+              StartTime: '17:00',
+              EndTime: '19:00',
+              Location: 'Rehearsal Studio Stockholm',
+              Description: 'Rehearsal fill-in',
+              searchSource: 'search_all',
+              IsPaid: false,
+              PayAmount: null,
+              PayAmountMinor: null,
+              Currency: null,
+              PayDetails: null,
+            },
+          ],
+        });
+
+        assert.strictEqual(res.data.success, true);
+
+        const canon = (await adminDb.ref('SubRequests/sub_event_gen_1').get()).val();
+        assert.strictEqual(canon.IsPaid, false);
+        assert.strictEqual(canon.PayAmount ?? null, null);
+        assert.strictEqual(canon.PayDetails ?? null, null);
+
+        const pub = (await adminDb.ref('publicSubRequests/sub_event_gen_1').get()).val();
+        assert.strictEqual(pub.isPaid, false);
+        assert.strictEqual(pub.payAmount ?? null, null);
+        assert.strictEqual(pub.payDetails ?? null, null);
+      });
+    });
   });
 });

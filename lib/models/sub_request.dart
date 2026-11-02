@@ -16,6 +16,7 @@ class SubRequest {
   final String? description;
   final String? date;
   final String? role;
+  final String? eventType;
   final String? requestType;
   final bool isPaid;
   final String? bandName;
@@ -66,6 +67,7 @@ class SubRequest {
     this.description,
     this.date,
     this.role,
+    this.eventType,
     this.requestType,
     this.isPaid = false,
     this.bandName,
@@ -203,6 +205,13 @@ class SubRequest {
       'payDetails',
       'RequestType',
       'requestType',
+      'EventType',
+      'eventType',
+      'notes',
+      'Notes',
+      'description',
+      'startTime',
+      'endTime',
     };
 
     final Map<String, dynamic> extra = {};
@@ -244,6 +253,13 @@ class SubRequest {
       }
     }
 
+    final parsedEventType = isNewMember
+        ? null
+        : (json['eventType']?.toString() ??
+            json['EventType']?.toString() ??
+            extra['eventType']?.toString() ??
+            extra['EventType']?.toString());
+
     return SubRequest(
       id: keyId,
       subRequestId: json['SubRequestId']?.toString() ?? json['subRequestId']?.toString() ?? keyId,
@@ -253,11 +269,15 @@ class SubRequest {
       voicePart: json['VoicePart']?.toString() ?? json['voicePart']?.toString() ?? json['Instrument']?.toString() ?? json['instrument']?.toString(),
       location: json['Location']?.toString() ?? json['location']?.toString(),
       city: parsedCity,
-      startTime: json['StartTime']?.toString() ?? json['startTime']?.toString(),
-      endTime: json['EndTime']?.toString() ?? json['endTime']?.toString(),
-      description: json['Description']?.toString() ?? json['description']?.toString(),
-      date: json['Date']?.toString() ?? json['date']?.toString(),
+      startTime: isNewMember ? null : (json['startTime']?.toString() ?? json['StartTime']?.toString()),
+      endTime: isNewMember ? null : (json['endTime']?.toString() ?? json['EndTime']?.toString()),
+      description: json['description']?.toString() ??
+          json['Description']?.toString() ??
+          json['notes']?.toString() ??
+          json['Notes']?.toString(),
+      date: isNewMember ? null : (json['Date']?.toString() ?? json['date']?.toString()),
       role: json['Role']?.toString() ?? json['role']?.toString(),
+      eventType: parsedEventType,
       requestType: derivedRequestType,
       isPaid: json['IsPaid'] == true || json['isPaid'] == true,
       bandName: json['BandName']?.toString() ?? json['bandName']?.toString(),
@@ -322,6 +342,7 @@ class SubRequest {
   }
 
   String? get resolvedEventType =>
+      eventType ??
       extraFields['eventType']?.toString() ??
       extraFields['EventType']?.toString();
 
@@ -347,6 +368,7 @@ class SubRequest {
       'Date': date,
       'Role': role,
       if (requestType != null) 'RequestType': requestType,
+      if (eventType != null) 'EventType': eventType,
       'IsPaid': isPaid,
       if (payAmountMinor != null) 'PayAmountMinor': payAmountMinor,
       if (currency != null) 'Currency': currency,
@@ -406,6 +428,7 @@ class SubRequest {
     String? description,
     String? date,
     String? role,
+    String? eventType,
     String? requestType,
     bool? isPaid,
     String? bandName,
@@ -455,6 +478,7 @@ class SubRequest {
       description: description ?? this.description,
       date: date ?? this.date,
       role: role ?? this.role,
+      eventType: eventType ?? this.eventType,
       requestType: requestType ?? this.requestType,
       isPaid: isPaid ?? this.isPaid,
       bandName: bandName ?? this.bandName,

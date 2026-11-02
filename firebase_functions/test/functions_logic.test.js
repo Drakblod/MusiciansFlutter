@@ -2407,9 +2407,10 @@ describe('MAP-VIEW-FEED-01: Final Privacy, Path & New Member Classification Audi
       const allowlistedKeys = [
         'id', 'subRequestId', 'slotId', 'requestGroupId', 'publicationId',
         'bandId', 'bandName', 'eventId', 'eventTitle', 'voicePart',
-        'date', 'time', 'location', 'city', 'latitude', 'longitude',
-        'locationPrecision', 'payAmount', 'payAmountMinor', 'currency',
-        'isPaid', 'notes', 'genre', 'status', 'createdAt', 'updatedAt',
+        'date', 'time', 'requestType', 'eventType', 'startTime', 'endTime',
+        'location', 'city', 'latitude', 'longitude', 'locationPrecision',
+        'payAmount', 'payAmountMinor', 'currency', 'isPaid', 'payDetails',
+        'description', 'genre', 'status', 'createdAt', 'updatedAt',
         'creatorUserId', 'creatorName', 'searchSource', 'type', 'isFavoritesOnly'
       ];
       assert.deepStrictEqual(Object.keys(feedItem).sort(), allowlistedKeys.sort());

@@ -1287,6 +1287,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
             userId: creatorId,
             role: 'Substitute',
             requestType: 'Substitute',
+            eventType: _eventType,
             voicePart: instrument,
             description: _descriptionController.text.trim().isNotEmpty
                 ? _descriptionController.text.trim()

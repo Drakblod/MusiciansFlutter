@@ -234,7 +234,7 @@ class _FindGigsScreenState extends State<FindGigsScreen>
       );
       final effectiveLocation = (locCandidate.location != null && locCandidate.location!.trim().isNotEmpty)
           ? locCandidate.location!.trim()
-          : (locCandidate.city != null && locCandidate.city!.trim().isNotEmpty ? locCandidate.city!.trim() : 'Stockholm, Sweden');
+          : (locCandidate.city != null && locCandidate.city!.trim().isNotEmpty ? locCandidate.city!.trim() : null);
 
       groups.add(
         GigGroup(
@@ -862,8 +862,8 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                       }),
                       const SizedBox(height: 16),
 
-                      // 4. Event Type and Paid status (omit Event Type for New Band Member)
-                      if (presentation.requestType != 'New Band Member') ...[
+                      // 4. Event Type (omit for New Band Member or if missing)
+                      if (presentation.requestType != 'New Band Member' && presentation.eventType != null && presentation.eventType!.trim().isNotEmpty) ...[
                         Text(
                           'Event Type',
                           style: GoogleFonts.outfit(
@@ -874,7 +874,7 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          presentation.eventType ?? 'Not provided',
+                          presentation.eventType!.trim(),
                           style: GoogleFonts.inter(
                             fontSize: 14,
                             color: AppTheme.textSecondary,
@@ -904,8 +904,8 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                         const SizedBox(height: 16),
                       ],
 
-                      // 5. Date & Time
-                      if (presentation.requestType != 'New Band Member' || presentation.formattedDateTime != null) ...[
+                      // 5. Date & Time (omit for New Band Member or if missing)
+                      if (presentation.requestType != 'New Band Member' && presentation.formattedDateTime != null && presentation.formattedDateTime!.trim().isNotEmpty) ...[
                         Text(
                           'Date & Time',
                           style: GoogleFonts.outfit(
@@ -916,7 +916,7 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          presentation.formattedDateTime ?? 'Not provided',
+                          presentation.formattedDateTime!.trim(),
                           style: GoogleFonts.inter(
                             fontSize: 14,
                             color: AppTheme.textSecondary,
@@ -925,53 +925,53 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                         const SizedBox(height: 16),
                       ],
 
-                      // 6. Location / Venue
-                      Text(
-                        'Location / Venue',
-                        style: GoogleFonts.outfit(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          const Icon(Icons.location_on_outlined, color: AppTheme.textSecondary, size: 18),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: Text(
-                              (presentation.locationVenue != null && presentation.locationVenue!.trim().isNotEmpty)
-                                  ? presentation.locationVenue!.trim()
-                                  : 'Stockholm, Sweden',
-                              style: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 14),
-                            ),
+                      // 6. Location / Venue (clean omission if missing)
+                      if (presentation.locationVenue != null && presentation.locationVenue!.trim().isNotEmpty) ...[
+                        Text(
+                          'Location / Venue',
+                          style: GoogleFonts.outfit(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
                           ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
+                        ),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            const Icon(Icons.location_on_outlined, color: AppTheme.textSecondary, size: 18),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                presentation.locationVenue!.trim(),
+                                style: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 14),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                      ],
 
-                      // 7. Description / Details
-                      Text(
-                        'Description / Details',
-                        style: GoogleFonts.outfit(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
+                      // 7. Description / Details (clean omission if missing)
+                      if (presentation.description != null && presentation.description!.trim().isNotEmpty) ...[
+                        Text(
+                          'Description / Details',
+                          style: GoogleFonts.outfit(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        (presentation.description != null && presentation.description!.trim().isNotEmpty)
-                            ? presentation.description!.trim()
-                            : 'Not provided',
-                        style: GoogleFonts.inter(
-                          fontSize: 14,
-                          color: AppTheme.textSecondary,
-                          height: 1.4,
+                        const SizedBox(height: 4),
+                        Text(
+                          presentation.description!.trim(),
+                          style: GoogleFonts.inter(
+                            fontSize: 14,
+                            color: AppTheme.textSecondary,
+                            height: 1.4,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 16),
+                        const SizedBox(height: 16),
+                      ],
 
                       // 8. Payment Details, when present
                       if (presentation.payDetails != null && presentation.payDetails!.trim().isNotEmpty) ...[

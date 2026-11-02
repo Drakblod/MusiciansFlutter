@@ -868,7 +868,11 @@ function classifySubRequest(data) {
   const searchSource = (data.SearchSource || data.searchSource || '').toString().toLowerCase();
   const isFavoritesOnly = data.IsFavoritesOnly === true || data.isFavoritesOnly === true || searchSource === 'favorites';
 
-  if (rawType === 'direct_invitation' || rawType === 'direct') {
+  const isDirect = data.IsDirectInvitation === true || data.isDirectInvitation === true ||
+    rawType === 'direct_invitation' || rawType === 'direct' ||
+    searchSource === 'direct';
+
+  if (isDirect) {
     return SUBREQUEST_KIND.DIRECT_INVITATION;
   }
 
@@ -903,21 +907,21 @@ function isNewMemberRequest(data) {
   const rawReqType = (data.RequestType || data.requestType || '').toString().trim();
   if (rawReqType) {
     const cleanReqType = rawReqType.toLowerCase().replace(/[\s_-]+/g, '');
-    if (cleanReqType === 'newmember') return true;
+    if (cleanReqType === 'newmember' || cleanReqType === 'newbandmember') return true;
     if (cleanReqType === 'substitute' || cleanReqType === 'sub' || cleanReqType === 'other') return false;
   }
 
   const rawRole = (data.Role || data.role || '').toString().trim();
   if (rawRole) {
     const cleanRole = rawRole.toLowerCase().replace(/[\s_-]+/g, '');
-    if (cleanRole === 'newmember') return true;
+    if (cleanRole === 'newmember' || cleanRole === 'newbandmember') return true;
   }
 
   const extra = data.extraFields && typeof data.extraFields === 'object' ? data.extraFields : {};
   const rawEventType = (data.EventType || data.eventType || extra.EventType || extra.eventType || '').toString().trim();
   if (rawEventType) {
     const cleanEventType = rawEventType.toLowerCase().replace(/[\s_-]+/g, '');
-    if (cleanEventType === 'newmember') return true;
+    if (cleanEventType === 'newmember' || cleanEventType === 'newbandmember') return true;
   }
 
   return false;
@@ -952,6 +956,40 @@ function extractCityLabel(locationStr) {
   return str;
 }
 
+const KNOWN_SWEDISH_CITIES = {
+  'stockholm': { lat: 59.3293, lng: 18.0686, name: 'Stockholm' },
+  'göteborg': { lat: 57.7089, lng: 11.9746, name: 'Göteborg' },
+  'gothenburg': { lat: 57.7089, lng: 11.9746, name: 'Göteborg' },
+  'malmö': { lat: 55.6050, lng: 13.0038, name: 'Malmö' },
+  'uppsala': { lat: 59.8586, lng: 17.6389, name: 'Uppsala' },
+  'linköping': { lat: 58.4108, lng: 15.6214, name: 'Linköping' },
+  'örebro': { lat: 59.2753, lng: 15.2134, name: 'Örebro' },
+  'västerås': { lat: 59.6099, lng: 16.5448, name: 'Västerås' },
+  'helsingborg': { lat: 56.0465, lng: 12.6945, name: 'Helsingborg' },
+  'jönköping': { lat: 57.7826, lng: 14.1618, name: 'Jönköping' },
+  'norrköping': { lat: 58.5877, lng: 16.1924, name: 'Norrköping' },
+  'lund': { lat: 55.7047, lng: 13.1910, name: 'Lund' },
+  'umeå': { lat: 63.8258, lng: 20.2630, name: 'Umeå' },
+  'gävle': { lat: 60.6749, lng: 17.1417, name: 'Gävle' },
+  'borås': { lat: 57.7210, lng: 12.9401, name: 'Borås' },
+  'halmstad': { lat: 56.6745, lng: 12.8578, name: 'Halmstad' },
+  'karlstad': { lat: 59.3793, lng: 13.5036, name: 'Karlstad' },
+  'sundsvall': { lat: 62.3908, lng: 17.3069, name: 'Sundsvall' },
+  'ljusdal': { lat: 61.8286, lng: 16.0958, name: 'Ljusdal' },
+};
+
+function resolveKnownCityCentroid(label) {
+  if (!label) return null;
+  const clean = label.toString().trim().toLowerCase();
+  if (!clean) return null;
+  for (const [key, city] of Object.entries(KNOWN_SWEDISH_CITIES)) {
+    if (clean.includes(key)) {
+      return city;
+    }
+  }
+  return null;
+}
+
 /**
  * Builds a sanitized, leak-free feed item containing only displayable fields.
  */
@@ -972,10 +1010,16 @@ function buildSanitizedFeedItem(subRequest) {
 
   if (isNewMember) {
     // Coarsen coordinates to 1 decimal place (~11 km lat, ~6 km lng uncertainty)
-    // to strictly protect residential privacy
+    // to strictly protect residential privacy, or fallback to known city centroid
     if (lat !== null && lng !== null) {
       lat = Number(Number(lat).toFixed(1));
       lng = Number(Number(lng).toFixed(1));
+    } else {
+      const knownCentroid = resolveKnownCityCentroid(cityLabel || locationLabel);
+      if (knownCentroid) {
+        lat = knownCentroid.lat;
+        lng = knownCentroid.lng;
+      }
     }
     // Location label is strictly coarsened to city label only; never expose street addresses or house numbers
     locationLabel = cityLabel || 'Stockholm';
@@ -983,11 +1027,32 @@ function buildSanitizedFeedItem(subRequest) {
     if (lat !== null && lng !== null) {
       lat = Number(Number(lat).toFixed(1));
       lng = Number(Number(lng).toFixed(1));
+    } else {
+      const knownCentroid = resolveKnownCityCentroid(cityLabel || locationLabel);
+      if (knownCentroid) {
+        lat = knownCentroid.lat;
+        lng = knownCentroid.lng;
+      }
     }
     if (cityLabel) {
       locationLabel = cityLabel;
     }
   }
+
+  const rawReqType = subRequest.RequestType || subRequest.requestType || '';
+  const requestType = isNewMember
+    ? 'New Band Member'
+    : (rawReqType || 'Substitute');
+
+  const rawEventType = subRequest.EventType || subRequest.eventType ||
+    (subRequest.extraFields && (subRequest.extraFields.EventType || subRequest.extraFields.eventType)) || null;
+  const eventType = isNewMember ? null : (rawEventType ? rawEventType.toString().trim() : null);
+
+  const startTime = isNewMember ? null : (subRequest.StartTime || subRequest.startTime || null);
+  const endTime = isNewMember ? null : (subRequest.EndTime || subRequest.endTime || null);
+
+  const description = (subRequest.Description || subRequest.description || subRequest.Notes || subRequest.notes || '').toString().trim();
+  const payDetails = (subRequest.PayDetails || subRequest.payDetails || '').toString().trim() || null;
 
   return {
     id: subRequest.SubRequestId || subRequest.subRequestId || subRequest.id || subRequest.slotId || '',
@@ -997,11 +1062,15 @@ function buildSanitizedFeedItem(subRequest) {
     publicationId: subRequest.PublicationId || subRequest.publicationId || '',
     bandId: subRequest.BandId || subRequest.bandId || '',
     bandName: subRequest.BandName || subRequest.bandName || 'Freelance Gig',
-    eventId: subRequest.EventId || subRequest.eventId || '',
-    eventTitle: subRequest.EventTitle || subRequest.eventTitle || '',
+    eventId: isNewMember ? '' : (subRequest.EventId || subRequest.eventId || ''),
+    eventTitle: isNewMember ? '' : (subRequest.EventTitle || subRequest.eventTitle || ''),
     voicePart: subRequest.VoicePart || subRequest.voicePart || subRequest.role || subRequest.Role || '',
-    date: subRequest.Date || subRequest.date || '',
-    time: subRequest.Time || subRequest.time || '',
+    date: isNewMember ? '' : (subRequest.Date || subRequest.date || ''),
+    time: isNewMember ? '' : (subRequest.Time || subRequest.time || ''),
+    requestType: requestType,
+    eventType: eventType,
+    startTime: startTime,
+    endTime: endTime,
     location: locationLabel,
     city: cityLabel || (isNewMember ? locationLabel : ''),
     latitude: lat,
@@ -1011,7 +1080,8 @@ function buildSanitizedFeedItem(subRequest) {
     payAmountMinor: subRequest.PayAmountMinor ?? subRequest.payAmountMinor ?? null,
     currency: subRequest.Currency || subRequest.currency || 'SEK',
     isPaid: subRequest.IsPaid ?? subRequest.isPaid ?? false,
-    notes: subRequest.Notes || subRequest.notes || subRequest.Description || subRequest.description || '',
+    payDetails: payDetails,
+    description: description,
     genre: subRequest.Genre || subRequest.genre || '',
     status: subRequest.Status || subRequest.status || 'published',
     createdAt: subRequest.CreatedAt || subRequest.createdAt || Date.now(),
@@ -1223,6 +1293,14 @@ exports.publishSubRequestGroup = onCall({ region: 'europe-west1' }, async (reque
   // 3. Write each canonical SubRequest & Creator feed
   resolvedSlots.forEach((slot) => {
     const slotKey = slot.subRequestId;
+    const isNewMember = isNewMemberRequest(slot);
+    const resolvedRequestType = isNewMember ? 'New Band Member' : (slot.RequestType || slot.requestType || 'Substitute');
+    const resolvedEventType = isNewMember ? null : (slot.EventType || slot.eventType || (slot.extraFields && (slot.extraFields.EventType || slot.extraFields.eventType)) || null);
+    const resolvedStartTime = isNewMember ? null : (slot.StartTime || slot.startTime || null);
+    const resolvedEndTime = isNewMember ? null : (slot.EndTime || slot.endTime || null);
+    const resolvedDesc = (slot.Description || slot.description || slot.Notes || slot.notes || '').toString().trim();
+    const resolvedPayDetails = (slot.PayDetails || slot.payDetails || '').toString().trim() || null;
+
     const canonicalItem = {
       ...slot,
       SubRequestId: slotKey,
@@ -1234,7 +1312,54 @@ exports.publishSubRequestGroup = onCall({ region: 'europe-west1' }, async (reque
       Status: 'published',
       CreatedAt: slot.createdAt || slot.CreatedAt || now,
       UpdatedAt: now,
+      RequestType: resolvedRequestType,
+      EventType: resolvedEventType,
+      StartTime: resolvedStartTime,
+      EndTime: resolvedEndTime,
+      Description: resolvedDesc,
+      PayDetails: resolvedPayDetails,
     };
+    if (isNewMember) {
+      delete canonicalItem.Date;
+      delete canonicalItem.date;
+      delete canonicalItem.Time;
+      delete canonicalItem.time;
+      delete canonicalItem.EventType;
+      delete canonicalItem.eventType;
+      delete canonicalItem.StartTime;
+      delete canonicalItem.startTime;
+      delete canonicalItem.EndTime;
+      delete canonicalItem.endTime;
+      delete canonicalItem.EventId;
+      delete canonicalItem.eventId;
+      delete canonicalItem.EventTitle;
+      delete canonicalItem.eventTitle;
+      delete canonicalItem.PlaceId;
+      delete canonicalItem.placeId;
+
+      const rawLoc = canonicalItem.City || canonicalItem.city || canonicalItem.Location || canonicalItem.location || '';
+      const knownCentroid = resolveKnownCityCentroid(rawLoc);
+      const cleanCity = knownCentroid ? knownCentroid.name : (extractCityLabel(rawLoc) || 'Stockholm');
+      canonicalItem.Location = cleanCity;
+      canonicalItem.location = cleanCity;
+      canonicalItem.City = cleanCity;
+      canonicalItem.city = cleanCity;
+      canonicalItem.LocationPrecision = 'city';
+      canonicalItem.locationPrecision = 'city';
+      if (canonicalItem.Latitude !== undefined && canonicalItem.Latitude !== null) {
+        const coarsenLat = Number(Number(canonicalItem.Latitude).toFixed(1));
+        const coarsenLng = Number(Number(canonicalItem.Longitude).toFixed(1));
+        canonicalItem.Latitude = coarsenLat;
+        canonicalItem.latitude = coarsenLat;
+        canonicalItem.Longitude = coarsenLng;
+        canonicalItem.longitude = coarsenLng;
+      } else if (knownCentroid) {
+        canonicalItem.Latitude = knownCentroid.lat;
+        canonicalItem.latitude = knownCentroid.lat;
+        canonicalItem.Longitude = knownCentroid.lng;
+        canonicalItem.longitude = knownCentroid.lng;
+      }
+    }
     updates[`/SubRequests/${slotKey}`] = canonicalItem;
     updates[`/creatorSubRequestFeed/${callerId}/${slotKey}`] = buildSanitizedFeedItem(canonicalItem);
     updates[`/users/${callerId}/SubRequests/${slotKey}`] = canonicalItem;

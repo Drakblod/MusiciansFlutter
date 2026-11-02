@@ -896,6 +896,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
             bandName: bandName,
             role: 'Substitute',
             requestType: 'Substitute',
+            eventType: evType,
             voicePart: slot.instrument,
             description: descStr,
             date: dateStr,
@@ -3468,6 +3469,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
       final req = SubRequest(
         role: 'Other',
         requestType: 'Other',
+        eventType: evType,
         voicePart: _selectedOtherInstrument,
         description: descStr,
         date: dateStr,

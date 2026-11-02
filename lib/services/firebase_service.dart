@@ -1189,10 +1189,7 @@ class FirebaseService {
       updatedRequests.add(updated);
     }
 
-    // 1. Write to user's personal mirror (for backwards compatibility)
-    final savedIds = await saveSubRequestsBatchAsync(updatedRequests);
-
-    // 2. Cloud function for atomic canonical publication and feed projections
+    // Server-owned Cloud Function for atomic canonical publication and feed projections
     final callable = FirebaseFunctions.instanceFor(region: 'europe-west1')
         .httpsCallable('publishSubRequestGroup');
     await callable.call<Map<dynamic, dynamic>>({
@@ -1202,12 +1199,10 @@ class FirebaseService {
       'slots': updatedRequests.map((r) => r.toJson()).toList(),
     });
 
-    return savedIds.isNotEmpty
-        ? savedIds
-        : updatedRequests
-            .map((r) => r.subRequestId ?? r.slotId ?? r.id ?? '')
-            .where((id) => id.isNotEmpty)
-            .toList();
+    return updatedRequests
+        .map((r) => r.subRequestId ?? r.slotId ?? r.id ?? '')
+        .where((id) => id.isNotEmpty)
+        .toList();
   }
 
   Future<void> assignSubstituteCandidateAsync({
