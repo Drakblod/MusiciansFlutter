@@ -1,3 +1,5 @@
+import '../utils/secondary_skills_utils.dart';
+
 class UserProfile {
   final String? userType;
   final String? userId;
@@ -28,7 +30,7 @@ class UserProfile {
     this.displayName,
     this.nickname,
     this.email,
-    this.instruments = const [],
+    List<String> instruments = const [],
     this.styles = const [],
     this.genres = const [],
     this.level,
@@ -45,7 +47,7 @@ class UserProfile {
     this.collabRemote = false,
     this.collabBio,
     this.mainInstrument,
-  });
+  }) : instruments = List.unmodifiable(SecondarySkillsUtils.normalize(instruments));
 
   factory UserProfile.fromJson(
     Map<dynamic, dynamic> json, [
@@ -84,7 +86,7 @@ class UserProfile {
           json['email']?.toString() ??
           infoMap['Contact']?.toString() ??
           infoMap['contact']?.toString(),
-      instruments: _toList(
+      instruments: _toSkillList(
         infoMap['Instruments'] ??
             json['Instruments'] ??
             infoMap['instruments'] ??
@@ -144,7 +146,7 @@ class UserProfile {
       'DisplayName': displayName,
       'Nickname': nickname,
       'Email': email,
-      'Instruments': instruments,
+      'Instruments': SecondarySkillsUtils.buildInstrumentsList(primarySkill, secondarySkills),
       'Styles': styles,
       'Genres': genres,
       'Level': level,
@@ -200,27 +202,38 @@ class UserProfile {
         .toList();
   }
 
-  /// Returns remaining selected instruments/skills excluding mainSkills
+  /// Returns remaining selected instruments/skills excluding mainSkills.
+  ///
+  /// Normalized per REGISTRATION-SECONDARY-SKILLS-01: trimmed, placeholder-free,
+  /// case-insensitively deduplicated, never containing the Primary Skill, and
+  /// ordered by the user's selection. Legacy profiles without additional
+  /// skills return an empty list.
   List<String> get secondarySkills {
-    final mains = mainSkills.toSet();
-    final all = <String>{};
+    final mains = mainSkills;
+    final raw = <String>[];
     if (mainInstrument != null && mainInstrument!.isNotEmpty) {
-      final parsed = mainInstrument!
-          .split(',')
-          .map((e) => e.trim())
-          .where((e) => e.isNotEmpty);
-      all.addAll(parsed);
+      raw.addAll(mainInstrument!.split(','));
     }
-    all.addAll(instruments);
-    return all
-        .where(
-          (item) =>
-              !mains.contains(item) &&
-              item != 'Browse Musicians' &&
-              item != 'Browse Profiles' &&
-              item != 'browse_musicians',
-        )
-        .toList();
+    raw.addAll(instruments);
+    final excludedLower = mains.map((m) => m.trim().toLowerCase()).toSet();
+    return SecondarySkillsUtils.normalize(
+      raw,
+      primarySkill: mains.isNotEmpty ? mains.first : null,
+    ).where((s) => !excludedLower.contains(s.toLowerCase())).toList();
+  }
+
+  /// Complete skill set used for musician matching: Primary ∪ Secondary.
+  ///
+  /// Combines the legacy primary sources (`UserType`, `MainInstrument`) with
+  /// the persisted `Instruments` list, deduplicated case-insensitively so a
+  /// request matched by both primary and secondary skills is counted once.
+  List<String> get matchingSkills {
+    final raw = <String?>[
+      userType,
+      ...?mainInstrument?.split(','),
+      ...instruments,
+    ];
+    return SecondarySkillsUtils.normalize(raw);
   }
 
   String get primarySkill =>
@@ -242,6 +255,20 @@ class UserProfile {
       return userType!;
     }
     return 'Musician';
+  }
+
+  static List<String> _toSkillList(dynamic value) {
+    final Iterable<dynamic> raw;
+    if (value is List) {
+      raw = value;
+    } else if (value is Map) {
+      raw = value.values;
+    } else if (value is String) {
+      raw = value.split(',');
+    } else {
+      return const [];
+    }
+    return SecondarySkillsUtils.normalize(raw.whereType<String>());
   }
 
   static List<String> _toList(dynamic val) {

@@ -23,6 +23,7 @@ import '../models/app_notification.dart';
 import '../models/public_calendar_event.dart';
 import '../models/map_event_item.dart';
 import '../utils/date_parser.dart';
+import '../utils/secondary_skills_utils.dart';
 
 class FirebaseService {
   static final StreamController<Map<String, dynamic>>
@@ -71,6 +72,7 @@ class FirebaseService {
     String nickname, [
     String? level,
     List<String>? genres,
+    List<String>? secondarySkills,
   ]) async {
     final credential = await _auth.createUserWithEmailAndPassword(
       email: email,
@@ -104,7 +106,10 @@ class FirebaseService {
         location: null,
         level: level ?? 'C = INTERMEDIATE',
         about: 'Hey! I am a musician ready to play.',
-        instruments: [userType],
+        instruments: SecondarySkillsUtils.buildInstrumentsList(
+          userType,
+          secondarySkills ?? const [],
+        ),
         genres: genres ?? const [],
       );
 
@@ -148,6 +153,10 @@ class FirebaseService {
       throw ArgumentError(
         'userId cannot be empty when updating profile fields.',
       );
+    }
+
+    if (trimmedUid != currentUserId) {
+      throw StateError('You can only update your own profile.');
     }
 
     final updates = <String, dynamic>{};
@@ -201,7 +210,9 @@ class FirebaseService {
       'Level': profile.level,
       'Location': profile.location,
       'About': profile.about,
-      'Instruments': profile.instruments,
+      'Instruments': SecondarySkillsUtils.buildInstrumentsList(
+        profile.primarySkill, profile.secondarySkills,
+      ),
       'Styles': profile.styles,
       'Genres': profile.genres,
       'Contact': profile.contact ?? profile.email,

@@ -45,7 +45,7 @@ class SecondarySkillsBadge extends StatelessWidget {
             ),
           ],
         ),
-        content: Column(
+        content: SingleChildScrollView(child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -89,7 +89,7 @@ class SecondarySkillsBadge extends StatelessWidget {
                 }).toList(),
               ),
           ],
-        ),
+        )),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),

@@ -444,30 +444,18 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
           const SizedBox(height: 24),
 
           // 2. SECONDARY Skills/Talents
-          Text(
-            'SECONDARY Skills/Talents',
-            style: GoogleFonts.outfit(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
+          if (user.secondarySkills.isNotEmpty) ...[
+            Text(
+              'SECONDARY Skills/Talents',
+              style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
             ),
-          ),
-          const SizedBox(height: 8),
-          if (user.secondarySkills.isNotEmpty)
+            const SizedBox(height: 8),
             SecondarySkillsBadge(
               memberName: user.displayName ?? '',
               secondarySkills: user.secondarySkills,
-            )
-          else
-            Text(
-              'None specified',
-              style: GoogleFonts.inter(
-                fontSize: 14,
-                color: AppTheme.textMuted,
-                fontStyle: FontStyle.italic,
-              ),
             ),
-          const SizedBox(height: 24),
+            const SizedBox(height: 24),
+          ],
 
           // 3. Genres/Band Types
           Text(

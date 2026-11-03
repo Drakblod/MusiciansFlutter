@@ -415,30 +415,18 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
                   const SizedBox(height: 24),
 
                   // 2. SECONDARY Skills/Talents
-                  Text(
-                    'SECONDARY Skills/Talents',
-                    style: GoogleFonts.outfit(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
+                  if (widget.musician.secondarySkills.isNotEmpty) ...[
+                    Text(
+                      'SECONDARY Skills/Talents',
+                      style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  if (widget.musician.secondarySkills.isNotEmpty)
+                    const SizedBox(height: 8),
                     SecondarySkillsBadge(
                       memberName: widget.musician.displayName ?? '',
                       secondarySkills: widget.musician.secondarySkills,
-                    )
-                  else
-                    Text(
-                      'None specified',
-                      style: GoogleFonts.inter(
-                        fontSize: 14,
-                        color: AppTheme.textMuted,
-                        fontStyle: FontStyle.italic,
-                      ),
                     ),
-                  const SizedBox(height: 24),
+                    const SizedBox(height: 24),
+                  ],
 
                   // 3. Genres/Band Types
                   Text(
@@ -888,14 +876,14 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
                                   size: 20,
                                 ),
                                 const SizedBox(width: 8),
-                                Text(
+                                Flexible(child: Text(
                                   isMe ? 'Edit Profile' : 'Message',
                                   style: GoogleFonts.inter(
                                     fontSize: 16,
                                     fontWeight: FontWeight.bold,
                                     color: Colors.white,
                                   ),
-                                ),
+                                )),
                               ],
                             ),
                           ),

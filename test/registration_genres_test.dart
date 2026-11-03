@@ -35,6 +35,7 @@ class MockRegisterAppState extends AppState {
     String nickname, [
     String? level,
     List<String>? genres,
+    List<String>? secondarySkills,
   ]) async {
     registeredEmail = email;
     registeredPassword = password;

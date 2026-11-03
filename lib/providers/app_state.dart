@@ -463,6 +463,7 @@ class AppState extends ChangeNotifier {
     String nickname, [
     String? level,
     List<String>? genres,
+    List<String>? secondarySkills,
   ]) async {
     _isLoading = true;
     _clearProfileState();
@@ -475,6 +476,7 @@ class AppState extends ChangeNotifier {
         nickname,
         level,
         genres,
+        secondarySkills,
       );
       await _loadProfileAndSubscribe();
     } catch (e) {
@@ -543,9 +545,13 @@ class AppState extends ChangeNotifier {
 
   Future<void> refreshProfile() async {
     if (firebaseService.isLoggedIn) {
-      _currentUserProfile = await firebaseService.getUserProfileAsync();
+      final uid = currentUserId;
+      final profile = await firebaseService.getUserProfileAsync(uid);
+      if (uid == null || currentUserId != uid) return;
+      _currentUserProfile = profile;
       if (currentUserId != null) {
-        final bands = await firebaseService.getUserBandsAsync(currentUserId!);
+        final bands = await firebaseService.getUserBandsAsync(uid);
+        if (currentUserId != uid) return;
         if (bands.isNotEmpty) {
           if (_activeBandId == null || !bands.containsKey(_activeBandId)) {
             final firstBandId = bands.keys.first;

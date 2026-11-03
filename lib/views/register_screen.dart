@@ -8,6 +8,8 @@ import '../widgets/animated_tap_detector.dart';
 import '../widgets/searchable_category_multi_select_sheet.dart';
 import '../data/skills_taxonomy.dart';
 import '../data/genres_taxonomy.dart';
+import '../utils/secondary_skills_utils.dart';
+import '../widgets/secondary_skills_editor.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -25,6 +27,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   String _selectedUserType = 'Electric Guitar';
   String _selectedLevel = 'C = INTERMEDIATE';
   List<String> _selectedGenres = [];
+  List<String> _secondarySkills = [];
   bool _obscurePassword = true;
 
   final List<String> _levels = [
@@ -72,6 +75,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         _nicknameController.text.trim(),
         _selectedLevel,
         _selectedGenres,
+        _secondarySkills,
       );
       if (mounted) {
         Navigator.pushReplacementNamed(context, '/main-nav');
@@ -279,6 +283,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   child: DropdownButtonHideUnderline(
                     child: DropdownButtonFormField<String>(
                       initialValue: _selectedUserType,
+                      isExpanded: true,
                       decoration: const InputDecoration(
                         labelText: 'Primary Skill/Talent (Select 1)',
                         filled: false,
@@ -310,11 +315,22 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         if (newValue != null) {
                           setState(() {
                             _selectedUserType = newValue;
+                            _secondarySkills = SecondarySkillsUtils.reconcileWithPrimary(
+                              _secondarySkills, newValue,
+                            );
                           });
                         }
                       },
                     ),
                   ),
+                ),
+                const SizedBox(height: 16),
+
+                SecondarySkillsEditor(
+                  primarySkill: _selectedUserType,
+                  selected: _secondarySkills,
+                  taxonomyContext: SkillTaxonomyContext.register,
+                  onChanged: (skills) => setState(() => _secondarySkills = skills),
                 ),
                 const SizedBox(height: 16),
 
@@ -443,6 +459,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   child: DropdownButtonHideUnderline(
                     child: DropdownButtonFormField<String>(
                       value: _selectedLevel,
+                      isExpanded: true,
                       decoration: const InputDecoration(
                         labelText: 'Level',
                         filled: false,
@@ -519,8 +536,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 const SizedBox(height: 24),
 
                 // Link to Login screen
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                Wrap(
+                  alignment: WrapAlignment.center,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     Text(
                       "Already have an account? ",

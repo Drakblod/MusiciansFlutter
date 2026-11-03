@@ -14,6 +14,8 @@ import '../widgets/searchable_category_multi_select_sheet.dart';
 import '../widgets/audio_snippet_player.dart';
 import '../data/skills_taxonomy.dart';
 import '../data/genres_taxonomy.dart';
+import '../utils/secondary_skills_utils.dart';
+import '../widgets/secondary_skills_editor.dart';
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
@@ -37,6 +39,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   List<String> _selectedGenres = [];
   late String _level;
   bool _isSaving = false;
+  String? _editingUserId;
 
   final List<String> _levels = [
     'A = PRO',
@@ -72,22 +75,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     if (result != null) {
       setState(() {
         _primarySkills = result;
-        _secondarySkills.removeWhere((item) => _primarySkills.contains(item));
-      });
-    }
-  }
-
-  Future<void> _openSecondarySkillsPicker() async {
-    final result = await SearchableCategoryMultiSelectSheet.show(
-      context: context,
-      title: 'Secondary Skills',
-      categoryMap: _allSkillsCategoryMap,
-      initialSelected: _secondarySkills,
-      presentation: CategoryPickerPresentation.skillsHierarchy,
-    );
-    if (result != null) {
-      setState(() {
-        _secondarySkills = result.where((item) => !_primarySkills.contains(item)).toList();
+        _secondarySkills = SecondarySkillsUtils.reconcileWithPrimary(
+          _secondarySkills, _primarySkills.firstOrNull,
+        );
       });
     }
   }
@@ -115,6 +105,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   void _loadCurrentProfile() {
     final appState = Provider.of<AppState>(context, listen: false);
     final user = appState.currentUserProfile;
+    _editingUserId = user?.userId;
     if (user != null) {
       _nameController.text = user.displayName ?? '';
       _emailController.text = user.email ?? appState.firebaseService.currentUser?.email ?? '';
@@ -135,30 +126,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         }
       }
       
-      final rawAll = List<String>.from(user.instruments)
-          .where((i) => i != 'Browse Musicians' && i != 'Browse Profiles' && i != 'browse_musicians')
-          .toList();
-
-      final role = user.userType ?? '';
-      if (user.mainInstrument != null && user.mainInstrument!.isNotEmpty) {
-        final parsed = user.mainInstrument!.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty && e != 'Browse Musicians' && e != 'Browse Profiles').toList();
-        _primarySkills = parsed.take(1).toList();
-      } else if (role.isNotEmpty && role != 'Browse Musicians' && role != 'Browse Profiles' && role != 'browse_musicians') {
-        _primarySkills = [role];
-      } else if (rawAll.isNotEmpty) {
-        _primarySkills = [rawAll.first];
-      } else {
-        _primarySkills = [];
-      }
-
-      final remaining = rawAll.where((i) => !_primarySkills.contains(i)).toList();
-      if (user.mainInstrument != null && user.mainInstrument!.isNotEmpty) {
-        final parsedAllMain = user.mainInstrument!.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
-        final secondaryFromMain = parsedAllMain.skip(1).toList();
-        _secondarySkills = [...secondaryFromMain, ...remaining.where((i) => !secondaryFromMain.contains(i))].toSet().toList();
-      } else {
-        _secondarySkills = remaining;
-      }
+      _primarySkills = user.mainSkills;
+      _secondarySkills = user.secondarySkills;
 
       _selectedGenres = List<String>.from(user.genres);
       _level = _levels.contains(user.level) ? user.level! : 'C = INTERMEDIATE';
@@ -422,11 +391,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     try {
       final user = appState.currentUserProfile;
       if (user != null) {
-        final allSelectedSkills = <String>[..._primarySkills];
-        for (var s in _secondarySkills) {
-          if (!allSelectedSkills.contains(s)) allSelectedSkills.add(s);
+        if (user.userId != _editingUserId || appState.currentUserId != _editingUserId) {
+          throw StateError('Your account changed. Reopen Edit Profile.');
         }
-        final mainInstrumentStr = ([..._primarySkills, ..._secondarySkills]).join(', ');
+        final allSelectedSkills = SecondarySkillsUtils.buildInstrumentsList(
+          _primarySkills.first, _secondarySkills,
+        );
+        final mainInstrumentStr = _primarySkills.first;
 
         final updatedProfile = UserProfile(
           userId: user.userId,
@@ -440,6 +411,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           profilePictureUrl: _profilePictureUrl,
           genres: _selectedGenres,
           instruments: allSelectedSkills,
+          styles: user.styles,
+          contact: user.contact,
+          history: user.history,
+          projects: user.projects,
+          collabRoles: user.collabRoles,
+          collabRemote: user.collabRemote,
           spotifyUrl: _spotifyController.text.trim().isEmpty ? null : _spotifyController.text.trim(),
           youtubeUrl: _youtubeController.text.trim().isEmpty ? null : _youtubeController.text.trim(),
           audioSnippetUrl: _audioSnippetUrl,
@@ -450,7 +427,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         await appState.firebaseService.saveUserProfileAsync(user.userId ?? '', updatedProfile);
         await appState.refreshProfile();
 
-        if (mounted) {
+        if (mounted && appState.currentUserId == _editingUserId) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Profile updated successfully!'),
@@ -563,6 +540,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final appState = Provider.of<AppState>(context);
+    if (_editingUserId != null && appState.currentUserId != _editingUserId) {
+      return const GradientScaffold(
+        body: Center(child: Text('Your account changed. Reopen Edit Profile.')),
+      );
+    }
     return GradientScaffold(
       appBar: const CustomTopBar(
         showBack: true,
@@ -762,7 +745,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       children: [
                         const Icon(Icons.star_rounded, color: AppTheme.primaryAccent, size: 18),
                         const SizedBox(width: 8),
-                        Text(
+                        Expanded(child: Text(
                           'SKILLS/TALENTS',
                           style: GoogleFonts.outfit(
                             fontSize: 15,
@@ -770,7 +753,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                             color: Colors.white,
                             letterSpacing: 1.2,
                           ),
-                        ),
+                        )),
                       ],
                     ),
                     const SizedBox(height: 16),
@@ -786,7 +769,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Text.rich(
+                              Expanded(child: Text.rich(
                                 TextSpan(
                                   children: [
                                     TextSpan(
@@ -799,7 +782,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                     ),
                                   ],
                                 ),
-                              ),
+                              )),
                               const Icon(Icons.chevron_right_rounded, color: AppTheme.textMuted, size: 20),
                             ],
                           ),
@@ -834,78 +817,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     const Divider(color: Color(0xFF231F45), height: 1),
                     const SizedBox(height: 16),
 
-                    // Secondary Skills (Optional)
-                    AnimatedTapDetector(
-                      enableFocus: true,
-                      semanticLabel: 'Secondary Skills',
-                      onTap: _openSecondarySkillsPicker,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text.rich(
-                                TextSpan(
-                                  children: [
-                                    TextSpan(
-                                      text: 'Secondary Skills',
-                                      style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white70),
-                                    ),
-                                    TextSpan(
-                                      text: ' (Optional)',
-                                      style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.normal, color: Colors.white70),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              Row(
-                                children: [
-                                  if (_secondarySkills.isNotEmpty)
-                                    Container(
-                                      margin: const EdgeInsets.only(right: 6),
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                      decoration: BoxDecoration(
-                                        color: AppTheme.primaryAccent.withOpacity(0.2),
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      child: Text(
-                                        '${_secondarySkills.length}',
-                                        style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.primaryAccent),
-                                      ),
-                                    ),
-                                  const Icon(Icons.chevron_right_rounded, color: AppTheme.textMuted, size: 20),
-                                ],
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          if (_secondarySkills.isEmpty)
-                            Text(
-                              'Tap to add secondary skills...',
-                              style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textMuted, fontStyle: FontStyle.italic),
-                            )
-                          else
-                            Wrap(
-                              spacing: 6,
-                              runSpacing: 6,
-                              children: _secondarySkills.map((skill) {
-                                return InputChip(
-                                  label: Text(skill),
-                                  selected: false,
-                                  onDeleted: () => setState(() => _secondarySkills.remove(skill)),
-                                  deleteIcon: const Icon(Icons.close_rounded, size: 14, color: Colors.white70),
-                                  backgroundColor: const Color(0xFF1B1735),
-                                  labelStyle: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w500, color: Colors.white70),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                                  side: const BorderSide(color: Color(0xFF38325E), width: 1),
-                                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
-                                  visualDensity: VisualDensity.compact,
-                                );
-                              }).toList(),
-                            ),
-                        ],
-                      ),
+                    SecondarySkillsEditor(
+                      primarySkill: _primarySkills.firstOrNull,
+                      selected: _secondarySkills,
+                      taxonomyContext: SkillTaxonomyContext.editProfile,
+                      onChanged: (skills) => setState(() => _secondarySkills = skills),
                     ),
                   ],
                 ),
@@ -930,11 +846,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Row(
+                          Expanded(child: Row(
                             children: [
                               const Icon(Icons.music_note_rounded, color: AppTheme.primaryAccent, size: 18),
                               const SizedBox(width: 8),
-                              Text(
+                              Expanded(child: Text(
                                 'GENRES/BAND TYPES',
                                 style: GoogleFonts.outfit(
                                   fontSize: 15,
@@ -942,9 +858,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                   color: Colors.white,
                                   letterSpacing: 1.2,
                                 ),
-                              ),
+                              )),
                             ],
-                          ),
+                          )),
                           Row(
                             children: [
                               if (_selectedGenres.isNotEmpty)
@@ -1012,6 +928,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 child: DropdownButtonHideUnderline(
                   child: DropdownButtonFormField<String>(
                     value: _level,
+                    isExpanded: true,
                     dropdownColor: AppTheme.cardBackground,
                     style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
                     icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppTheme.textSecondary),
