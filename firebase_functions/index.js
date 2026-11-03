@@ -4367,7 +4367,18 @@ async function handleBandMemberChange(event) {
 exports.onBandMemberWritten = onValueWritten({
   ref: '/Bands/{bandId}/Members_band/{memberId}',
   region: databaseTriggerRegion,
-}, handleBandMemberChange);
+  retry: true,
+}, async (event) => {
+  // Re-read canonical state: delayed/retried events must not resurrect old membership.
+  try {
+    await require('./band_membership_index').reconcileMembershipIndex(
+      admin.database(), event.params.bandId, event.params.memberId);
+  } finally {
+    // Preserve audience reconciliation even if index maintenance needs a retry.
+    await handleBandMemberChange(event);
+  }
+  return null;
+});
 
 /**
  * 10. createSessionConversation

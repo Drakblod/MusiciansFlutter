@@ -1,5 +1,10 @@
 {
   "rules": {
+    "userBandMembershipIndex": {
+      ".read": false,
+      ".write": false,
+      "$uid": { ".read": "auth != null && auth.uid == $uid" }
+    },
     "users": {
       ".read": "auth != null",
       "$userId": {

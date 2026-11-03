@@ -55,13 +55,23 @@ class ReadSpy {
     };
   }
   void index(String uid, List<String> ids) {
-    data['users/$uid/Bands'] = {for (final id in ids) id: {'Name': 'Untrusted cached name'}};
+    data['userBandMembershipIndex/$uid'] = {for (final id in ids) id: true};
   }
   void clearLog() { reads.clear(); writes.clear(); }
 }
 
 class PerformanceService extends guards.GuardService {
   final ReadSpy spy = ReadSpy();
+  int catalogueCalls = 0;
+
+  // Browse Musicians is a separate catalogue flow, excluded from this matrix.
+  // Any membership/access path calling the catalogue fails this gate explicitly.
+  @override
+  Future<List<Band>> getAllBandsAsync() async {
+    catalogueCalls++;
+    throw StateError('Catalogue must not be called by membership/access flows');
+  }
+
   late final FirebaseService reader = FirebaseService(membershipRead: spy.read);
 
   @override
@@ -109,7 +119,7 @@ class PerformanceState extends guards.GuardState {
   final PerformanceService service = PerformanceService();
 }
 List<String> discoveryPaths(String uid, List<String> ids) => [
-  'users/$uid/Bands',
+  'userBandMembershipIndex/$uid',
   for (final id in ids) ...[
     'Bands/$id/Members_band/$uid', 'Bands/$id/Name', 'Bands/$id/isMock', 'Bands/$id/isDemo',
   ],
@@ -146,19 +156,19 @@ void main() {
     state.service.spy.band('foreign', uid: 'b');
     expect(await state.resolveAuthorizedBand('foreign'), isNull);
     expect(state.activeBandId, isNull);
-    expect(state.service.spy.reads, ['users/a/Bands', 'Bands/foreign/Members_band/a']);
+    expect(state.service.spy.reads, ['userBandMembershipIndex/a', 'Bands/foreign/Members_band/a']);
   });
   test('stale deleted-band index entry is rejected without metadata reads', () async {
     final state = PerformanceState();
     state.service.spy.index('a', ['deleted']);
     expect(await state.resolveAuthorizedBand('deleted'), isNull);
-    expect(state.service.spy.reads, ['users/a/Bands', 'Bands/deleted/Members_band/a']);
+    expect(state.service.spy.reads, ['userBandMembershipIndex/a', 'Bands/deleted/Members_band/a']);
   });
   test('unindexed canonical membership is not recovered through a root scan', () async {
     final state = PerformanceState();
     state.service.spy.band('unindexed');
     expect(await state.resolveAuthorizedBand('unindexed'), isNull);
-    expect(state.service.spy.reads, ['users/a/Bands']);
+    expect(state.service.spy.reads, ['userBandMembershipIndex/a']);
   });
   test('membership discovery and verification write nothing including stale entries', () async {
     final state = PerformanceState();
@@ -178,7 +188,7 @@ void main() {
     state.service.spy.gate!.complete();
     expect(await first, isNotNull);
     expect(await second, isNotNull);
-    expect(state.service.spy.reads.where((path) => path == 'users/a/Bands'), hasLength(1));
+    expect(state.service.spy.reads.where((path) => path == 'userBandMembershipIndex/a'), hasLength(1));
     expect(state.service.spy.reads.where((path) => path == 'Bands/valid/Members_band/a'), hasLength(1));
     expect(state.service.spy.reads.where((path) => path == 'Bands/valid'), hasLength(1));
   });
@@ -190,6 +200,7 @@ void main() {
     state.service.uid = 'b';
     expect(state.activeBandId, isNull);
     state.service.spy.index('b', ['valid']);
+    state.service.spy.data['userBandMembershipIndex/b'] = {'valid': {'Name': 'Untrusted cached name'}};
     expect(await state.resolveAuthorizedBand('valid'), isNull);
     expect(state.activeBandId, isNull);
   });
@@ -213,7 +224,7 @@ void main() {
     state.service.spy.clearLog();
     await state.login('b@example.com', 'test-password');
     expect(state.activeBandId, isNull);
-    expect(state.service.spy.reads.where((path) => path.endsWith('/Bands')), ['users/b/Bands']);
+    expect(state.service.spy.reads.where((path) => path.startsWith('userBandMembershipIndex/')), ['userBandMembershipIndex/b']);
   });
   test('failed canonical refresh clears previously selected authorization', () async {
     final state = PerformanceState();
@@ -247,6 +258,7 @@ void main() {
   test('canonical name replaces an untrusted index copy', () async {
     final state = PerformanceState();
     state.service.spy.index('a', ['valid']);
+    state.service.spy.data['userBandMembershipIndex/a'] = {'valid': {'Name': 'Untrusted cached name'}};
     state.service.spy.band('valid', name: 'Actual canonical name');
     await state.refreshBandMemberships();
     expect(state.activeBandName, 'Actual canonical name');
@@ -267,7 +279,7 @@ void main() {
     final service = PerformanceService();
     service.spy.index('a', ['', 'mock_band', 'demo-band', 'mock', 'freelance', 'standalone', 'null', '../other']);
     expect(await service.getUserBandsAsync('a'), isEmpty);
-    expect(service.spy.reads, ['users/a/Bands']);
+    expect(service.spy.reads, ['userBandMembershipIndex/a']);
   });
   test('canonical mock marker rejects an otherwise valid candidate', () async {
     final service = PerformanceService();
@@ -297,7 +309,65 @@ void main() {
     expect(await state.resolveAuthorizedBand('band_123', requireManager: true), isNull);
   });
 
-  // Exact, deterministic point-read matrix for normal navigation. Streaming
+  test('historical canonical membership becomes discoverable after simulated Admin backfill', () async {
+    final state = PerformanceState();
+    state.service.spy.band('historical');
+    expect(await state.resolveAuthorizedBand('historical'), isNull);
+    state.service.spy.index('a', ['historical']); // Admin migration result, not a client write.
+    expect(await state.resolveAuthorizedBand('historical'), isNotNull);
+    expect(state.service.writes, 0);
+  });
+  for (final status in ['inactive', 'removed', 'blocked', 'invited', 'suspended', 'unknown']) {
+    test('canonical $status status rejects a retained index before metadata reads', () async {
+      final state = PerformanceState();
+      final spy = state.service.spy;
+      spy.index('a', ['valid']); spy.band('valid');
+      spy.data['Bands/valid/Members_band/a'] = {'Role': 'Leader', 'Status': status};
+      expect(await state.resolveAuthorizedBand('valid'), isNull);
+      expect(spy.reads, ['userBandMembershipIndex/a', 'Bands/valid/Members_band/a']);
+      expect(spy.writes, isEmpty);
+    });
+  }
+  for (final status in ['on_hold', 'temporarily_off']) {
+    test('availability hold $status preserves canonical band access', () async {
+      final state = PerformanceState();
+      state.service.spy.index('a', ['valid']); state.service.spy.band('valid');
+      state.service.spy.data['Bands/valid/Members_band/a'] = {'Role': 'Member', 'Status': status};
+      expect(await state.refreshBandMemberships(), {'valid': 'Canonical valid'});
+    });
+  }
+  testWidgets('A to B to A rejects delayed first-session membership', (tester) async {
+    final state = PerformanceState();
+    final spy = state.service.spy;
+    spy.index('a', ['old']); spy.band('old');
+    final gate = Completer<void>(); spy.gate = gate;
+    final old = state.resolveAuthorizedBand('old');
+    spy.gate = null;
+    await state.login('b@example.com', 'test-password');
+    spy.index('a', ['fresh']); spy.band('fresh');
+    await state.login('a@example.com', 'test-password');
+    gate.complete();
+    expect(await old, isNull);
+    expect(state.activeBandId, 'fresh');
+    expect(state.service.writes, 0);
+  });
+  test('restored membership read matrix remains bounded and read-only', () async {
+    final state = PerformanceState(); final spy = state.service.spy;
+    spy.index('a', ['one']); spy.band('one');
+    spy.data['Bands/one/Members_band/a'] = null;
+    await state.refreshBandMemberships();
+    spy.band('one'); spy.data.remove('Bands/one/Members_band/a'); spy.clearLog();
+    expect(await state.refreshBandMemberships(), {'one': 'Canonical one'});
+    expect(spy.reads, discoveryPaths('a', ['one']));
+    expect(state.service.catalogueCalls, 0);
+    print('MEMBERSHIP_READ_MATRIX=' + jsonEncode({'scenario': 'restored-membership', 'reads': spy.reads, 'writes': spy.writes.length, 'catalogueCalls': state.service.catalogueCalls}));
+    spy.clearLog(); await state.logout();
+    expect(spy.reads, isEmpty); expect(spy.writes, isEmpty);
+    print('MEMBERSHIP_READ_MATRIX=' + jsonEncode({'scenario': 'logout', 'reads': spy.reads, 'writes': spy.writes.length, 'catalogueCalls': state.service.catalogueCalls}));
+  });
+
+  // Exact membership/access point-read matrix; Browse Musicians is excluded.
+  // Its complete catalogue semantics must remain independent of this gate. Streaming
   // notifications/event subscriptions are fixed empty by the existing fakes.
   for (final scenario in ['login-none', 'login-one', 'login-several', 'profile',
       'band-room', 'find-musician', 'switch-user', 'after-removal',
@@ -317,13 +387,13 @@ void main() {
         await state.refreshBandMemberships();
         spy.clearLog();
         await state.login('b@example.com', 'test-password');
-        expect(spy.reads, ['users/b', 'users/b/metrics/buttonClicks', 'users/b/Bands']);
+        expect(spy.reads, ['users/b', 'users/b/metrics/buttonClicks', 'userBandMembershipIndex/b']);
       } else if (scenario == 'after-removal') {
         await state.refreshBandMemberships();
         spy.data['Bands/one/Members_band/a'] = null;
         spy.clearLog();
         await state.refreshBandMemberships();
-        expect(spy.reads, ['users/a/Bands', 'Bands/one/Members_band/a']);
+        expect(spy.reads, ['userBandMembershipIndex/a', 'Bands/one/Members_band/a']);
       } else {
         // Warm initial auth load before measuring the subsequent opening.
         await tester.pumpWidget(guards.app(state, const SizedBox()));
@@ -361,8 +431,10 @@ void main() {
       expect(spy.reads, isNot(contains('Bands')));
       expect(spy.writes, isEmpty);
       expect(state.service.writes, 0);
+      expect(state.service.catalogueCalls, 0);
       print('MEMBERSHIP_READ_MATRIX=' + jsonEncode({'scenario': scenario,
-        'reads': spy.reads, 'getCount': spy.reads.length, 'writes': spy.writes.length}));
+        'reads': spy.reads, 'getCount': spy.reads.length, 'writes': spy.writes.length,
+        'catalogueCalls': state.service.catalogueCalls}));
     });
   }
 }
