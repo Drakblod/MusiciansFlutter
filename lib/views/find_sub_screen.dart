@@ -19,6 +19,7 @@ import '../utils/thousands_separator_input_formatter.dart';
 import '../widgets/animated_tap_detector.dart';
 import '../widgets/custom_top_bar.dart';
 import '../widgets/gradient_scaffold.dart';
+import '../widgets/authorized_band_gate.dart';
 import '../widgets/searchable_category_multi_select_sheet.dart';
 
 class ResponderItem {
@@ -116,23 +117,40 @@ class EventStaffingSection {
   }
 }
 
-class FindSubScreen extends StatefulWidget {
+class FindSubScreen extends StatelessWidget {
+  final String? eventId;
+  final String? bandId;
+  final SubRequest? initialRequest;
+  const FindSubScreen({super.key, this.eventId, this.bandId, this.initialRequest});
+
+  @override
+  Widget build(BuildContext context) {
+    if (bandId != null && initialRequest?.bandId != null && bandId != initialRequest!.bandId) {
+      return const GradientScaffold(body: NoBandState(staffing: true, managerRequired: true));
+    }
+    return AuthorizedBandGate(
+      requestedBandId: bandId ?? initialRequest?.bandId, staffing: true,
+      builder: (band) => _FindSubForm(eventId: eventId, bandId: band.id, initialRequest: initialRequest),
+    );
+  }
+}
+
+class _FindSubForm extends StatefulWidget {
   final String? eventId;
   final String? bandId;
   final SubRequest? initialRequest;
 
-  const FindSubScreen({
-    super.key,
+  const _FindSubForm({
     this.eventId,
     this.bandId,
     this.initialRequest,
   });
 
   @override
-  State<FindSubScreen> createState() => _FindSubScreenState();
+  State<_FindSubForm> createState() => _FindSubScreenState();
 }
 
-class _FindSubScreenState extends State<FindSubScreen> {
+class _FindSubScreenState extends State<_FindSubForm> {
   final _messageController = TextEditingController();
   final _locationController = TextEditingController();
   final _amountController = TextEditingController(text: '1.500');
@@ -927,6 +945,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
         }
       }
 
+      if (!mounted || await appState.resolveAuthorizedBand(widget.bandId, requireManager: true) == null || !mounted) return;
       await appState.firebaseService.publishSubRequestGroupAsync(
         bandId: effectiveBandId,
         requestGroupId: groupId,
@@ -3037,6 +3056,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
         extraFields: {'PublicationId': pubId},
       );
 
+      if (!mounted || await appState.resolveAuthorizedBand(widget.bandId, requireManager: true) == null || !mounted) return;
       await appState.firebaseService.publishSubRequestGroupAsync(
         bandId: effectiveBandId,
         requestGroupId: groupId,
@@ -3437,6 +3457,7 @@ class _FindSubScreenState extends State<FindSubScreen> {
         extraFields: {'eventType': evType, 'PublicationId': pubId},
       );
 
+      if (!mounted || await appState.resolveAuthorizedBand(widget.bandId, requireManager: true) == null || !mounted) return;
       await appState.firebaseService.publishSubRequestGroupAsync(
         bandId: effectiveBandId,
         requestGroupId: groupId,

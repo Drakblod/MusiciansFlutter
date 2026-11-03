@@ -12,6 +12,7 @@ import 'package:musicians_flutter/providers/app_state.dart';
 import 'package:musicians_flutter/services/firebase_service.dart';
 import 'package:musicians_flutter/models/sub_request.dart';
 import 'package:musicians_flutter/views/home_screen.dart';
+import 'package:musicians_flutter/views/band_room_chat_screen.dart';
 
 class MockFirebaseServiceForBadges extends FirebaseService {
   final Map<String, int> markedFeatures = {};
@@ -511,7 +512,8 @@ void main() {
             '/find-gigs': (context) => const Scaffold(body: Text('Find Gigs Screen')),
             '/find-sub': (context) => const Scaffold(body: Text('Find Sub Screen')),
             '/collabs': (context) => const Scaffold(body: Text('Collabs Screen')),
-            '/band-room': (context) => const Scaffold(body: Text('Band Room Screen')),
+            '/band-room': (context) => (appState.firebaseService as MockFirebaseServiceForBadges).userBands.isEmpty
+                ? const BandRoomChatScreen() : const Scaffold(body: Text('Band Room Screen')),
           },
         ),
       );
@@ -751,7 +753,9 @@ void main() {
 
       // Did NOT navigate to Band Room Screen
       expect(find.text('Band Room Screen'), findsNothing);
-      expect(find.text('You need to be part of a band to access Band Room.'), findsOneWidget);
+      expect(find.text('You’re not in a band yet'), findsOneWidget);
+      expect(find.byType(SnackBar), findsNothing);
+      expect(find.text('Create a Band'), findsOneWidget);
 
       // Red dot remains, markFeatureAsRead was NOT called
       expect(appState.hasUnreadActivity('band_room'), isTrue);

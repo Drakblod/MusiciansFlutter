@@ -17,6 +17,7 @@ import '../models/event_room.dart';
 import '../widgets/animated_tap_detector.dart';
 import '../widgets/custom_top_bar.dart';
 import '../widgets/gradient_scaffold.dart';
+import '../widgets/authorized_band_gate.dart';
 import '../widgets/rsvp_reminder_dialog.dart';
 import 'create_event_page.dart';
 import 'event_details_page.dart';
@@ -29,14 +30,22 @@ import '../utils/date_parser.dart';
 import '../widgets/create_band_section_sheet.dart';
 import '../widgets/secondary_skills_badge.dart';
 
-class BandRoomChatScreen extends StatefulWidget {
+class BandRoomChatScreen extends StatelessWidget {
   const BandRoomChatScreen({super.key});
-
   @override
-  State<BandRoomChatScreen> createState() => _BandRoomChatScreenState();
+  Widget build(BuildContext context) => AuthorizedBandGate(
+    builder: (band) => const _BandRoomContent(),
+  );
 }
 
-class _BandRoomChatScreenState extends State<BandRoomChatScreen>
+class _BandRoomContent extends StatefulWidget {
+  const _BandRoomContent();
+
+  @override
+  State<_BandRoomContent> createState() => _BandRoomChatScreenState();
+}
+
+class _BandRoomChatScreenState extends State<_BandRoomContent>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final _messageController = TextEditingController();
@@ -140,7 +149,7 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
       final appState = Provider.of<AppState>(context, listen: false);
       final userId = appState.currentUserId;
       if (userId != null) {
-        final userBands = await appState.firebaseService.getUserBandsAsync(userId);
+        final userBands = await appState.refreshBandMemberships();
         if (userBands.isNotEmpty) {
           appState.selectBand(userBands.keys.first, userBands.values.first);
           return;
@@ -879,57 +888,7 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
     );
   }
 
-  Widget _buildNoActiveBandView() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.groups_outlined, size: 64, color: AppTheme.textSecondary),
-            const SizedBox(height: 16),
-            Text(
-              'No Active Band',
-              style: GoogleFonts.outfit(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Create or join a band to start sharing messages, files, and calendar events.',
-              textAlign: TextAlign.center,
-              style: GoogleFonts.inter(
-                fontSize: 14,
-                color: AppTheme.textSecondary,
-              ),
-            ),
-            const SizedBox(height: 24),
-            AnimatedTapDetector(
-              onTap: () {
-                Navigator.pushNamed(context, '/create-band');
-              },
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                decoration: BoxDecoration(
-                  gradient: AppTheme.primaryGradient,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  'Create a Band',
-                  style: GoogleFonts.inter(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  Widget _buildNoActiveBandView() => const NoBandState();
 
   Widget _buildBandRoomContent(AppState appState) {
     final bandName = _activeBand?.name ?? 'Band Room';
@@ -963,7 +922,7 @@ class _BandRoomChatScreenState extends State<BandRoomChatScreen>
                       );
 
                       try {
-                        final bands = await appState.firebaseService.getUserBandsAsync(userId);
+                        final bands = await appState.refreshBandMemberships();
                         if (context.mounted) {
                           Navigator.pop(context); // Dismiss loader
                         }

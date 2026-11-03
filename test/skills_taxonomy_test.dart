@@ -6,6 +6,8 @@ import 'package:provider/provider.dart';
 
 import 'package:musicians_flutter/data/skills_taxonomy.dart';
 import 'package:musicians_flutter/models/user_profile.dart';
+import 'package:musicians_flutter/models/band.dart';
+import 'package:musicians_flutter/models/sub_request.dart';
 import 'package:musicians_flutter/providers/app_state.dart';
 import 'package:musicians_flutter/services/firebase_service.dart';
 import 'package:musicians_flutter/views/browse_musicians_screen.dart';
@@ -17,8 +19,24 @@ import 'package:musicians_flutter/views/find_sub_screen.dart';
 import 'package:musicians_flutter/views/producer_search_screen.dart';
 import 'package:musicians_flutter/views/register_screen.dart';
 import 'package:musicians_flutter/widgets/searchable_category_multi_select_sheet.dart';
+import 'package:musicians_flutter/widgets/skill_picker.dart';
 
 class MockTaxonomyFirebaseService extends FirebaseService {
+  @override
+  bool get isLoggedIn => true;
+  @override
+  String? get currentUserId => 'test_user_taxonomy';
+  @override
+  Future<void> initializePushNotifications() async {}
+
+  @override
+  Future<Map<String, String>> getUserBandsAsync(String userId) async => {'taxonomy_band': 'Taxonomy Band'};
+  @override
+  Future<Band?> getBandInfoAsync(String bandId) async => Band(id: bandId, name: 'Taxonomy Band',
+    membersBand: {'test_user_taxonomy': BandMember(userId: 'test_user_taxonomy', role: 'Leader')});
+  @override
+  Future<List<SubRequest>> getUserSubRequestsAsync(String userId) async => [];
+
   @override
   Future<UserProfile?> getUserProfileAsync([String? userId]) async {
     return UserProfile(
@@ -391,7 +409,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
 
       expect(find.byType(SearchableCategoryMultiSelectSheet), findsOneWidget);
-      for (final cat in expectedMasterCategoryLabels) {
+      for (final cat in expectedMasterCategoryLabels.where((label) => label != 'Sessions')) {
         if (cat.contains('(') && cat.contains('Voices')) {
           expect(
             find.byWidgetPredicate(
@@ -403,6 +421,8 @@ void main() {
         }
       }
 
+      expect(find.text('Sessions'), findsNothing);
+
       // Single select sheet closes via pop or item tap
       Navigator.pop(tester.element(find.byType(SearchableCategoryMultiSelectSheet)));
       await tester.pump();
@@ -410,7 +430,7 @@ void main() {
       expect(find.byType(SearchableCategoryMultiSelectSheet), findsNothing);
     });
 
-    testWidgets('18. RegisterScreen renders flat dropdown with exact default and user types', (WidgetTester tester) async {
+    testWidgets('18. RegisterScreen renders canonical single-select primary editor', (WidgetTester tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() => tester.view.resetPhysicalSize());
@@ -420,6 +440,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
 
       expect(find.text('Electric Guitar'), findsOneWidget);
+      expect(find.byType(PrimarySkillEditor), findsOneWidget);
     });
 
     testWidgets('19. BrowseMusiciansScreen opens filter picker with master categories', (WidgetTester tester) async {
@@ -504,6 +525,9 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
+      // Allow the destination authorization and form load to finish.
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
       final instrumentTitle = find.text('Role / Instrument');
       expect(instrumentTitle, findsOneWidget);
 

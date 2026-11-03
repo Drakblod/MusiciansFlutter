@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../data/skills_taxonomy.dart';
 import '../utils/secondary_skills_utils.dart';
-import 'searchable_category_multi_select_sheet.dart';
+import 'skill_picker.dart';
 
 /// Local draft editor; only the parent form's save persists selections.
 class SecondarySkillsEditor extends StatelessWidget {
@@ -19,25 +19,12 @@ class SecondarySkillsEditor extends StatelessWidget {
   });
 
   Future<void> _openPicker(BuildContext context) async {
-    final primary = primarySkill?.trim().toLowerCase();
-    final allowed = SkillsTaxonomy.optionsFor(taxonomyContext)
-        .where((option) => option.kind != SkillOptionKind.action &&
-            option.kind != SkillOptionKind.legacyHeader)
-        .map((option) => option.persistedValue).toSet();
-    final categories = <String, List<String>>{};
-    SkillsTaxonomy.categoryMapFor(SkillTaxonomyContext.editProfile).forEach((category, items) {
-      final available = items.where((label) {
-        final value = SkillsTaxonomy.getPersistedValueForDisplayLabel(label);
-        return allowed.contains(value) && value.toLowerCase() != primary;
-      }).toList();
-      if (available.isNotEmpty) categories[category] = available;
-    });
-    final result = await SearchableCategoryMultiSelectSheet.show(
-      context: context,
+    final result = await SkillPicker.show(
+      context,
       title: 'Secondary Skills (optional)',
-      categoryMap: categories,
-      initialSelected: selected,
-      presentation: CategoryPickerPresentation.skillsHierarchy,
+      taxonomyContext: taxonomyContext,
+      selected: selected,
+      excludedSkill: primarySkill,
     );
     if (!context.mounted || result == null) return;
     onChanged(SecondarySkillsUtils.normalize(result, primarySkill: primarySkill));

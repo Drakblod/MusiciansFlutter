@@ -21,6 +21,7 @@ import 'package:musicians_flutter/views/register_screen.dart';
 import 'package:musicians_flutter/views/musician_profile_screen.dart';
 import 'package:musicians_flutter/views/edit_profile_screen.dart';
 import 'package:musicians_flutter/widgets/secondary_skills_editor.dart';
+import 'package:musicians_flutter/widgets/skill_picker.dart';
 import 'package:musicians_flutter/widgets/secondary_skills_badge.dart';
 import 'package:musicians_flutter/widgets/searchable_category_multi_select_sheet.dart';
 
@@ -296,8 +297,8 @@ void main() {
     await settle(tester);
     tester.widget<SecondarySkillsEditor>(find.byType(SecondarySkillsEditor)).onChanged(['Electric Bass', 'Piano']);
     await tester.pump();
-    final primary = tester.widget<DropdownButtonFormField<String>>(find.byType(DropdownButtonFormField<String>).first);
-    primary.onChanged!('Electric Bass');
+    final primary = tester.widget<PrimarySkillEditor>(find.byType(PrimarySkillEditor));
+    primary.onChanged('Electric Bass');
     await tester.pump();
     final editor = tester.widget<SecondarySkillsEditor>(find.byType(SecondarySkillsEditor));
     expect(editor.primarySkill, 'Electric Bass');

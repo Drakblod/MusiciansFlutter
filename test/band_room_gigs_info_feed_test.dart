@@ -17,6 +17,16 @@ import 'package:musicians_flutter/views/event_results_page.dart';
 import 'package:musicians_flutter/widgets/animated_tap_detector.dart';
 
 class MockGigsInfoFirebaseService extends FirebaseService {
+  @override
+  bool get isLoggedIn => true;
+  @override
+  String? get currentUserId => 'leader_1';
+  @override
+  Future<void> initializePushNotifications() async {}
+
+  @override
+  Future<Map<String, String>> getUserBandsAsync(String userId) async => {'band_feed_test': 'Rock Band'};
+
   BandEvent? testEvent;
   List<BandEvent> testEventsList = [];
   List<BandMember> testMembers = [];
@@ -71,6 +81,7 @@ class MockGigsInfoFirebaseService extends FirebaseService {
     return Band(
       id: bandId,
       name: 'Rock Band',
+      membersBand: {'leader_1': BandMember(userId: 'leader_1', role: 'Leader')},
       description: 'Test Band',
     );
   }

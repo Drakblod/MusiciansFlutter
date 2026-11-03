@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/firebase_service.dart';
 import '../models/user_profile.dart';
+import '../models/band.dart';
+import '../utils/band_membership_policy.dart';
 import '../models/app_notification.dart';
 import '../main.dart';
 import '../models/sub_request.dart';
@@ -16,6 +18,13 @@ class AppState extends ChangeNotifier {
   UserProfile? _currentUserProfile;
   String? _activeBandId;
   String? _activeBandName;
+  String? _bandOwnerUid;
+  Map<String, String> _authorizedBands = {};
+  int _bandReadGeneration = 0;
+  Future<Map<String, String>>? _bandLoad;
+  String? _bandLoadUid;
+  bool _bandSessionEnding = false;
+  final Map<String, Future<Band?>> _bandVerificationLoads = {};
   bool _hasUnreadMessages = false;
   int _unreadNotificationCount = 0;
   List<AppNotification> _userNotifications = [];
@@ -235,8 +244,10 @@ class AppState extends ChangeNotifier {
   }
 
   UserProfile? get currentUserProfile => _currentUserProfile;
-  String? get activeBandId => _activeBandId;
-  String? get activeBandName => _activeBandName;
+  String? get activeBandId => !_bandSessionEnding && _bandOwnerUid == currentUserId &&
+      _authorizedBands.containsKey(_activeBandId) ? _activeBandId : null;
+  String? get activeBandName => activeBandId == null ? null : _activeBandName;
+  bool get hasAuthorizedBand => activeBandId != null;
   bool get hasUnreadMessages => _hasUnreadMessages;
   int get unreadNotificationCount => _unreadNotificationCount;
   bool get isLoading => _isLoading;
@@ -327,6 +338,12 @@ class AppState extends ChangeNotifier {
 
   void _clearProfileState() {
     _currentUserProfile = null;
+    _bandReadGeneration++;
+    _bandLoad = null;
+    _bandLoadUid = null;
+    _bandVerificationLoads.clear();
+    _bandOwnerUid = null;
+    _authorizedBands = {};
     _activeBandId = null;
     _activeBandName = null;
     _hasUnreadMessages = false;
@@ -371,12 +388,9 @@ class AppState extends ChangeNotifier {
           unawaited(firebaseService.initializePushNotifications());
         }
         await _loadButtonClicks();
-        final bands = await firebaseService.getUserBandsAsync(uid);
-        if (bands.isNotEmpty && _activeBandId == null) {
-          final firstBandId = bands.keys.first;
-          _activeBandId = firstBandId;
-          _activeBandName = bands[firstBandId];
-        }
+        if (currentUserId != uid) return;
+        await refreshBandMemberships();
+        if (currentUserId != uid) return;
         handlePendingNotification();
       }
     } catch (e) {
@@ -442,6 +456,7 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> login(String email, String password) async {
+    _bandSessionEnding = false;
     _isLoading = true;
     _clearProfileState();
     notifyListeners();
@@ -465,6 +480,7 @@ class AppState extends ChangeNotifier {
     List<String>? genres,
     List<String>? secondarySkills,
   ]) async {
+    _bandSessionEnding = false;
     _isLoading = true;
     _clearProfileState();
     notifyListeners();
@@ -488,11 +504,12 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> logout() async {
+    _bandSessionEnding = true;
     _isLoading = true;
+    _clearProfileState();
     notifyListeners();
     try {
       await firebaseService.logoutAsync();
-      _clearProfileState();
     } catch (e) {
       debugPrint("Error on logout: $e");
     } finally {
@@ -538,9 +555,81 @@ class AppState extends ChangeNotifier {
   }
 
   void selectBand(String bandId, String bandName) {
+    if (_bandOwnerUid != currentUserId || !_authorizedBands.containsKey(bandId)) {
+      return;
+    }
     _activeBandId = bandId;
-    _activeBandName = bandName;
+    _activeBandName = _authorizedBands[bandId];
     notifyListeners();
+  }
+
+  Future<Map<String, String>> refreshBandMemberships() {
+    if (_bandSessionEnding) {
+      return Future.value(const <String, String>{});
+    }
+    final uid = currentUserId;
+    if (_bandLoad != null && _bandLoadUid == uid) return _bandLoad!;
+    _bandLoadUid = uid;
+    final request = _readBandMemberships();
+    _bandLoad = request;
+    return request.whenComplete(() {
+      if (identical(_bandLoad, request)) _bandLoad = null;
+    });
+  }
+
+  Future<Map<String, String>> _readBandMemberships() async {
+    final uid = currentUserId;
+    final generation = ++_bandReadGeneration;
+    if (_bandOwnerUid != uid) {
+      _bandVerificationLoads.clear();
+      _authorizedBands = {};
+      _activeBandId = null;
+      _activeBandName = null;
+      _bandOwnerUid = uid;
+    }
+    if (uid == null || uid.isEmpty) return const {};
+    final Map<String, String> bands;
+    try {
+      bands = await firebaseService.getUserBandsAsync(uid);
+    } catch (_) {
+      if (currentUserId == uid && generation == _bandReadGeneration) {
+        _authorizedBands = {};
+        _activeBandId = null;
+        _activeBandName = null;
+        notifyListeners();
+      }
+      rethrow;
+    }
+    if (currentUserId != uid || generation != _bandReadGeneration) return const {};
+    _authorizedBands = Map.fromEntries(bands.entries.where((entry) =>
+      BandMembershipPolicy.isRealId(entry.key) && entry.value.trim().isNotEmpty));
+    if (!_authorizedBands.containsKey(_activeBandId)) {
+      _activeBandId = _authorizedBands.keys.firstOrNull;
+    }
+    _activeBandName = _authorizedBands[_activeBandId];
+    notifyListeners();
+    return Map.unmodifiable(_authorizedBands);
+  }
+
+  Future<Band?> resolveAuthorizedBand(String? requestedBandId, {bool requireManager = false}) async {
+    final uid = currentUserId;
+    final bands = await refreshBandMemberships();
+    if (uid == null || currentUserId != uid) return null;
+    final bandId = requestedBandId ?? activeBandId;
+    if (bandId == null || !bands.containsKey(bandId)) return null;
+    final generation = _bandReadGeneration;
+    final verificationKey = '$uid/$bandId/$generation';
+    final band = await _bandVerificationLoads.putIfAbsent(verificationKey, () {
+      return firebaseService.getBandInfoAsync(bandId).whenComplete(() {
+        _bandVerificationLoads.remove(verificationKey);
+      });
+    });
+    if (generation != _bandReadGeneration || currentUserId != uid || !BandMembershipPolicy.isMember(band, uid) ||
+        (requireManager && !BandMembershipPolicy.canStaff(band, uid))) {
+      return null;
+    }
+    selectBand(bandId, band!.name!);
+    return band;
   }
 
   Future<void> refreshProfile() async {
@@ -549,17 +638,8 @@ class AppState extends ChangeNotifier {
       final profile = await firebaseService.getUserProfileAsync(uid);
       if (uid == null || currentUserId != uid) return;
       _currentUserProfile = profile;
-      if (currentUserId != null) {
-        final bands = await firebaseService.getUserBandsAsync(uid);
-        if (currentUserId != uid) return;
-        if (bands.isNotEmpty) {
-          if (_activeBandId == null || !bands.containsKey(_activeBandId)) {
-            final firstBandId = bands.keys.first;
-            _activeBandId = firstBandId;
-            _activeBandName = bands[firstBandId];
-          }
-        }
-      }
+      await refreshBandMemberships();
+      if (currentUserId != uid) return;
       notifyListeners();
     }
   }

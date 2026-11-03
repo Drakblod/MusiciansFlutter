@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:musicians_flutter/models/band.dart';
+import 'package:musicians_flutter/utils/band_membership_policy.dart';
 import 'package:musicians_flutter/models/band_event.dart';
 import 'package:musicians_flutter/models/event_room.dart';
 import 'package:musicians_flutter/models/message.dart';
@@ -15,6 +16,7 @@ import 'package:provider/provider.dart';
 class MockFirebaseServiceForHoldTest extends Fake implements FirebaseService {
   final Map<String, dynamic> mockBandData = {
     'BandName': 'Rock Legends',
+    'Name': 'Rock Legends',
     'UserRole': 'Leader',
     'Members_band': {
       'user_leader': {
@@ -133,6 +135,14 @@ class MockFirebaseServiceForHoldTest extends Fake implements FirebaseService {
 
 class MockAppStateForHoldTest extends Fake with ChangeNotifier implements AppState {
   final MockFirebaseServiceForHoldTest mockFirebase = MockFirebaseServiceForHoldTest();
+
+  @override
+  Future<Band?> resolveAuthorizedBand(String? requestedBandId, {bool requireManager = false}) async {
+    if (requestedBandId != null && requestedBandId != activeBandId) return null;
+    final band = await mockFirebase.getBandInfoAsync(activeBandId!);
+    return BandMembershipPolicy.isMember(band, currentUserId) &&
+        (!requireManager || BandMembershipPolicy.canStaff(band, currentUserId)) ? band : null;
+  }
 
   @override
   FirebaseService get firebaseService => mockFirebase;

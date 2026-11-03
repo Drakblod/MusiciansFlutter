@@ -72,6 +72,7 @@ class MockRoutingFirebaseService extends Fake implements FirebaseService {
     return Band(
       id: bandId,
       name: 'Rock Band',
+      membersBand: {'user_1': BandMember(userId: 'user_1', role: 'Leader')},
     );
   }
 

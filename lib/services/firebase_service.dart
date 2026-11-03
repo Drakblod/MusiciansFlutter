@@ -24,8 +24,15 @@ import '../models/public_calendar_event.dart';
 import '../models/map_event_item.dart';
 import '../utils/date_parser.dart';
 import '../utils/secondary_skills_utils.dart';
+import '../utils/band_membership_policy.dart';
 
 class FirebaseService {
+  // Optional read-only adapter for deterministic membership path tests.
+  // Production callers use the existing authenticated RTDB reference.
+  final Future<Object?> Function(String path)? _membershipRead;
+  FirebaseService({Future<Object?> Function(String path)? membershipRead})
+      : _membershipRead = membershipRead;
+
   static final StreamController<Map<String, dynamic>>
   _notificationClickStreamController =
       StreamController<Map<String, dynamic>>.broadcast();
@@ -364,74 +371,11 @@ class FirebaseService {
   // ==========================================
 
   Future<Map<String, String>> getUserBandsAsync(String userId) async {
-    final Map<String, String> bands = {};
-
-    // 1. Check user's direct Bands map
-    try {
-      final snapshot = await _dbRef('users/$userId/Bands').get();
-      if (snapshot.exists) {
-        final value = snapshot.value;
-        if (value is Map) {
-          value.forEach((k, v) {
-            final bandId = k.toString();
-            if (v is Map) {
-              final name =
-                  v['Name']?.toString() ?? v['name']?.toString() ?? bandId;
-              bands[bandId] = name;
-            } else if (v is String) {
-              bands[bandId] = v;
-            } else {
-              bands[bandId] = bandId;
-            }
-          });
-        } else if (value is List) {
-          for (int i = 0; i < value.length; i++) {
-            final item = value[i];
-            if (item != null) {
-              if (item is Map) {
-                final name =
-                    item['Name']?.toString() ??
-                    item['name']?.toString() ??
-                    i.toString();
-                bands[i.toString()] = name;
-              } else {
-                bands[i.toString()] = item.toString();
-              }
-            }
-          }
-        }
-      }
-    } catch (_) {}
-
-    // 2. Fallback / discovery from root Bands collection where user is listed in Members_band
-    try {
-      final bandsSnap = await _dbRef('Bands').get();
-      if (bandsSnap.exists && bandsSnap.value is Map) {
-        final allBands = Map<String, dynamic>.from(bandsSnap.value as Map);
-        for (final entry in allBands.entries) {
-          final bandId = entry.key.toString();
-          final bandData = entry.value;
-          if (bandData is Map) {
-            final members = bandData['Members_band'];
-            if (members is Map &&
-                (members.containsKey(userId) ||
-                    members.keys.any((k) => k.toString() == userId))) {
-              final name =
-                  bandData['Name']?.toString() ?? bandData['name']?.toString() ?? bandId;
-              bands[bandId] = name;
-              // If querying for the currently authenticated user, self-sync to users/$userId/Bands
-              if (userId == currentUserId) {
-                try {
-                  await _dbRef('users/$userId/Bands/$bandId').set(bandData);
-                } catch (_) {}
-              }
-            }
-          }
-        }
-      }
-    } catch (_) {}
-
-    return bands;
+    return BandMembershipPolicy.discover(userId, (path) async {
+      final adapter = _membershipRead;
+      if (adapter != null) return adapter(path);
+      return (await _dbRef(path).get()).value;
+    });
   }
 
   Future<Band?> getBandInfoAsync(String bandId) async {

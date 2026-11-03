@@ -833,50 +833,16 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: AppTheme.cardBackground,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFF231F45), width: 1),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: AppTheme.primaryAccent.withOpacity(0.12),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Icon(Icons.groups_rounded, color: AppTheme.primaryAccent, size: 22),
-                    ),
-                    const SizedBox(width: 12),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          appState.activeBandName ?? 'Deku Tree Bongo',
-                          style: GoogleFonts.outfit(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          appState.activeBandId != null ? 'Active' : 'Default Mock Band',
-                          style: GoogleFonts.inter(
-                            fontSize: 11,
-                            color: AppTheme.textSecondary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ],
-            ),
+            decoration: BoxDecoration(color: AppTheme.cardBackground,
+              borderRadius: BorderRadius.circular(16)),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(appState.hasAuthorizedBand ? appState.activeBandName! : 'No active band',
+                style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+              const SizedBox(height: 8),
+              if (!appState.hasAuthorizedBand) TextButton(
+                onPressed: () => Navigator.pushNamed(context, '/create-band'),
+                child: const Text('Create a Band')),
+            ]),
           ),
           const SizedBox(height: 24),
 

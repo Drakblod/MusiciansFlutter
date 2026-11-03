@@ -8,6 +8,7 @@ import '../widgets/animated_tap_detector.dart';
 import '../widgets/custom_top_bar.dart';
 import '../config/feature_toggles.dart';
 import '../controllers/global_create_event_launcher.dart';
+import '../widgets/authorized_band_gate.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -30,27 +31,18 @@ class HomeScreen extends StatelessWidget {
     );
 
     try {
-      final bands = await appState.firebaseService.getUserBandsAsync(userId);
+      final bands = await appState.refreshBandMemberships();
       if (context.mounted) {
         Navigator.pop(context); // Dismiss loading dialog
       }
 
+      if (!context.mounted || appState.currentUserId != userId) return false;
       if (bands.isEmpty) {
-        if (routeName == '/band-room') {
-          if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('You need to be part of a band to access Band Room.'),
-                backgroundColor: AppTheme.danger,
-              ),
-            );
-          }
+        if (routeName == '/find-sub') {
+          await NoBandState.showStaffingDialog(context);
           return false;
         }
-        if (context.mounted) {
-          await Navigator.pushNamed(context, routeName);
-          return true;
-        }
+        await Navigator.pushNamed(context, routeName);
         return false;
       } else if (bands.length == 1) {
         if (context.mounted) {
@@ -530,7 +522,6 @@ class HomeScreen extends StatelessWidget {
         badgeCount: appState.unreadActivityCount('find_musicians'),
         showRedDot: appState.hasUnreadActivity('find_musicians'),
         onTap: () async {
-          appState.trackButtonClick('find_musicians');
           final isProducer = profile?.instruments.contains('PRODUCER') == true ||
               profile?.userType == 'PRODUCER';
           bool navigated = false;
@@ -540,6 +531,7 @@ class HomeScreen extends StatelessWidget {
           } else {
             navigated = await _handleBandNavigation(context, appState, '/find-sub');
           }
+          if (navigated) appState.trackButtonClick('find_musicians');
           if (navigated && context.mounted && appState.hasUnreadActivity('find_musicians')) {
             appState.markFeatureAsRead('find_musicians');
           }
@@ -580,8 +572,8 @@ class HomeScreen extends StatelessWidget {
         badgeCount: appState.unreadActivityCount('band_room'),
         showRedDot: appState.hasUnreadActivity('band_room'),
         onTap: () async {
-          appState.trackButtonClick('band_room');
           final navigated = await _handleBandNavigation(context, appState, '/band-room');
+          if (navigated) appState.trackButtonClick('band_room');
           if (navigated && context.mounted && appState.hasUnreadActivity('band_room')) {
             appState.markFeatureAsRead('band_room');
           }
@@ -957,27 +949,18 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
     );
 
     try {
-      final bands = await appState.firebaseService.getUserBandsAsync(userId);
+      final bands = await appState.refreshBandMemberships();
       if (context.mounted) {
         Navigator.pop(context); // Dismiss loading dialog
       }
 
+      if (!context.mounted || appState.currentUserId != userId) return false;
       if (bands.isEmpty) {
-        if (routeName == '/band-room') {
-          if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('You need to be part of a band to access Band Room.'),
-                backgroundColor: AppTheme.danger,
-              ),
-            );
-          }
+        if (routeName == '/find-sub') {
+          await NoBandState.showStaffingDialog(context);
           return false;
         }
-        if (context.mounted) {
-          await Navigator.pushNamed(context, routeName);
-          return true;
-        }
+        await Navigator.pushNamed(context, routeName);
         return false;
       } else if (bands.length == 1) {
         if (context.mounted) {

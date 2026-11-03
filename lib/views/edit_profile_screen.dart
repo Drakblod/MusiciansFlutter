@@ -16,6 +16,7 @@ import '../data/skills_taxonomy.dart';
 import '../data/genres_taxonomy.dart';
 import '../utils/secondary_skills_utils.dart';
 import '../widgets/secondary_skills_editor.dart';
+import '../widgets/skill_picker.dart';
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
@@ -56,22 +57,18 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   String? _pickedAudioFileName;
   bool _isUploadingAudio = false;
 
-  // Master Skills & Talents Category Map
-  static Map<String, List<String>> get _allSkillsCategoryMap =>
-      SkillsTaxonomy.categoryMapFor(SkillTaxonomyContext.editProfile);
-
   // PDF Specified Genre & Band Types Categories
   static final Map<String, List<String>> _genreCategoryMap = GenresTaxonomy.categoryMap;
 
   Future<void> _openPrimarySkillPicker() async {
-    final result = await SearchableCategoryMultiSelectSheet.show(
-      context: context,
+    final result = await SkillPicker.show(
+      context,
       title: 'Primary Skill/Talent (Select 1)',
-      categoryMap: _allSkillsCategoryMap,
-      initialSelected: _primarySkills,
-      maxSelection: 1,
-      presentation: CategoryPickerPresentation.skillsHierarchy,
+      taxonomyContext: SkillTaxonomyContext.editProfile,
+      selected: _primarySkills,
+      singleSelect: true,
     );
+    if (!mounted) return;
     if (result != null) {
       setState(() {
         _primarySkills = result;

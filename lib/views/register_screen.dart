@@ -10,6 +10,7 @@ import '../data/skills_taxonomy.dart';
 import '../data/genres_taxonomy.dart';
 import '../utils/secondary_skills_utils.dart';
 import '../widgets/secondary_skills_editor.dart';
+import '../widgets/skill_picker.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -37,9 +38,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     'D = AMATEUR',
     'E = BEGINNER',
   ];
-
-  List<String> get _userTypes =>
-      SkillsTaxonomy.persistedValuesFor(SkillTaxonomyContext.register);
 
   @override
   void dispose() {
@@ -266,63 +264,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 ),
                 const SizedBox(height: 16),
 
-                // 4. Primary Skill/Talent Selection (Exactly 1 choice)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppTheme.inputBackground,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: const Color(0xFF2E2A4E),
-                      width: 1,
-                    ),
-                  ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButtonFormField<String>(
-                      initialValue: _selectedUserType,
-                      isExpanded: true,
-                      decoration: const InputDecoration(
-                        labelText: 'Primary Skill/Talent (Select 1)',
-                        filled: false,
-                        border: InputBorder.none,
-                        enabledBorder: InputBorder.none,
-                        focusedBorder: InputBorder.none,
-                        contentPadding: EdgeInsets.zero,
-                        prefixIcon: Icon(
-                          Icons.music_note_outlined,
-                          color: AppTheme.textSecondary,
-                        ),
-                      ),
-                      dropdownColor: AppTheme.cardBackground,
-                      style: GoogleFonts.inter(
-                        color: Colors.white,
-                        fontSize: 14,
-                      ),
-                      icon: const Icon(
-                        Icons.keyboard_arrow_down_rounded,
-                        color: AppTheme.textSecondary,
-                      ),
-                      items: _userTypes.map((String value) {
-                        return DropdownMenuItem<String>(
-                          value: value,
-                          child: Text(value),
-                        );
-                      }).toList(),
-                      onChanged: (newValue) {
-                        if (newValue != null) {
-                          setState(() {
-                            _selectedUserType = newValue;
-                            _secondarySkills = SecondarySkillsUtils.reconcileWithPrimary(
-                              _secondarySkills, newValue,
-                            );
-                          });
-                        }
-                      },
-                    ),
-                  ),
+                PrimarySkillEditor(
+                  selected: _selectedUserType,
+                  taxonomyContext: SkillTaxonomyContext.register,
+                  onChanged: (value) => setState(() {
+                    _selectedUserType = value;
+                    _secondarySkills = SecondarySkillsUtils.reconcileWithPrimary(
+                      _secondarySkills, value);
+                  }),
                 ),
                 const SizedBox(height: 16),
 

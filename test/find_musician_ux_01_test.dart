@@ -174,6 +174,9 @@ Future<void> _pumpFindSubScreen(
   await tester.pumpWidget(_createTestApp(appState, initialRequest: initialRequest));
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 200));
+  // The destination now verifies canonical membership before constructing the form.
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 200));
 }
 
 
@@ -190,6 +193,8 @@ void main() {
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
     appState = _MockFindMusicianAppState();
+    appState.mockService.bandInfo = Band(id: 'band_1', name: 'Test Band',
+      membersBand: {'organizer_1': BandMember(userId: 'organizer_1', role: 'Leader')});
     appState.testUserProfile = UserProfile(
       userId: 'organizer_1',
       displayName: 'Alex Bongo',
