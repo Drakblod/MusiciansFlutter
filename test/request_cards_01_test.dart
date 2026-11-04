@@ -223,7 +223,11 @@ void main() {
 
       final appState = MockCardsAppState(mockService, activeUserId: 'test_creator');
       await tester.pumpWidget(createTestApp(
-        child: const SubRequestResponsesScreen(bandId: 'all'),
+        // Keep this presentation fixture active independently of wall-clock time.
+        child: SubRequestResponsesScreen(
+          bandId: 'all',
+          clock: () => DateTime(2026, 10, 30, 18),
+        ),
         appState: appState,
       ));
       await tester.pump();

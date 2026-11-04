@@ -561,15 +561,21 @@ bool isSubRequestExpired(
   SubRequest req, {
   DateTime? now,
 }) {
-  final clock = now ?? DateTime.now();
+  final boundary = subRequestExpirationBoundary(req);
+  return boundary != null && !(now ?? DateTime.now()).isBefore(boundary);
+}
+
+/// Shared local expiration boundary, also used for read-only UI timers.
+/// Missing or malformed legacy dates have no known boundary.
+DateTime? subRequestExpirationBoundary(SubRequest req) {
   final rawDate = req.date?.trim();
   if (rawDate == null || rawDate.isEmpty) {
-    return false;
+    return null;
   }
 
   final parsedDate = parseSubRequestCalendarDate(rawDate);
   if (parsedDate == null) {
-    return false;
+    return null;
   }
 
   final parsedEndTime = parseSubRequestTimeOfDay(req.endTime);
@@ -593,7 +599,7 @@ bool isSubRequestExpired(
             parsedEndTime.minute,
           );
 
-    return !clock.isBefore(boundary);
+    return boundary;
   }
 
   // Exact no-end boundary: next local calendar day at 00:00 (absent beginning at next local midnight)
@@ -605,7 +611,7 @@ bool isSubRequestExpired(
     0,
     0,
   );
-  return !clock.isBefore(nextDayMidnight);
+  return nextDayMidnight;
 }
 
 /// Central pure policy determining whether a SubRequest is an active application
@@ -686,4 +692,34 @@ bool isActiveAppliedRequest(
   }
 
   return true;
+}
+
+/// Read-only active management policy. Uses the same status and expiration
+/// rules as Applied, without requiring an application by the manager.
+bool isActiveManageRequest(SubRequest request, {DateTime? now}) {
+  if (!isSubRequestStatusActive(request.status) ||
+      request.isMapOnlyPin ||
+      request.isSelected) {
+    return false;
+  }
+  final assignedTo = request.assignedUserId?.trim() ??
+      request.extraFields['assignedUserId']?.toString().trim() ??
+      request.extraFields['AssignedUserId']?.toString().trim();
+  if (assignedTo != null && assignedTo.isNotEmpty) return false;
+  return !isSubRequestExpired(request, now: now);
+}
+
+/// Retains the first authorized feed copy for each exact request ID. Positions
+/// sharing an event/group remain independent. Records without IDs are not cards.
+List<SubRequest> filterActiveManageRequests(
+  Iterable<SubRequest> requests, {
+  DateTime? now,
+}) {
+  final clock = now ?? DateTime.now();
+  final seen = <String>{};
+  return requests.where((request) {
+    final id = request.subRequestId ?? request.id ?? '';
+    if (id.isEmpty || !seen.add(id)) return false;
+    return isActiveManageRequest(request, now: clock);
+  }).toList();
 }

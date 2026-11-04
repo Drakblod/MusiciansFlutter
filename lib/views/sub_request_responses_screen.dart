@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -11,18 +12,21 @@ import '../utils/sub_request_card_helper.dart';
 
 class SubRequestResponsesScreen extends StatefulWidget {
   final String bandId;
+  final DateTime Function()? clock;
 
   const SubRequestResponsesScreen({
     super.key,
     required this.bandId,
+    this.clock,
   });
 
   @override
-  State<SubRequestResponsesScreen> createState() => _SubRequestResponsesScreenState();
+  State<SubRequestResponsesScreen> createState() =>
+      _SubRequestResponsesScreenState();
 }
 
 class _SubRequestResponsesScreenState extends State<SubRequestResponsesScreen>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late TabController _tabController;
   List<SubRequest> _substituteRequests = [];
   List<SubRequest> _memberRequests = [];
@@ -30,45 +34,119 @@ class _SubRequestResponsesScreenState extends State<SubRequestResponsesScreen>
   Map<String, int> _viewedResponseCounts = {};
   bool _isBandAdmin = false;
   bool _isLoading = true;
+  Timer? _expirationTimer;
+  int _loadGeneration = 0;
+  DateTime get _now => (widget.clock ?? DateTime.now)();
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _expireVisibleRequests();
+  }
+
+  void _scheduleExpiration() {
+    _expirationTimer?.cancel();
+    final now = _now;
+    final boundaries =
+        [..._substituteRequests, ..._memberRequests]
+            .map(subRequestExpirationBoundary)
+            .whereType<DateTime>()
+            .where((boundary) => boundary.isAfter(now))
+            .toList()
+          ..sort();
+    if (boundaries.isEmpty) return;
+    final delay = boundaries.first.difference(now);
+    // Long timers are limited on web; recheck locally at least once per day.
+    _expirationTimer = Timer(
+      delay > const Duration(days: 1) ? const Duration(days: 1) : delay,
+      _expireVisibleRequests,
+    );
+  }
+
+  void _expireVisibleRequests() {
+    if (!mounted) return;
+    final now = _now;
+    setState(() {
+      _substituteRequests = filterActiveManageRequests(
+        _substituteRequests,
+        now: now,
+      );
+      _memberRequests = filterActiveManageRequests(_memberRequests, now: now);
+      final ids = [
+        ..._substituteRequests,
+        ..._memberRequests,
+      ].map((r) => r.subRequestId ?? r.id).toSet();
+      _responseCounts.removeWhere((id, _) => !ids.contains(id));
+      _viewedResponseCounts.removeWhere((id, _) => !ids.contains(id));
+    });
+    _scheduleExpiration();
+  }
 
   @override
   void initState() {
     _tabController = TabController(length: 2, vsync: this);
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadRequests();
   }
 
   @override
   void dispose() {
+    _expirationTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    _loadGeneration++;
     _tabController.dispose();
     super.dispose();
   }
 
   Future<void> _loadRequests() async {
-    setState(() => _isLoading = true);
+    final generation = ++_loadGeneration;
+    setState(() {
+      _isLoading = true;
+      _isBandAdmin = false;
+      _substituteRequests = [];
+      _memberRequests = [];
+      _responseCounts = {};
+      _viewedResponseCounts = {};
+    });
+    _expirationTimer?.cancel();
+    final appState = Provider.of<AppState>(context, listen: false);
+    final userId = appState.currentUserId;
+    bool current() =>
+        mounted &&
+        generation == _loadGeneration &&
+        userId == appState.currentUserId;
     try {
-      final appState = Provider.of<AppState>(context, listen: false);
-      final userId = appState.currentUserId;
       if (userId == null) return;
 
       // 1. Fetch user's sub requests
-      final list = await appState.firebaseService.getUserSubRequestsAsync(userId);
-      final seenIds = list.map((r) => r.subRequestId ?? r.id ?? '').where((id) => id.isNotEmpty).toSet();
+      final list = List<SubRequest>.of(
+        await appState.firebaseService.getUserSubRequestsAsync(userId),
+      );
+      if (!current()) return;
+      final seenIds = list
+          .map((r) => r.subRequestId ?? r.id ?? '')
+          .where((id) => id.isNotEmpty)
+          .toSet();
 
       // If a specific bandId is requested and the current user is an admin/leader of that band,
       // also include open requests belonging to that band so band admins can manage requests created by co-leaders.
       if (widget.bandId.isNotEmpty && widget.bandId != 'all') {
         try {
-          final isBandAdmin = await appState.firebaseService.isBandLeaderOrAdminAsync(widget.bandId, userId);
+          final isBandAdmin = await appState.firebaseService
+              .isBandLeaderOrAdminAsync(widget.bandId, userId);
+          if (!current()) return;
           _isBandAdmin = isBandAdmin;
           if (isBandAdmin) {
-            final allRequests = await appState.firebaseService.getAllSubRequestsAsync();
+            final allRequests = await appState.firebaseService
+                .getAllSubRequestsAsync();
             for (final req in allRequests) {
               final reqId = req.subRequestId ?? req.id ?? '';
               if (reqId.isEmpty || seenIds.contains(reqId)) continue;
-              final matchesBand = (req.bandId != null && req.bandId == widget.bandId) ||
+              final matchesBand =
+                  (req.bandId != null && req.bandId == widget.bandId) ||
                   (req.bandName != null &&
-                      (req.bandName!.replaceAll(' ', '_') == widget.bandId || req.bandName == widget.bandId));
+                      (req.bandName!.replaceAll(' ', '_') == widget.bandId ||
+                          req.bandName == widget.bandId));
               if (matchesBand) {
                 seenIds.add(reqId);
                 list.add(req);
@@ -77,31 +155,44 @@ class _SubRequestResponsesScreenState extends State<SubRequestResponsesScreen>
           }
         } catch (_) {}
       }
-      
+
       // 2. Filter requests matching the selected band (or show all if bandId is empty or 'all')
-      final bandRequests = (widget.bandId.isEmpty || widget.bandId == 'all')
+      final selectedRequests = (widget.bandId.isEmpty || widget.bandId == 'all')
           ? list
           : list.where((req) {
-              if (req.bandId != null && req.bandId == widget.bandId) return true;
+              if (req.bandId != null && req.bandId == widget.bandId) {
+                return true;
+              }
               if (req.bandName == null) return false;
               final cleanBandName = req.bandName!.replaceAll(' ', '_');
-              return cleanBandName == widget.bandId || req.bandName == widget.bandId;
+              return cleanBandName == widget.bandId ||
+                  req.bandName == widget.bandId;
             }).toList();
 
-      // 3. Concurrently fetch responses count for each request
+      if (!current()) return;
+      // Evaluate exact positions before response reads or tab classification.
+      final bandRequests = filterActiveManageRequests(
+        selectedRequests,
+        now: _now,
+      );
+
+      // 3. Concurrently fetch responses count for each active request
       final Map<String, int> counts = {};
-      await Future.wait(bandRequests.map((req) async {
-        final reqId = req.subRequestId ?? req.id;
-        if (reqId != null) {
-          final count = await appState.firebaseService.getSubRequestResponseCountAsync(reqId);
-          counts[reqId] = count;
-        }
-      }));
+      await Future.wait(
+        bandRequests.map((req) async {
+          final reqId = req.subRequestId ?? req.id;
+          if (reqId != null) {
+            final count = await appState.firebaseService
+                .getSubRequestResponseCountAsync(reqId);
+            counts[reqId] = count;
+          }
+        }),
+      );
 
       // 4. Categorize requests
       final List<SubRequest> subs = [];
       final List<SubRequest> members = [];
-      for (final req in bandRequests) {
+      for (final req in filterActiveManageRequests(bandRequests, now: _now)) {
         if (req.role == 'Substitute') {
           subs.add(req);
         } else if (req.role == 'Member' || req.role == 'New Member') {
@@ -121,15 +212,18 @@ class _SubRequestResponsesScreenState extends State<SubRequestResponsesScreen>
         }
       }
 
+      if (!current()) return;
       setState(() {
         _substituteRequests = subs;
         _memberRequests = members;
         _responseCounts = counts;
         _viewedResponseCounts = viewedMap;
       });
+      // Re-evaluate after asynchronous counts/preferences, then arm the timer.
+      _expireVisibleRequests();
     } catch (e) {
       debugPrint("Error loading sub requests: $e");
-      if (mounted) {
+      if (mounted && current()) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Failed to load requests: $e'),
@@ -138,7 +232,9 @@ class _SubRequestResponsesScreenState extends State<SubRequestResponsesScreen>
         );
       }
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted && generation == _loadGeneration) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -223,10 +319,15 @@ class _SubRequestResponsesScreenState extends State<SubRequestResponsesScreen>
     return count > 0 && count > viewed;
   }
 
-  bool get _hasSubstituteActivity => _substituteRequests.any(_requestHasActivity);
+  bool get _hasSubstituteActivity =>
+      _substituteRequests.any(_requestHasActivity);
   bool get _hasMemberActivity => _memberRequests.any(_requestHasActivity);
 
   Future<void> _openRequestDetails(SubRequest req) async {
+    if (!isActiveManageRequest(req, now: _now)) {
+      _expireVisibleRequests();
+      return;
+    }
     final reqId = req.subRequestId ?? req.id;
     if (reqId != null) {
       final currentCount = _responseCounts[reqId] ?? 0;
@@ -244,8 +345,9 @@ class _SubRequestResponsesScreenState extends State<SubRequestResponsesScreen>
         final appState = Provider.of<AppState>(context, listen: false);
         for (final notif in appState.userNotifications) {
           if (!notif.isRead &&
-              (notif.type == 'sub_request_response' || notif.type == 'sub_response') &&
-              (notif.data['subRequestId'] == reqId || notif.id.contains(reqId))) {
+              (notif.type == 'sub_request_response' ||
+                  notif.type == 'sub_response') &&
+              notif.data['subRequestId'] == reqId) {
             appState.firebaseService.markNotificationReadAsync(notif.id);
           }
         }
@@ -371,10 +473,21 @@ class _SubRequestResponsesScreenState extends State<SubRequestResponsesScreen>
 
   Widget _buildRequestsList(List<SubRequest> list) {
     if (list.isEmpty) {
-      return Center(
-        child: Text(
-          'No active requests found.',
-          style: GoogleFonts.inter(color: AppTheme.textSecondary),
+      return RefreshIndicator(
+        onRefresh: _loadRequests,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 48),
+              child: Center(
+                child: Text(
+                  'No active requests found.',
+                  style: GoogleFonts.inter(color: AppTheme.textSecondary),
+                ),
+              ),
+            ),
+          ],
         ),
       );
     }
