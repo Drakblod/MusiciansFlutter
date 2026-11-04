@@ -305,7 +305,7 @@ void main() {
         await tester.tap(find.text('Band Room').first);
         await settle(tester);
       }
-      expect(find.text('You’re not in a band yet'), findsOneWidget);
+      expect(find.text('Create a band first'), findsOneWidget);
       expect(find.byType(SnackBar), findsNothing);
       expect(state.service.roomReads, 0);
       expect(state.service.writes, 0);
@@ -472,7 +472,7 @@ void main() {
     await settle(tester);
     expect(state.activeBandId, isNull);
     expect(state.service.roomReads, 0);
-    expect(find.text('You’re not in a band yet'), findsOneWidget);
+    expect(find.text('Create a band first'), findsOneWidget);
   });
   test('unrelated legacy UserRole alone never grants membership or staffing', () {
     final forged = Band(id: 'real', name: 'Band', userRole: 'Leader');
@@ -500,7 +500,7 @@ void main() {
     await state.refreshBandMemberships();
     await settle(tester);
     expect(find.text('Verified Band'), findsNothing);
-    expect(find.text('You’re not in a band yet'), findsOneWidget);
+    expect(find.text('Create a band first'), findsOneWidget);
   });
   for (final staffing in [false, true]) {
     testWidgets('320 px ${staffing ? 'staffing' : 'Band Room'} no-band state has no overflow', (tester) async {

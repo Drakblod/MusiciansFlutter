@@ -753,7 +753,7 @@ void main() {
 
       // Did NOT navigate to Band Room Screen
       expect(find.text('Band Room Screen'), findsNothing);
-      expect(find.text('You’re not in a band yet'), findsOneWidget);
+      expect(find.text('Create a band first'), findsOneWidget);
       expect(find.byType(SnackBar), findsNothing);
       expect(find.text('Create a Band'), findsOneWidget);
 

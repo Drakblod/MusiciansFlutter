@@ -3,25 +3,15 @@ import 'package:provider/provider.dart';
 import '../models/band.dart';
 import '../providers/app_state.dart';
 import 'gradient_scaffold.dart';
+import 'band_required_prompt.dart';
 
 class NoBandState extends StatelessWidget {
   final bool staffing;
   final bool managerRequired;
   const NoBandState({super.key, this.staffing = false, this.managerRequired = false});
 
-  static const staffingTitle = 'Create a band first';
-  static const staffingBody = 'You need to create or join a band before you can search for musicians or vocalists.';
-
-  static Future<void> showStaffingDialog(BuildContext context) async {
-    final create = await showDialog<bool>(context: context, builder: (context) => AlertDialog(
-      title: const Text(staffingTitle), content: const Text(staffingBody),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-        TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Create a Band')),
-      ],
-    ));
-    if (create == true && context.mounted) await Navigator.pushNamed(context, '/create-band');
-  }
+  static const staffingTitle = BandRequiredDialog.title;
+  static const staffingBody = BandRequiredDialog.staffingBody;
 
   @override
   Widget build(BuildContext context) => SafeArea(child: Center(child: SingleChildScrollView(
@@ -60,6 +50,9 @@ class _AuthorizedBandGateState extends State<AuthorizedBandGate> {
   Band? _band;
   bool _loading = true;
   bool _failed = false;
+  int? _promptedGeneration;
+  bool? _sessionLoading;
+  bool _reloadAfterSession = false;
 
   @override
   void didChangeDependencies() {
@@ -77,6 +70,17 @@ class _AuthorizedBandGateState extends State<AuthorizedBandGate> {
   }
 
   void _ensureResolved(AppState state) {
+    if (_sessionLoading == false && state.isLoading) {
+      _requestKey = null;
+      _generation++;
+      _band = null;
+      _reloadAfterSession = true;
+    } else if (_sessionLoading == true && !state.isLoading && _reloadAfterSession) {
+      _requestKey = null;
+      _reloadAfterSession = false;
+    }
+    _sessionLoading = state.isLoading;
+    // Verify in parallel with initial profile loading; rendering still stays neutral.
     final key = '${state.currentUserId}/${widget.requestedBandId ?? state.activeBandId}/${widget.staffing}';
     if (key == _requestKey) return;
     _requestKey = key;
@@ -100,10 +104,31 @@ class _AuthorizedBandGateState extends State<AuthorizedBandGate> {
     }
   }
 
+  void _promptOrLeave(AppState state) {
+    if (_promptedGeneration == _generation) return;
+    _promptedGeneration = _generation;
+    final generation = _generation;
+    final uid = state.currentUserId;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted || generation != _generation || state.isLoading || _failed || _band != null) return;
+      final create = uid != null && await BandRequiredPrompt.show(context, state, staffing: widget.staffing);
+      if (!mounted || generation != _generation || uid != state.currentUserId || state.isLoading) return;
+      final route = ModalRoute.of(context);
+      if (route?.isCurrent != true) return;
+      final navigator = Navigator.of(context);
+      if (navigator.canPop()) {
+        navigator.pop();
+        if (create) navigator.pushNamed('/create-band');
+      } else {
+        navigator.pushReplacementNamed(create ? '/create-band' : '/main-nav');
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = Provider.of<AppState>(context);
-    if (_loading) {
+    if (_loading || state.isLoading) {
       return const GradientScaffold(body: Center(child: CircularProgressIndicator()));
     }
     if (_failed) {
@@ -113,8 +138,18 @@ class _AuthorizedBandGateState extends State<AuthorizedBandGate> {
     )));
     }
     if (_band == null) {
-      return GradientScaffold(body: NoBandState(
-      staffing: widget.staffing, managerRequired: widget.staffing && state.hasAuthorizedBand));
+      if (state.hasAuthorizedBand) {
+        if (widget.staffing) {
+          return const GradientScaffold(body: NoBandState(staffing: true, managerRequired: true));
+        }
+        return GradientScaffold(body: Center(child: TextButton(
+          onPressed: () { setState(() { _loading = true; _failed = false; }); _resolve(state); },
+          child: const Text('Could not verify band membership. Retry'),
+        )));
+      }
+      _promptOrLeave(state);
+      // Neutral backdrop while the shared prompt is shown; no protected content is built.
+      return const GradientScaffold(body: Center(child: CircularProgressIndicator()));
     }
     return KeyedSubtree(key: ValueKey('${state.currentUserId}/${_band!.id}'),
       child: widget.builder(_band!));

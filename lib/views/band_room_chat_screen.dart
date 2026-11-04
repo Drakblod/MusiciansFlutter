@@ -888,7 +888,12 @@ class _BandRoomChatScreenState extends State<_BandRoomContent>
     );
   }
 
-  Widget _buildNoActiveBandView() => const NoBandState();
+  // The outer gate handles confirmed empty membership. Missing details here are
+  // a load failure or race after verification, never a reason to create a band.
+  Widget _buildNoActiveBandView() => Center(child: TextButton(
+    onPressed: () => _initBand(Provider.of<AppState>(context, listen: false).activeBandId),
+    child: const Text('Could not load Band Room. Retry'),
+  ));
 
   Widget _buildBandRoomContent(AppState appState) {
     final bandName = _activeBand?.name ?? 'Band Room';

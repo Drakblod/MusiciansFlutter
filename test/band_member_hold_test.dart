@@ -136,6 +136,10 @@ class MockFirebaseServiceForHoldTest extends Fake implements FirebaseService {
 class MockAppStateForHoldTest extends Fake with ChangeNotifier implements AppState {
   final MockFirebaseServiceForHoldTest mockFirebase = MockFirebaseServiceForHoldTest();
 
+  // This authenticated fixture is idle; the shared guard reads this state.
+  @override
+  bool get isLoading => false;
+
   @override
   Future<Band?> resolveAuthorizedBand(String? requestedBandId, {bool requireManager = false}) async {
     if (requestedBandId != null && requestedBandId != activeBandId) return null;

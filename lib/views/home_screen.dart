@@ -8,7 +8,7 @@ import '../widgets/animated_tap_detector.dart';
 import '../widgets/custom_top_bar.dart';
 import '../config/feature_toggles.dart';
 import '../controllers/global_create_event_launcher.dart';
-import '../widgets/authorized_band_gate.dart';
+import '../widgets/band_required_prompt.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -17,63 +17,16 @@ class HomeScreen extends StatelessWidget {
     BuildContext context,
     AppState appState,
     String routeName,
-  ) async {
-    final userId = appState.currentUserId;
-    if (userId == null) return false;
-
-    // Show loading spinner dialog
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const Center(
-        child: CircularProgressIndicator(color: AppTheme.primaryAccent),
-      ),
-    );
-
-    try {
-      final bands = await appState.refreshBandMemberships();
-      if (context.mounted) {
-        Navigator.pop(context); // Dismiss loading dialog
+  ) => BandRequiredPrompt.checkMemberships(context, appState,
+    staffing: routeName == '/find-sub',
+    onVerified: (bands, isCurrent) async {
+      if (bands.length == 1) {
+        return _proceedToBandRoute(context, appState, bands.keys.first,
+          bands.values.first, routeName, isCurrent);
       }
-
-      if (!context.mounted || appState.currentUserId != userId) return false;
-      if (bands.isEmpty) {
-        if (routeName == '/find-sub') {
-          await NoBandState.showStaffingDialog(context);
-          return false;
-        }
-        await Navigator.pushNamed(context, routeName);
-        return false;
-      } else if (bands.length == 1) {
-        if (context.mounted) {
-          return await _proceedToBandRoute(
-            context,
-            appState,
-            bands.keys.first,
-            bands.values.first,
-            routeName,
-          );
-        }
-        return false;
-      } else {
-        if (context.mounted) {
-          return await _showBandSelectorBottomSheet(context, appState, bands, routeName);
-        }
-        return false;
-      }
-    } catch (e) {
-      if (context.mounted) {
-        Navigator.pop(context); // Dismiss loading dialog
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error checking band memberships: $e'),
-            backgroundColor: AppTheme.danger,
-          ),
-        );
-      }
-      return false;
-    }
-  }
+      return _showBandSelectorBottomSheet(context, appState, bands, routeName, isCurrent);
+    },
+  );
 
   Future<bool> _proceedToBandRoute(
     BuildContext context,
@@ -81,7 +34,9 @@ class HomeScreen extends StatelessWidget {
     String bandId,
     String bandName,
     String routeName,
+    bool Function() isCurrent,
   ) async {
+    if (!context.mounted || !isCurrent()) return false;
     appState.selectBand(bandId, bandName);
 
     if (routeName == '/find-sub') {
@@ -89,6 +44,7 @@ class HomeScreen extends StatelessWidget {
       if (userId != null) {
         try {
           final subRequests = await appState.firebaseService.getUserSubRequestsAsync(userId);
+          if (!context.mounted || !isCurrent()) return false;
           final activeForBand = subRequests.where((req) {
             final matchesBand = (req.bandId != null && req.bandId == bandId) ||
                 (req.bandName != null &&
@@ -106,6 +62,7 @@ class HomeScreen extends StatelessWidget {
               bandId,
               bandName,
               activeForBand.length,
+              isCurrent,
             );
           }
         } catch (e) {
@@ -114,7 +71,7 @@ class HomeScreen extends StatelessWidget {
       }
     }
 
-    if (context.mounted) {
+    if (context.mounted && isCurrent()) {
       await Navigator.pushNamed(context, routeName);
       return true;
     }
@@ -127,11 +84,10 @@ class HomeScreen extends StatelessWidget {
     String bandId,
     String bandName,
     int activeCount,
+    bool Function() isCurrent,
   ) async {
-    final choice = await showModalBottomSheet<String>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
+    final choice = await BandRequiredPrompt.showSessionSheet<String>(
+      context, appState, isCurrent: isCurrent,
       builder: (sheetContext) {
         return Container(
           decoration: BoxDecoration(
@@ -336,7 +292,7 @@ class HomeScreen extends StatelessWidget {
       },
     );
 
-    if (context.mounted && choice != null) {
+    if (context.mounted && isCurrent() && choice != null) {
       if (choice == 'manage') {
         await Navigator.pushNamed(
           context,
@@ -357,11 +313,10 @@ class HomeScreen extends StatelessWidget {
     AppState appState,
     Map<String, String> bands,
     String routeName,
+    bool Function() isCurrent,
   ) async {
-    final selectedBand = await showModalBottomSheet<MapEntry<String, String>>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
+    final selectedBand = await BandRequiredPrompt.showSessionSheet<MapEntry<String, String>>(
+      context, appState, isCurrent: isCurrent,
       builder: (sheetContext) {
         return Container(
           decoration: BoxDecoration(
@@ -490,13 +445,14 @@ class HomeScreen extends StatelessWidget {
       },
     );
 
-    if (context.mounted && selectedBand != null) {
+    if (context.mounted && isCurrent() && selectedBand != null) {
       return await _proceedToBandRoute(
         context,
         appState,
         selectedBand.key,
         selectedBand.value,
         routeName,
+        isCurrent,
       );
     }
     return false;
@@ -935,63 +891,16 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
     BuildContext context,
     AppState appState,
     String routeName,
-  ) async {
-    final userId = appState.currentUserId;
-    if (userId == null) return false;
-
-    // Show loading spinner dialog
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const Center(
-        child: CircularProgressIndicator(color: AppTheme.primaryAccent),
-      ),
-    );
-
-    try {
-      final bands = await appState.refreshBandMemberships();
-      if (context.mounted) {
-        Navigator.pop(context); // Dismiss loading dialog
+  ) => BandRequiredPrompt.checkMemberships(context, appState,
+    staffing: routeName == '/find-sub',
+    onVerified: (bands, isCurrent) async {
+      if (bands.length == 1) {
+        return _proceedToBandRoute(context, appState, bands.keys.first,
+          bands.values.first, routeName, isCurrent);
       }
-
-      if (!context.mounted || appState.currentUserId != userId) return false;
-      if (bands.isEmpty) {
-        if (routeName == '/find-sub') {
-          await NoBandState.showStaffingDialog(context);
-          return false;
-        }
-        await Navigator.pushNamed(context, routeName);
-        return false;
-      } else if (bands.length == 1) {
-        if (context.mounted) {
-          return await _proceedToBandRoute(
-            context,
-            appState,
-            bands.keys.first,
-            bands.values.first,
-            routeName,
-          );
-        }
-        return false;
-      } else {
-        if (context.mounted) {
-          return await _showBandSelectorBottomSheet(context, appState, bands, routeName);
-        }
-        return false;
-      }
-    } catch (e) {
-      if (context.mounted) {
-        Navigator.pop(context); // Dismiss loading dialog
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error checking band memberships: $e'),
-            backgroundColor: AppTheme.danger,
-          ),
-        );
-      }
-      return false;
-    }
-  }
+      return _showBandSelectorBottomSheet(context, appState, bands, routeName, isCurrent);
+    },
+  );
 
   Future<bool> _proceedToBandRoute(
     BuildContext context,
@@ -999,7 +908,9 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
     String bandId,
     String bandName,
     String routeName,
+    bool Function() isCurrent,
   ) async {
+    if (!context.mounted || !isCurrent()) return false;
     appState.selectBand(bandId, bandName);
 
     if (routeName == '/find-sub') {
@@ -1007,6 +918,7 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
       if (userId != null) {
         try {
           final subRequests = await appState.firebaseService.getUserSubRequestsAsync(userId);
+          if (!context.mounted || !isCurrent()) return false;
           final activeForBand = subRequests.where((req) {
             final matchesBand = (req.bandId != null && req.bandId == bandId) ||
                 (req.bandName != null &&
@@ -1024,6 +936,7 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
               bandId,
               bandName,
               activeForBand.length,
+              isCurrent,
             );
           }
         } catch (e) {
@@ -1032,7 +945,7 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
       }
     }
 
-    if (context.mounted) {
+    if (context.mounted && isCurrent()) {
       await Navigator.pushNamed(context, routeName);
       return true;
     }
@@ -1045,11 +958,10 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
     String bandId,
     String bandName,
     int activeCount,
+    bool Function() isCurrent,
   ) async {
-    final choice = await showModalBottomSheet<String>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
+    final choice = await BandRequiredPrompt.showSessionSheet<String>(
+      context, appState, isCurrent: isCurrent,
       builder: (sheetContext) {
         return Container(
           decoration: BoxDecoration(
@@ -1253,7 +1165,7 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
       },
     );
 
-    if (context.mounted && choice != null) {
+    if (context.mounted && isCurrent() && choice != null) {
       if (choice == 'manage') {
         await Navigator.pushNamed(
           context,
@@ -1274,11 +1186,10 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
     AppState appState,
     Map<String, String> bands,
     String routeName,
+    bool Function() isCurrent,
   ) async {
-    final selectedBand = await showModalBottomSheet<MapEntry<String, String>>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
+    final selectedBand = await BandRequiredPrompt.showSessionSheet<MapEntry<String, String>>(
+      context, appState, isCurrent: isCurrent,
       builder: (sheetContext) {
         return Container(
           decoration: BoxDecoration(
@@ -1407,13 +1318,14 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
       },
     );
 
-    if (context.mounted && selectedBand != null) {
+    if (context.mounted && isCurrent() && selectedBand != null) {
       return await _proceedToBandRoute(
         context,
         appState,
         selectedBand.key,
         selectedBand.value,
         routeName,
+        isCurrent,
       );
     }
     return false;
