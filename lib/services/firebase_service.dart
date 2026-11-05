@@ -1,3 +1,4 @@
+import 'dart:math' show Random;
 import 'dart:async';
 import 'dart:io' show File;
 import 'dart:typed_data' show Uint8List;
@@ -386,77 +387,64 @@ class FirebaseService {
     return null;
   }
 
-  Future<void> createBandAsync(String userId, Band band) async {
-    final bandNameKey = (band.name ?? 'My Band').replaceAll(' ', '_');
-    final bandRef = _dbRef('Bands/$bandNameKey');
-
-    String creatorName = 'Leader';
-    try {
-      final profile = await getUserProfileAsync(userId);
-      if (profile?.displayName != null && profile!.displayName!.trim().isNotEmpty) {
-        creatorName = profile.displayName!.trim();
-      } else if (profile?.nickname != null && profile!.nickname!.trim().isNotEmpty) {
-        creatorName = profile.nickname!.trim();
-      }
-    } catch (_) {}
-
-    final updatedBand = Band(
-      id: bandNameKey,
-      name: band.name,
-      ensembleType: band.ensembleType,
-      genres: band.genres,
-      location: band.location,
-      rehearsalLocation: band.rehearsalLocation,
-      rehearsalDayOfWeek: band.rehearsalDayOfWeek,
-      rehearsalStartTime: band.rehearsalStartTime,
-      rehearsalEndTime: band.rehearsalEndTime,
-      about: band.about,
-      description: band.description,
-      membersBand: {userId: BandMember(nickname: creatorName, role: 'Leader')},
-    );
-
-    // Save globally
-    await bandRef.set(updatedBand.toJson());
-    // Assign Leader in global band members
-    await _dbRef(
-      'Bands/$bandNameKey/Members_band/$userId',
-    ).set({'Nickname': creatorName, 'Role': 'Leader'});
-    // Link band in user's profile
-    await _dbRef('users/$userId/Bands/$bandNameKey').set(updatedBand.toJson());
-    // Add member to band conversation
-    await _dbRef('bandconversations/$bandNameKey/members/$userId').set(true);
-  }
-
-  Future<void> updateBandAsync(String bandId, Band band) async {
-    final updateData = {
-      'Name': band.name,
-      'EnsembleType': band.ensembleType,
-      'Genres': band.genres,
-      'Style_band': band.styleBand,
-      'Level': band.level,
-      'Location': band.location,
-      'RehearsalLocation': band.rehearsalLocation,
-      'RehearsalDayOfWeek': band.rehearsalDayOfWeek,
-      'RehearsalStartTime': band.rehearsalStartTime,
-      'RehearsalEndTime': band.rehearsalEndTime,
-      'About': band.about,
-      'Description': band.description,
-    };
-
-    // 1. Update root band reference
-    await _dbRef('Bands/$bandId').update(updateData);
-
-    // 2. Sync updates to user-specific band lists for all members
-    final members = await getBandMembersAsync(bandId);
-    for (final member in members) {
-      final userId = member.userId;
-      if (userId != null) {
-        try {
-          await _dbRef('users/$userId/Bands/$bandId').update(updateData);
-        } catch (_) {}
-      }
+  /// One server-owned mutation; production never falls back to protected RTDB writes.
+  Future<void> mutateBandMembershipAsync(Map<String, dynamic> payload) async {
+    final uid = currentUserId;
+    if (uid == null) throw StateError('Please sign in first.');
+    await _functions.httpsCallable('mutateBandMembership').call(payload);
+    if (currentUserId != uid) {
+      throw StateError('Your session changed. Please try again.');
     }
   }
+
+  String _membershipOperationId() =>
+      '${DateTime.now().microsecondsSinceEpoch}_${Random.secure().nextInt(0x7fffffff)}';
+  final _membershipPendingOperations = <String, String>{};
+  Future<void> _submitMembershipMutation(Map<String, dynamic> payload) async {
+    final uid = currentUserId;
+    if (uid == null) throw StateError('Please sign in first.');
+    final body = Map<String, dynamic>.of(payload)..remove('operationId');
+    final fingerprint = '$uid/$body';
+    final id = _membershipPendingOperations.putIfAbsent(
+      fingerprint,
+      () => payload['operationId'] as String? ?? _membershipOperationId(),
+    );
+    await mutateBandMembershipAsync({...payload, 'operationId': id});
+    if (currentUserId != uid) {
+      throw StateError('Your session changed. Please try again.');
+    }
+    _membershipPendingOperations.remove(fingerprint);
+  }
+
+  Future<void> createBandAsync(String userId, Band band) async {
+    if (userId != currentUserId) {
+      throw StateError('You can only create a band as yourself.');
+    }
+    final bandId = (band.name ?? 'My Band').replaceAll(' ', '_');
+    await _submitMembershipMutation({
+      'action': 'create', 'bandId': bandId,
+      // A stable creation ID makes a retry safe after an uncertain network result.
+      'operationId': 'create_$userId', 'metadata': band.toJson(),
+      'initialMembers': band.membersBand.entries
+          .where((e) => e.key != userId)
+          .map(
+            (e) => {
+              'userId': e.key,
+              'role': e.value.role ?? 'Member',
+              'nickname': e.value.nickname ?? 'Member',
+            },
+          )
+          .toList(),
+    });
+  }
+
+  Future<void> updateBandAsync(String bandId, Band band) =>
+      _submitMembershipMutation({
+        'action': 'metadata',
+        'bandId': bandId,
+        'operationId': _membershipOperationId(),
+        'metadata': band.toJson(),
+      });
 
   Future<List<BandMember>> getBandMembersAsync(String bandId) async {
     final snapshot = await _dbRef('Bands/$bandId/Members_band').get();
@@ -1291,23 +1279,23 @@ class FirebaseService {
 
   /// One-shot check whether [userId] is a Leader or Admin of [bandId].
   Future<bool> isBandLeaderOrAdminAsync(String bandId, String userId) async {
-    final bId = bandId.trim();
     final uid = userId.trim();
-    if (bId.isEmpty ||
-        uid.isEmpty ||
-        bId == 'freelance' ||
-        bId == 'standalone' ||
-        bId == 'all') {
+    if (uid != currentUserId || !BandMembershipPolicy.isRealId(bandId)) {
       return false;
     }
     try {
-      final roleSnap = await _dbRef('Bands/$bId/Members_band/$uid/Role').get();
-      if (roleSnap.exists && roleSnap.value != null) {
-        final role = roleSnap.value.toString().trim().toLowerCase();
-        return role == 'leader' || role == 'admin';
-      }
-    } catch (_) {}
-    return false;
+      final bands = await getUserBandsAsync(uid);
+      if (currentUserId != uid || !bands.containsKey(bandId)) return false;
+      final path = 'Bands/$bandId/Members_band/$uid';
+      final raw = _membershipRead != null
+          ? await _membershipRead(path)
+          : (await _dbRef(path).get()).value;
+      return currentUserId == uid &&
+          raw is Map &&
+          BandMembershipPolicy.canManageMember(BandMember.fromJson(raw, uid));
+    } catch (_) {
+      return false;
+    }
   }
 
   Future<void> addResponseToSubRequestAsync(
@@ -1551,24 +1539,10 @@ class FirebaseService {
     try {
       if (subRequestId.isEmpty) return false;
 
-      // 1. Server-owned callable handles atomic multi-path deletion
-      try {
-        final callable = _functions.httpsCallable('deleteSubRequest');
-        await callable.call({'subRequestId': subRequestId});
-        return true;
-      } catch (e) {
-        debugPrint("[FirebaseService] deleteSubRequest callable notice: $e");
-      }
-
-      // 2. Best-effort fallback for user's personal index
-      if (creatorId.isNotEmpty) {
-        try {
-          await _dbRef('users/$creatorId/SubRequests/$subRequestId').remove();
-          await _dbRef('creatorSubRequestFeed/$creatorId/$subRequestId').remove();
-        } catch (_) {}
-      }
-
-      return true;
+      final uid = currentUserId;
+      if (uid == null) return false;
+      await _functions.httpsCallable('deleteSubRequest').call({'subRequestId': subRequestId});
+      return currentUserId == uid;
     } catch (e) {
       debugPrint("[FirebaseService] Error deleting subrequest: $e");
       return false;
@@ -2984,60 +2958,52 @@ class FirebaseService {
     String userId,
     String role,
     String nickname,
-  ) async {
-    await _dbRef(
-      'Bands/$bandId/Members_band/$userId',
-    ).set({'Nickname': nickname, 'Role': role, 'Status': 'active'});
-    try {
-      final band = await getBandInfoAsync(bandId);
-      if (band != null) {
-        await _dbRef('users/$userId/Bands/$bandId').set(band.toJson());
-      }
-    } catch (e) {
-      debugPrint('[FirebaseService] Could not write to users/$userId/Bands/$bandId: $e');
-    }
-    try {
-      await _dbRef('bandconversations/$bandId/members/$userId').set(true);
-    } catch (e) {
-      debugPrint('[FirebaseService] Could not set bandconversations/$bandId/members/$userId: $e');
-    }
-  }
+  ) => _submitMembershipMutation({
+    'action': 'add',
+    'bandId': bandId,
+    'userId': userId,
+    'role': role,
+    'nickname': nickname,
+    'operationId': _membershipOperationId(),
+  });
 
-  Future<void> removeBandMemberAsync(String bandId, String userId) async {
-    await _dbRef('Bands/$bandId/Members_band/$userId').remove();
-    try {
-      await _dbRef('users/$userId/Bands/$bandId').remove();
-    } catch (e) {
-      debugPrint('[FirebaseService] Could not remove from users/$userId/Bands/$bandId: $e');
-    }
-    try {
-      await _dbRef('bandconversations/$bandId/members/$userId').remove();
-    } catch (e) {
-      debugPrint('[FirebaseService] Could not remove from bandconversations/$bandId/members/$userId: $e');
-    }
-  }
+  Future<void> removeBandMemberAsync(String bandId, String userId) =>
+      _submitMembershipMutation({
+        'action': userId == currentUserId ? 'leave' : 'remove',
+        'bandId': bandId,
+        'userId': userId,
+        'operationId': _membershipOperationId(),
+      });
+
+  Future<void> leaveBandAsync(String bandId) => _submitMembershipMutation({
+    'action': 'leave',
+    'bandId': bandId,
+    'operationId': _membershipOperationId(),
+  });
 
   Future<void> updateBandMemberRoleAsync(
     String bandId,
     String userId,
     String newRole,
-  ) async {
-    await _dbRef('Bands/$bandId/Members_band/$userId/Role').set(newRole);
-    try {
-      await _dbRef('users/$userId/Bands/$bandId/Members_band/$userId/Role').set(newRole);
-    } catch (_) {}
-  }
+  ) => _submitMembershipMutation({
+    'action': newRole.trim().toLowerCase() == 'leader' ? 'transfer' : 'role',
+    'bandId': bandId,
+    'userId': userId,
+    'role': newRole,
+    'operationId': _membershipOperationId(),
+  });
 
   Future<void> updateBandMemberStatusAsync(
     String bandId,
     String userId,
     String newStatus,
-  ) async {
-    await _dbRef('Bands/$bandId/Members_band/$userId/Status').set(newStatus);
-    try {
-      await _dbRef('users/$userId/Bands/$bandId/Members_band/$userId/Status').set(newStatus);
-    } catch (_) {}
-  }
+  ) => _submitMembershipMutation({
+    'action': 'status',
+    'bandId': bandId,
+    'userId': userId,
+    'status': newStatus,
+    'operationId': _membershipOperationId(),
+  });
 
   Future<void> postGigsNewsAsync(
     String bandId,
@@ -3721,103 +3687,19 @@ class FirebaseService {
       throw Exception('User is not logged in.');
     }
 
-    try {
-      final callable = _functions.httpsCallable('deleteUserAccount');
-      await callable.call();
-    } on FirebaseFunctionsException catch (e) {
-      debugPrint('Cloud Function deleteUserAccount error: ${e.message}, executing fallback cleanup');
-      await _deleteUserAccountFallback(uid);
-    } catch (e) {
-      debugPrint('deleteUserAccount fallback triggered: $e');
-      await _deleteUserAccountFallback(uid);
-    }
+    await _functions.httpsCallable('deleteUserAccount').call();
 
-    // Clean up client-side Auth record
-    try {
-      final user = _auth.currentUser;
-      if (user != null) {
-        await user.delete();
-      }
-    } catch (e) {
-      debugPrint('Client Auth delete notice (may have already been deleted server-side): $e');
-    }
-  }
-
-  Future<void> _deleteUserAccountFallback(String uid) async {
-    try {
-      final userBands = await getUserBandsAsync(uid);
-      for (final bandId in userBands.keys) {
-        final membersSnap = await _dbRef('Bands/$bandId/Members_band').get();
-        if (membersSnap.exists && membersSnap.value is Map) {
-          final members = Map<String, dynamic>.from(membersSnap.value as Map);
-          final userMember = members[uid];
-          final role = (userMember is Map ? (userMember['Role'] ?? userMember['role']) : null)?.toString().toLowerCase();
-          final otherMemberIds = members.keys.where((k) => k != uid).toList();
-
-          if (role == 'leader') {
-            if (otherMemberIds.isEmpty) {
-              await _dbRef('Bands/$bandId').remove();
-              await _dbRef('bandconversations/$bandId').remove();
-            } else {
-              String? successorId = otherMemberIds.firstWhere((id) {
-                final m = members[id];
-                final r = (m is Map ? (m['Role'] ?? m['role']) : null)?.toString().toLowerCase();
-                return r == 'admin';
-              }, orElse: () => otherMemberIds.first);
-
-              await _dbRef('Bands/$bandId/Members_band/$successorId/Role').set('Leader');
-              await _dbRef('Bands/$bandId/Members_band/$uid').remove();
-              await _dbRef('bandconversations/$bandId/members/$uid').remove();
-            }
-          } else {
-            await _dbRef('Bands/$bandId/Members_band/$uid').remove();
-            await _dbRef('bandconversations/$bandId/members/$uid').remove();
-          }
-        }
-      }
-    } catch (e) {
-      debugPrint('Fallback error in band membership cleanup: $e');
-    }
-
-    await _dbRef('users/$uid').remove();
-    await _dbRef('userNotifications/$uid').remove();
-    await _dbRef('userSubRequestFeed/$uid').remove();
-    await _dbRef('creatorSubRequestGroups/$uid').remove();
-    await _dbRef('userConversations/$uid').remove();
+    // The server deletes the authenticated caller; never delete whichever client
+    // account happens to be current after this asynchronous operation.
   }
 
   Future<void> deleteBandAsync(String bandId) async {
-    final uid = currentUserId;
-    if (uid == null) {
-      throw Exception('User is not logged in.');
-    }
-
-    try {
-      final callable = _functions.httpsCallable('deleteBand');
-      await callable.call({'bandId': bandId});
-    } on FirebaseFunctionsException catch (e) {
-      debugPrint('Cloud Function deleteBand error: ${e.message}, executing fallback');
-      await _deleteBandFallback(bandId, uid);
-    } catch (e) {
-      debugPrint('deleteBand fallback triggered: $e');
-      await _deleteBandFallback(bandId, uid);
-    }
-  }
-
-  Future<void> _deleteBandFallback(String bandId, String uid) async {
-    final members = await getBandMembersAsync(bandId);
-    for (final member in members) {
-      if (member.userId != null) {
-        try {
-          await _dbRef('users/${member.userId}/Bands/$bandId').remove();
-        } catch (_) {}
-      }
-    }
-    await _dbRef('bandconversations/$bandId').remove();
-    await _dbRef('Bands/$bandId').remove();
+    if (currentUserId == null) throw StateError('Please sign in first.');
+    await _functions.httpsCallable('deleteBand').call({'bandId': bandId});
   }
 
   // ==========================================
+
   // Public Calendar Events
   // ==========================================
 

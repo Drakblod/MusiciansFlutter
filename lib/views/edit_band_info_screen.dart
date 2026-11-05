@@ -1,3 +1,5 @@
+import '../utils/membership_mutation_feedback.dart';
+import '../utils/band_membership_policy.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -225,7 +227,7 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
         description: _aboutController.text.trim(),
       );
 
-      await appState.firebaseService.updateBandAsync(bandId, updated);
+      if (!await MembershipMutationFeedback.run(context, bandId, () => appState.firebaseService.updateBandAsync(bandId, updated))) return;
       appState.selectBand(bandId, updated.name ?? bandId);
 
       if (mounted) {
@@ -388,7 +390,7 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
     if (confirmed == true && mounted) {
       final appState = Provider.of<AppState>(context, listen: false);
       try {
-        await appState.firebaseService.removeBandMemberAsync(bandId, memberUserId);
+        if (!await MembershipMutationFeedback.run(context, bandId, () async { await appState.firebaseService.removeBandMemberAsync(bandId, memberUserId); })) return;
         if (mounted) {
           setState(() {
             _members.removeWhere((m) => m.userId == memberUserId);
@@ -699,7 +701,7 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
     final appState = Provider.of<AppState>(context, listen: false);
     try {
       final newStatus = putOnHold ? 'on_hold' : 'active';
-      await appState.firebaseService.updateBandMemberStatusAsync(bandId, memberUserId, newStatus);
+      if (!await MembershipMutationFeedback.run(context, bandId, () async { await appState.firebaseService.updateBandMemberStatusAsync(bandId, memberUserId, newStatus); })) return;
       if (mounted) {
         setState(() {
           final idx = _members.indexWhere((m) => m.userId == memberUserId);
@@ -741,8 +743,8 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
       (m) => m.userId == currentUserId,
       orElse: () => BandMember(role: 'Member'),
     );
-    final roleStr = (currentMember.role ?? widget.band.userRole ?? '').toLowerCase();
-    final isLeaderOrAdmin = roleStr.contains('leader') || roleStr.contains('admin') || widget.band.canUserEdit(currentUserId);
+
+    final isLeaderOrAdmin = appState.activeBandId == bandId && BandMembershipPolicy.canManageMember(currentMember);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -774,10 +776,13 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
           const SizedBox(height: 12),
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            child: Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 8,
               children: [
                 Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
                       'BAND MEMBERS',
@@ -809,6 +814,7 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
                   ],
                 ),
                 Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     const Icon(Icons.shield_outlined, size: 14, color: AppTheme.primaryAccent),
                     const SizedBox(width: 4),
@@ -901,8 +907,10 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(color: isOnHold ? Colors.amber.withValues(alpha: 0.3) : const Color(0xFF231F45), width: 1),
                     ),
-                    child: Row(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        Row(children: [
                         CircleAvatar(
                           radius: 20,
                           backgroundColor: isOnHold ? Colors.amber.withValues(alpha: 0.2) : AppTheme.primaryAccent.withValues(alpha: 0.3),
@@ -959,6 +967,13 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
                             ],
                           ),
                         ),
+                        ]),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 4,
+                          runSpacing: 8,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
                         if (isOnHold)
                           Container(
                             margin: const EdgeInsets.only(right: 8),
@@ -1030,7 +1045,7 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
                               ),
                             ),
                           ),
-                          if (isLeaderOrAdmin) ...[
+                          if (isLeaderOrAdmin && !isLeaderRole && (currentMember.role?.trim().toLowerCase() == 'leader' || !isAdminRole)) ...[
                             const SizedBox(width: 4),
                             GestureDetector(
                               onTap: () => _toggleMemberHoldStatus(member, !isOnHold),
@@ -1048,21 +1063,14 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
                               ),
                             ),
                             const SizedBox(width: 4),
+                            if (currentMember.role?.trim().toLowerCase() == 'leader' && !isLeaderRole)
                             PopupMenuButton<String>(
                               icon: const Icon(Icons.shield_outlined, color: AppTheme.primaryAccent, size: 20),
                               tooltip: 'Set Admin Roles',
                               color: const Color(0xFF16132D),
                               onSelected: (newRole) async {
                                 if (bandId != null && member.userId != null) {
-                                  if (newRole == 'Leader') {
-                                    // Enforce 1 Leader limit: Demote previous leader to Admin
-                                    for (var m in _members) {
-                                      if (m.userId != null && (m.role ?? '').toLowerCase().contains('leader') && m.userId != member.userId) {
-                                        await appState.firebaseService.updateBandMemberRoleAsync(bandId, m.userId!, 'Admin');
-                                      }
-                                    }
-                                  }
-                                  await appState.firebaseService.updateBandMemberRoleAsync(bandId, member.userId!, newRole);
+                                  if (!await MembershipMutationFeedback.run(context, bandId, () async { await appState.firebaseService.updateBandMemberRoleAsync(bandId, member.userId!, newRole); })) return;
                                   await _loadMembers();
                                   if (!mounted) return;
                                   ScaffoldMessenger.of(context).showSnackBar(
@@ -1081,16 +1089,6 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
                                       Icon(Icons.person_outline, color: Colors.white, size: 16),
                                       SizedBox(width: 8),
                                       Text('Set as Member', style: GoogleFonts.inter(color: Colors.white)),
-                                    ],
-                                  ),
-                                ),
-                                PopupMenuItem(
-                                  value: 'MOD',
-                                  child: Row(
-                                    children: [
-                                      Icon(Icons.security_rounded, color: Colors.purpleAccent, size: 16),
-                                      SizedBox(width: 8),
-                                      Text('Set as MOD', style: GoogleFonts.inter(color: Colors.purpleAccent)),
                                     ],
                                   ),
                                 ),
@@ -1134,6 +1132,8 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
                             ),
                           ],
                         ],
+                          ],
+                        ),
                       ],
                     ),
                   ),
@@ -1147,6 +1147,10 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final appState = context.watch<AppState>();
+    final canonicalMember = _members.where((m) => m.userId == appState.currentUserId).firstOrNull;
+    final canManage = !_isLoadingMembers && appState.activeBandId == widget.band.id &&
+        BandMembershipPolicy.canManageMember(canonicalMember);
     return GradientScaffold(
       appBar: const CustomTopBar(
         showBack: true,
@@ -1225,11 +1229,11 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Row(
+                          Expanded(child: Row(
                             children: [
                               const Icon(Icons.music_note_rounded, color: AppTheme.primaryAccent, size: 18),
                               const SizedBox(width: 8),
-                              Text(
+                              Expanded(child: Text(
                                 'GENRES/BAND TYPES',
                                 style: GoogleFonts.outfit(
                                   fontSize: 15,
@@ -1237,9 +1241,9 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
                                   color: Colors.white,
                                   letterSpacing: 1.2,
                                 ),
-                              ),
+                              )),
                             ],
-                          ),
+                          )),
                           Row(
                             children: [
                               if (_selectedStyles.isNotEmpty)
@@ -1306,6 +1310,7 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
                 ),
                 child: DropdownButtonHideUnderline(
                   child: DropdownButtonFormField<String>(
+                      isExpanded: true,
                     value: _level,
                     dropdownColor: AppTheme.cardBackground,
                     style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
@@ -1435,6 +1440,7 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
                   ),
                   child: DropdownButtonHideUnderline(
                     child: DropdownButtonFormField<String>(
+                      isExpanded: true,
                       value: _rehearsalDay,
                       dropdownColor: AppTheme.cardBackground,
                       style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
@@ -1567,15 +1573,15 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
                           children: [
                             const Icon(Icons.help_outline_rounded, color: AppTheme.primaryAccent, size: 16),
                             const SizedBox(width: 6),
-                            Text(
+                            Expanded(child: Text(
                               'What is Map View?',
                               style: GoogleFonts.outfit(
                                 fontSize: 13,
                                 fontWeight: FontWeight.bold,
                                 color: Colors.white,
                               ),
-                            ),
-                            const Spacer(),
+                             )),
+                            const SizedBox(width: 6),
                             const Icon(Icons.arrow_forward_ios_rounded, color: AppTheme.primaryAccent, size: 12),
                           ],
                         ),
@@ -1655,7 +1661,8 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
               _buildBandMembersSection(),
               const SizedBox(height: 30),
 
-              // Save Button
+              // Save is a management action, hidden until canonical membership resolves.
+              if (canManage)
               _isSaving
                   ? const Center(child: CircularProgressIndicator(color: AppTheme.primaryAccent))
                   : AnimatedTapDetector(
@@ -1683,7 +1690,8 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
               // Leader-only Danger Zone: Delete Band
               Consumer<AppState>(
                 builder: (context, appState, child) {
-                  final isLeader = widget.band.isUserLeader(appState.currentUserId);
+                  final canonicalMember = _members.where((m) => m.userId == appState.currentUserId).firstOrNull;
+                  final isLeader = appState.activeBandId == widget.band.id && BandMembershipPolicy.canManageMember(canonicalMember) && canonicalMember?.role?.trim().toLowerCase() == 'leader';
                   if (!isLeader) return const SizedBox.shrink();
 
                   return Container(
@@ -1707,14 +1715,14 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
                               size: 20,
                             ),
                             const SizedBox(width: 8),
-                            Text(
+                            Expanded(child: Text(
                               'BAND LEADER ACTIONS',
                               style: GoogleFonts.outfit(
                                 fontSize: 13,
                                 fontWeight: FontWeight.bold,
                                 color: const Color(0xFFEF4444),
                                 letterSpacing: 1.5,
-                              ),
+                              )),
                             ),
                           ],
                         ),

@@ -112,7 +112,7 @@ class _CreateBandScreenState extends State<CreateBandScreen> {
   }
 
   Future<void> _saveBand() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (_isSaving || !_formKey.currentState!.validate()) return;
 
     final appState = Provider.of<AppState>(context, listen: false);
     final userId = appState.currentUserId;
@@ -141,6 +141,17 @@ class _CreateBandScreenState extends State<CreateBandScreen> {
       }
     }
 
+    final initialBand = appState.activeBandId;
+    var cancelled = false;
+    var refreshing = false;
+    void sessionChanged() {
+      if (appState.currentUserId != userId ||
+          (!refreshing && appState.activeBandId != initialBand)) {
+        cancelled = true;
+      }
+    }
+
+    appState.addListener(sessionChanged);
     setState(() => _isSaving = true);
 
     try {
@@ -148,8 +159,18 @@ class _CreateBandScreenState extends State<CreateBandScreen> {
           '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
 
       final band = Band(
+        membersBand: {
+          for (final member in _selectedMembers)
+            if (member.userId != null && member.userId != userId)
+              member.userId!: BandMember(
+                role: _memberRoles[member.userId] ?? 'Member',
+                nickname: member.nickname ?? member.displayName,
+              ),
+        },
         name: _nameController.text.trim(),
-        ensembleType: _selectedGenres.isNotEmpty ? _selectedGenres.first : 'Band',
+        ensembleType: _selectedGenres.isNotEmpty
+            ? _selectedGenres.first
+            : 'Band',
         genres: _selectedGenres,
         styleBand: _selectedGenres,
         level: _level,
@@ -157,7 +178,9 @@ class _CreateBandScreenState extends State<CreateBandScreen> {
         rehearsalLocation: _rehearsalLocationController.text.trim(),
         address: _mapViewLocationController.text.trim(),
         rehearsalDayOfWeek: _hasRegularRehearsal ? _rehearsalDay : null,
-        rehearsalStartTime: _hasRegularRehearsal ? formatTime(_startTime) : null,
+        rehearsalStartTime: _hasRegularRehearsal
+            ? formatTime(_startTime)
+            : null,
         rehearsalEndTime: _hasRegularRehearsal ? formatTime(_endTime) : null,
         about: _aboutController.text.trim(),
         description: _aboutController.text.trim(),
@@ -165,24 +188,10 @@ class _CreateBandScreenState extends State<CreateBandScreen> {
 
       await appState.firebaseService.createBandAsync(userId, band);
 
-      final bandId = (band.name ?? 'My Band').replaceAll(' ', '_');
-      for (final member in _selectedMembers) {
-        if (member.userId != null && member.userId != userId) {
-          final role = _memberRoles[member.userId] ?? 'Member';
-          try {
-            await appState.firebaseService.addBandMemberAsync(
-              bandId,
-              member.userId!,
-              role,
-              member.nickname ?? member.displayName ?? role,
-            );
-          } catch (mErr) {
-            debugPrint("Error adding initial band member ${member.userId}: $mErr");
-          }
-        }
-      }
-
+      if (!mounted || cancelled || appState.currentUserId != userId) return;
+      refreshing = true;
       await appState.refreshProfile(); // refresh local active bands
+      if (!mounted || cancelled || appState.currentUserId != userId) return;
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -194,15 +203,16 @@ class _CreateBandScreenState extends State<CreateBandScreen> {
         Navigator.pop(context);
       }
     } catch (e) {
-      if (mounted) {
+      if (mounted && !cancelled && appState.currentUserId == userId) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to create band: $e'),
+          const SnackBar(
+            content: Text('Could not create the band. Please try again.'),
             backgroundColor: AppTheme.danger,
           ),
         );
       }
     } finally {
+      appState.removeListener(sessionChanged);
       if (mounted) {
         setState(() => _isSaving = false);
       }
@@ -276,10 +286,13 @@ class _CreateBandScreenState extends State<CreateBandScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 8,
           children: [
             Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
                   'Band Members',
@@ -644,11 +657,11 @@ class _CreateBandScreenState extends State<CreateBandScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Row(
+                          Expanded(child: Row(
                             children: [
                               const Icon(Icons.music_note_rounded, color: AppTheme.primaryAccent, size: 18),
                               const SizedBox(width: 8),
-                              Text(
+                              Expanded(child: Text(
                                 'GENRES/BAND TYPES',
                                 style: GoogleFonts.outfit(
                                   fontSize: 15,
@@ -656,9 +669,9 @@ class _CreateBandScreenState extends State<CreateBandScreen> {
                                   color: Colors.white,
                                   letterSpacing: 1.2,
                                 ),
-                              ),
+                              )),
                             ],
-                          ),
+                          )),
                           Row(
                             children: [
                               if (_selectedGenres.isNotEmpty)
@@ -725,6 +738,7 @@ class _CreateBandScreenState extends State<CreateBandScreen> {
                 ),
                 child: DropdownButtonHideUnderline(
                   child: DropdownButtonFormField<String>(
+                      isExpanded: true,
                     value: _level,
                     dropdownColor: AppTheme.cardBackground,
                     style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
@@ -854,6 +868,7 @@ class _CreateBandScreenState extends State<CreateBandScreen> {
                   ),
                   child: DropdownButtonHideUnderline(
                     child: DropdownButtonFormField<String>(
+                      isExpanded: true,
                       value: _rehearsalDay,
                       dropdownColor: AppTheme.cardBackground,
                       style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
@@ -986,15 +1001,15 @@ class _CreateBandScreenState extends State<CreateBandScreen> {
                           children: [
                             const Icon(Icons.help_outline_rounded, color: AppTheme.primaryAccent, size: 16),
                             const SizedBox(width: 6),
-                            Text(
+                            Expanded(child: Text(
                               'What is Map View?',
                               style: GoogleFonts.outfit(
                                 fontSize: 13,
                                 fontWeight: FontWeight.bold,
                                 color: Colors.white,
                               ),
-                            ),
-                            const Spacer(),
+                            )),
+                            const SizedBox(width: 6),
                             const Icon(Icons.arrow_forward_ios_rounded, color: AppTheme.primaryAccent, size: 12),
                           ],
                         ),

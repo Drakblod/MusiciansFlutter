@@ -4,6 +4,13 @@ const { onValueCreated, onValueWritten } = require('firebase-functions/v2/databa
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const logger = require('firebase-functions/logger');
 const crypto = require('crypto');
+const membershipAuthority = require('./membership_authority');
+exports.mutateBandMembership = onCall({ region:'europe-west1' }, request => {
+  if (!['create','add','role','status','remove','leave','transfer','metadata'].includes(request.data?.action)) {
+    throw new HttpsError('invalid-argument','Unsupported membership action.');
+  }
+  return membershipAuthority.mutate(admin.database(), request.auth?.uid, request.data);
+});
 const {
   buildEventProjections,
   getAuthorizedUserIdsForBandEvent,
@@ -23,7 +30,8 @@ const databaseTriggerRegion = isEmulator ? 'us-central1' : 'europe-west1';
 
 // In emulator environment, stub outbound FCM messaging to avoid external network timeouts on fake tokens
 if (isEmulator) {
-  admin.messaging = function() {
+  // Admin exposes messaging through an inherited getter; assignment is ignored.
+  Object.defineProperty(admin, 'messaging', { configurable:true, value:function() {
     return {
       send: async () => 'mock-fcm-message-id',
       sendEach: async (messages) => ({
@@ -32,7 +40,7 @@ if (isEmulator) {
         failureCount: 0,
       }),
     };
-  };
+  } });
 }
 
 const KNOWN_FEATURE_IDS = ['find_gigs', 'find_musicians', 'collabs', 'band_room', 'messages'];
@@ -1201,7 +1209,9 @@ exports.publishSubRequestGroup = onCall({ region: 'europe-west1' }, async (reque
 
   const callerId = request.auth.uid;
   const data = request.data || {};
-  const { bandId, requestGroupId, eventId, slots, bandName } = data;
+  const { bandId: requestedBandId, requestGroupId, eventId, slots, bandName } = data;
+  // Explicit canonical sentinel for a genuinely bandless new publication.
+  const bandId = requestedBandId ?? 'freelance';
 
   if (!requestGroupId || !slots || !Array.isArray(slots) || slots.length === 0) {
     throw new HttpsError('invalid-argument', 'Invalid request payload.');
@@ -1209,32 +1219,27 @@ exports.publishSubRequestGroup = onCall({ region: 'europe-west1' }, async (reque
 
   const db = admin.database();
 
-  // 1. Validate band authorization and event ownership if bandId is provided and exists in Bands
-  if (bandId && bandId !== 'freelance' && bandId !== 'standalone') {
-    const bandSnap = await db.ref(`/Bands/${bandId}`).once('value');
-    if (bandSnap.exists()) {
-      const memberRoleSnap = await db.ref(`/Bands/${bandId}/Members_band/${callerId}/Role`).once('value');
-      const role = memberRoleSnap.val();
-      if (role !== 'Leader' && role !== 'Admin') {
-        throw new HttpsError('permission-denied', 'Only Band Leaders or Admins can publish substitute requests for this band.');
-      }
-
-      // Verify all slots belong to the band and verify event ownership
-      for (const slot of slots) {
-        if (slot.bandId && slot.bandId !== bandId) {
-          throw new HttpsError('invalid-argument', 'Mixed band slots in a single publication group are rejected.');
-        }
-        const slotEventId = slot.eventId || eventId;
-        if (slotEventId && slotEventId !== 'standalone' && !slotEventId.startsWith('freelance')) {
-          const evSnap = await db.ref(`/Bands/${bandId}/Events/${slotEventId}`).once('value');
-          if (!evSnap.exists()) {
-            throw new HttpsError('permission-denied', `Event ${slotEventId} does not exist in band ${bandId}.`);
-          }
-          if (evSnap.val()?.createdBy && evSnap.val()?.createdBy !== callerId && role !== 'Leader' && role !== 'Admin') {
-            throw new HttpsError('permission-denied', `Event ${slotEventId} does not belong to caller.`);
-          }
-        }
-      }
+  // New publications have no canonical request yet: bind every slot and existing
+  // exact slot record to this validated owning band before publishing anything.
+  if (!bandId || typeof bandId !== 'string') throw new HttpsError('invalid-argument','An explicit owning band is required.');
+  const bandless = ['freelance','standalone'].includes(bandId);
+  if (!bandless) await membershipAuthority.requireManager(db,bandId,callerId);
+  for (const slot of slots) {
+    if (slot.bandId != null && slot.bandId !== bandId) throw new HttpsError('invalid-argument','Mixed owning bands are not permitted.');
+    if (slot.BandId != null && slot.BandId !== bandId) throw new HttpsError('invalid-argument','Mixed owning bands are not permitted.');
+    slot.bandId = bandId;
+    slot.BandId = bandId;
+    const id = slot.subRequestId || slot.SubRequestId || slot.slotId;
+    if (id) {
+      membershipAuthority.key(id,'request ID');
+      const existing = (await db.ref(`SubRequests/${id}`).get()).val();
+      if (existing) await membershipAuthority.authorizeRequest(db,callerId,existing,bandId);
+    }
+    const linkedEvent = membershipAuthority.canonicalField(slot,'EventId','eventId') || eventId;
+    if (linkedEvent) { slot.EventId = linkedEvent; slot.eventId = linkedEvent; }
+    if (!bandless && linkedEvent && linkedEvent !== 'standalone' && !linkedEvent.startsWith('freelance')) {
+      membershipAuthority.key(linkedEvent,'event ID');
+      if (!(await db.ref(`Bands/${bandId}/Events/${linkedEvent}`).get()).exists()) throw new HttpsError('permission-denied','Owning band event was not found.');
     }
   }
 
@@ -1738,6 +1743,8 @@ exports.deleteSubRequest = onCall({ region: 'europe-west1' }, async (request) =>
     throw new HttpsError('invalid-argument', 'subRequestId is required.');
   }
 
+  membershipAuthority.key(subRequestId,'request ID');
+
   const db = admin.database();
   const subSnap = await db.ref(`SubRequests/${subRequestId}`).get();
   if (!subSnap.exists()) {
@@ -1746,23 +1753,8 @@ exports.deleteSubRequest = onCall({ region: 'europe-west1' }, async (request) =>
 
   const val = subSnap.val() || {};
   const creatorId = val.CreatorUserId || val.creatorUserId || val.UserId || val.userId;
-  const bandId = val.BandId || val.bandId;
-
-  // Authorization check: Caller must be creator OR Band Leader/Admin of the request's band
-  let isAuthorized = (creatorId === callerId);
-  if (!isAuthorized && bandId) {
-    const memberSnap = await db.ref(`/Bands/${bandId}/Members_band/${callerId}`).once('value');
-    if (memberSnap.exists()) {
-      const role = memberSnap.val()?.Role || memberSnap.val()?.role;
-      if (role === 'Leader' || role === 'Admin') {
-        isAuthorized = true;
-      }
-    }
-  }
-
-  if (!isAuthorized) {
-    throw new HttpsError('permission-denied', 'Only creator or Band Leader/Admin can delete this request.');
-  }
+  const ownership = await membershipAuthority.authorizeRequest(db,callerId,val,request.data?.bandId,request.data?.eventId);
+  const bandId = ownership.bandId;
 
   // Fetch all audience recipients for atomic removal
   const audienceSnap = await db.ref(`subRequestAudience/${subRequestId}`).once('value');
@@ -1818,6 +1810,9 @@ exports.assignSubstitute = onCall({ region: 'europe-west1' }, async (request) =>
     throw new HttpsError('invalid-argument', 'subRequestId and candidateUserId are required.');
   }
 
+  membershipAuthority.key(subRequestId,'request ID');
+  membershipAuthority.key(candidateUserId,'candidate ID');
+
   const db = admin.database();
   const subReqRef = db.ref(`/SubRequests/${subRequestId}`);
   const subReqSnap = await subReqRef.once('value');
@@ -1826,30 +1821,16 @@ exports.assignSubstitute = onCall({ region: 'europe-west1' }, async (request) =>
   }
 
   const subReqData = subReqSnap.val();
-  const targetBandId = bandId || subReqData.bandId || subReqData.BandId;
-  const targetEventId = eventId || subReqData.eventId || subReqData.EventId;
-  const creatorUserId = subReqData.CreatorUserId || subReqData.UserId || subReqData.createdBy || subReqData.userId || subReqData.creatorUserId;
+  const ownership = await membershipAuthority.authorizeRequest(db,callerId,subReqData,bandId,eventId);
+  const targetBandId = ownership.bandId;
+  const targetEventId = ownership.eventId;
+  const creatorUserId = ownership.creatorId;
+  if (candidateUserId === creatorUserId) throw new HttpsError('invalid-argument','Creator cannot assign themselves as substitute.');
 
-  if (candidateUserId === creatorUserId) {
-    throw new HttpsError('invalid-argument', 'Creator cannot assign themselves as substitute.');
-  }
-
-  // Authorization check: Caller must be creator OR Band Leader/Admin of the request's band
-  let isAuthorized = (creatorUserId === callerId);
-  if (!isAuthorized && targetBandId) {
-    const memberSnap = await db.ref(`/Bands/${targetBandId}/Members_band/${callerId}`).once('value');
-    if (memberSnap.exists()) {
-      const role = memberSnap.val()?.Role || memberSnap.val()?.role;
-      if (role === 'Leader' || role === 'Admin') {
-        isAuthorized = true;
-      }
-    }
-  }
-
-  if (!isAuthorized) {
-    throw new HttpsError('permission-denied', 'Only Band Leaders, Band Admins, or the Request Creator can assign substitutes.');
-  }
-
+  const callerMember = !targetBandId ? null :
+    (await db.ref(`Bands/${targetBandId}/Members_band/${callerId}`).get()).val();
+  const addsMember = isNewMemberRequest(subReqData) || (!!targetEventId && membershipAuthority.manager(callerMember));
+  if (addsMember) await membershipAuthority.requireManager(db,targetBandId,callerId);
   // Candidate eligibility check: candidate must have applied/responded, be targeted, or invited
   const currentAssignedIdCheck = subReqData.AssignedUserId || subReqData.assignedUserId;
   const responsesSnap = await db.ref(`/SubRequests/${subRequestId}/Responses/${candidateUserId}`).once('value');
@@ -1865,6 +1846,12 @@ exports.assignSubstitute = onCall({ region: 'europe-west1' }, async (request) =>
   if (!isCandidateEligible) {
     throw new HttpsError('failed-precondition', 'Candidate has not applied or been invited for this request.');
   }
+
+  // Validate the real candidate before the canonical claim can commit.
+  try {
+    const candidate = await admin.auth().getUser(candidateUserId);
+    if (candidate.disabled) throw new Error('disabled');
+  } catch (_) { throw new HttpsError('failed-precondition','Candidate account is unavailable.'); }
 
   const now = Date.now();
   const actualSlotId = slotId || subReqData.SlotId || subReqData.slotId || subRequestId;
@@ -1917,6 +1904,14 @@ exports.assignSubstitute = onCall({ region: 'europe-west1' }, async (request) =>
     throw new HttpsError('already-exists', `Slot ${subRequestId} has already been assigned to another candidate.`);
   }
 
+  if (addsMember) {
+    const existing = (await db.ref(`Bands/${targetBandId}/Members_band/${candidateUserId}`).get()).val();
+    if (!existing) await membershipAuthority.mutate(db,callerId,{
+      action:'add',bandId:targetBandId,userId:candidateUserId,role:'Member',
+      nickname:candidateName || 'Member',operationId:`assignment_${crypto.createHash('sha256').update(`${subRequestId}/${candidateUserId}`).digest('hex')}`,
+    });
+  }
+
   // Multi-location idempotent derived updates (band event substitute assignments, externalInvitees, creator index)
   const updates = {};
   if (targetBandId && targetEventId) {
@@ -1948,22 +1943,7 @@ exports.assignSubstitute = onCall({ region: 'europe-west1' }, async (request) =>
     updates[`/Bands/${targetBandId}/Events/${targetEventId}/externalInvitees/${candidateUserId}/subRequestId`] = subRequestId;
     updates[`/Bands/${targetBandId}/Events/${targetEventId}/updatedAt`] = now;
 
-    updates[`/Bands/${targetBandId}/Members_band/${candidateUserId}`] = {
-      Nickname: candidateName || 'Substitute',
-      Role: 'Substitute',
-    };
-    updates[`/bandconversations/${targetBandId}/members/${candidateUserId}`] = true;
-  }
 
-  if (targetBandId) {
-    try {
-      const bandSnap = await db.ref(`/Bands/${targetBandId}`).once('value');
-      if (bandSnap.exists()) {
-        updates[`/users/${candidateUserId}/Bands/${targetBandId}`] = bandSnap.val();
-      }
-    } catch (e) {
-      console.error('Error fetching band for user index:', e);
-    }
   }
 
   if (callerId) {
@@ -2257,6 +2237,8 @@ exports.revokeSubstituteAssignment = onCall({ region: 'europe-west1' }, async (r
     throw new HttpsError('invalid-argument', 'subRequestId is required.');
   }
 
+  membershipAuthority.key(subRequestId,'request ID');
+
   const db = admin.database();
   const subReqRef = db.ref(`/SubRequests/${subRequestId}`);
   const subReqSnap = await subReqRef.once('value');
@@ -2265,24 +2247,10 @@ exports.revokeSubstituteAssignment = onCall({ region: 'europe-west1' }, async (r
   }
 
   const subReqData = subReqSnap.val();
-  const targetBandId = bandId || subReqData.bandId || subReqData.BandId;
-  const targetEventId = eventId || subReqData.eventId || subReqData.EventId;
-  const creatorUserId = subReqData.CreatorUserId || subReqData.UserId;
-
-  let isAuthorized = (creatorUserId === callerId);
-  if (!isAuthorized && targetBandId) {
-    const memberSnap = await db.ref(`/Bands/${targetBandId}/Members_band/${callerId}`).once('value');
-    if (memberSnap.exists()) {
-      const role = memberSnap.val()?.Role || memberSnap.val()?.role;
-      if (role === 'Leader' || role === 'Admin') {
-        isAuthorized = true;
-      }
-    }
-  }
-
-  if (!isAuthorized) {
-    throw new HttpsError('permission-denied', 'Only Band Leaders, Band Admins, or Creator can revoke assignments.');
-  }
+  const ownership = await membershipAuthority.authorizeRequest(db,callerId,subReqData,bandId,eventId);
+  const targetBandId = ownership.bandId;
+  const targetEventId = ownership.eventId;
+  const creatorUserId = ownership.creatorId;
 
   const actualSlotId = slotId || subReqData.SlotId || subReqData.slotId || subRequestId;
   const updates = {};
@@ -3017,6 +2985,9 @@ exports.createAgreementConversation = onCall({ region: 'europe-west1' }, async (
     throw new HttpsError('invalid-argument', 'applicantId is required.');
   }
 
+  membershipAuthority.key(subRequestId,'request ID');
+  membershipAuthority.key(applicantId,'applicant ID');
+
   // Database verification: Load SubRequest
   const subReqSnap = await admin.database().ref(`/SubRequests/${subRequestId}`).once('value');
   if (!subReqSnap.exists()) {
@@ -3029,23 +3000,8 @@ exports.createAgreementConversation = onCall({ region: 'europe-west1' }, async (
     throw new HttpsError('failed-precondition', 'SubRequest has no valid creator.');
   }
 
-  // Authorization check: Caller must be creator OR Band Leader/Admin of the request's band
-  // APPLICANTS CANNOT SELF-CREATE OR ALTER AGREEMENTS
-  const targetBandId = subReqData.bandId || subReqData.BandId;
-  let isAuthorized = (creatorUid === callerUid);
-  if (!isAuthorized && targetBandId) {
-    const memberSnap = await admin.database().ref(`/Bands/${targetBandId}/Members_band/${callerUid}`).once('value');
-    if (memberSnap.exists()) {
-      const role = memberSnap.val()?.Role || memberSnap.val()?.role;
-      if (role === 'Leader' || role === 'Admin') {
-        isAuthorized = true;
-      }
-    }
-  }
-
-  if (!isAuthorized) {
-    throw new HttpsError('permission-denied', 'Only Band Leaders, Band Admins, or the Request Creator can create agreement conversations.');
-  }
+  const ownership = await membershipAuthority.authorizeRequest(admin.database(),callerUid,subReqData,request.data?.bandId,request.data?.eventId);
+  const targetBandId = ownership.bandId;
 
   // Precondition: SubRequest must already be assigned or filled to applicantId
   const currentAssignedId = subReqData.AssignedUserId || subReqData.assignedUserId;
@@ -5065,66 +5021,21 @@ exports.deleteUserAccount = onCall({ region: 'europe-west1' }, async (request) =
     throw new HttpsError('unauthenticated', 'User must be authenticated.');
   }
 
+  if ((request.data?.userId != null && request.data.userId !== callerUid) || (request.data?.uid != null && request.data.uid !== callerUid)) {
+    throw new HttpsError('permission-denied','You may delete only your own account.');
+  }
   const db = admin.database();
 
   try {
-    // 1. Process band memberships & leadership transfer
-    const userBandsSnap = await db.ref(`/users/${callerUid}/Bands`).once('value');
-    if (userBandsSnap.exists() && userBandsSnap.val()) {
-      const userBands = userBandsSnap.val();
-      const bandIds = Object.keys(userBands);
-
-      for (const bandId of bandIds) {
-        const bandSnap = await db.ref(`/Bands/${bandId}`).once('value');
-        if (!bandSnap.exists()) continue;
-
-        const bandData = bandSnap.val() || {};
-        const members = bandData.Members_band || {};
-        const callerMember = members[callerUid];
-
-        if (callerMember) {
-          const userRole = (callerMember.Role || callerMember.role || '').toLowerCase();
-          const otherMemberIds = Object.keys(members).filter((id) => id !== callerUid);
-
-          if (userRole === 'leader') {
-            if (otherMemberIds.length === 0) {
-              // Sole member / leader: Delete orphaned band completely
-              await db.ref(`/Bands/${bandId}`).remove();
-              await db.ref(`/bandconversations/${bandId}`).remove();
-              await db.ref(`/bandSectionConversations/${bandId}`).remove();
-            } else {
-              // Auto-transfer leadership to an Admin, or next available member
-              let successorId = otherMemberIds.find((id) => {
-                const r = (members[id]?.Role || members[id]?.role || '').toLowerCase();
-                return r === 'admin';
-              });
-              if (!successorId) {
-                successorId = otherMemberIds[0];
-              }
-
-              // Promote successor to Leader
-              await db.ref(`/Bands/${bandId}/Members_band/${successorId}/Role`).set('Leader');
-              // Remove deleting user from band
-              await db.ref(`/Bands/${bandId}/Members_band/${callerUid}`).remove();
-              await db.ref(`/bandconversations/${bandId}/members/${callerUid}`).remove();
-
-              // Send system notification to new leader
-              const bandName = bandData.Name || bandData.name || bandId;
-              await recordUserNotification(successorId, {
-                type: 'band_leadership_promoted',
-                category: 'events',
-                title: '👑 You are now the Band Leader',
-                body: `You have been promoted to Leader of ${bandName}.`,
-                data: { bandId: bandId },
-              });
-            }
-          } else {
-            // Normal member: remove from band members
-            await db.ref(`/Bands/${bandId}/Members_band/${callerUid}`).remove();
-            await db.ref(`/bandconversations/${bandId}/members/${callerUid}`).remove();
-          }
-        }
+    // Discovery references are candidates only. Every departure checks the canonical band.
+    const indexed = (await db.ref(`userBandMembershipIndex/${callerUid}`).get()).val() || {};
+    const legacy = (await db.ref(`users/${callerUid}/Bands`).get()).val() || {};
+    for (const bandId of new Set([...Object.keys(indexed),...Object.keys(legacy)])) {
+      if (!(await db.ref(`Bands/${bandId}/Members_band/${callerUid}`).get()).exists()) {
+        await require('./band_membership_index').reconcileMembershipIndex(db,bandId,callerUid);
+        continue;
       }
+      await membershipAuthority.mutate(db,callerUid,{action:'departAccount',bandId,operationId:'delete_account'});
     }
 
     // 2. Clean up user's sub-requests
@@ -5132,13 +5043,21 @@ exports.deleteUserAccount = onCall({ region: 'europe-west1' }, async (request) =
     if (subRequestsSnap.exists() && subRequestsSnap.val()) {
       const allSubRequests = subRequestsSnap.val();
       const subUpdates = {};
-      Object.keys(allSubRequests).forEach((subId) => {
+      for (const subId of Object.keys(allSubRequests)) {
         const item = allSubRequests[subId];
         if (item && (item.CreatorUserId === callerUid || item.UserId === callerUid || item.creatorUserId === callerUid || item.userId === callerUid)) {
+          // A surviving band's request belongs to that band, even when its creator leaves.
+          let owningBand;
+          try { owningBand = membershipAuthority.canonicalField(item,'BandId','bandId'); }
+          catch (_) { continue; }
+          if (!['freelance','standalone'].includes(owningBand)) {
+            try { membershipAuthority.bandKey(owningBand); } catch (_) { continue; }
+            if ((await db.ref(`Bands/${owningBand}`).get()).exists()) continue;
+          }
           subUpdates[`/SubRequests/${subId}`] = null;
           subUpdates[`/subRequestAudience/${subId}`] = null;
         }
-      });
+      }
       if (Object.keys(subUpdates).length > 0) {
         await db.ref().update(subUpdates);
       }
@@ -5179,6 +5098,7 @@ exports.deleteUserAccount = onCall({ region: 'europe-west1' }, async (request) =
     // 4. Clean up user-specific nodes
     const rootUpdates = {};
     rootUpdates[`/users/${callerUid}`] = null;
+    rootUpdates[`/userBandMembershipIndex/${callerUid}`] = null;
     rootUpdates[`/userNotifications/${callerUid}`] = null;
     rootUpdates[`/userSubRequestFeed/${callerUid}`] = null;
     rootUpdates[`/creatorSubRequestGroups/${callerUid}`] = null;
@@ -5189,11 +5109,12 @@ exports.deleteUserAccount = onCall({ region: 'europe-west1' }, async (request) =
     try {
       await admin.auth().deleteUser(callerUid);
     } catch (authErr) {
-      console.warn(`Auth user delete notice for ${callerUid}:`, authErr.message);
+      if (authErr.code !== 'auth/user-not-found') throw authErr;
     }
 
     return { success: true };
   } catch (err) {
+    if (err instanceof HttpsError) throw err;
     console.error(`Error deleting user account for ${callerUid}:`, err);
     throw new HttpsError('internal', `Failed to delete user account: ${err.message}`);
   }
@@ -5222,7 +5143,7 @@ exports.deleteBand = onCall({ region: 'europe-west1' }, async (request) => {
     const bandSnap = await bandRef.once('value');
 
     if (!bandSnap.exists()) {
-      throw new HttpsError('not-found', 'Band not found.');
+      return { success:true };
     }
 
     const bandData = bandSnap.val() || {};
@@ -5233,10 +5154,7 @@ exports.deleteBand = onCall({ region: 'europe-west1' }, async (request) => {
       throw new HttpsError('permission-denied', 'You are not a member of this band.');
     }
 
-    const callerRole = (callerMember.Role || callerMember.role || '').toLowerCase();
-    if (callerRole !== 'leader') {
-      throw new HttpsError('permission-denied', 'Only the band leader can delete this band.');
-    }
+    await membershipAuthority.requireManager(db,trimmedBandId,callerUid,true);
 
     const memberIds = Object.keys(members);
     const updates = {};
@@ -5264,8 +5182,8 @@ exports.deleteBand = onCall({ region: 'europe-west1' }, async (request) => {
     updates[`/bandconversations/${trimmedBandId}`] = null;
     updates[`/bandSectionConversations/${trimmedBandId}`] = null;
 
-    // 3. Remove the band itself
-    updates[`/Bands/${trimmedBandId}`] = null;
+    // Atomically revalidate ownership and delete canonical band; no client fallback.
+    await membershipAuthority.mutate(db,callerUid,{action:'delete',bandId:trimmedBandId,operationId:'delete_band'});
 
     await db.ref().update(updates);
 

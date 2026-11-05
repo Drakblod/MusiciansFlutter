@@ -3,66 +3,86 @@
     "userBandMembershipIndex": {
       ".read": false,
       ".write": false,
-      "$uid": { ".read": "auth != null && auth.uid == $uid" }
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid"
+      }
     },
     "users": {
       ".read": "auth != null",
       "$userId": {
-        ".write": "auth != null && auth.uid == $userId",
+        ".write": false,
         "Favorites": {
           ".read": "auth != null && auth.uid == $userId",
           ".write": "auth != null && auth.uid == $userId",
           "$targetUserId": {
             ".write": "auth != null && auth.uid == $userId"
           }
+        },
+        "info": {
+          ".write": "auth != null && auth.uid == $userId"
+        },
+        "UserType": {
+          ".write": "auth != null && auth.uid == $userId"
+        },
+        "Nickname": {
+          ".write": "auth != null && auth.uid == $userId"
+        },
+        "DisplayName": {
+          ".write": "auth != null && auth.uid == $userId"
+        },
+        "metrics": {
+          ".write": "auth != null && auth.uid == $userId"
+        },
+        "PublicEvents": {
+          ".write": "auth != null && auth.uid == $userId"
+        },
+        "Bands": {
+          ".write": false
         }
       }
     },
     "Bands": {
       ".read": "auth != null",
       "$bandId": {
-        ".write": "auth != null && !data.exists()",
+        ".write": false,
         "Name": {
-          ".write": "auth != null && (root.child('Bands').child($bandId).child('Members_band').child(auth.uid).child('Role').val() == 'Leader' || root.child('Bands').child($bandId).child('Members_band').child(auth.uid).child('Role').val() == 'Admin')"
+          ".write": false
         },
         "EnsembleType": {
-          ".write": "auth != null && (root.child('Bands').child($bandId).child('Members_band').child(auth.uid).child('Role').val() == 'Leader' || root.child('Bands').child($bandId).child('Members_band').child(auth.uid).child('Role').val() == 'Admin')"
+          ".write": false
         },
         "Genres": {
-          ".write": "auth != null && (root.child('Bands').child($bandId).child('Members_band').child(auth.uid).child('Role').val() == 'Leader' || root.child('Bands').child($bandId).child('Members_band').child(auth.uid).child('Role').val() == 'Admin')"
+          ".write": false
         },
         "Style_band": {
-          ".write": "auth != null && (root.child('Bands').child($bandId).child('Members_band').child(auth.uid).child('Role').val() == 'Leader' || root.child('Bands').child($bandId).child('Members_band').child(auth.uid).child('Role').val() == 'Admin')"
+          ".write": false
         },
         "Level": {
-          ".write": "auth != null && (root.child('Bands').child($bandId).child('Members_band').child(auth.uid).child('Role').val() == 'Leader' || root.child('Bands').child($bandId).child('Members_band').child(auth.uid).child('Role').val() == 'Admin')"
+          ".write": false
         },
         "Location": {
-          ".write": "auth != null && (root.child('Bands').child($bandId).child('Members_band').child(auth.uid).child('Role').val() == 'Leader' || root.child('Bands').child($bandId).child('Members_band').child(auth.uid).child('Role').val() == 'Admin')"
+          ".write": false
         },
         "RehearsalLocation": {
-          ".write": "auth != null && (root.child('Bands').child($bandId).child('Members_band').child(auth.uid).child('Role').val() == 'Leader' || root.child('Bands').child($bandId).child('Members_band').child(auth.uid).child('Role').val() == 'Admin')"
+          ".write": false
         },
         "RehearsalDayOfWeek": {
-          ".write": "auth != null && (root.child('Bands').child($bandId).child('Members_band').child(auth.uid).child('Role').val() == 'Leader' || root.child('Bands').child($bandId).child('Members_band').child(auth.uid).child('Role').val() == 'Admin')"
+          ".write": false
         },
         "RehearsalStartTime": {
-          ".write": "auth != null && (root.child('Bands').child($bandId).child('Members_band').child(auth.uid).child('Role').val() == 'Leader' || root.child('Bands').child($bandId).child('Members_band').child(auth.uid).child('Role').val() == 'Admin')"
+          ".write": false
         },
         "RehearsalEndTime": {
-          ".write": "auth != null && (root.child('Bands').child($bandId).child('Members_band').child(auth.uid).child('Role').val() == 'Leader' || root.child('Bands').child($bandId).child('Members_band').child(auth.uid).child('Role').val() == 'Admin')"
+          ".write": false
         },
         "About": {
-          ".write": "auth != null && (root.child('Bands').child($bandId).child('Members_band').child(auth.uid).child('Role').val() == 'Leader' || root.child('Bands').child($bandId).child('Members_band').child(auth.uid).child('Role').val() == 'Admin')"
+          ".write": false
         },
         "Description": {
-          ".write": "auth != null && (root.child('Bands').child($bandId).child('Members_band').child(auth.uid).child('Role').val() == 'Leader' || root.child('Bands').child($bandId).child('Members_band').child(auth.uid).child('Role').val() == 'Admin')"
+          ".write": false
         },
         "Members_band": {
-          ".write": "auth != null && (!data.exists() || root.child('Bands').child($bandId).child('Members_band').child(auth.uid).child('Role').val() == 'Leader' || root.child('Bands').child($bandId).child('Members_band').child(auth.uid).child('Role').val() == 'Admin')",
-          "$memberId": {
-            ".write": "auth != null && (!data.parent().exists() || root.child('Bands').child($bandId).child('Members_band').child(auth.uid).child('Role').val() == 'Leader' || root.child('Bands').child($bandId).child('Members_band').child(auth.uid).child('Role').val() == 'Admin' || auth.uid == $memberId)"
-          }
+          ".write": false
         },
         "GigsNews": {
           ".write": "auth != null && root.child('Bands').child($bandId).child('Members_band').child(auth.uid).exists()"
@@ -297,7 +317,17 @@
     },
     "bandconversations": {
       ".read": "auth != null",
-      ".write": "auth != null"
+      ".write": false,
+      "$bandId": {
+        "members": {
+          ".write": false
+        },
+        "messages": {
+          "$messageId": {
+            ".write": "auth != null && root.child('Bands').child($bandId).child('Members_band').child(auth.uid).hasChildren() && (!root.child('Bands').child($bandId).child('Members_band').child(auth.uid).child('Status').exists() || (root.child('Bands').child($bandId).child('Members_band').child(auth.uid).child('Status').isString() && root.child('Bands').child($bandId).child('Members_band').child(auth.uid).child('Status').val().matches(/^ *(active|on_hold|temporarily_off) *$/i))) && (!root.child('Bands').child($bandId).child('Members_band').child(auth.uid).child('status').exists() || (root.child('Bands').child($bandId).child('Members_band').child(auth.uid).child('status').isString() && root.child('Bands').child($bandId).child('Members_band').child(auth.uid).child('status').val().matches(/^ *(active|on_hold|temporarily_off) *$/i))) && root.child('bandconversations').child($bandId).child('members').child(auth.uid).val() == true && !data.exists() && newData.child('SenderId').val() == auth.uid"
+          }
+        }
+      }
     },
     "files": {
       "$bandId": {
@@ -438,6 +468,14 @@
       "$broadcastId": {
         ".write": false
       }
+    },
+    "membershipMutationOperations": {
+      ".read": false,
+      ".write": false
+    },
+    "userBandMemberships": {
+      ".read": false,
+      ".write": false
     }
   }
 }

@@ -209,6 +209,7 @@ describe('Real Cloud Functions Emulator Integration Tests (JS Client SDK + Emula
 
   it('7. Agreement-chat creation is genuinely idempotent across repeated and concurrent calls', async () => {
     await adminDb.ref('SubRequests/sub_200').set({
+      BandId: 'freelance',
       CreatorUserId: 'user_a',
       SubRequestId: 'sub_200',
       VoicePart: 'Tenor',
@@ -864,6 +865,12 @@ describe('Real Cloud Functions Emulator Integration Tests (JS Client SDK + Emula
   });
 
   it('27. Real assignSubstitute callable concurrency race: exactly one caller wins, loser receives already-exists, and retry is idempotent', async () => {
+    // Eligible candidates are actual accounts, not invented response identities.
+    for (const uid of ['user_cand_1','user_cand_2']) {
+      try { await admin.auth().getUser(uid); }
+      catch (e) { if (e.code !== 'auth/user-not-found') throw e; await admin.auth().createUser({uid}); }
+    }
+
     await seedBandAndUsers();
     // Authorize user_b as Band Admin alongside Leader user_a
     await adminDb.ref('Bands/band_tour_test/Members_band/user_b').set({ Role: 'Admin' });
@@ -2435,6 +2442,14 @@ describe('Real Cloud Functions Emulator Integration Tests (JS Client SDK + Emula
       });
     });
     describe('SUBREQUEST-DATA-CONSISTENCY-01: End-to-End Field Value Preservation and Classification', () => {
+      // Positive publication fixtures must have a real canonical active manager/event.
+      beforeEach(async () => {
+        await adminDb.ref('Bands/band_consist_1').set({
+          Name:'Consistency Band', Members_band:{user_a:{Role:'Leader',Status:'active'}},
+          Events:{ev_consist_1:{createdBy:'user_a',title:'Consistency event'}},
+        });
+      });
+
       it('68. Full Substitute request: field value preservation across canonical and feed projections', async () => {
         const publish = httpsCallable(functionsUserA, 'publishSubRequestGroup');
         const res = await publish({
@@ -2882,6 +2897,7 @@ describe('Real Cloud Functions Emulator Integration Tests (JS Client SDK + Emula
 
         it('73. assignSubstitute rejects ineligible candidate who never applied or was targeted, leaving zero Agreement records', async () => {
           await adminDb.ref('SubRequests/sub_ineligible_test').set({
+      BandId: 'freelance',
             SubRequestId: 'sub_ineligible_test',
             CreatorUserId: 'user_a',
             BandName: 'Band 26',
@@ -3051,6 +3067,8 @@ describe('Real Cloud Functions Emulator Integration Tests (JS Client SDK + Emula
             Responses: { user_b: true },
           });
 
+          // A real band request is managed by its current canonical manager.
+          await adminDb.ref('Bands/band_26').set({Name:'Band 26',Members_band:{user_a:{Role:'Leader',Status:'active'}}});
           const assignFn = httpsCallable(functionsUserA, 'assignSubstitute');
           const res = await assignFn({ subRequestId, candidateUserId });
 

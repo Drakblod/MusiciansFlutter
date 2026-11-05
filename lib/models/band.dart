@@ -1,3 +1,4 @@
+import '../utils/band_membership_policy.dart';
 class Band {
   final String? id;
   final String? ensembleType;
@@ -128,31 +129,11 @@ class Band {
     };
   }
 
-  bool canUserEdit(String? userId) {
-    if (userId == null) return false;
-    final member = membersBand[userId] ??
-        membersBand.values.firstWhere(
-          (m) => m.userId == userId,
-          orElse: () => BandMember(),
-        );
-    final role = (member.role ?? '').toLowerCase();
-    if (role.contains('leader') || role.contains('admin')) return true;
-    final uRole = (userRole ?? '').toLowerCase();
-    return uRole.contains('leader') || uRole.contains('admin');
-  }
+  bool canUserEdit(String? userId) => BandMembershipPolicy.canStaff(this, userId);
 
-  bool isUserLeader(String? userId) {
-    if (userId == null) return false;
-    final member = membersBand[userId] ??
-        membersBand.values.firstWhere(
-          (m) => m.userId == userId,
-          orElse: () => BandMember(),
-        );
-    final role = (member.role ?? '').toLowerCase();
-    final nickname = (member.nickname ?? '').toLowerCase();
-    final uRole = (userRole ?? '').toLowerCase();
-    return role == 'leader' || nickname == 'leader' || uRole == 'leader';
-  }
+  bool isUserLeader(String? userId) =>
+      BandMembershipPolicy.isMember(this,userId) &&
+      membersBand[userId]!.role?.trim().toLowerCase() == 'leader';
 
   static List<String> _toList(dynamic val) {
     if (val == null) return [];
@@ -183,11 +164,13 @@ class BandMember {
   bool get isActive => !isOnHold;
 
   factory BandMember.fromJson(Map<dynamic, dynamic> json, [String? userId]) {
+    bool conflicts(String upper, String lower) => json[upper] != null && json[lower] != null &&
+        json[upper].toString().trim().toLowerCase() != json[lower].toString().trim().toLowerCase();
     return BandMember(
       userId: userId,
       nickname: json['Nickname']?.toString() ?? json['nickname']?.toString(),
-      role: json['Role']?.toString() ?? json['role']?.toString(),
-      status: json['Status']?.toString() ?? json['status']?.toString() ?? 'active',
+      role: conflicts('Role','role') ? null : json['Role']?.toString() ?? json['role']?.toString(),
+      status: conflicts('Status','status') ? 'unknown' : json['Status']?.toString() ?? json['status']?.toString() ?? 'active',
     );
   }
 

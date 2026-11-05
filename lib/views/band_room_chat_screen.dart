@@ -1,3 +1,5 @@
+import '../utils/membership_mutation_feedback.dart';
+import '../utils/band_membership_policy.dart';
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -1884,8 +1886,8 @@ class _BandRoomChatScreenState extends State<_BandRoomContent>
       (m) => m.userId == selfId,
       orElse: () => BandMember(role: 'Member'),
     );
-    final roleStr = (currentMember.role ?? _activeBand?.userRole ?? '').toLowerCase();
-    final isLeaderOrAdmin = roleStr.contains('leader') || roleStr.contains('admin') || (_activeBand?.canUserEdit(selfId) ?? false);
+
+    final isLeaderOrAdmin = appState.activeBandId == bandId && BandMembershipPolicy.canManageMember(currentMember);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2174,7 +2176,7 @@ class _BandRoomChatScreenState extends State<_BandRoomContent>
                               ),
                             ),
                           ),
-                          if (isLeaderOrAdmin) ...[
+                          if (isLeaderOrAdmin && !isLeaderRole && (currentMember.role?.trim().toLowerCase() == 'leader' || !isAdminRole)) ...[
                             const SizedBox(width: 4),
                             GestureDetector(
                               onTap: () => _toggleMemberHoldStatus(member, !isOnHold),
@@ -2192,21 +2194,14 @@ class _BandRoomChatScreenState extends State<_BandRoomContent>
                               ),
                             ),
                             const SizedBox(width: 4),
+                            if (currentMember.role?.trim().toLowerCase() == 'leader' && !isLeaderRole)
                             PopupMenuButton<String>(
                               icon: const Icon(Icons.shield_outlined, color: AppTheme.primaryAccent, size: 20),
                               tooltip: 'Set Admin Roles',
                               color: const Color(0xFF16132D),
                               onSelected: (newRole) async {
                                 if (bandId != null && member.userId != null) {
-                                  if (newRole == 'Leader') {
-                                    // Enforce 1 Leader limit: Demote previous leader to Admin
-                                    for (var m in _members) {
-                                      if (m.userId != null && (m.role ?? '').toLowerCase().contains('leader') && m.userId != member.userId) {
-                                        await appState.firebaseService.updateBandMemberRoleAsync(bandId, m.userId!, 'Admin');
-                                      }
-                                    }
-                                  }
-                                  await appState.firebaseService.updateBandMemberRoleAsync(bandId, member.userId!, newRole);
+                                  if (!await MembershipMutationFeedback.run(context, bandId, () async { await appState.firebaseService.updateBandMemberRoleAsync(bandId, member.userId!, newRole); })) return;
                                   await _initBand(bandId);
                                   if (mounted) {
                                     ScaffoldMessenger.of(context).showSnackBar(
@@ -2226,16 +2221,6 @@ class _BandRoomChatScreenState extends State<_BandRoomContent>
                                       Icon(Icons.person_outline, color: Colors.white, size: 16),
                                       SizedBox(width: 8),
                                       Text('Set as Member', style: GoogleFonts.inter(color: Colors.white)),
-                                    ],
-                                  ),
-                                ),
-                                PopupMenuItem(
-                                  value: 'MOD',
-                                  child: Row(
-                                    children: [
-                                      Icon(Icons.security_rounded, color: Colors.purpleAccent, size: 16),
-                                      SizedBox(width: 8),
-                                      Text('Set as MOD', style: GoogleFonts.inter(color: Colors.purpleAccent)),
                                     ],
                                   ),
                                 ),
@@ -2842,10 +2827,10 @@ class _BandRoomChatScreenState extends State<_BandRoomContent>
                             (m) => m.userId == currentUserId,
                             orElse: () => BandMember(role: 'Member'),
                           );
-                          final roleStr = (currentUserMember.role ?? _activeBand?.userRole ?? '').toLowerCase();
-                          final isLeaderOrAdmin = roleStr.contains('leader') || roleStr.contains('admin');
 
-                          if (isLeaderOrAdmin && member.userId != currentUserId) {
+                          final isLeaderOrAdmin = appState.activeBandId == _loadedBandId && BandMembershipPolicy.canManageMember(currentUserMember);
+
+                          if (isLeaderOrAdmin && member.userId != currentUserId && member.role?.trim().toLowerCase() != 'leader' && (currentUserMember.role?.trim().toLowerCase() == 'leader' || member.role?.trim().toLowerCase() != 'admin')) {
                             return Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
@@ -2919,7 +2904,7 @@ class _BandRoomChatScreenState extends State<_BandRoomContent>
     if (confirmed == true && mounted) {
       final appState = Provider.of<AppState>(context, listen: false);
       try {
-        await appState.firebaseService.removeBandMemberAsync(_loadedBandId!, memberUserId);
+        if (!await MembershipMutationFeedback.run(context, _loadedBandId!, () async { await appState.firebaseService.removeBandMemberAsync(_loadedBandId!, memberUserId); })) return;
         if (mounted) {
           setState(() {
             _members.removeWhere((m) => m.userId == memberUserId);
@@ -2996,7 +2981,7 @@ class _BandRoomChatScreenState extends State<_BandRoomContent>
     final appState = Provider.of<AppState>(context, listen: false);
     try {
       final newStatus = putOnHold ? 'on_hold' : 'active';
-      await appState.firebaseService.updateBandMemberStatusAsync(_loadedBandId!, memberUserId, newStatus);
+      if (!await MembershipMutationFeedback.run(context, _loadedBandId!, () async { await appState.firebaseService.updateBandMemberStatusAsync(_loadedBandId!, memberUserId, newStatus); })) return;
       if (mounted) {
         setState(() {
           final idx = _members.indexWhere((m) => m.userId == memberUserId);
@@ -4055,12 +4040,12 @@ class AddMemberDialogContentState extends State<AddMemberDialogContent> {
     });
 
     try {
-      await appState.firebaseService.addBandMemberAsync(
+      if (!await MembershipMutationFeedback.run(context, widget.bandId, () async { await appState.firebaseService.addBandMemberAsync(
         widget.bandId,
         userId,
         'Member',
         user.nickname ?? name,
-      );
+      ); })) { return; }
       widget.onMemberAdded();
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

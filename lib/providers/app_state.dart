@@ -21,6 +21,8 @@ class AppState extends ChangeNotifier {
   String? _bandOwnerUid;
   Map<String, String> _authorizedBands = {};
   int _bandReadGeneration = 0;
+  int _membershipMutationEpoch = 0;
+  Object? _membershipUiOperation;
   Future<Map<String, String>>? _bandLoad;
   String? _bandLoadUid;
   bool _bandSessionEnding = false;
@@ -337,6 +339,8 @@ class AppState extends ChangeNotifier {
   }
 
   void _clearProfileState() {
+    _membershipMutationEpoch++;
+    _membershipUiOperation = null;
     _currentUserProfile = null;
     _bandReadGeneration++;
     _bandLoad = null;
@@ -519,38 +523,63 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> deleteCurrentAccount() async {
+    final uid = currentUserId;
+    final epoch = _membershipMutationEpoch;
+    final token = Object();
+    _membershipUiOperation = token;
+    var clearedOwnSession = false;
     _isLoading = true;
     notifyListeners();
     try {
       _unreadSubscription?.cancel();
       _unreadNotificationsSubscription?.cancel();
       await firebaseService.deleteUserAccountAsync();
+      if (currentUserId != uid || _membershipMutationEpoch != epoch) {
+        throw StateError('Your session changed. Please try again.');
+      }
       _clearProfileState();
+      clearedOwnSession = true;
     } catch (e) {
       debugPrint("Error on deleteCurrentAccount: $e");
       rethrow;
     } finally {
-      _isLoading = false;
-      notifyListeners();
+      if (clearedOwnSession || identical(_membershipUiOperation,token)) {
+        _membershipUiOperation = null;
+        _isLoading = false;
+        notifyListeners();
+      }
     }
   }
 
   Future<void> deleteBand(String bandId) async {
+    final uid = currentUserId;
+    final epoch = _membershipMutationEpoch;
+    final token = Object();
+    _membershipUiOperation = token;
     _isLoading = true;
     notifyListeners();
     try {
       await firebaseService.deleteBandAsync(bandId);
+      if (currentUserId != uid || _membershipMutationEpoch != epoch) {
+        throw StateError('Your session or selected band changed. Please try again.');
+      }
       if (_activeBandId == bandId) {
         _activeBandId = null;
         _activeBandName = null;
       }
       await refreshProfile();
+      if (currentUserId != uid || _membershipMutationEpoch != epoch) {
+        throw StateError('Your session or selected band changed. Please try again.');
+      }
     } catch (e) {
       debugPrint("Error on deleteBand: $e");
       rethrow;
     } finally {
-      _isLoading = false;
-      notifyListeners();
+      if (identical(_membershipUiOperation,token)) {
+        _membershipUiOperation = null;
+        _isLoading = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -558,6 +587,7 @@ class AppState extends ChangeNotifier {
     if (_bandOwnerUid != currentUserId || !_authorizedBands.containsKey(bandId)) {
       return;
     }
+    if (_activeBandId != bandId) _membershipMutationEpoch++;
     _activeBandId = bandId;
     _activeBandName = _authorizedBands[bandId];
     notifyListeners();

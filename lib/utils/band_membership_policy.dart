@@ -54,7 +54,12 @@ class BandMembershipPolicy {
 
   static bool canStaff(Band? band, String? uid) {
     if (!isMember(band, uid)) return false;
-    final role = band!.membersBand[uid]!.role?.trim().toLowerCase();
+    return canManageMember(band!.membersBand[uid]);
+  }
+  static bool canManageMember(BandMember? member) {
+    if (member == null || !isValidStatus(member.status)) return false;
+    final role = member.role?.trim().toLowerCase();
     return role == 'leader' || role == 'admin';
   }
+
 }
