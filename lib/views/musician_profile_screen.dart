@@ -116,7 +116,7 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
   @override
   Widget build(BuildContext context) {
     final defaultAbout =
-        "Passionate musician looking to collaborate. Love playing live gigs and creating fresh arrangements in the studio.";
+        "None specified";
 
     final appState = Provider.of<AppState>(context);
     final isMe = widget.musician.userId == appState.currentUserId;
@@ -242,6 +242,7 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
                   const SizedBox(height: 6),
 
                   // Location
+                  if (widget.musician.location?.trim().isNotEmpty ?? false)
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -251,13 +252,13 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
                         size: 16,
                       ),
                       const SizedBox(width: 4),
-                      Text(
-                        widget.musician.location ?? 'Stockholm, Sweden',
+                      Flexible(child: Text(
+                        widget.musician.location!,
                         style: GoogleFonts.inter(
                           fontSize: 13,
                           color: AppTheme.textSecondary,
                         ),
-                      ),
+                      )),
                     ],
                   ),
                   if (widget.musician.genres.isNotEmpty) ...[

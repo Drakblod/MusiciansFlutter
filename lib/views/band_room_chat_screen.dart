@@ -1,3 +1,4 @@
+import '../utils/catalogue_loading.dart';
 import '../utils/membership_mutation_feedback.dart';
 import '../utils/band_membership_policy.dart';
 import 'dart:async';
@@ -3932,28 +3933,9 @@ class _BandRoomChatScreenState extends State<_BandRoomContent>
   }
 
   Future<void> _showAddMemberDialog(String bandId) async {
-    final appState = Provider.of<AppState>(context, listen: false);
 
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const Center(
-        child: CircularProgressIndicator(color: AppTheme.primaryAccent),
-      ),
-    );
-
-    List<UserProfile> allUsers = [];
-    try {
-      allUsers = await appState.firebaseService.getAllUsersAsync();
-    } catch (e) {
-      debugPrint("Error fetching users: $e");
-    } finally {
-      if (mounted) {
-        Navigator.pop(context); // Dismiss loader
-      }
-    }
-
-    if (!mounted) return;
+    final allUsers = await CatalogueLoading.usersForPicker(context);
+    if (!mounted || allUsers == null) return;
 
     showDialog(
       context: context,

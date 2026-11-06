@@ -1,3 +1,4 @@
+import '../utils/catalogue_loading.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -34,6 +35,7 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
 
 
   Future<void> _loadFavorites() async {
+    final scope = CatalogueScope(context.read<AppState>());
     setState(() => _isLoadingFavorites = true);
     try {
       final appState = Provider.of<AppState>(context, listen: false);
@@ -46,7 +48,7 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
           .where((user) => user.userId != null && setOfFavorites.contains(user.userId))
           .toList();
 
-      if (mounted) {
+      if (mounted && scope.current) {
         setState(() {
           _favoriteMusicians = favList;
         });
@@ -54,7 +56,8 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
     } catch (e) {
       debugPrint("Error loading favorites: $e");
     } finally {
-      if (mounted) {
+      scope.dispose();
+      if (mounted && scope.current) {
         setState(() => _isLoadingFavorites = false);
       }
     }
@@ -94,7 +97,7 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
   Widget build(BuildContext context) {
     final appState = Provider.of<AppState>(context);
     final user = appState.currentUserProfile;
-    const defaultAbout = "Passionate musician looking to collaborate. Love playing live gigs and creating fresh arrangements in the studio.";
+    const defaultAbout = "None specified";
 
     return GradientScaffold(
       appBar: const CustomTopBar(
@@ -153,7 +156,7 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Text(
-                                user.displayName ?? 'Alex Hill',
+                                user.displayName ?? 'Unknown musician',
                                 style: GoogleFonts.outfit(
                                   fontSize: 24,
                                   fontWeight: FontWeight.bold,
@@ -192,6 +195,7 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                           const SizedBox(height: 8),
 
                           // Location
+                          if (user.location?.trim().isNotEmpty ?? false)
                           Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
@@ -201,13 +205,13 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                                 size: 14,
                               ),
                               const SizedBox(width: 4),
-                              Text(
-                                user.location ?? 'Stockholm, Sweden',
+                              Flexible(child: Text(
+                                user.location!,
                                 style: GoogleFonts.inter(
                                   fontSize: 12,
                                   color: AppTheme.textSecondary,
                                 ),
-                              ),
+                              )),
                             ],
                           ),
                           if (user.genres.isNotEmpty) ...[

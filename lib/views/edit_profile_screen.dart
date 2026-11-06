@@ -7,6 +7,8 @@ import 'package:image_picker/image_picker.dart';
 import '../providers/app_state.dart';
 import '../theme/app_theme.dart';
 import '../models/user_profile.dart';
+import '../models/city_location.dart';
+import '../widgets/city_location_picker_field.dart';
 import '../widgets/gradient_scaffold.dart';
 import '../widgets/custom_top_bar.dart';
 import '../widgets/animated_tap_detector.dart';
@@ -29,7 +31,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
-  final _locationController = TextEditingController();
+  CityLocation? _cityLocation;
+  String? _legacyLocation;
   final _aboutController = TextEditingController();
   final _collabBioController = TextEditingController();
   final _spotifyController = TextEditingController();
@@ -106,7 +109,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     if (user != null) {
       _nameController.text = user.displayName ?? '';
       _emailController.text = user.email ?? appState.firebaseService.currentUser?.email ?? '';
-      _locationController.text = user.location ?? '';
+      _cityLocation = user.publicLocation;
+      if (_cityLocation == null) _legacyLocation = user.location;
       _aboutController.text = user.about ?? '';
       _collabBioController.text = user.collabBio ?? '';
       _spotifyController.text = user.spotifyUrl ?? '';
@@ -138,7 +142,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   void dispose() {
     _nameController.dispose();
     _emailController.dispose();
-    _locationController.dispose();
     _aboutController.dispose();
     _collabBioController.dispose();
     _spotifyController.dispose();
@@ -402,7 +405,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           displayName: _nameController.text.trim(),
           email: _emailController.text.trim().isEmpty ? null : _emailController.text.trim(),
           userType: _primarySkills.first,
-          location: _locationController.text.trim(),
+          location: _cityLocation?.label,
+          publicLocation: _cityLocation,
+          clearPublicLocation: _cityLocation == null &&
+              (user.publicLocation != null || user.location != null),
           level: _level,
           about: _aboutController.text.trim(),
           profilePictureUrl: _profilePictureUrl,
@@ -702,29 +708,16 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               ),
               const SizedBox(height: 20),
 
-              // 3. Location (City, Country)
-              Text.rich(
-                TextSpan(
-                  children: [
-                    TextSpan(
-                      text: 'Location',
-                      style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
-                    ),
-                    TextSpan(
-                      text: ' (City, Country)',
-                      style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.normal, color: Colors.white),
-                    ),
-                  ],
-                ),
+              CityLocationPickerField(
+                purpose:'profile',
+                targetId:()=>_editingUserId??'',
+                initialLocation: _cityLocation,
+                onChanged: (city) => setState(() => _cityLocation = city),
               ),
-              const SizedBox(height: 8),
-              TextFormField(
-                controller: _locationController,
-                style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
-                decoration: const InputDecoration(
-                  hintText: 'Stockholm, Sweden',
-                ),
-              ),
+              if (_legacyLocation?.trim().isNotEmpty == true)
+                Text('Previous location (unverified): $_legacyLocation',
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary)),
               const SizedBox(height: 24),
 
               // ================= SKILLS & TALENTS CARD =================

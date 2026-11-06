@@ -26,13 +26,16 @@ import '../models/map_event_item.dart';
 import '../utils/date_parser.dart';
 import '../utils/secondary_skills_utils.dart';
 import '../utils/band_membership_policy.dart';
+import '../utils/catalogue_profiles.dart';
 
 class FirebaseService {
   // Optional read-only adapter for deterministic membership path tests.
   // Production callers use the existing authenticated RTDB reference.
   final Future<Object?> Function(String path)? _membershipRead;
-  FirebaseService({Future<Object?> Function(String path)? membershipRead})
-      : _membershipRead = membershipRead;
+  final Future<Object?> Function(String path)? _catalogueRead;
+  FirebaseService({Future<Object?> Function(String path)? membershipRead,
+    Future<Object?> Function(String path)? catalogueRead})
+      : _membershipRead = membershipRead, _catalogueRead = catalogueRead;
 
   static final StreamController<Map<String, dynamic>>
   _notificationClickStreamController =
@@ -216,7 +219,6 @@ class FirebaseService {
       'DisplayName': profile.displayName,
       'Email': profile.email,
       'Level': profile.level,
-      'Location': profile.location,
       'About': profile.about,
       'Instruments': SecondarySkillsUtils.buildInstrumentsList(
         profile.primarySkill, profile.secondarySkills,
@@ -237,33 +239,60 @@ class FirebaseService {
       if (profile.userType != null) 'UserType': profile.userType,
       if (profile.nickname != null) 'Nickname': profile.nickname,
     };
+    final city = profile.publicLocation;
+    if (city?.confirmationNonce != null) {
+      await _functions.httpsCallable('commitUserCity').call({
+        'nonce': city!.confirmationNonce,
+        // The confirmation nonce is unique to this grant and keeps a network
+        // retry on the same one-use operation.
+        'operationId': city.confirmationNonce,
+        'location': city.toJson(),
+      });
+    } else if (profile.clearPublicLocation) {
+      await _functions.httpsCallable('commitUserCity').call({'clear': true});
+    }
     await updateUserProfileFields(trimmedUid, fields);
+  }
+
+  Stream<String?> get catalogueIdentityChanges => _auth.authStateChanges().map((user) => user?.uid);
+
+  Future<Object?> _readPublicCatalogue(String path) async {
+    final uid = currentUserId;
+    if (uid == null) throw StateError('Sign in to browse profiles.');
+    var stale = false;
+    final subscription = catalogueIdentityChanges.listen((next) { if (next != uid) stale = true; });
+    try {
+      final value = _catalogueRead != null ? await _catalogueRead(path) : (await _dbRef(path).get()).value;
+      if (stale || currentUserId != uid) throw StateError('Your session changed.');
+      return value;
+    } finally { unawaited(subscription.cancel()); }
+  }
+
+  Future<List<UserProfile>> getPublicUserProfilesAsync() async =>
+      CatalogueProfiles.users(await _readPublicCatalogue('publicUserProfiles'));
+  Future<List<Band>> getPublicBandProfilesAsync() async =>
+      CatalogueProfiles.bands(await _readPublicCatalogue('publicBandProfiles'));
+  Future<UserProfile?> getPublicUserProfileAsync(String userId) async {
+    if (!CatalogueProfiles.validId(userId)) return null;
+    return CatalogueProfiles.user(userId, await _readPublicCatalogue('publicUserProfiles/$userId'));
+  }
+  Future<Band?> getPublicBandProfileAsync(String bandId) async {
+    if (!CatalogueProfiles.validId(bandId)) return null;
+    return CatalogueProfiles.band(bandId, await _readPublicCatalogue('publicBandProfiles/$bandId'));
   }
 
   Future<UserProfile?> getUserProfileAsync([String? userId]) async {
     final targetId = userId ?? currentUserId;
     if (targetId == null) return null;
-
+    if (targetId != currentUserId) return getPublicUserProfileAsync(targetId);
     final snapshot = await _dbRef('users/$targetId').get();
-    if (snapshot.exists && snapshot.value is Map) {
-      return UserProfile.fromJson(snapshot.value as Map, targetId);
-    }
+    if (targetId != currentUserId) throw StateError('Your session changed.');
+    if (snapshot.exists && snapshot.value is Map) return UserProfile.fromJson(snapshot.value as Map, targetId);
     return null;
   }
 
-  Future<List<UserProfile>> getAllUsersAsync() async {
-    final snapshot = await _dbRef('users').get();
-    final List<UserProfile> users = [];
-    if (snapshot.exists && snapshot.value is Map) {
-      final data = snapshot.value as Map;
-      data.forEach((k, v) {
-        if (v is Map) {
-          users.add(UserProfile.fromJson(v, k.toString()));
-        }
-      });
-    }
-    return users;
-  }
+  // Compatibility entry points for all existing discovery/picker consumers.
+  Future<List<UserProfile>> getAllUsersAsync() => getPublicUserProfilesAsync();
 
   Future<String> uploadAudioSnippetAsync(
     String userId,
@@ -421,10 +450,16 @@ class FirebaseService {
       throw StateError('You can only create a band as yourself.');
     }
     final bandId = (band.name ?? 'My Band').replaceAll(' ', '_');
+    final metadata = band.toJson();
+    if(band.publicLocation != null && band.publicLocation!.confirmationNonce == null){
+      metadata.remove('PublicLocation');metadata.remove('Location');
+    }
     await _submitMembershipMutation({
       'action': 'create', 'bandId': bandId,
       // A stable creation ID makes a retry safe after an uncertain network result.
-      'operationId': 'create_$userId', 'metadata': band.toJson(),
+      'operationId': 'create_$userId', 'metadata': metadata,
+      if(band.publicLocation?.confirmationNonce != null)
+        'cityGrantNonce':band.publicLocation!.confirmationNonce,
       'initialMembers': band.membersBand.entries
           .where((e) => e.key != userId)
           .map(
@@ -438,13 +473,20 @@ class FirebaseService {
     });
   }
 
-  Future<void> updateBandAsync(String bandId, Band band) =>
-      _submitMembershipMutation({
+  Future<void> updateBandAsync(String bandId, Band band) {
+    final metadata=band.toJson();
+    if(band.publicLocation != null && band.publicLocation!.confirmationNonce == null){
+      metadata.remove('PublicLocation');metadata.remove('Location');
+    }
+    return _submitMembershipMutation({
         'action': 'metadata',
         'bandId': bandId,
         'operationId': _membershipOperationId(),
-        'metadata': band.toJson(),
+        'metadata': metadata,
+        if(band.publicLocation?.confirmationNonce != null)
+          'cityGrantNonce':band.publicLocation!.confirmationNonce,
       });
+  }
 
   Future<List<BandMember>> getBandMembersAsync(String bandId) async {
     final snapshot = await _dbRef('Bands/$bandId/Members_band').get();
@@ -3162,19 +3204,7 @@ class FirebaseService {
     return null;
   }
 
-  Future<List<Band>> getAllBandsAsync() async {
-    final snapshot = await _dbRef('Bands').get();
-    final List<Band> list = [];
-    if (snapshot.exists && snapshot.value is Map) {
-      final map = snapshot.value as Map;
-      map.forEach((k, v) {
-        if (v is Map) {
-          list.add(Band.fromJson(v, k.toString()));
-        }
-      });
-    }
-    return list;
-  }
+  Future<List<Band>> getAllBandsAsync() => getPublicBandProfilesAsync();
 
   // ==========================================
   // 10. Collabs MVP Methods

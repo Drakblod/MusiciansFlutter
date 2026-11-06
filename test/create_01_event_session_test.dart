@@ -1038,14 +1038,16 @@ void main() {
         errors.add(details);
       };
 
-      await tester.scrollUntilVisible(
-        find.text('Publish Event'),
-        200,
-        scrollable: find.byType(Scrollable).first,
-      );
-      await tester.pumpAndSettle();
-
-      FlutterError.onError = oldHandler;
+      try {
+        await tester.scrollUntilVisible(
+          find.text('Publish Event'),
+          200,
+          scrollable: find.byType(Scrollable).first,
+        );
+        await tester.pumpAndSettle();
+      } finally {
+        FlutterError.onError = oldHandler;
+      }
 
       expect(errors, isEmpty);
       expect(find.text('Publish Event'), findsOneWidget);

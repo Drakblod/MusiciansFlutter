@@ -1,3 +1,4 @@
+import '../utils/catalogue_loading.dart';
 import '../utils/membership_mutation_feedback.dart';
 import '../utils/band_membership_policy.dart';
 import 'package:flutter/material.dart';
@@ -6,6 +7,8 @@ import 'package:google_fonts/google_fonts.dart';
 import '../providers/app_state.dart';
 import '../theme/app_theme.dart';
 import '../models/band.dart';
+import '../models/city_location.dart';
+import '../widgets/city_location_picker_field.dart';
 import '../models/user_profile.dart';
 import '../widgets/gradient_scaffold.dart';
 import '../widgets/custom_top_bar.dart';
@@ -30,7 +33,7 @@ class EditBandInfoScreen extends StatefulWidget {
 class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
   final _formKey = GlobalKey<FormState>();
   late TextEditingController _nameController;
-  late TextEditingController _locationController;
+  CityLocation? _cityLocation;
   late TextEditingController _rehearsalLocationController;
   late TextEditingController _mapViewLocationController;
   late TextEditingController _aboutController;
@@ -77,7 +80,7 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
   void initState() {
     super.initState();
     _nameController = TextEditingController(text: widget.band.name);
-    _locationController = TextEditingController(text: widget.band.location);
+    _cityLocation = widget.band.publicLocation;
     _rehearsalLocationController = TextEditingController(text: widget.band.rehearsalLocation);
     _mapViewLocationController = TextEditingController(text: widget.band.address ?? '');
     _aboutController = TextEditingController(text: widget.band.about ?? widget.band.description);
@@ -125,7 +128,6 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
   @override
   void dispose() {
     _nameController.dispose();
-    _locationController.dispose();
     _rehearsalLocationController.dispose();
     _mapViewLocationController.dispose();
     _aboutController.dispose();
@@ -217,7 +219,8 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
         genres: _selectedStyles,
         styleBand: _selectedStyles,
         level: _level,
-        location: _locationController.text.trim(),
+        location: _cityLocation?.label,
+        publicLocation: _cityLocation,
         rehearsalLocation: _rehearsalLocationController.text.trim(),
         address: _mapViewLocationController.text.trim(),
         rehearsalDayOfWeek: _hasRegularRehearsal ? _rehearsalDay : null,
@@ -418,28 +421,9 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
   Future<void> _showAddMemberDialog() async {
     final bandId = widget.band.id;
     if (bandId == null || bandId.isEmpty) return;
-    final appState = Provider.of<AppState>(context, listen: false);
 
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const Center(
-        child: CircularProgressIndicator(color: AppTheme.primaryAccent),
-      ),
-    );
-
-    List<UserProfile> allUsers = [];
-    try {
-      allUsers = await appState.firebaseService.getAllUsersAsync();
-    } catch (e) {
-      debugPrint("Error fetching users: $e");
-    } finally {
-      if (mounted) {
-        Navigator.pop(context); // Dismiss loader
-      }
-    }
-
-    if (!mounted) return;
+    final allUsers = await CatalogueLoading.usersForPicker(context);
+    if (!mounted || allUsers == null) return;
 
     showDialog(
       context: context,
@@ -1337,35 +1321,13 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
               ),
               const SizedBox(height: 20),
 
-              // Location (City, Country)
-              Text.rich(
-                TextSpan(
-                  children: [
-                    TextSpan(
-                      text: 'Location',
-                      style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
-                    ),
-                    TextSpan(
-                      text: ' (City, Country)',
-                      style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.normal, color: Colors.white),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 8),
-              TextFormField(
-                controller: _locationController,
-                style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
-                decoration: const InputDecoration(
-                  hintText: 'Stockholm, Sweden',
-                ),
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Please enter location';
-                  }
-                  return null;
-                },
-              ),
+              CityLocationPickerField(initialLocation: _cityLocation,
+                purpose:'band',targetId:()=>widget.band.id??'',
+                onChanged: (city) => setState(() => _cityLocation = city)),
+              if (_cityLocation == null && widget.band.location?.trim().isNotEmpty == true)
+                Text('Previous location (unverified): ${widget.band.location}',
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary)),
               const SizedBox(height: 20),
 
               // Rehearsal Location (if any)

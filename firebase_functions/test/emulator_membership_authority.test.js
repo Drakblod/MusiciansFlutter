@@ -275,13 +275,14 @@ for (const ruleFile of ['database.rules.json','database.transitional.rules.json'
         const reference=path ? databaseRef(realDb,path) : databaseRef(realDb);
         return {set:value=>databaseSet(reference,value),update:value=>databaseUpdate(reference,value),get:()=>databaseGet(reference)};
       }};
-      const fields={DisplayName:'New Musician',Email:email,Level:'A = PRO',Location:'Stockholm',About:'About',Instruments:['Guitar','Piano'],Styles:['Jazz'],Genres:['Rock'],Contact:email,History:'History',Projects:'Projects',ProfilePictureUrl:'',SpotifyUrl:'',YoutubeUrl:'',AudioSnippetUrl:'',CollabRoles:['Musician'],CollabRemote:true,CollabBio:'Bio',MainInstrument:'Guitar',UserType:'Musician',Nickname:'Nick'};
+      const fields={DisplayName:'New Musician',Email:email,Level:'A = PRO',About:'About',Instruments:['Guitar','Piano'],Styles:['Jazz'],Genres:['Rock'],Contact:email,History:'History',Projects:'Projects',ProfilePictureUrl:'',SpotifyUrl:'',YoutubeUrl:'',AudioSnippetUrl:'',CollabRoles:['Musician'],CollabRemote:true,CollabBio:'Bio',MainInstrument:'Guitar',UserType:'Musician',Nickname:'Nick'};
       const updates={};
       for(const [k,v] of Object.entries(fields)) {
         updates[`users/${id}/info/${k}`]=v;
         if(['UserType','Nickname','DisplayName'].includes(k))updates[`users/${id}/${k}`]=v;
       }
       await assertSucceeds(client.ref().update(updates));
+      await assertFails(client.ref(`users/${id}/info/Location`).set('Stockholm'));
       await assertSucceeds(client.ref().update({[`users/${id}/info/MainInstrument`]:'Piano',[`users/${id}/info/Instruments`]:['Piano','Guitar','Vocals'],[`users/${id}/info/Genres`]:['Jazz']}));
       await assertSucceeds(client.ref(`users/${id}/info/PushToken`).set('local-test-token'));
       for(const [p,v] of [['Favorites/target',true],['metrics/buttonClicks/profile',2],['PublicEvents/event',{Title:'Public event'}]]) await assertSucceeds(client.ref(`users/${id}/${p}`).set(v));
@@ -375,6 +376,15 @@ for (const ruleFile of ['database.rules.json','database.transitional.rules.json'
     for (const id of [uid.leader,uid.admin,uid.member]) assert.strictEqual((await db.ref(`userBandMembershipIndex/${id}/${band}`).get()).val(),null);
   });
   it('own account deletion transfers leadership atomically to an active successor',async()=>{
+    // The fixture writes canonical membership directly. Wait for its actual
+    // index trigger before exercising account deletion's index discovery.
+    let indexed=false;
+    for(let attempt=0;attempt<100;attempt++){
+      indexed=(await db.ref(`userBandMembershipIndex/${uid.leader}/${band}`).get()).exists();
+      if(indexed)break;
+      await new Promise(resolve=>setTimeout(resolve,100));
+    }
+    assert(indexed,'Membership index trigger did not converge');
     await call('leader','deleteUserAccount',{});
     const value=await members();
     assert.strictEqual(value[uid.leader],undefined);assert.strictEqual(leaderCount(value),1);

@@ -11,14 +11,17 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:musicians_flutter/models/band.dart';
+import 'package:musicians_flutter/models/city_location.dart';
 import 'package:musicians_flutter/models/user_profile.dart';
 import 'package:musicians_flutter/providers/app_state.dart';
 import 'package:musicians_flutter/services/firebase_service.dart';
+import 'package:musicians_flutter/services/city_search_service.dart';
 import 'package:musicians_flutter/utils/band_membership_policy.dart';
 import 'package:musicians_flutter/utils/membership_mutation_feedback.dart';
 import 'package:musicians_flutter/views/create_band_screen.dart';
 import 'package:musicians_flutter/views/edit_band_info_screen.dart';
 import 'package:musicians_flutter/widgets/animated_tap_detector.dart';
+import 'package:musicians_flutter/widgets/city_location_picker_field.dart';
 import 'registration_secondary_skills_01_test.dart' as fixtures;
 import 'new_user_skills_and_band_guards_01_test.dart' as guards;
 
@@ -53,6 +56,19 @@ class AuthorityService extends FirebaseService {
   @override
   Future<List<BandMember>> getBandMembersAsync(String id) async =>
       band.membersBand.values.toList();
+}
+
+class _AuthorityCityProvider implements CitySearchProvider {
+  @override
+  Future<String> createSession() async => newCitySearchSessionToken();
+  @override
+  Future<List<CityCandidate>> search(String query, String token) async =>
+      [const CityCandidate(placeId:'stockholm-city',city:'Stockholm',country:'Sweden')];
+  @override
+  Future<CityLocation?> resolve(CityCandidate candidate, String token,
+      {required String purpose,required String targetId,
+       required String city,required String country}) async =>
+      CityLocation.confirmed(city:city,country:country,confirmationNonce:'fake-grant');
 }
 
 class DelayedDeletionService extends guards.GuardService {
@@ -647,14 +663,26 @@ void main() {
     ) async {
       final state = AuthorityState();
       state.service.pending = Completer<void>();
-      await mount(tester, state, const CreateBandScreen());
+      await mount(tester, state, CitySearchProviderScope(
+        provider:_AuthorityCityProvider(),child:const CreateBandScreen()));
       final fields = find.byType(TextFormField);
       for (final f in tester.widgetList<TextFormField>(fields)) {
         if (f.validator?.call('') == 'Please enter a band name')
           f.controller!.text = 'Local Band';
-        if (f.validator?.call('') == 'Please enter location')
-          f.controller!.text = 'Stockholm';
       }
+      final cityField=find.descendant(of:find.byType(CityLocationPickerField),
+        matching:find.byType(TextFormField));
+      await tester.ensureVisible(cityField);
+      await tester.enterText(cityField,'Stock');
+      await tester.pump(const Duration(milliseconds:350));
+      await tester.pump();
+      await tester.ensureVisible(find.text('Stockholm'));
+      await tester.tap(find.text('Stockholm'));
+      await tester.pump();
+      await tester.enterText(find.widgetWithText(TextField,'City'),'Stockholm');
+      await tester.enterText(find.widgetWithText(TextField,'Country'),'Sweden');
+      await tester.tap(find.text('Confirm city'));
+      await tester.pump();
       final save = find.ancestor(
         of: find.text('Save Band'),
         matching: find.byType(AnimatedTapDetector),

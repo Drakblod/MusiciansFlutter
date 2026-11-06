@@ -1,4 +1,5 @@
 import '../utils/band_membership_policy.dart';
+import 'city_location.dart';
 class Band {
   final String? id;
   final String? ensembleType;
@@ -15,8 +16,10 @@ class Band {
   final String? about;
   final String? userRole;
   final String? location;
+  final CityLocation? publicLocation;
   final String? rehearsalDateTime;
   final Map<String, BandMember> membersBand;
+  final int? activeMemberCount;
   final List<String> styleBand;
   final String? style;
   final String? level;
@@ -42,8 +45,10 @@ class Band {
     this.about,
     this.userRole,
     this.location,
+    this.publicLocation,
     this.rehearsalDateTime,
     this.membersBand = const {},
+    this.activeMemberCount,
     this.styleBand = const [],
     this.style,
     this.level,
@@ -82,6 +87,7 @@ class Band {
       about: json['About']?.toString(),
       userRole: json['UserRole']?.toString(),
       location: json['Location']?.toString(),
+      publicLocation: CityLocation.fromJson(json['PublicLocation']),
       rehearsalDateTime: json['RehearsalDateTime']?.toString(),
       membersBand: parsedMembers,
       styleBand: _toList(json['Style_band']),
@@ -116,6 +122,7 @@ class Band {
       'About': about,
       'UserRole': userRole,
       'Location': location,
+      'PublicLocation': publicLocation?.toJson(),
       'RehearsalDateTime': rehearsalDateTime,
       'Members_band': membersMap,
       'Style_band': styleBand,

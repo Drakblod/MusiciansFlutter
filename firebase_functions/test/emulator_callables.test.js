@@ -103,7 +103,10 @@ describe('Real Cloud Functions Emulator Integration Tests (JS Client SDK + Emula
   });
 
   it('1. Unauthenticated callable rejection', async () => {
-    const callable = httpsCallable(functionsUnauth, 'getOrCreateDirectConversation');
+    // The first callable can queue behind startup database triggers in the
+    // complete emulator suite. Keep the rejection assertion, but allow its
+    // client deadline to span that cold-start queue.
+    const callable = httpsCallable(functionsUnauth, 'getOrCreateDirectConversation', { timeout: 110000 });
     await assert.rejects(
       callable({ otherUserId: 'user_b' }),
       (err) => isAuthError(err)
@@ -383,13 +386,15 @@ describe('Real Cloud Functions Emulator Integration Tests (JS Client SDK + Emula
   });
 
   it('14. manageBandSectionConversation rename and leave actions', async () => {
-    await adminDb.ref('Bands/band_sec/Members_band/user_a').set({ Role: 'Member' });
-    await adminDb.ref('Bands/band_sec/Members_band/user_b').set({ Role: 'Member' });
-    await adminDb.ref('Bands/band_sec/Members_band/user_c').set({ Role: 'Member' });
+    // A distinct band avoids delayed removal triggers from earlier cases
+    // acting on this conversation after their shared fixture is cleared.
+    await adminDb.ref('Bands/band_sec_14/Members_band/user_a').set({ Role: 'Member' });
+    await adminDb.ref('Bands/band_sec_14/Members_band/user_b').set({ Role: 'Member' });
+    await adminDb.ref('Bands/band_sec_14/Members_band/user_c').set({ Role: 'Member' });
 
     const createFn = httpsCallable(functionsUserA, 'createBandSectionConversation');
     const createRes = await createFn({
-      bandId: 'band_sec',
+      bandId: 'band_sec_14',
       groupName: 'Horns',
       participantIds: ['user_b', 'user_c'],
     });

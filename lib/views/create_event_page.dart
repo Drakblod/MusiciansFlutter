@@ -1,3 +1,5 @@
+import '../utils/catalogue_profiles.dart';
+import '../utils/catalogue_loading.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -696,25 +698,8 @@ class _CreateEventPageState extends State<CreateEventPage> {
     );
   }
   void _showAddGuestSheet() async {
-    final appState = Provider.of<AppState>(context, listen: false);
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const Center(
-        child: CircularProgressIndicator(color: AppTheme.primaryAccent),
-      ),
-    );
-    List<UserProfile> allUsers = [];
-    try {
-      allUsers = await appState.firebaseService.getAllUsersAsync();
-    } catch (e) {
-      debugPrint("Error fetching users for guest sheet: $e");
-    } finally {
-      if (mounted) {
-        Navigator.pop(context); // close loader
-      }
-    }
-    if (!mounted) return;
+    final allUsers = await CatalogueLoading.usersForPicker(context);
+    if (!mounted || allUsers == null) return;
     final memberUserIds = _bandMembers.map((m) => m.userId).where((uid) => uid != null).cast<String>().toSet();
     showModalBottomSheet(
       context: context,
@@ -2003,16 +1988,7 @@ class _AddEventGuestSheetState extends State<_AddEventGuestSheet> {
       if (uid == null || uid.isEmpty) return false;
       if (widget.existingBandMemberIds.contains(uid)) return false;
       if (query.isEmpty) return true;
-      final name = (u.displayName ?? '').toLowerCase();
-      final nick = (u.nickname ?? '').toLowerCase();
-      final instruments = u.instruments.map((i) => i.toLowerCase()).join(' ');
-      final location = (u.location ?? '').toLowerCase();
-      final email = (u.email ?? '').toLowerCase();
-      return name.contains(query) ||
-          nick.contains(query) ||
-          instruments.contains(query) ||
-          location.contains(query) ||
-          email.contains(query);
+      return CatalogueProfiles.matchesUserQuery(u, query);
     }).toList();
     return Padding(
       padding: EdgeInsets.only(
@@ -2049,7 +2025,7 @@ class _AddEventGuestSheetState extends State<_AddEventGuestSheet> {
               controller: _searchController,
               style: GoogleFonts.inter(color: Colors.white),
               decoration: InputDecoration(
-                hintText: 'Search by name, instrument, location...',
+                hintText: 'Search by name, nickname, skill, city...',
                 hintStyle: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 13),
                 prefixIcon: const Icon(Icons.search, color: AppTheme.textSecondary),
                 suffixIcon: _searchQuery.isNotEmpty

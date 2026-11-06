@@ -1,3 +1,4 @@
+import '../utils/catalogue_loading.dart';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -212,6 +213,7 @@ class _FindSubScreenState extends State<_FindSubForm> {
   }
 
   Future<void> _loadFavoritesAndProfiles() async {
+    final scope = CatalogueScope(context.read<AppState>());
     try {
       final appState = Provider.of<AppState>(context, listen: false);
       final favIds = await appState.firebaseService.getFavoriteUserIdsAsync();
@@ -231,7 +233,7 @@ class _FindSubScreenState extends State<_FindSubForm> {
         debugPrint('Note: getAllUsersAsync not available or empty: ' + e.toString());
       }
 
-      if (mounted) {
+      if (mounted && scope.current) {
         setState(() {
           _favorites = loadedFavs;
           _allMusicianProfiles = allProfiles;
@@ -239,7 +241,7 @@ class _FindSubScreenState extends State<_FindSubForm> {
       }
     } catch (e) {
       debugPrint('Error loading favorites or profiles: ' + e.toString());
-    }
+    } finally { scope.dispose(); }
   }
 
   @override

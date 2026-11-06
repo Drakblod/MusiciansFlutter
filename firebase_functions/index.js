@@ -2,9 +2,107 @@ const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const { onValueCreated, onValueWritten } = require('firebase-functions/v2/database');
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
+const { onSchedule } = require('firebase-functions/v2/scheduler');
+const { defineSecret } = require('firebase-functions/params');
 const logger = require('firebase-functions/logger');
 const crypto = require('crypto');
 const membershipAuthority = require('./membership_authority');
+const cityPlaces = require('./google_places_cities');
+const cityGate = require('./city_verification');
+const cityPlacesKey = defineSecret('GOOGLE_PLACES_API_KEY');
+const cityBody = (data,keys) => data && typeof data === 'object' && !Array.isArray(data) &&
+  JSON.stringify(data).length <= 512 && Object.keys(data).every(key => keys.includes(key)) &&
+  keys.every(key => Object.hasOwn(data,key));
+exports.startCatalogueCitySession = onCall({region:'europe-west1',secrets:[cityPlacesKey]},request=>{
+  if(!request.auth)throw new HttpsError('unauthenticated','Sign in first.');
+  if(!cityBody(request.data||{},[]))throw new HttpsError('invalid-argument','Invalid city session.');
+  return {sessionToken:cityGate.createToken(request.auth.uid,cityPlacesKey.value())};
+});
+exports.searchCatalogueCities = onCall({region:'europe-west1',secrets:[cityPlacesKey]}, async request => {
+  if (!request.auth) throw new HttpsError('unauthenticated','Sign in first.');
+  if(!cityBody(request.data,['query','sessionToken']))throw new HttpsError('invalid-argument','Invalid city search.');
+  const {query,sessionToken} = request.data;
+  if (typeof query !== 'string' || query.trim().length < 2 || query.trim().length > 100 ||
+      !cityPlaces.token(sessionToken)) throw new HttpsError('invalid-argument','Invalid city search.');
+  const db=admin.database(),uid=request.auth.uid;
+  cityGate.validateToken(sessionToken,uid,cityPlacesKey.value());
+  const lease=await cityGate.reserveRate(db,uid);
+  try {
+    const hash=await cityGate.searchSession(db,uid,sessionToken);
+    const candidates=await cityPlaces.search(query,sessionToken,cityPlacesKey.value());
+    await cityGate.rememberPredictions(db,uid,hash,candidates.map(x=>x.placeId));
+    return {candidates};
+  } catch(error) {
+    if(error instanceof HttpsError)throw error;
+    throw new HttpsError(error?.code==='quota'?'resource-exhausted':'unavailable',
+      'City search is temporarily unavailable.');
+  } finally {await cityGate.releaseRate(db,lease);}
+});
+exports.resolveCatalogueCity = onCall({region:'europe-west1',secrets:[cityPlacesKey]}, async request => {
+  if (!request.auth) throw new HttpsError('unauthenticated','Sign in first.');
+  if(!cityBody(request.data,['placeId','sessionToken','purpose','targetId','city','country']))
+    throw new HttpsError('invalid-argument','Invalid city selection.');
+  const {placeId,sessionToken,purpose,targetId,city,country} = request.data;
+  if (!cityPlaces.token(sessionToken) || typeof placeId !== 'string' || placeId.length > 200)
+    throw new HttpsError('invalid-argument','Invalid city selection.');
+  cityGate.scope(purpose,targetId,request.auth.uid);
+  const names=cityGate.authored(city,country);
+  const db=admin.database(),uid=request.auth.uid;
+  cityGate.validateToken(sessionToken,uid,cityPlacesKey.value());
+  if(purpose==='band') {
+    const exists=(await db.ref(`Bands/${targetId}`).get()).exists();
+    if(exists)await membershipAuthority.requireManager(db,targetId,uid);
+  }
+  const lease=await cityGate.reserveRate(db,uid);
+  try {
+    await cityGate.closeSessionForDetails(db,uid,sessionToken,placeId);
+    const provider=await cityPlaces.resolve(placeId,sessionToken,cityPlacesKey.value());
+    if(!provider||!cityGate.same(provider.city,names.city)||!cityGate.same(provider.country,names.country))
+      throw new HttpsError('failed-precondition','City and country must match the selected place.');
+    const grant=await cityGate.issueGrant(db,uid,purpose,targetId,placeId,names.city,names.country);
+    return {...grant,attributions:provider.attributions||[]};
+  } catch(error) {
+    if(error instanceof HttpsError)throw error;
+    throw new HttpsError(error?.code==='quota'?'resource-exhausted':'unavailable',
+      'City selection is temporarily unavailable.');
+  } finally {await cityGate.releaseRate(db,lease);}
+});
+exports.commitUserCity = onCall({region:'europe-west1'},async request=>{
+  if(!request.auth)throw new HttpsError('unauthenticated','Sign in first.');
+  const data=request.data||{},uid=request.auth.uid,db=admin.database();
+  const infoRef=db.ref(`users/${uid}/info`);
+  if(data.clear===true&&cityBody(data,['clear'])) {
+    const clearedAt=Date.now();
+    const clearOperation=`clear_${crypto.randomBytes(12).toString('hex')}`;
+    await infoRef.transaction(current=>{
+      current ||= {};
+      delete current.Location;delete current.PublicLocation;
+      Object.assign(current,{LocationCleared:true,CityOperationId:clearOperation,
+        CityUpdatedAt:clearedAt});
+      return current;
+    },undefined,false);
+    return {success:true};
+  }
+  if(!cityBody(data,['nonce','operationId','location'])||typeof data.location!=='object')
+    throw new HttpsError('invalid-argument','Invalid city confirmation.');
+  const result=await cityGate.consumeGrant(db,uid,'profile',uid,data.nonce,data.operationId,data.location);
+  let superseded=false;
+  const committed=await infoRef.transaction(current=>{
+    superseded=false;current ||= {};
+    if((current.CityUpdatedAt||0)>result.consumedAt&&current.CityOperationId!==data.operationId){
+      superseded=true;return;
+    }
+    Object.assign(current,{Location:`${result.location.city}, ${result.location.country}`,
+      PublicLocation:result.location,LocationCleared:false,
+      CityOperationId:data.operationId,CityUpdatedAt:Date.now()});
+    return current;
+  },undefined,false);
+  if(!committed.committed||superseded)
+    throw new HttpsError('failed-precondition','A newer city selection exists.');
+  return {success:true};
+});
+exports.cleanupCityVerificationState = onSchedule({schedule:'every 30 minutes',
+  region:'europe-west1'},()=>cityGate.cleanup(admin.database()));
 exports.mutateBandMembership = onCall({ region:'europe-west1' }, request => {
   if (!['create','add','role','status','remove','leave','transfer','metadata'].includes(request.data?.action)) {
     throw new HttpsError('invalid-argument','Unsupported membership action.');
@@ -42,6 +140,12 @@ if (isEmulator) {
     };
   } });
 }
+
+// Server-owned authenticated discovery projections; never use event snapshots as authority.
+exports.onCatalogueUserWritten = onValueWritten({ref:'/users/{userId}',region:databaseTriggerRegion,retry:true},
+  event => require('./catalogue_projections').reconcile(admin.database(),'user',event.params.userId));
+exports.onCatalogueBandWritten = onValueWritten({ref:'/Bands/{bandId}',region:databaseTriggerRegion,retry:true},
+  event => require('./catalogue_projections').reconcile(admin.database(),'band',event.params.bandId));
 
 const KNOWN_FEATURE_IDS = ['find_gigs', 'find_musicians', 'collabs', 'band_room', 'messages'];
 

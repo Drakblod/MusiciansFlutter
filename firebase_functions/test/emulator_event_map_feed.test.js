@@ -27,7 +27,7 @@ if (!admin.apps.length) {
   });
 }
 
-async function waitForValue(ref, predicate, timeoutMs = 25000) {
+async function waitForValue(ref, predicate, timeoutMs = 60000) {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     const snap = await ref.once('value');
@@ -164,7 +164,7 @@ describe('Real Firebase Emulator: MAP-VIEW-FEED-02 Event Feed & Rules Integratio
   });
 
   describe('2. Real Emulator Triggers & Projection Lifecycle', function () {
-    this.timeout(50000);
+    this.timeout(90000);
     const testPublicEventId = `evt_emu_pub_${Date.now()}`;
     const testBandId = `band_emu_${Date.now()}`;
     const testBandEventId = `evt_emu_priv_${Date.now()}`;

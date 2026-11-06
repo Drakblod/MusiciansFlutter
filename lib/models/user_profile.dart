@@ -1,4 +1,5 @@
 import '../utils/secondary_skills_utils.dart';
+import 'city_location.dart';
 
 class UserProfile {
   final String? userType;
@@ -11,6 +12,9 @@ class UserProfile {
   final List<String> genres;
   final String? level;
   final String? location;
+  final CityLocation? publicLocation;
+  /// Save intent only; never serialized into the profile or catalogue.
+  final bool clearPublicLocation;
   final String? about;
   final String? contact;
   final String? history;
@@ -35,6 +39,8 @@ class UserProfile {
     this.genres = const [],
     this.level,
     this.location,
+    this.publicLocation,
+    this.clearPublicLocation = false,
     this.about,
     this.contact,
     this.history,
@@ -106,6 +112,7 @@ class UserProfile {
       ),
       level: (infoMap['Level'] ?? json['Level'] ?? infoMap['level'] ?? json['level'])?.toString(),
       location: (infoMap['Location'] ?? json['Location'] ?? infoMap['location'] ?? json['location'])?.toString(),
+      publicLocation: CityLocation.fromJson(infoMap['PublicLocation'] ?? json['PublicLocation']),
       about: (infoMap['About'] ?? json['About'] ?? infoMap['about'] ?? json['about'])?.toString(),
       contact: (infoMap['Contact'] ?? json['Contact'] ?? infoMap['contact'] ?? json['contact'])?.toString(),
       history: (infoMap['History'] ?? json['History'] ?? infoMap['history'] ?? json['history'])?.toString(),
@@ -151,6 +158,7 @@ class UserProfile {
       'Genres': genres,
       'Level': level,
       'Location': location,
+      'PublicLocation': publicLocation?.toJson(),
       'About': about,
       'Contact': contact,
       'History': history,

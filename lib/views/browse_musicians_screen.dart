@@ -1,3 +1,4 @@
+import '../utils/catalogue_loading.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -53,125 +54,30 @@ class _BrowseMusiciansScreenState extends State<BrowseMusiciansScreen> {
     super.dispose();
   }
 
+  int _catalogueGeneration = 0;
   Future<void> _loadData() async {
+    final generation = ++_catalogueGeneration;
+    final appState = context.read<AppState>();
+    final scope = CatalogueScope(appState);
     setState(() => _isLoading = true);
     try {
-      final appState = Provider.of<AppState>(context, listen: false);
-      
-      // Load favorites
       final favIds = await appState.firebaseService.getFavoriteUserIdsAsync();
+      final users = await appState.firebaseService.getAllUsersAsync();
+      final bands = widget.favoritesOnly ? <Band>[] : await appState.firebaseService.getAllBandsAsync();
+      if (!mounted || !scope.current || generation != _catalogueGeneration) return;
       _favoriteUserIds = favIds.toSet();
-
-      // Load musicians
-      List<UserProfile> users = await appState.firebaseService.getAllUsersAsync();
-      final selfId = appState.currentUserId;
-      _allMusicians = users.where((u) => u.userId != selfId).toList();
-
-      if (widget.favoritesOnly) {
-        _allMusicians = _allMusicians.where((u) => u.userId != null && _favoriteUserIds.contains(u.userId)).toList();
-      }
-
-      // Seed mock musicians if empty and not favoritesOnly
-      if (_allMusicians.isEmpty && !widget.favoritesOnly) {
-        _allMusicians = _getMockMusicians();
-      }
-
-      // Load bands (only if not favoritesOnly)
-      if (!widget.favoritesOnly) {
-        _allBands = await appState.firebaseService.getAllBandsAsync();
-        if (_allBands.isEmpty) {
-          _allBands = _getMockBands();
-        }
-      }
-
+      _allMusicians = users.where((u) => u.userId != scope.uid &&
+          (!widget.favoritesOnly || _favoriteUserIds.contains(u.userId))).toList();
+      _allBands = bands;
       _applyFilters();
     } catch (e) {
       debugPrint("Error loading data: $e");
     } finally {
-      if (mounted) {
+      if (mounted && scope.current && generation == _catalogueGeneration) {
         setState(() => _isLoading = false);
       }
+      scope.dispose();
     }
-  }
-
-  List<UserProfile> _getMockMusicians() {
-    return [
-      UserProfile(
-        userId: 'mock_1',
-        displayName: 'Lina Rockwell',
-        nickname: 'linarock',
-        userType: 'Vocalist',
-        location: 'Stockholm, Sweden',
-        instruments: ['Vocalist', 'Popular Music'],
-        genres: ['Rock', 'Pop', 'Indie'],
-        about: 'Passionate vocalist with experience in live performances and studio recordings. Love rock, pop and indie vibes!',
-        profilePictureUrl: '',
-      ),
-      UserProfile(
-        userId: 'mock_2',
-        displayName: 'Marcus K.',
-        nickname: 'marcusg',
-        userType: 'Electric Guitar',
-        location: 'Gothenburg, Sweden',
-        instruments: ['Electric Guitar', 'Strings'],
-        genres: ['Rock', 'Blues', 'Metal'],
-        about: 'Lead guitarist playing for over 10 years. Looking for heavy rock bands or acoustic side gigs.',
-        profilePictureUrl: '',
-      ),
-      UserProfile(
-        userId: 'mock_3',
-        displayName: 'Sofia Lind',
-        nickname: 'sofia_bass',
-        userType: 'Electric Bass',
-        location: 'Malmö, Sweden',
-        instruments: ['Electric Bass', 'Strings'],
-        genres: ['Pop', 'Funk', 'Soul'],
-        about: 'Bass player with a strong focus on groove and pocket. Experienced in musical theater and pop cover groups.',
-        profilePictureUrl: '',
-      ),
-      UserProfile(
-        userId: 'mock_4',
-        displayName: 'Jonas Pettersson',
-        nickname: 'jonasdrums',
-        userType: 'Drums',
-        location: 'Uppsala, Sweden',
-        instruments: ['Drums', 'Percussion'],
-        genres: ['Rock', 'Alternative', 'Indie'],
-        about: 'Energetic drummer who plays both acoustic and electronic setups. Available for rehearsal substitutes and studio sessions.',
-        profilePictureUrl: '',
-      ),
-    ];
-  }
-
-  List<Band> _getMockBands() {
-    return [
-      Band(
-        id: 'mock_band_1',
-        name: 'The Sonic Wave',
-        ensembleType: 'Band',
-        genres: ['Rock', 'Indie', 'Alternative'],
-        location: 'Stockholm, Sweden',
-        rehearsalLocation: 'Studio 4, Stockholm',
-        rehearsalDayOfWeek: 'Wednesday',
-        rehearsalStartTime: '18:00',
-        rehearsalEndTime: '21:00',
-        about: 'We are a 4-piece indie rock band looking for active gigs and occasional synth player substitutes.',
-        description: 'Indie rock band from Stockholm.',
-      ),
-      Band(
-        id: 'mock_band_2',
-        name: 'Groove Collective',
-        ensembleType: 'Ensemble',
-        genres: ['Funk', 'Soul', 'Jazz'],
-        location: 'Gothenburg, Sweden',
-        rehearsalLocation: 'Gothenburg Community Center',
-        rehearsalDayOfWeek: 'Monday',
-        rehearsalStartTime: '19:00',
-        rehearsalEndTime: '21:30',
-        about: 'A loose collective of soul and jazz lovers. We play cover events and corporate gigs.',
-        description: 'Funk and Soul collective in Gothenburg.',
-      ),
-    ];
   }
 
   void _onSearchChanged() {
@@ -352,53 +258,6 @@ class _BrowseMusiciansScreenState extends State<BrowseMusiciansScreen> {
                   height: 1.5,
                 ),
               ),
-              const SizedBox(height: 20),
-              Text(
-                'REHEARSAL DETAILS',
-                style: GoogleFonts.outfit(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: AppTheme.textSecondary,
-                  letterSpacing: 1.5,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  const Icon(Icons.calendar_month_rounded, color: AppTheme.primaryAccent, size: 16),
-                  const SizedBox(width: 8),
-                  Text(
-                    band.rehearsalDayOfWeek != null 
-                        ? 'Every ${band.rehearsalDayOfWeek}'
-                        : 'No set schedule',
-                    style: GoogleFonts.inter(color: Colors.white, fontSize: 13),
-                  ),
-                  if (band.rehearsalStartTime != null) ...[
-                    const SizedBox(width: 12),
-                    const Icon(Icons.access_time_rounded, color: AppTheme.primaryAccent, size: 16),
-                    const SizedBox(width: 8),
-                    Text(
-                      '${band.rehearsalStartTime} - ${band.rehearsalEndTime ?? ""}',
-                      style: GoogleFonts.inter(color: Colors.white, fontSize: 13),
-                    ),
-                  ],
-                ],
-              ),
-              if (band.rehearsalLocation != null && band.rehearsalLocation!.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    const Icon(Icons.room_rounded, color: AppTheme.primaryAccent, size: 16),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        band.rehearsalLocation!,
-                        style: GoogleFonts.inter(color: Colors.white, fontSize: 13),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
               const SizedBox(height: 24),
               Row(
                 children: [
@@ -987,7 +846,7 @@ class _BrowseMusiciansScreenState extends State<BrowseMusiciansScreen> {
                         const Icon(Icons.people_alt_rounded, color: AppTheme.textSecondary, size: 16),
                         const SizedBox(width: 6),
                         Text(
-                          '${band.membersBand.length} member${band.membersBand.length == 1 ? "" : "s"}',
+                          '${(band.activeMemberCount ?? 0)} member${(band.activeMemberCount ?? 0) == 1 ? "" : "s"}',
                           style: GoogleFonts.inter(
                             fontSize: 12,
                             color: AppTheme.textSecondary,

@@ -1,9 +1,12 @@
+import '../utils/catalogue_loading.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../providers/app_state.dart';
 import '../theme/app_theme.dart';
 import '../models/band.dart';
+import '../models/city_location.dart';
+import '../widgets/city_location_picker_field.dart';
 import '../models/user_profile.dart';
 import '../widgets/gradient_scaffold.dart';
 import '../widgets/custom_top_bar.dart';
@@ -22,7 +25,7 @@ class CreateBandScreen extends StatefulWidget {
 class _CreateBandScreenState extends State<CreateBandScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
-  final _locationController = TextEditingController();
+  CityLocation? _cityLocation;
   final _rehearsalLocationController = TextEditingController();
   final _mapViewLocationController = TextEditingController();
   final _aboutController = TextEditingController();
@@ -63,7 +66,6 @@ class _CreateBandScreenState extends State<CreateBandScreen> {
   @override
   void dispose() {
     _nameController.dispose();
-    _locationController.dispose();
     _rehearsalLocationController.dispose();
     _mapViewLocationController.dispose();
     _aboutController.dispose();
@@ -174,7 +176,8 @@ class _CreateBandScreenState extends State<CreateBandScreen> {
         genres: _selectedGenres,
         styleBand: _selectedGenres,
         level: _level,
-        location: _locationController.text.trim(),
+        location: _cityLocation?.label,
+        publicLocation: _cityLocation,
         rehearsalLocation: _rehearsalLocationController.text.trim(),
         address: _mapViewLocationController.text.trim(),
         rehearsalDayOfWeek: _hasRegularRehearsal ? _rehearsalDay : null,
@@ -223,26 +226,8 @@ class _CreateBandScreenState extends State<CreateBandScreen> {
     final appState = Provider.of<AppState>(context, listen: false);
     final currentUserId = appState.currentUserId;
 
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const Center(
-        child: CircularProgressIndicator(color: AppTheme.primaryAccent),
-      ),
-    );
-
-    List<UserProfile> allUsers = [];
-    try {
-      allUsers = await appState.firebaseService.getAllUsersAsync();
-    } catch (e) {
-      debugPrint("Error fetching users: $e");
-    } finally {
-      if (mounted) {
-        Navigator.pop(context); // Dismiss loader
-      }
-    }
-
-    if (!mounted) return;
+    final allUsers = await CatalogueLoading.usersForPicker(context);
+    if (!mounted || allUsers == null) return;
 
     final existingUserIds = {
       if (currentUserId != null) currentUserId,
@@ -765,35 +750,10 @@ class _CreateBandScreenState extends State<CreateBandScreen> {
               ),
               const SizedBox(height: 20),
 
-              // Location (City, Country)
-              Text.rich(
-                TextSpan(
-                  children: [
-                    TextSpan(
-                      text: 'Location',
-                      style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
-                    ),
-                    TextSpan(
-                      text: ' (City, Country)',
-                      style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.normal, color: Colors.white),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 8),
-              TextFormField(
-                controller: _locationController,
-                style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
-                decoration: const InputDecoration(
-                  hintText: 'Stockholm, Sweden',
-                ),
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Please enter location';
-                  }
-                  return null;
-                },
-              ),
+              CityLocationPickerField(requiredSelection: true,
+                purpose:'band',
+                targetId:()=>_nameController.text.trim().replaceAll(' ','_'),
+                onChanged: (city) => setState(() => _cityLocation = city)),
               const SizedBox(height: 20),
 
               // Rehearsal Location (if any)

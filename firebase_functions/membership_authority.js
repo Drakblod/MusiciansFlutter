@@ -59,14 +59,25 @@ async function authorizeRequest(db, uid, request, suppliedBand, suppliedEvent) {
   }
   return { bandId:bandless ? null : bandId, eventId:bandless ? null : eventId, creatorId };
 }
-const metadataFields = ['Name','EnsembleType','Genres','Qualification','Location','Style_band','Style','Level',
+const metadataFields = ['Name','EnsembleType','Genres','Qualification','Location','PublicLocation','Style_band','Style','Level',
   'RehearsalLocation','RehearsalDayOfWeek','RehearsalDate','RehearsalTime','RehearsalStartTime','RehearsalEndTime',
   'RehearsalDateTime','About','Description','Address','Contact','Members','History','ConcertsProjects'];
-function metadata(value) {
+function metadata(value, allowVerifiedCity = false) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new HttpsError('invalid-argument','Band metadata is required.');
   const clean = {};
   for (const field of metadataFields) {
     const v = value[field];
+    if (field === 'Location' && v == null) { clean.Location = null; continue; }
+    if (field === 'PublicLocation') {
+      if (v == null) { clean[field] = null; continue; }
+      if (!allowVerifiedCity) throw new HttpsError('permission-denied','A city confirmation is required.');
+      const location = require('./catalogue_projections').structuredLocation(v);
+      if (!location) throw new HttpsError('invalid-argument','Invalid public city.');
+      clean[field] = {version:1,precision:'city',confirmed:true,city:location.city,
+        ...(location.region?{region:location.region}:{}),country:location.country,
+        ...(location.countryCode?{countryCode:location.countryCode}:{})};
+      continue;
+    }
     if (v == null) continue;
     if (['Genres','Style_band'].includes(field)) {
       if (!Array.isArray(v) || v.length > 100 || v.some(x => typeof x !== 'string' || x.length > 200)) throw new HttpsError('invalid-argument','Invalid band tags.');
@@ -99,7 +110,7 @@ async function mutate(db, uid, data) {
   if (!allowed.includes(action)) throw new HttpsError('invalid-argument','Unknown membership action.');
   // Validate creation before allocating private retry state for a new band ID.
   if (action === 'create' || action === 'metadata') {
-    const fields = metadata(data.metadata);
+    const fields = metadata(data.metadata,!!data.cityGrantNonce);
     if (action === 'create') {
       if (!fields.Name) throw new HttpsError('invalid-argument','Band name is required.');
       const initial = data.initialMembers ?? [];
@@ -124,7 +135,8 @@ async function mutate(db, uid, data) {
     }
   }
   const fingerprint = require('crypto').createHash('sha256').update(JSON.stringify({ action, target, role: data.role ?? null, status: data.status ?? null,
-    nickname: data.nickname ?? null, metadata: data.metadata ?? null, initialMembers: data.initialMembers ?? null })).digest('hex');
+    nickname: data.nickname ?? null, metadata: data.metadata ?? null,
+    cityGrantNonce:data.cityGrantNonce??null,initialMembers: data.initialMembers ?? null })).digest('hex');
   let failure, affected = [], deleted = false;
   const ref = db.ref(`Bands/${bandId}`);
   const before = (await ref.get()).val();
@@ -143,6 +155,16 @@ async function mutate(db, uid, data) {
     } else if (before && !(action === 'delete' ? leader(caller) : manager(caller))) {
       throw new HttpsError('permission-denied','An active canonical manager is required.');
     }
+  }
+  let effectiveMetadata=data.metadata;
+  // A canonical receipt plus the matching private ledger proves this exact
+  // operation already succeeded, even after the short-lived grant expires.
+  if(data.cityGrantNonce!=null && !before?._membershipOperations?.[receiptKey]) {
+    if(!['create','metadata'].includes(action))throw new HttpsError('invalid-argument','City confirmation is only valid for band metadata.');
+    const grant=await require('./city_verification').consumeGrant(db,uid,'band',bandId,
+      data.cityGrantNonce,operationId,data.metadata?.PublicLocation);
+    effectiveMetadata={...data.metadata,PublicLocation:grant.location,
+      Location:`${grant.location.city}, ${grant.location.country}`};
   }
   let ledgerFailure;
   const now = Date.now();
@@ -175,7 +197,7 @@ async function mutate(db, uid, data) {
           }
           throw new HttpsError('already-exists','A band with that ID already exists.');
         }
-        const fields = metadata(data.metadata);
+        const fields = metadata(effectiveMetadata,!!data.cityGrantNonce);
         if (!fields.Name) throw new HttpsError('invalid-argument','Band name is required.');
         const members = { [uid]: { Role:'Leader', Status:'active', Nickname: String(data.nickname || 'Leader').slice(0,200) } };
         const initial = data.initialMembers ?? [];
@@ -217,7 +239,7 @@ async function mutate(db, uid, data) {
             if (!leader(caller)) throw new HttpsError('permission-denied','Only the active Leader may delete the band.');
             affected = Object.keys(members); deleted = true; return null;
           }
-          if (action === 'metadata') Object.assign(current, metadata(data.metadata));
+          if (action === 'metadata') Object.assign(current, metadata(effectiveMetadata,!!data.cityGrantNonce));
           else if (action === 'add') {
             const r = normalize(data.role || 'Member');
             if (!['member','admin'].includes(r) || (r === 'admin' && !leader(caller))) throw new HttpsError('permission-denied','Only the Leader may grant Admin.');

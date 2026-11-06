@@ -1,3 +1,4 @@
+import '../utils/catalogue_loading.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -69,11 +70,13 @@ class _ProducerSearchScreenState extends State<ProducerSearchScreen> {
   }
 
   Future<void> _loadMusicians() async {
+    final state = context.read<AppState>();
+    final scope = CatalogueScope(state);
     setState(() => _isLoading = true);
     try {
       final appState = Provider.of<AppState>(context, listen: false);
       final users = await appState.firebaseService.getAllUsersAsync();
-      
+      if (!mounted || !scope.current) return;
       setState(() {
         _allMusicians = users;
         _applyFilters();
@@ -89,7 +92,8 @@ class _ProducerSearchScreenState extends State<ProducerSearchScreen> {
         );
       }
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted && scope.current) setState(() => _isLoading = false);
+      scope.dispose();
     }
   }
 

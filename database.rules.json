@@ -1,5 +1,10 @@
 {
   "rules": {
+    "citySearchRateState": { ".read": false, ".write": false },
+    "citySearchSessions": { ".read": false, ".write": false },
+    "cityVerificationGrants": { ".read": false, ".write": false },
+    "publicUserProfiles": { ".read": "auth != null", ".write": false },
+    "publicBandProfiles": { ".read": "auth != null", ".write": false },
     "userBandMembershipIndex": {
       ".read": false,
       ".write": false,
@@ -19,7 +24,7 @@
           }
         },
         "info": {
-          ".write": "auth != null && auth.uid == $userId"
+          ".write": "auth != null && auth.uid == $userId && newData.child('Location').val() == data.child('Location').val() && newData.child('PublicLocation').val() == data.child('PublicLocation').val() && newData.child('LocationCleared').val() == data.child('LocationCleared').val() && newData.child('CityOperationId').val() == data.child('CityOperationId').val() && newData.child('CityUpdatedAt').val() == data.child('CityUpdatedAt').val()"
         },
         "UserType": {
           ".write": "auth != null && auth.uid == $userId"
