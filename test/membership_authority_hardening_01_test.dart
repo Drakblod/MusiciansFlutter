@@ -26,6 +26,9 @@ import 'registration_secondary_skills_01_test.dart' as fixtures;
 import 'new_user_skills_and_band_guards_01_test.dart' as guards;
 
 class AuthorityService extends FirebaseService {
+  @override
+  Stream<bool> subscribeToBandProfileAccess(String bandId) => Stream.value(true);
+
   String? uid = 'leader';
   List<Map<String, dynamic>> calls = [];
   Completer<void>? pending;

@@ -72,10 +72,10 @@ describe('Real RTDB Emulator Rules Tests', function () {
       await assertFails(ref.set({ otherUserId: 'user_b' }));
     });
 
-    it('Authenticated legacy client CAN write to conversations during transitional phase', async () => {
+    it('Authenticated legacy client CANNOT bypass conversation callables in either ruleset', async () => {
       const userAContext = testEnvTransitional.authenticatedContext('user_a');
       const ref = userAContext.database().ref('conversations/legacy_conv_1/messages/msg_1');
-      await assertSucceeds(ref.set({ text: 'Legacy message', senderId: 'user_a' }));
+      await assertFails(ref.set({ text: 'Legacy message', senderId: 'user_a' }));
     });
 
     it('Unauthenticated access to conversations is DENIED in transitional rules', async () => {
@@ -104,7 +104,7 @@ describe('Real RTDB Emulator Rules Tests', function () {
 
       const userAcc = testEnvTransitional.authenticatedContext('user_trans_acc');
       await assertSucceeds(
-        userAcc.database().ref('Collabs/Sessions/sess_trans_test/Responses/user_trans_acc').set({
+        userAcc.database().ref('Collabs/SessionResponses/sess_trans_test/user_trans_acc').set({
           status: 'YES',
           timestamp: '2026-08-28T12:00:00Z',
         })
@@ -112,7 +112,7 @@ describe('Real RTDB Emulator Rules Tests', function () {
 
       const userPending = testEnvTransitional.authenticatedContext('user_trans_pending');
       await assertFails(
-        userPending.database().ref('Collabs/Sessions/sess_trans_test/Responses/user_trans_pending').set({
+        userPending.database().ref('Collabs/SessionResponses/sess_trans_test/user_trans_pending').set({
           status: 'YES',
           timestamp: '2026-08-28T12:00:00Z',
         })
@@ -319,7 +319,7 @@ describe('Real RTDB Emulator Rules Tests', function () {
 
     it('9. Accepted participant can write only their own RSVP response', async () => {
       const acceptedUser = testEnvFinal.authenticatedContext('user_accepted');
-      const ref = acceptedUser.database().ref('Collabs/Sessions/sess_cascade_test/Responses/user_accepted');
+      const ref = acceptedUser.database().ref('Collabs/SessionResponses/sess_cascade_test/user_accepted');
       await assertSucceeds(ref.set({
         status: 'NO',
         timestamp: '2026-08-28T13:00:00Z',
@@ -601,10 +601,10 @@ describe('Real RTDB Emulator Rules Tests', function () {
       );
     });
 
-    it('13. Candidate can write their own response under SubRequests/Responses when indexed in audience', async () => {
+    it('13. Indexed candidate cannot bypass the respondToSubRequest callable', async () => {
       const candidate = testEnvFinal.authenticatedContext('user_sub_cand_1');
       const ref = candidate.database().ref('SubRequests/sub_rules_test/Responses/user_sub_cand_1');
-      await assertSucceeds(ref.set(true));
+      await assertFails(ref.set(true));
 
       // Unindexed candidate is denied
       const unindexed = testEnvFinal.authenticatedContext('user_sub_cand_2');
@@ -810,10 +810,10 @@ describe('Real RTDB Emulator Rules Tests', function () {
       await assertFails(hacker.database().ref('userSubRequestFeed/user_sub_cand_1').get());
     });
 
-    it('39. Targeted Favorite in subRequestAudience CAN submit response to published SubRequest', async () => {
+    it('39. Targeted Favorite must submit responses through the callable', async () => {
       const candidate = testEnvFinal.authenticatedContext('user_sub_cand_1');
       const respRef = candidate.database().ref('SubRequests/sub_fav_targeted_1/Responses/user_sub_cand_1');
-      await assertSucceeds(respRef.set(true));
+      await assertFails(respRef.set(true));
     });
 
     it('40. Candidate NOT in subRequestAudience CANNOT submit response to Favorites-only SubRequest', async () => {
@@ -858,12 +858,12 @@ describe('Real RTDB Emulator Rules Tests', function () {
       await assertFails(outsider.database().ref('creatorSubRequestGroups/user_leader').get());
     });
 
-    it('46. Candidate A CAN write Candidate A own response when in audience', async () => {
+    it('46. Audience membership does not permit direct response writes', async () => {
       await testEnvFinal.withSecurityRulesDisabled(async (context) => {
         await context.database().ref('SubRequests/sub_fav_targeted_1/Responses/user_sub_cand_1').remove();
       });
       const candA = testEnvFinal.authenticatedContext('user_sub_cand_1');
-      await assertSucceeds(candA.database().ref('SubRequests/sub_fav_targeted_1/Responses/user_sub_cand_1').set(true));
+      await assertFails(candA.database().ref('SubRequests/sub_fav_targeted_1/Responses/user_sub_cand_1').set(true));
     });
 
     it('47. Candidate A CANNOT write Candidate B response', async () => {
@@ -1345,6 +1345,9 @@ describe('Real RTDB Emulator Rules Tests', function () {
     });
 
     it('3. Files write with legitimate UploadedBy matching auth.uid is accepted', async () => {
+      await testEnvFinal.withSecurityRulesDisabled(async c => {
+        await c.database().ref('Bands/band_test/Members_band/legit_uid').set({Role:'Member',Status:'active'});
+      });
       const legitUser = testEnvFinal.authenticatedContext('legit_uid');
       await assertSucceeds(
         legitUser.database().ref('files/band_test/file_legit').set({
@@ -1357,7 +1360,7 @@ describe('Real RTDB Emulator Rules Tests', function () {
       );
     });
 
-    it('4. Legacy file record without UploadedBy remains readable by authenticated users', async () => {
+    it('4. Legacy file record never bypasses exact active band membership', async () => {
       await testEnvFinal.withSecurityRulesDisabled(async (context) => {
         await context.database().ref('files/band_test/legacy_file').set({
           FileName: 'legacy_chart.pdf',
@@ -1365,7 +1368,7 @@ describe('Real RTDB Emulator Rules Tests', function () {
         });
       });
       const reader = testEnvFinal.authenticatedContext('reader_uid');
-      await assertSucceeds(reader.database().ref('files/band_test/legacy_file').get());
+      await assertFails(reader.database().ref('files/band_test/legacy_file').get());
     });
   });
 
@@ -1385,10 +1388,10 @@ describe('Real RTDB Emulator Rules Tests', function () {
       });
     });
 
-    it('1. First write of true succeeds', async () => {
+    it('1. First direct response write is rejected; callable owns responses', async () => {
       const candidate = testEnvFinal.authenticatedContext('user_sub_cand_1');
       const ref = candidate.database().ref('SubRequests/sub_integrity_test/Responses/user_sub_cand_1');
-      await assertSucceeds(ref.set(true));
+      await assertFails(ref.set(true));
     });
 
     it('2. Writing false is rejected', async () => {
@@ -1638,7 +1641,7 @@ describe('Real RTDB Emulator Rules Tests', function () {
       await assertFails(userC.database().ref('SubRequests/map_pin_trans_child_test/Responses/user_c').set(true));
     });
 
-    it('Staffing requests with NotificationMode absent or non-map_pin preserve approved direct field operations', async () => {
+    it('Staffing fields and responses remain server-owned regardless of NotificationMode', async () => {
       await testEnvFinal.withSecurityRulesDisabled(async (context) => {
         const db = context.database();
         await db.ref('SubRequests/staffing_req_test').set({
@@ -1664,8 +1667,8 @@ describe('Real RTDB Emulator Rules Tests', function () {
       await assertFails(creator.database().ref('SubRequests/staffing_req_test/PayAmountMinor').set(150000));
       await assertFails(creator.database().ref('SubRequests/staffing_req_test/Currency').set('EUR'));
 
-      // 2. Candidate in audience CAN submit response
-      await assertSucceeds(candidate.database().ref('SubRequests/staffing_req_test/Responses/user_candidate').set(true));
+      // 2. Candidate in audience must use the callable
+      await assertFails(candidate.database().ref('SubRequests/staffing_req_test/Responses/user_candidate').set(true));
 
       // 3. Candidate CANNOT overwrite response
       await assertFails(candidate.database().ref('SubRequests/staffing_req_test/Responses/user_candidate').set(true));
@@ -1974,14 +1977,14 @@ describe('Real RTDB Emulator Rules Tests', function () {
           await assertSucceeds(alice.database().ref('SubRequests/parity_direct_inv/Responses/bob').get());
         });
 
-        it('20. Bob can submit exact approved first response (boolean true)', async () => {
+        it('20. Bob cannot bypass response callable with boolean true', async () => {
           const bob = getEnv().authenticatedContext('bob');
-          await assertSucceeds(bob.database().ref('SubRequests/fresh_direct_inv/Responses/bob').set(true));
+          await assertFails(bob.database().ref('SubRequests/fresh_direct_inv/Responses/bob').set(true));
         });
 
-        it('20b. Public applicant can submit first response (boolean true) on public staffing', async () => {
+        it('20b. Public applicant must use response callable', async () => {
           const charlie = getEnv().authenticatedContext('charlie');
-          await assertSucceeds(charlie.database().ref('SubRequests/fresh_public_staffing/Responses/charlie').set(true));
+          await assertFails(charlie.database().ref('SubRequests/fresh_public_staffing/Responses/charlie').set(true));
         });
 
         it('21. Bob cannot submit a second response (no overwrite)', async () => {

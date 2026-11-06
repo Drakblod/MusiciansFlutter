@@ -104,12 +104,11 @@ describe(`SANITIZED-EVENT-READ-MODEL-01 real rules and trigger: ${ruleFile}`,fun
       value=>value?.Responses?.[`member_${suffix}`]?.status==='NO');
   });
 
-  it('documents the retained canonical ancestor read privacy gap explicitly',async()=>{
+  it('denies canonical Event descendants after the clean-schema ancestor cutover',async()=>{
     const unrelated=client(`other_${suffix}`);
-    const canonical=await assertSucceeds(unrelated.ref(eventPath).get());
-    assert.equal(canonical.val().Responses[`member_${suffix}`].status,'NO');
-    assert.equal(canonical.val().externalInvitees[`applicant_${suffix}`].comment,
-      'Private application');
+    await assertFails(unrelated.ref(eventPath).get());
+    await assertFails(unrelated.ref(`${eventPath}/Responses/member_${suffix}`).get());
+    await assertFails(unrelated.ref(`${eventPath}/externalInvitees/applicant_${suffix}`).get());
     await assertFails(env.unauthenticatedContext().database().ref(eventPath).get());
   });
 

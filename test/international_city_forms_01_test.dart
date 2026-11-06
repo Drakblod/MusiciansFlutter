@@ -15,6 +15,9 @@ import 'package:musicians_flutter/widgets/city_location_picker_field.dart';
 import 'international_city_picker_01_test.dart' as picker;
 
 class FormService extends FirebaseService {
+  @override
+  Stream<bool> subscribeToBandProfileAccess(String bandId) => Stream.value(true);
+
   UserProfile? saved;
   Band? created,updated;
   @override Future<void> saveUserProfileAsync(String id,UserProfile profile) async { saved=profile; }

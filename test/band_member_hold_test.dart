@@ -14,6 +14,8 @@ import 'package:musicians_flutter/views/edit_band_info_screen.dart';
 import 'package:provider/provider.dart';
 
 class MockFirebaseServiceForHoldTest extends Fake implements FirebaseService {
+  @override
+  Stream<bool> subscribeToBandProfileAccess(String bandId) => Stream.value(true);
   final Map<String, dynamic> mockBandData = {
     'BandName': 'Rock Legends',
     'Name': 'Rock Legends',

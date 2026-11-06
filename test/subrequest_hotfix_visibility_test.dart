@@ -18,6 +18,9 @@ import 'package:musicians_flutter/views/gig_map_page.dart' show MapCategory;
 import 'package:provider/provider.dart';
 
 class MockHotfixFirebaseService extends FirebaseService {
+  @override
+  Stream<int> subscribeToSubRequestResponseCount(String id) => const Stream<int>.empty();
+
   String? _currentUserId = 'creator_user_1';
   bool _isLoggedIn = true;
   bool shouldCallableFail = false;

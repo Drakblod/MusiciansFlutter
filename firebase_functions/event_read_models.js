@@ -263,7 +263,7 @@ function legacyCalendarEvent(bandId,eventId,source) {
 
 async function reconcileLegacyCalendar(db,bandId,eventId) {
   if(!key(bandId)||!key(eventId))return {changed:false};
-  const sourceRef=db.ref(`BandEvents/${bandId}/${eventId}`);
+  const sourceRef=db.ref(`Bands/${bandId}/Calendar/${eventId}`);
   for(let attempt=0;attempt<5;attempt++){
     const [source,band]=await Promise.all([sourceRef.get(),db.ref(`Bands/${bandId}/Name`).get()]);
     const next=band.exists()?legacyCalendarEvent(bandId,eventId,source.val()):null;

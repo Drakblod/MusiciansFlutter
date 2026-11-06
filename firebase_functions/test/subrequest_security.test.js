@@ -217,13 +217,13 @@ describe('SUBREQUEST-SECURITY-MIGRATION-01: Permanent Security Rules & Feed Isol
     await assertFails(eveCtx.database().ref('BandEvents/CancelledSubRequests/sub_hack').set(true));
   });
 
-  it('14. Other BandEvents paths (Agreements, Notifications, Responses, bandId) remain accessible', async () => {
+  it('14. Other BandEvents paths (Agreements, Notifications, Responses, bandId) are forbidden', async () => {
     const eveCtx = testEnv.authenticatedContext(unrelatedUid);
     // Agreements
-    await assertSucceeds(eveCtx.database().ref('BandEvents/Agreements/conv_123').get());
+    await assertFails(eveCtx.database().ref('BandEvents/Agreements/conv_123').get());
     // Notifications for own UID
-    await assertSucceeds(eveCtx.database().ref(`BandEvents/Notifications/${unrelatedUid}`).get());
+    await assertFails(eveCtx.database().ref(`BandEvents/Notifications/${unrelatedUid}`).get());
     // SubRequestResponses
-    await assertSucceeds(eveCtx.database().ref('BandEvents/SubRequestResponses/sub_pub_1').get());
+    await assertFails(eveCtx.database().ref('BandEvents/SubRequestResponses/sub_pub_1').get());
   });
 });

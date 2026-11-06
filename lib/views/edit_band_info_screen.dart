@@ -1,3 +1,4 @@
+import 'dart:async';
 import '../utils/catalogue_loading.dart';
 import '../utils/membership_mutation_feedback.dart';
 import '../utils/band_membership_policy.dart';
@@ -52,6 +53,39 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
   List<BandMember> _members = [];
   final Map<String, UserProfile> _memberProfiles = {};
   bool _isLoadingMembers = false;
+  bool _accessLost = false;
+  AppState? _observedState;
+  String? _observedUid;
+  String? _observedActiveBand;
+  void _sessionChanged() {
+    final state = _observedState;
+    if (state?.currentUserId != _observedUid || state?.activeBandId != _observedActiveBand) _loseAccess();
+  }
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final state = Provider.of<AppState>(context, listen: false);
+    if (identical(state, _observedState)) return;
+    _observedState?.removeListener(_sessionChanged);
+    _observedState = state;
+    _observedUid = state.currentUserId;
+    _observedActiveBand = state.activeBandId;
+    state.addListener(_sessionChanged);
+  }
+  StreamSubscription<bool>? _accessSubscription;
+  void _loseAccess() {
+    if (!mounted || _accessLost) return;
+    setState(() {
+      _accessLost = true;
+      _members = [];
+      _memberProfiles.clear();
+      _nameController.clear();
+      _rehearsalLocationController.clear();
+      _mapViewLocationController.clear();
+      _aboutController.clear();
+      _cityLocation = null;
+    });
+  }
 
   final List<String> _levels = [
     'A = PRO',
@@ -106,6 +140,14 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
       _members = widget.band.membersBand.values.toList();
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final bandId = widget.band.id;
+      if (bandId != null && bandId.isNotEmpty) {
+        _accessSubscription = Provider.of<AppState>(context, listen: false)
+            .firebaseService.subscribeToBandProfileAccess(bandId).listen((allowed) {
+          if (!allowed) _loseAccess();
+        }, onError: (Object error) => _loseAccess());
+      }
       _loadMembers();
     });
   }
@@ -127,6 +169,8 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
 
   @override
   void dispose() {
+    _observedState?.removeListener(_sessionChanged);
+    _accessSubscription?.cancel();
     _nameController.dispose();
     _rehearsalLocationController.dispose();
     _mapViewLocationController.dispose();
@@ -268,7 +312,7 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
     try {
       final appState = Provider.of<AppState>(context, listen: false);
       final members = await appState.firebaseService.getBandMembersAsync(bandId);
-      if (mounted) {
+      if (mounted && !_accessLost) {
         final uniqueMembers = <String, BandMember>{};
         for (final m in members) {
           if (m.userId != null && m.userId!.isNotEmpty) {
@@ -297,7 +341,7 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
       if (uid != null && uid.isNotEmpty && !_memberProfiles.containsKey(uid)) {
         try {
           final profile = await appState.firebaseService.getUserProfileAsync(uid);
-          if (profile != null && mounted) {
+          if (profile != null && mounted && !_accessLost) {
             setState(() {
               _memberProfiles[uid] = profile;
             });
@@ -1131,6 +1175,12 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_accessLost) {
+      return const GradientScaffold(
+        appBar: CustomTopBar(title: 'Band', showBack: true),
+        body: Center(child: Text('This band is unavailable for your current access.')),
+      );
+    }
     final appState = context.watch<AppState>();
     final canonicalMember = _members.where((m) => m.userId == appState.currentUserId).firstOrNull;
     final canManage = !_isLoadingMembers && appState.activeBandId == widget.band.id &&

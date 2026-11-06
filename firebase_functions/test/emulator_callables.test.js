@@ -1780,7 +1780,7 @@ describe('Real Cloud Functions Emulator Integration Tests (JS Client SDK + Emula
         );
       });
 
-      it('48. deleteMapPin by creator succeeds, cleans canonical & legacy mirrors, and is idempotent', async () => {
+      it('48. deleteMapPin by creator succeeds, deletes canonical data without touching obsolete mirrors, and is idempotent', async () => {
         const createCallable = httpsCallable(functionsUserA, 'createMapPin');
         const pin = await createCallable({
           eventType: 'jamSession',
@@ -1801,12 +1801,12 @@ describe('Real Cloud Functions Emulator Integration Tests (JS Client SDK + Emula
         const canonSnap = await adminDb.ref(`SubRequests/${pinId}`).get();
         assert.strictEqual(canonSnap.exists(), false);
 
-        // Check legacy copies removed
+        // Obsolete copies are not migration or cleanup targets
         const pubSnap = await adminDb.ref(`BandEvents/PublishedSubRequests/${pinId}`).get();
-        assert.strictEqual(pubSnap.exists(), false);
+        assert.deepStrictEqual(pubSnap.val(), {legacy:true});
 
         const userSnap = await adminDb.ref(`users/user_a/SubRequests/${pinId}`).get();
-        assert.strictEqual(userSnap.exists(), false);
+        assert.deepStrictEqual(userSnap.val(), {legacy:true});
 
         // Calling a second time on the already deleted pin succeeds idempotently
         const secondDel = await callableA({ pinId: pinId });
@@ -1850,7 +1850,7 @@ describe('Real Cloud Functions Emulator Integration Tests (JS Client SDK + Emula
         assert.strictEqual(res.data.alreadyDeleted, true);
       });
 
-      it('51. deleteMapPin: canonical missing but authorized creator-owned legacy map-pin mirror exists -> cleaned successfully', async () => {
+      it('51. deleteMapPin: canonical missing but authorized creator-owned legacy map-pin mirror exists -> canonical absence returns without legacy cleanup', async () => {
         const pinId = 'orphan_legacy_pin_1';
         // Plant legacy mirror only (canonical SubRequests/{pinId} does not exist)
         await adminDb.ref('BandEvents/PublishedSubRequests/' + pinId).set({
@@ -1874,14 +1874,14 @@ describe('Real Cloud Functions Emulator Integration Tests (JS Client SDK + Emula
         assert.strictEqual(res.data.success, true);
         assert.strictEqual(res.data.id, pinId);
 
-        // Verify legacy mirrors are cleaned
+        // Obsolete mirrors are not read or cleaned
         const pubAfter = await adminDb.ref('BandEvents/PublishedSubRequests/' + pinId).get();
-        assert.strictEqual(pubAfter.exists(), false);
+        assert.strictEqual(pubAfter.val().CreatorUserId, 'user_a');
         const userAfter = await adminDb.ref('users/user_a/SubRequests/' + pinId).get();
-        assert.strictEqual(userAfter.exists(), false);
+        assert.strictEqual(userAfter.val().CreatorUserId, 'user_a');
       });
 
-      it('52. deleteMapPin: canonical missing but unauthorized caller targets legacy mirror -> permission-denied', async () => {
+      it('52. deleteMapPin: canonical missing but unauthorized caller targets legacy mirror -> no legacy lookup or mutation', async () => {
         const pinId = 'orphan_legacy_pin_stranger';
         await adminDb.ref('BandEvents/PublishedSubRequests/' + pinId).set({
           SubRequestId: pinId,
@@ -1891,17 +1891,15 @@ describe('Real Cloud Functions Emulator Integration Tests (JS Client SDK + Emula
 
         // user_b is not creator and no band leader role
         const callableB = httpsCallable(functionsUserB, 'deleteMapPin');
-        await assert.rejects(
-          callableB({ pinId: pinId }),
-          (err) => err.code === 'functions/permission-denied' || err.code === 'permission-denied'
-        );
+        const result = await callableB({pinId});
+        assert.strictEqual(result.data.alreadyDeleted, true);
 
         // Record must still exist
         const pubSnap = await adminDb.ref('BandEvents/PublishedSubRequests/' + pinId).get();
         assert.strictEqual(pubSnap.exists(), true);
       });
 
-      it('53. deleteMapPin: canonical missing but legacy record is a staffing request -> failed-precondition', async () => {
+      it('53. deleteMapPin: canonical missing but legacy record is a staffing request -> no legacy lookup or mutation', async () => {
         const pinId = 'orphan_legacy_staffing_req';
         // Plant legacy staffing record without map_pin notification mode
         await adminDb.ref('BandEvents/PublishedSubRequests/' + pinId).set({
@@ -1911,17 +1909,15 @@ describe('Real Cloud Functions Emulator Integration Tests (JS Client SDK + Emula
         });
 
         const callableA = httpsCallable(functionsUserA, 'deleteMapPin');
-        await assert.rejects(
-          callableA({ pinId: pinId }),
-          (err) => err.code === 'functions/failed-precondition' || err.code === 'failed-precondition'
-        );
+        const result = await callableA({pinId});
+        assert.strictEqual(result.data.alreadyDeleted, true);
 
         // Record must not be deleted
         const pubSnap = await adminDb.ref('BandEvents/PublishedSubRequests/' + pinId).get();
         assert.strictEqual(pubSnap.exists(), true);
       });
 
-      it('54. deleteMapPin: successful deletion leaves none of the relevant paths behind and creates no tombstone', async () => {
+      it('54. deleteMapPin: deletes canonical data without obsolete cleanup or tombstones', async () => {
         const createCallable = httpsCallable(functionsUserA, 'createMapPin');
         const pin = await createCallable({
           eventType: 'jamSession',
@@ -1939,13 +1935,13 @@ describe('Real Cloud Functions Emulator Integration Tests (JS Client SDK + Emula
         const res = await callableA({ pinId: pinId });
         assert.strictEqual(res.data.success, true);
 
-        // Verify none of the paths exist
+        // Canonical data is removed; obsolete data is untouched
         const canonSnap = await adminDb.ref('SubRequests/' + pinId).get();
         assert.strictEqual(canonSnap.exists(), false);
         const pubSnap = await adminDb.ref('BandEvents/PublishedSubRequests/' + pinId).get();
-        assert.strictEqual(pubSnap.exists(), false);
+        assert.deepStrictEqual(pubSnap.val(), {legacy:true});
         const userSnap = await adminDb.ref('users/user_a/SubRequests/' + pinId).get();
-        assert.strictEqual(userSnap.exists(), false);
+        assert.deepStrictEqual(userSnap.val(), {legacy:true});
 
         // Verify no tombstone write under CancelledSubRequests
         const cancelSnap = await adminDb.ref('BandEvents/CancelledSubRequests/' + pinId).get();
@@ -2065,7 +2061,7 @@ describe('Real Cloud Functions Emulator Integration Tests (JS Client SDK + Emula
         assert.strictEqual(userBFeed.exists(), false);
       });
 
-      it('59. deleteSubRequest: completely removes canonical, public, user feed, creator feed, audience and legacy mirrors', async () => {
+      it('59. deleteSubRequest: removes canonical and supported feeds without obsolete mirror cleanup', async () => {
         const publish = httpsCallable(functionsUserA, 'publishSubRequestGroup');
         await publish({
           requestGroupId: 'grp_del_test',
@@ -2099,7 +2095,7 @@ describe('Real Cloud Functions Emulator Integration Tests (JS Client SDK + Emula
         assert.strictEqual(aud.exists(), false);
 
         const legacy = await adminDb.ref('BandEvents/PublishedSubRequests/slot_del_test_1').get();
-        assert.strictEqual(legacy.exists(), false);
+        assert.deepStrictEqual(legacy.val(), {legacy:true});
       });
 
       it('60. assignSubstitute: removes slot from public and user feeds and updates creator feed to assigned', async () => {
@@ -2812,7 +2808,7 @@ describe('Real Cloud Functions Emulator Integration Tests (JS Client SDK + Emula
       });
 
       describe('AGREEMENT-INTEGRITY-01: Server-Authoritative Agreement & Assignment Integrity', () => {
-        it('72. assignSubstitute atomically creates Agreement conversation, canonical snapshot, and legacy mirrors', async () => {
+        it('72. assignSubstitute atomically creates Agreement conversation, canonical snapshot, without legacy mirrors', async () => {
           await adminDb.ref('Bands/band_26').set({
             Name: 'Band 26',
             Members_band: { user_a: { Role: 'Leader' } },
@@ -2884,13 +2880,13 @@ describe('Real Cloud Functions Emulator Integration Tests (JS Client SDK + Emula
           assert.strictEqual(idxB.otherUserId, 'user_a');
           assert.strictEqual(idxB.bandName, 'Band 26');
 
-          // Verify legacy mirrors are written by server
+          // Obsolete mirrors must not reappear
           const bandEventMirror = (await adminDb.ref(`BandEvents/Agreements/${convId}`).get()).val();
           const userAMirror = (await adminDb.ref(`users/user_a/Agreements/${convId}`).get()).val();
           const userBMirror = (await adminDb.ref(`users/user_b/Agreements/${convId}`).get()).val();
-          assert.strictEqual(bandEventMirror.BandName, 'Band 26');
-          assert.strictEqual(userAMirror.BandName, 'Band 26');
-          assert.strictEqual(userBMirror.BandName, 'Band 26');
+          assert.strictEqual(bandEventMirror, null);
+          assert.strictEqual(userAMirror, null);
+          assert.strictEqual(userBMirror, null);
 
           // Retry is idempotent and returns identical conversationId
           const retryRes = await assignFn({
@@ -3087,7 +3083,7 @@ describe('Real Cloud Functions Emulator Integration Tests (JS Client SDK + Emula
           const idxB = await adminDb.ref(`userConversations/user_b/${preReservedConvId}`).get();
           assert.strictEqual(idxB.exists(), true);
           const mirrorB = await adminDb.ref(`users/user_b/Agreements/${preReservedConvId}`).get();
-          assert.strictEqual(mirrorB.exists(), true);
+          assert.strictEqual(mirrorB.exists(), false);
         });
       });
     });

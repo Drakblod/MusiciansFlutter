@@ -12,6 +12,9 @@ import 'package:musicians_flutter/views/edit_profile_screen.dart';
 import 'package:musicians_flutter/widgets/custom_top_bar.dart';
 
 class MockDeletionFirebaseService extends FirebaseService {
+  @override
+  Stream<bool> subscribeToBandProfileAccess(String bandId) => Stream.value(true);
+
   String _mockUserId = 'user_leader_1';
   bool deleteAccountCalled = false;
   String? deletedBandId;

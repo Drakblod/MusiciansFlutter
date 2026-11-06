@@ -35,7 +35,11 @@ if (process.platform === 'win32' &&
   throw new Error('The normal Windows ADC location is still available.');
 }
 globalThis.__EMULATOR_ISOLATION_GUARD_ACTIVE__ = true;
-process.stderr.write(`ISOLATION_GUARD_ACTIVE pid=${process.pid}\n`);
+process.stderr.write(`ISOLATION_GUARD_ACTIVE pid=${process.pid} node=${process.version} entry=${process.argv[1]}\n`);
+if (process.env.EMULATOR_EXPECTED_NODE_MAJOR &&
+    process.versions.node.split('.')[0] !== process.env.EMULATOR_EXPECTED_NODE_MAJOR) {
+  throw new Error('The emulator process is using an unexpected Node.js runtime.');
+}
 
 const ownAddresses = new Set(Object.values(os.networkInterfaces()).flat()
   .map(interfaceInfo => interfaceInfo.address.toLowerCase().split('%')[0]));

@@ -16,6 +16,9 @@ import 'package:musicians_flutter/views/sub_request_response_details_screen.dart
 
 class MockConsistencyFirebaseService extends FirebaseService {
   @override
+  Stream<int> subscribeToSubRequestResponseCount(String id) => const Stream<int>.empty();
+
+  @override
   String? get currentUserId => 'test_user_active';
   final List<SubRequest> requests = [];
   final Set<String> appliedIds = {};

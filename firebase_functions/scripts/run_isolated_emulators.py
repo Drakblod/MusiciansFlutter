@@ -164,6 +164,8 @@ def summarize(expected, run_code, temp):
     totals = {name: sum(row[name] for row in per_file.values())
               for name in ("passed", "failed", "skipped")}
     summary = {"exitCode": run_code, "totals": totals, "perFile": per_file,
+               "nodeVersions": sorted(set(re.findall(
+                   r"ISOLATION_GUARD_ACTIVE pid=\d+ node=(v[\d.]+)", output))),
                "guardProcesses": output.count("ISOLATION_GUARD_ACTIVE"),
                "externalAttempts": 0, "secretManagerAttempts": 0,
                "expectedFiles": len(expected), "actualFiles": len(actual)}

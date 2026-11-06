@@ -166,14 +166,9 @@ exports.onCatalogueBandWritten = onValueWritten({ref:'/Bands/{bandId}',region:da
 exports.onBandEventReadModelWritten = onValueWritten({
   ref:'/Bands/{bandId}/Events/{eventId}',region:databaseTriggerRegion,retry:true,
 },event=>eventReadModels.reconcile(admin.database(),event.params.bandId,event.params.eventId));
-const nonCalendarBandEvents = new Set(['Agreements','CancelledSubRequests',
-  'Notifications','PublishedSubRequests','SubRequestResponses']);
 exports.onLegacyBandCalendarEventWritten = onValueWritten({
-  ref:'/BandEvents/{bandId}/{eventId}',region:databaseTriggerRegion,retry:true,
+  ref:'/Bands/{bandId}/Calendar/{eventId}',region:databaseTriggerRegion,retry:true,
 },event=>{
-  // BandEvents also contains unrelated legacy response, agreement and
-  // notification namespaces. Those records are never calendar events.
-  if(nonCalendarBandEvents.has(event.params.bandId))return null;
   return eventReadModels.reconcileLegacyCalendar(admin.database(),
     event.params.bandId,event.params.eventId);
 });
@@ -1502,7 +1497,7 @@ exports.publishSubRequestGroup = onCall({ region: 'europe-west1' }, async (reque
     }
     updates[`/SubRequests/${slotKey}`] = canonicalItem;
     updates[`/creatorSubRequestFeed/${callerId}/${slotKey}`] = buildSanitizedFeedItem(canonicalItem);
-    updates[`/users/${callerId}/SubRequests/${slotKey}`] = canonicalItem;
+
   });
 
   // 4. Write publication manifest
@@ -1763,13 +1758,8 @@ exports.respondToSubRequest = onCall({ region: 'europe-west1' }, async (request)
   updates[`SubRequests/${subRequestId}/Responses/${userId}`] = true;
   updates[`subRequestAudience/${subRequestId}/${userId}`] = true;
   updates[`users/${userId}/AppliedSubRequests/${subRequestId}`] = true;
-  updates[`BandEvents/SubRequestResponses/${subRequestId}/${userId}`] = {
-    userId: userId,
-    appliedAt: now,
-  };
 
   if (creatorId) {
-    updates[`users/${creatorId}/SubRequests/${subRequestId}/Responses/${userId}`] = true;
 
     let applicantName = 'A musician';
     try {
@@ -1822,7 +1812,6 @@ exports.respondToSubRequest = onCall({ region: 'europe-west1' }, async (request)
     };
 
     updates[`userNotifications/${creatorId}/${notifId}`] = notifData;
-    updates[`BandEvents/Notifications/${creatorId}/${notifId}`] = notifData;
 
     // Dispatch push notification to creator
     try {
@@ -1908,15 +1897,14 @@ exports.deleteSubRequest = onCall({ region: 'europe-west1' }, async (request) =>
   updates[`publicMapPinFeed/${subRequestId}`] = null;
   if (creatorId) {
     updates[`creatorSubRequestFeed/${creatorId}/${subRequestId}`] = null;
-    updates[`users/${creatorId}/SubRequests/${subRequestId}`] = null;
+
   }
   for (const rUid of recipientUids) {
     updates[`userSubRequestFeed/${rUid}/${subRequestId}`] = null;
   }
   updates[`subRequestAudience/${subRequestId}`] = null;
-  updates[`BandEvents/PublishedSubRequests/${subRequestId}`] = null;
-  updates[`BandEvents/CancelledSubRequests/${subRequestId}`] = null;
-  updates[`BandEvents/SubRequestResponses/${subRequestId}`] = null;
+
+
 
   await db.ref().update(updates);
 
@@ -1969,11 +1957,9 @@ exports.assignSubstitute = onCall({ region: 'europe-west1' }, async (request) =>
   // Candidate eligibility check: candidate must have applied/responded, be targeted, or invited
   const currentAssignedIdCheck = subReqData.AssignedUserId || subReqData.assignedUserId;
   const responsesSnap = await db.ref(`/SubRequests/${subRequestId}/Responses/${candidateUserId}`).once('value');
-  const legacyResponsesSnap = await db.ref(`/BandEvents/SubRequestResponses/${subRequestId}/${candidateUserId}`).once('value');
   const audienceSnapCheck = await db.ref(`/subRequestAudience/${subRequestId}/${candidateUserId}`).once('value');
   const extraTargetsCheck = Array.isArray(subReqData.TargetUserIds) ? subReqData.TargetUserIds : (Array.isArray(subReqData.targetUserIds) ? subReqData.targetUserIds : []);
   const isCandidateEligible = responsesSnap.exists() ||
-    legacyResponsesSnap.exists() ||
     audienceSnapCheck.exists() ||
     extraTargetsCheck.includes(candidateUserId) ||
     currentAssignedIdCheck === candidateUserId;
@@ -2081,20 +2067,9 @@ exports.assignSubstitute = onCall({ region: 'europe-west1' }, async (request) =>
 
   }
 
-  if (callerId) {
-    updates[`/users/${callerId}/SubRequests/${subRequestId}/IsSelected`] = true;
-    updates[`/users/${callerId}/SubRequests/${subRequestId}/Status`] = 'assigned';
-    updates[`/users/${callerId}/SubRequests/${subRequestId}/AssignedUserId`] = candidateUserId;
-    if (candidateName) {
-      updates[`/users/${callerId}/SubRequests/${subRequestId}/AssignedUserName`] = candidateName;
-    }
-    updates[`/users/${callerId}/SubRequests/${subRequestId}/AssignedAt`] = now;
-    updates[`/users/${callerId}/SubRequests/${subRequestId}/AssignedBy`] = callerId;
-  }
 
-  // Remove from public feed & legacy mirror so slot is no longer open
+  // Remove the public feed entry so the slot is no longer open
   updates[`/publicSubRequests/${subRequestId}`] = null;
-  updates[`/BandEvents/PublishedSubRequests/${subRequestId}`] = null;
 
   // Remove from userSubRequestFeed for all audience recipients
   const audienceSnap = await db.ref(`/subRequestAudience/${subRequestId}`).once('value');
@@ -2285,10 +2260,8 @@ exports.assignSubstitute = onCall({ region: 'europe-west1' }, async (request) =>
     bandId: targetBandId || null,
   };
 
-  // Retained legacy mirrors synchronized server-side from same canonical object
-  updates[`/BandEvents/Agreements/${conversationId}`] = agreementPayload;
-  updates[`/users/${actualCreatorId}/Agreements/${conversationId}`] = agreementPayload;
-  updates[`/users/${candidateUserId}/Agreements/${conversationId}`] = agreementPayload;
+
+
 
   if (Object.keys(updates).length > 0) {
     await db.ref().update(updates);
@@ -2403,12 +2376,11 @@ exports.revokeSubstituteAssignment = onCall({ region: 'europe-west1' }, async (r
 
   const actualCreatorId = creatorUserId || callerId;
   if (actualCreatorId) {
-    updates[`/users/${actualCreatorId}/SubRequests/${subRequestId}/IsSelected`] = false;
-    updates[`/users/${actualCreatorId}/SubRequests/${subRequestId}/Status`] = 'published';
-    updates[`/users/${actualCreatorId}/SubRequests/${subRequestId}/AssignedUserId`] = null;
-    updates[`/users/${actualCreatorId}/SubRequests/${subRequestId}/AssignedUserName`] = null;
-    updates[`/users/${actualCreatorId}/SubRequests/${subRequestId}/AssignedAt`] = null;
-    updates[`/users/${actualCreatorId}/SubRequests/${subRequestId}/AssignedBy`] = null;
+
+
+
+
+
 
     updates[`/creatorSubRequestFeed/${actualCreatorId}/${subRequestId}/isSelected`] = false;
     updates[`/creatorSubRequestFeed/${actualCreatorId}/${subRequestId}/status`] = 'published';
@@ -3311,9 +3283,7 @@ exports.createAgreementConversation = onCall({ region: 'europe-west1' }, async (
     bandId: targetBandId || null,
   };
 
-  atomicUpdates[`/BandEvents/Agreements/${conversationId}`] = agreementPayload;
-  atomicUpdates[`/users/${creatorUid}/Agreements/${conversationId}`] = agreementPayload;
-  atomicUpdates[`/users/${applicantId}/Agreements/${conversationId}`] = agreementPayload;
+
 
   await admin.database().ref().update(atomicUpdates);
 
@@ -4334,8 +4304,8 @@ async function handleBandMemberChange(event) {
     const afterExists = event.data.after.exists();
     const memberData = afterExists ? event.data.after.val() : null;
 
-    if (!afterExists) {
-      // 1. Member was removed from band
+    if (!afterExists || !require('./band_membership_index').validMember(memberData)) {
+      // 1. Removed or inactive membership cannot retain private conversation indices.
       // Strictly scoped removal: use mapEventProjectionIndex to remove ONLY projections for this band's events
       try {
         const bandSnap = await db.ref(`/Bands/${bandId}`).once('value');
@@ -5165,8 +5135,7 @@ exports.deleteUserAccount = onCall({ region: 'europe-west1' }, async (request) =
   try {
     // Discovery references are candidates only. Every departure checks the canonical band.
     const indexed = (await db.ref(`userBandMembershipIndex/${callerUid}`).get()).val() || {};
-    const legacy = (await db.ref(`users/${callerUid}/Bands`).get()).val() || {};
-    for (const bandId of new Set([...Object.keys(indexed),...Object.keys(legacy)])) {
+    for (const bandId of Object.keys(indexed)) {
       if (!(await db.ref(`Bands/${bandId}/Members_band/${callerUid}`).get()).exists()) {
         await require('./band_membership_index').reconcileMembershipIndex(db,bandId,callerUid);
         continue;
@@ -5208,6 +5177,7 @@ exports.deleteUserAccount = onCall({ region: 'europe-west1' }, async (request) =
         const s = sessions[sId];
         if (s && (s.CreatorId === callerUid || s.creatorId === callerUid)) {
           collabUpdates[`/Collabs/Sessions/${sId}`] = null;
+          collabUpdates[`/Collabs/SessionResponses/${sId}`] = null;
           collabUpdates[`/Collabs/Applications/${sId}`] = null;
         }
       });
@@ -5297,7 +5267,7 @@ exports.deleteBand = onCall({ region: 'europe-west1' }, async (request) => {
 
     // 1. Remove band from each member's user profile
     for (const memberId of memberIds) {
-      updates[`/users/${memberId}/Bands/${trimmedBandId}`] = null;
+
     }
 
     // Clean up private event projections for all members of deleted band
@@ -5818,7 +5788,7 @@ const {
  * Server-owned Cloud Function callable to securely delete an existing Map Pin.
  * Requires authenticated caller, validates pin ID, verifies NotificationMode == 'map_pin',
  * enforces authorization (creator or band leader/admin), and atomically removes
- * canonical record and legacy copies via a root multi-location update.
+ * canonical record and supported projection via a root multi-location update.
  */
 exports.deleteMapPin = onCall({ region: 'europe-west1' }, async (request) => {
   const callerUid = request.auth?.uid;
@@ -5839,21 +5809,10 @@ exports.deleteMapPin = onCall({ region: 'europe-west1' }, async (request) => {
   const snap = await pinRef.get();
   if (snap.exists()) {
     existing = snap.val() || {};
-  } else {
-    // Canonical record is missing. Check legacy mirrors for backward compatibility.
-    const pubSnap = await db.ref(`BandEvents/PublishedSubRequests/${pinId}`).get();
-    if (pubSnap.exists()) {
-      existing = pubSnap.val() || {};
-    } else {
-      const userSnap = await db.ref(`users/${callerUid}/SubRequests/${pinId}`).get();
-      if (userSnap.exists()) {
-        existing = userSnap.val() || {};
-      }
-    }
   }
 
   if (!existing) {
-    // Idempotent: return success if pin is already absent from canonical and legacy paths
+    // Idempotent: canonical absence is sufficient; obsolete stores are not consulted.
     return {
       success: true,
       id: pinId,
@@ -5882,15 +5841,11 @@ exports.deleteMapPin = onCall({ region: 'europe-west1' }, async (request) => {
     throw new HttpsError('permission-denied', 'Only the pin creator or band leader may delete this pin.');
   }
 
-  // Atomically delete canonical pin, publicMapPinFeed projection, and backward-compatibility legacy copies
+  // Atomically delete the canonical pin and its supported public projection.
   const updates = {};
   updates[`SubRequests/${pinId}`] = null;
   updates[`publicMapPinFeed/${pinId}`] = null;
-  updates[`BandEvents/PublishedSubRequests/${pinId}`] = null;
-  if (creatorUid) {
-    updates[`users/${creatorUid}/SubRequests/${pinId}`] = null;
-  }
-  updates[`users/${callerUid}/SubRequests/${pinId}`] = null;
+
 
   await db.ref().update(updates);
 

@@ -28,7 +28,71 @@ import '../utils/secondary_skills_utils.dart';
 import '../utils/band_membership_policy.dart';
 import '../utils/catalogue_profiles.dart';
 
+class PrivateDataAccessException implements Exception {
+  const PrivateDataAccessException();
+  @override
+  String toString() => 'This information is unavailable for your current access.';
+}
+
 class FirebaseService {
+  void _rethrowAccessDenied(Object error) {
+    if (error is PrivateDataAccessException) throw error;
+    if (error is FirebaseException &&
+        {'permission-denied', 'permission_denied', 'unauthenticated'}.contains(error.code.toLowerCase())) {
+      throw const PrivateDataAccessException();
+    }
+  }
+
+  Future<T> _forCurrentSession<T>(Future<T> Function() operation) async {
+    final uid = currentUserId;
+    var stale = false;
+    final subscription = catalogueIdentityChanges.listen((next) {
+      if (next != uid) stale = true;
+    });
+    try {
+      final result = await operation();
+      if (stale || uid != currentUserId) throw const PrivateDataAccessException();
+      return result;
+    } catch (error) {
+      _rethrowAccessDenied(error);
+      rethrow;
+    } finally {
+      await subscription.cancel();
+    }
+  }
+
+  Stream<T> _sessionStream<T>(Stream<T> source, T clearedValue) {
+    final uid = currentUserId;
+    late StreamController<T> controller;
+    StreamSubscription<T>? dataSubscription;
+    StreamSubscription<String?>? identitySubscription;
+    var stopped = false;
+    void fail() {
+      if (stopped || controller.isClosed) return;
+      stopped = true;
+      controller.add(clearedValue);
+      controller.addError(const PrivateDataAccessException());
+      unawaited(dataSubscription?.cancel());
+      unawaited(identitySubscription?.cancel());
+      unawaited(controller.close());
+    }
+    controller = StreamController<T>(onListen: () {
+      identitySubscription = catalogueIdentityChanges.listen((next) {
+        if (next != uid) fail();
+      });
+      dataSubscription = source.listen((value) {
+        if (stopped) return;
+        if (uid != currentUserId) { fail(); return; }
+        controller.add(value);
+      }, onError: (Object error) => fail());
+    }, onCancel: () async {
+      stopped = true;
+      await dataSubscription?.cancel();
+      await identitySubscription?.cancel();
+    });
+    return controller.stream;
+  }
+
   // Optional read-only adapter for deterministic membership path tests.
   // Production callers use the existing authenticated RTDB reference.
   final Future<Object?> Function(String path)? _membershipRead;
@@ -125,10 +189,10 @@ class FirebaseService {
       );
 
       await saveUserProfileAsync(trimmedUid, profile);
-    } catch (e) {
+    } catch (e) { _rethrowAccessDenied(e);
       try {
         await newAuthUser?.delete();
-      } catch (deleteError) {
+      } catch (deleteError) { _rethrowAccessDenied(deleteError);
         await _auth.signOut();
         throw Exception(
           'Registration failed during profile setup ($e). '
@@ -281,15 +345,20 @@ class FirebaseService {
     return CatalogueProfiles.band(bandId, await _readPublicCatalogue('publicBandProfiles/$bandId'));
   }
 
-  Future<UserProfile?> getUserProfileAsync([String? userId]) async {
+  Future<UserProfile?> getUserProfileAsync([String? userId]) => _forCurrentSession(() async {
     final targetId = userId ?? currentUserId;
     if (targetId == null) return null;
     if (targetId != currentUserId) return getPublicUserProfileAsync(targetId);
-    final snapshot = await _dbRef('users/$targetId').get();
+    const fields = ['info', 'UserType', 'Nickname', 'DisplayName'];
+    final snapshots = await Future.wait(fields.map((field) =>
+        _dbRef('users/$targetId/$field').get()));
     if (targetId != currentUserId) throw StateError('Your session changed.');
-    if (snapshot.exists && snapshot.value is Map) return UserProfile.fromJson(snapshot.value as Map, targetId);
-    return null;
-  }
+    final data = <String, dynamic>{};
+    for (var i = 0; i < fields.length; i++) {
+      if (snapshots[i].exists) data[fields[i]] = snapshots[i].value;
+    }
+    return data.isEmpty ? null : UserProfile.fromJson(data, targetId);
+  });
 
   // Compatibility entry points for all existing discovery/picker consumers.
   Future<List<UserProfile>> getAllUsersAsync() => getPublicUserProfilesAsync();
@@ -320,7 +389,7 @@ class FirebaseService {
       final snapshot = await uploadTask;
       final url = await snapshot.ref.getDownloadURL();
       return url;
-    } catch (e) {
+    } catch (e) { _rethrowAccessDenied(e);
       print("[FirebaseService] Error uploading audio snippet: $e");
       rethrow;
     }
@@ -351,7 +420,7 @@ class FirebaseService {
       final snapshot = await uploadTask;
       final url = await snapshot.ref.getDownloadURL();
       return url;
-    } catch (e) {
+    } catch (e) { _rethrowAccessDenied(e);
       print("[FirebaseService] Error uploading profile picture: $e");
       rethrow;
     }
@@ -409,6 +478,28 @@ class FirebaseService {
   }
 
   Future<Band?> getBandInfoAsync(String bandId) async {
+    final uid = currentUserId;
+    if (uid == null) throw StateError('Sign in to view bands.');
+    if (!CatalogueProfiles.validId(bandId)) return null;
+    var stale = false;
+    final subscription = catalogueIdentityChanges.listen((next) {
+      if (next != uid) stale = true;
+    });
+    Future<Object?> read(String path) async {
+      final value = _membershipRead != null
+          ? await _membershipRead(path)
+          : (await _dbRef(path).get()).value;
+      if (stale || currentUserId != uid) throw StateError('Your session changed.');
+      return value;
+    }
+    try {
+    final membership = await read('Bands/$bandId/Members_band/$uid');
+    if (membership is! Map || !BandMembershipPolicy.isValidStatus(
+        membership['Status'] ?? membership['status'])) {
+      final band = await getPublicBandProfileAsync(bandId);
+      if (stale || currentUserId != uid) throw StateError('Your session changed.');
+      return band;
+    }
     // Band metadata and roster are read as exact leaves. A whole-band read
     // would also transfer every canonical Event and its private descendants.
     const fields = [
@@ -419,14 +510,20 @@ class FirebaseService {
       'Style_band','Style','Level','Address','Contact','Members','History',
       'ConcertsProjects',
     ];
-    final snapshots = await Future.wait(fields.map((field) =>
-        _dbRef('Bands/$bandId/$field').get()));
+    final values = await Future.wait(fields.map((field) => read('Bands/$bandId/$field')));
     final data = <String, dynamic>{};
     for (var index = 0; index < fields.length; index++) {
-      if (snapshots[index].exists) data[fields[index]] = snapshots[index].value;
+      if (values[index] != null) data[fields[index]] = values[index];
     }
     return data.isEmpty ? null : Band.fromJson(data, bandId);
+    } finally {
+      await subscription.cancel();
+    }
   }
+
+  Stream<bool> subscribeToBandProfileAccess(String bandId) => _sessionStream(
+    _dbRef('Bands/$bandId/Members_band').onValue.map((_) => true), false,
+  );
 
   /// One server-owned mutation; production never falls back to protected RTDB writes.
   Future<void> mutateBandMembershipAsync(Map<String, dynamic> payload) async {
@@ -500,7 +597,7 @@ class FirebaseService {
       });
   }
 
-  Future<List<BandMember>> getBandMembersAsync(String bandId) async {
+  Future<List<BandMember>> getBandMembersAsync(String bandId) => _forCurrentSession(() async {
     final snapshot = await _dbRef('Bands/$bandId/Members_band').get();
     final List<BandMember> members = [];
     if (snapshot.exists && snapshot.value is Map) {
@@ -520,7 +617,7 @@ class FirebaseService {
       });
     }
     return members;
-  }
+  });
 
   // ==========================================
   // 5. Substitute Requests
@@ -609,7 +706,7 @@ class FirebaseService {
       }
       final pinPayload = resData['pin'] is Map ? Map<dynamic, dynamic>.from(resData['pin'] as Map) : <dynamic, dynamic>{};
       return SubRequest.fromJson(pinPayload, pinId);
-    } catch (e) {
+    } catch (e) { _rethrowAccessDenied(e);
       debugPrint('[FirebaseService] Error creating Map Pin via createMapPin: $e');
       rethrow;
     }
@@ -646,7 +743,7 @@ class FirebaseService {
       final resData = result.data is Map ? Map<dynamic, dynamic>.from(result.data as Map) : <dynamic, dynamic>{};
       final pinPayload = resData['pin'] is Map ? Map<dynamic, dynamic>.from(resData['pin'] as Map) : <dynamic, dynamic>{};
       return SubRequest.fromJson(pinPayload, pinId);
-    } catch (e) {
+    } catch (e) { _rethrowAccessDenied(e);
       debugPrint('[FirebaseService] Error updating Map Pin via updateMapPin: $e');
       rethrow;
     }
@@ -662,13 +759,13 @@ class FirebaseService {
       final result = await callable.call({'id': pinId});
       final resData = result.data is Map ? Map<dynamic, dynamic>.from(result.data as Map) : <dynamic, dynamic>{};
       return resData['success'] == true;
-    } catch (e) {
+    } catch (e) { _rethrowAccessDenied(e);
       debugPrint('[FirebaseService] Error deleting Map Pin via deleteMapPin: $e');
       rethrow;
     }
   }
 
-  Future<List<SubRequest>> getUserSubRequestFeedAsync() async {
+  Future<List<SubRequest>> getUserSubRequestFeedAsync() => _forCurrentSession(() async {
     final selfId = currentUserId;
     if (selfId == null) return [];
 
@@ -685,7 +782,7 @@ class FirebaseService {
           combined[id] = r;
         }
       }
-    } catch (e) {
+    } catch (e) { _rethrowAccessDenied(e);
       debugPrint('[FirebaseService] Error loading all subrequests: $e');
     }
 
@@ -706,14 +803,14 @@ class FirebaseService {
           }
         }
       }
-    } catch (e) {
+    } catch (e) { _rethrowAccessDenied(e);
       debugPrint('[FirebaseService] Error loading userSubRequestFeed: $e');
     }
 
     return combined.values.toList();
-  }
+  });
 
-  Future<List<SubRequest>> getAllSubRequestsAsync() async {
+  Future<List<SubRequest>> getAllSubRequestsAsync() => _forCurrentSession(() async {
     final List<SubRequest> requests = [];
     final selfId = currentUserId;
     final Set<String> seenIds = {};
@@ -740,7 +837,7 @@ class FirebaseService {
           }
         });
       }
-    } catch (e) {
+    } catch (e) { _rethrowAccessDenied(e);
       debugPrint('[FirebaseService] Error reading publicSubRequests: $e');
     }
 
@@ -756,7 +853,7 @@ class FirebaseService {
             }
           });
         }
-      } catch (e) {
+      } catch (e) { _rethrowAccessDenied(e);
         debugPrint('[FirebaseService] Error reading userSubRequestFeed: $e');
       }
 
@@ -771,13 +868,13 @@ class FirebaseService {
             }
           });
         }
-      } catch (e) {
+      } catch (e) { _rethrowAccessDenied(e);
         debugPrint('[FirebaseService] Error reading creatorSubRequestFeed: $e');
       }
     }
 
     return requests;
-  }
+  });
 
   /// Real-time stream of merged, deduplicated, authorized SubRequests for Map View and feeds.
   /// Exactly one listener per authorized feed.
@@ -829,13 +926,13 @@ class FirebaseService {
               if (v is Map) {
                 try {
                   publicMap[k.toString()] = SubRequest.fromJson(v, k.toString());
-                } catch (_) {}
+                } catch (accessError) { _rethrowAccessDenied(accessError);}
               }
             });
           }
           emitMerged();
         }, onError: (e) {
-          debugPrint('[FirebaseService] publicSubRequests stream error: $e');
+          controller.addError(const PrivateDataAccessException());
         });
 
         if (selfId != null && selfId.isNotEmpty) {
@@ -846,13 +943,13 @@ class FirebaseService {
                 if (v is Map) {
                   try {
                     userMap[k.toString()] = SubRequest.fromJson(v, k.toString());
-                  } catch (_) {}
+                  } catch (accessError) { _rethrowAccessDenied(accessError);}
                 }
               });
             }
             emitMerged();
           }, onError: (e) {
-            debugPrint('[FirebaseService] userSubRequestFeed stream error: $e');
+            controller.addError(const PrivateDataAccessException());
           });
 
           creatorSub = _dbRef('creatorSubRequestFeed/' + selfId).onValue.listen((event) {
@@ -862,13 +959,13 @@ class FirebaseService {
                 if (v is Map) {
                   try {
                     creatorMap[k.toString()] = SubRequest.fromJson(v, k.toString());
-                  } catch (_) {}
+                  } catch (accessError) { _rethrowAccessDenied(accessError);}
                 }
               });
             }
             emitMerged();
           }, onError: (e) {
-            debugPrint('[FirebaseService] creatorSubRequestFeed stream error: $e');
+            controller.addError(const PrivateDataAccessException());
           });
         }
       },
@@ -885,7 +982,7 @@ class FirebaseService {
       },
     );
 
-    return controller.stream;
+    return _sessionStream(controller.stream, <SubRequest>[]);
   }
 
 
@@ -916,7 +1013,7 @@ class FirebaseService {
                   if (status != 'cancelled' && status != 'deleted' && status != 'closed') {
                     pinMap[k.toString()] = SubRequest.fromJson(v, k.toString());
                   }
-                } catch (_) {}
+                } catch (accessError) { _rethrowAccessDenied(accessError);}
               }
             });
           }
@@ -982,7 +1079,7 @@ class FirebaseService {
               if (v is Map) {
                 try {
                   publicMap[k.toString()] = MapEventItem.fromJson(v, k.toString());
-                } catch (_) {}
+                } catch (accessError) { _rethrowAccessDenied(accessError);}
               }
             });
           }
@@ -1000,7 +1097,7 @@ class FirebaseService {
                 if (v is Map) {
                   try {
                     userMap[k.toString()] = MapEventItem.fromJson(v, k.toString());
-                  } catch (_) {}
+                  } catch (accessError) { _rethrowAccessDenied(accessError);}
                 }
               });
             }
@@ -1024,7 +1121,7 @@ class FirebaseService {
   }
 
 
-  Future<List<SubRequest>> getUserSubRequestsAsync(String userId) async {
+  Future<List<SubRequest>> getUserSubRequestsAsync(String userId) => _forCurrentSession(() async {
     final List<SubRequest> requests = [];
     final selfId = currentUserId;
 
@@ -1042,7 +1139,7 @@ class FirebaseService {
             }
           });
         }
-      } catch (e) {
+      } catch (e) { _rethrowAccessDenied(e);
         debugPrint("[FirebaseService] Error loading creatorSubRequestFeed/$userId: $e");
       }
     } else {
@@ -1052,7 +1149,7 @@ class FirebaseService {
     }
 
     return requests;
-  }
+  });
 
   Future<List<SubRequest>> getSubRequestsForEventAsync(
     String bandId,
@@ -1073,82 +1170,10 @@ class FirebaseService {
   }
 
   Future<List<String>> saveSubRequestsBatchAsync(List<SubRequest> requests) async {
-    final currentUserId = _auth.currentUser?.uid;
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final List<String> createdIds = [];
-
-    for (final req in requests) {
-      final cleanBandId = req.bandId != null ? _sanitizeRtdbKey(req.bandId!) : (currentUserId != null ? _sanitizeRtdbKey(currentUserId) : 'band');
-      final cleanEventId = req.eventId != null ? _sanitizeRtdbKey(req.eventId!) : 'standalone';
-      final cleanSlotId = req.slotId != null ? _sanitizeRtdbKey(req.slotId!) : '${DateTime.now().millisecondsSinceEpoch}';
-
-      final key = (req.subRequestId != null &&
-              req.subRequestId!.isNotEmpty &&
-              !req.subRequestId!.startsWith('slot_') &&
-              !req.subRequestId!.startsWith('initial_') &&
-              !req.subRequestId!.startsWith('draft_'))
-          ? req.subRequestId!
-          : 'sub_${cleanBandId}_${cleanEventId}_${cleanSlotId}_$now';
-
-      createdIds.add(key);
-
-      final updated = req.copyWith(
-        id: key,
-        subRequestId: key,
-        slotId: req.slotId ?? key,
-        creatorUserId: currentUserId,
-        userId: currentUserId,
-        createdAt: req.createdAt ?? now,
-        status: 'published',
-      );
-
-      final json = updated.toJson();
-
-
-
-      // 2. Direct write to user's personal /users/$currentUserId/SubRequests/$key
-      if (currentUserId != null) {
-        try {
-          await _dbRef('users/$currentUserId/SubRequests/$key').set(json);
-          if (updated.requestGroupId != null && updated.requestGroupId!.isNotEmpty) {
-          }
-        } catch (e) {
-          debugPrint('[FirebaseService] Error saving users/$currentUserId/SubRequests/$key: $e');
-        }
-      }
-
-      // 3. Direct write to canonical /SubRequests/$key (best-effort)
-      try {
-        await _dbRef('SubRequests/$key').set(json);
-      } catch (e) {
-        debugPrint('[FirebaseService] Error saving SubRequests/$key: $e');
-      }
-
-      // 4. Optional invitee tracking (non-blocking for permission boundaries)
-      if (req.bandId != null && req.eventId != null) {
-        final targets = req.targetUserIds;
-        if (targets != null && targets.isNotEmpty) {
-          for (final targetId in targets) {
-            try {
-              await _dbRef(
-                'Bands/${req.bandId}/Events/${req.eventId}/externalInvitees/$targetId',
-              ).set({
-                'userId': targetId,
-                'status': 'pending',
-                'instrument': req.voicePart,
-                'invitedAt': now,
-                'source': 'subRequest',
-                'subRequestId': key,
-              });
-            } catch (e) {
-              debugPrint('[FirebaseService] Notice: could not record externalInvitee: $e');
-            }
-          }
-        }
-      }
-    }
-
-    return createdIds;
+    if (requests.isEmpty) return [];
+    final groupId = requests.first.requestGroupId ?? _dbRef('SubRequests').push().key!;
+    return publishSubRequestGroupAsync(bandId: requests.first.bandId,
+      requestGroupId: groupId, requests: requests);
   }
 
   Future<List<String>> publishSubRequestGroupAsync({
@@ -1235,7 +1260,7 @@ class FirebaseService {
       });
       final convId = result.data['conversationId']?.toString() ?? '';
       _lastAssignedAgreementConversationId = convId.isNotEmpty ? convId : null;
-    } on FirebaseFunctionsException catch (e) {
+    } on FirebaseFunctionsException catch (e) { _rethrowAccessDenied(e);
       if (e.code == 'already-exists') {
         throw StateError('Assignment conflict: Slot $subRequestId has already been assigned to another candidate.');
       }
@@ -1263,19 +1288,17 @@ class FirebaseService {
     });
   }
 
-  Future<Set<String>> getUserAppliedSubRequestIdsAsync(String userId) async {
+  Future<Set<String>> getUserAppliedSubRequestIdsAsync(String userId) => _forCurrentSession(() async {
     final uid = userId.trim();
-    if (uid.isEmpty) return {};
-    try {
-      final snap = await _dbRef('users/$uid/AppliedSubRequests').get();
-      if (snap.exists && snap.value is Map) {
-        return (snap.value as Map).keys.map((k) => k.toString()).toSet();
-      }
-    } catch (e) {
-      debugPrint('[FirebaseService] Error loading AppliedSubRequests: $e');
+    if (uid.isEmpty || uid != currentUserId) {
+      throw StateError('Sign in to view your applications.');
     }
-    return {};
-  }
+    final snap = await _dbRef('users/$uid/AppliedSubRequests').get();
+    if (uid != currentUserId) throw StateError('Your session changed.');
+    return snap.value is Map
+        ? (snap.value as Map).keys.map((k) => k.toString()).toSet()
+        : {};
+  });
 
   /// One-shot lookup of the current user's applied state for the specific subRequestIds
   /// shown in an opened Map View details card.
@@ -1283,7 +1306,7 @@ class FirebaseService {
   Future<Set<String>> resolveAppliedSubRequestIdsForCardAsync({
     required String userId,
     required Iterable<String> subRequestIds,
-  }) async {
+  }) => _forCurrentSession(() async {
     final uid = userId.trim();
     final targetIds = subRequestIds
         .map((id) => id.trim())
@@ -1294,42 +1317,28 @@ class FirebaseService {
     final resolved = <String>{};
 
     // 1. Check user's own AppliedSubRequests map via getUserAppliedSubRequestIdsAsync
-    try {
-      final userApplied = await getUserAppliedSubRequestIdsAsync(uid);
-      for (final id in targetIds) {
-        if (userApplied.contains(id)) {
-          resolved.add(id);
-        }
+    final userApplied = await getUserAppliedSubRequestIdsAsync(uid);
+    for (final id in targetIds) {
+      if (userApplied.contains(id)) {
+        resolved.add(id);
       }
-    } catch (_) {}
+    }
 
     // 2. For any remaining IDs, check the user's own authorized leaf SubRequests/$id/Responses/$uid
     final remaining = targetIds.difference(resolved);
     for (final id in remaining) {
-      try {
         final leafSnap = await _dbRef('SubRequests/$id/Responses/$uid').get();
+        if (uid != currentUserId) throw StateError('Your session changed.');
         if (leafSnap.exists &&
             (leafSnap.value == true ||
                 leafSnap.value == 'true' ||
                 leafSnap.value is Map)) {
           resolved.add(id);
         }
-      } catch (_) {}
-    }
-
-    // 3. For any still-remaining IDs, check BandEvents/SubRequestResponses/$id/$uid
-    final stillRemaining = targetIds.difference(resolved);
-    for (final id in stillRemaining) {
-      try {
-        final legacySnap = await _dbRef('BandEvents/SubRequestResponses/$id/$uid').get();
-        if (legacySnap.exists && legacySnap.value != null) {
-          resolved.add(id);
-        }
-      } catch (_) {}
     }
 
     return resolved;
-  }
+  });
 
   /// One-shot check whether [userId] is a Leader or Admin of [bandId].
   Future<bool> isBandLeaderOrAdminAsync(String bandId, String userId) async {
@@ -1347,327 +1356,63 @@ class FirebaseService {
       return currentUserId == uid &&
           raw is Map &&
           BandMembershipPolicy.canManageMember(BandMember.fromJson(raw, uid));
-    } catch (_) {
+    } catch (accessError) { _rethrowAccessDenied(accessError);
       return false;
     }
   }
 
-  Future<void> addResponseToSubRequestAsync(
-    String subRequestId,
-    String userId,
-  ) async {
-    final cleanSubId = subRequestId.trim();
-    final cleanUserId = userId.trim();
-    if (cleanSubId.isEmpty) {
-      throw ArgumentError('subRequestId is required.');
-    }
-    if (cleanUserId.isEmpty) {
-      throw FirebaseFunctionsException(
-        code: 'unauthenticated',
-        message: 'User must be authenticated.',
-      );
-    }
-
-    // 0. Prevent replying to own subrequest before invoking backend
-    try {
-      final sub = await getSubRequestAsync(cleanSubId);
-      final creatorId = sub?.creatorUserId ?? sub?.userId;
-      if (creatorId != null && creatorId.isNotEmpty && creatorId == cleanUserId) {
-        throw Exception('You cannot respond to your own substitute request.');
-      }
-    } catch (e) {
-      if (e.toString().contains('cannot respond to your own substitute request')) {
-        rethrow;
-      }
-    }
-
-    final now = DateTime.now().millisecondsSinceEpoch;
-
-    // 1. Direct persistent writes permitted by security rules
-    try {
-      await _dbRef('users/$cleanUserId/AppliedSubRequests/$cleanSubId').set(true);
-    } catch (e) {
-      debugPrint('[FirebaseService] Write users/$cleanUserId/AppliedSubRequests notice: $e');
-    }
-
-    try {
-      await _dbRef('SubRequests/$cleanSubId/Responses/$cleanUserId').set(true);
-    } catch (e) {
-      debugPrint('[FirebaseService] Direct RTDB write for response notice: $e');
-    }
-
-    try {
-      await _dbRef('BandEvents/SubRequestResponses/$cleanSubId/$cleanUserId').set({
-        'userId': cleanUserId,
-        'appliedAt': now,
-      });
-    } catch (e) {
-      debugPrint('[FirebaseService] Write BandEvents/SubRequestResponses notice: $e');
-    }
-
-    // 2. Authoritative server-side Cloud Function callable respondToSubRequest (best-effort)
-    try {
-      final callable = _functions.httpsCallable('respondToSubRequest');
-      await callable.call({
-        'subRequestId': cleanSubId,
-      });
-    } on FirebaseFunctionsException catch (e) {
-      if (e.code != 'already-exists') {
-        debugPrint('[FirebaseService] Cloud Function respondToSubRequest notice: $e');
-      }
-    } catch (e) {
-      debugPrint('[FirebaseService] Cloud Function respondToSubRequest notice: $e');
-    }
-
-    // 3. Also record in creator's personal SubRequests if found (best-effort)
-    SubRequest? effectiveSubRequest;
-    try {
-      effectiveSubRequest = await getSubRequestAsync(cleanSubId);
-      final creatorId = effectiveSubRequest?.creatorUserId ?? effectiveSubRequest?.userId;
-      if (creatorId != null && creatorId.toString().isNotEmpty) {
-        try {
-          await _dbRef('users/$creatorId/SubRequests/$cleanSubId/Responses/$cleanUserId').set(true);
-        } catch (_) {}
-      }
-    } catch (_) {}
-
-    // 4. Optional event invitee linking (non-blocking for permission boundaries)
-    try {
-      if (effectiveSubRequest != null) {
-        final bandId = effectiveSubRequest.bandId;
-        final eventId = effectiveSubRequest.eventId;
-        if (bandId != null &&
-            eventId != null &&
-            bandId.isNotEmpty &&
-            eventId.isNotEmpty) {
-          final profile = await getUserProfileAsync(cleanUserId);
-          final invitee = ExternalInvitee(
-            userId: cleanUserId,
-            status: 'pending',
-            instrument: profile?.instruments.isNotEmpty == true
-                ? profile?.instruments.first
-                : profile?.userType,
-            invitedAt: now,
-            source: 'subRequest',
-            subRequestId: cleanSubId,
-            displayName: profile?.displayName ?? profile?.nickname,
-          );
-          try {
-            await _dbRef(
-              'Bands/$bandId/Events/$eventId/externalInvitees/$cleanUserId',
-            ).set(invitee.toJson());
-            await _dbRef(
-              'Bands/$bandId/Events/$eventId/updatedAt',
-            ).set(now);
-          } catch (e) {
-            debugPrint('[FirebaseService] External invitee linking skipped: $e');
-          }
-        }
-      }
-    } catch (e) {
-      debugPrint("[FirebaseService] Error in addResponseToSubRequestAsync linking event: $e");
-    }
-
-    // 5. Insert real-time notification for the subrequest creator
-    try {
-      final subRequest = effectiveSubRequest ?? await getSubRequestAsync(cleanSubId);
-
-      final creatorId = subRequest?.creatorUserId ?? subRequest?.userId;
-      if (creatorId != null && creatorId.isNotEmpty && creatorId != cleanUserId) {
-        final applicantProfile = await getUserProfileAsync(cleanUserId);
-        final applicantName = applicantProfile?.displayName ?? applicantProfile?.nickname ?? 'A musician';
-        final role = subRequest?.role ?? subRequest?.voicePart ?? 'Musician';
-        final bandName = subRequest?.bandName ?? 'Band';
-        final eventType = subRequest?.role ?? subRequest?.requestType ?? 'Gig';
-        final dateStr = subRequest?.date ?? '';
-        final timeStr = subRequest?.formattedTimeRange ?? subRequest?.startTime ?? '';
-        final dateTimeStr = (dateStr.isNotEmpty && timeStr.isNotEmpty)
-            ? '$dateStr $timeStr'
-            : (dateStr.isNotEmpty ? dateStr : (timeStr.isNotEmpty ? timeStr : 'Date & Time TBD'));
-        final notifId = 'notif_sub_resp_${cleanSubId}_$cleanUserId';
-        final notifMap = {
-          'id': notifId,
-          'type': 'sub_request_response',
-          'category': 'requests',
-          'title': 'Gig Request Response',
-          'body': '$bandName\n$eventType\n$dateTimeStr',
-          'createdAt': DateTime.now().millisecondsSinceEpoch,
-          'isRead': false,
-          'data': {
-            'subRequestId': cleanSubId,
-            'applicantId': cleanUserId,
-            'applicantName': applicantName,
-            'bandId': subRequest?.bandId ?? '',
-            'eventId': subRequest?.eventId ?? '',
-            'voicePart': role,
-            'bandName': bandName,
-            'eventType': eventType,
-            'dateTime': dateTimeStr,
-          },
-        };
-
-        try {
-          await _dbRef('BandEvents/Notifications/$creatorId/$notifId').set(notifMap);
-        } catch (e) {
-          debugPrint('[FirebaseService] Write BandEvents/Notifications error: $e');
-        }
-
-        try {
-          await _dbRef('userNotifications/$creatorId/$notifId').set(notifMap);
-        } catch (_) {}
-      }
-    } catch (notifErr) {
-      debugPrint('[FirebaseService] Notification dispatch notice: $notifErr');
-    }
+  Future<void> addResponseToSubRequestAsync(String subRequestId, String userId) async {
+    final uid = currentUserId;
+    if (uid == null || uid != userId) throw StateError('Sign in to respond.');
+    await _functions.httpsCallable('respondToSubRequest').call({'subRequestId': subRequestId});
+    if (currentUserId != uid) throw StateError('Your session changed.');
   }
 
-  Future<SubRequest?> getSubRequestAsync(String subRequestId) async {
-    // 1. Check canonical SubRequests
-    try {
-      final snapshot = await _dbRef('SubRequests/$subRequestId').get();
-      if (snapshot.exists && snapshot.value is Map) {
-        final req = SubRequest.fromJson(snapshot.value as Map, subRequestId);
-        final st = req.status.toLowerCase();
-        if (st != 'cancelled' && st != 'deleted') {
-          return req;
-        }
+  Future<SubRequest?> getSubRequestAsync(String subRequestId) => _forCurrentSession(() async {
+    final uid = currentUserId;
+    if (uid == null) throw StateError('Sign in to view requests.');
+    for (final path in ['creatorSubRequestFeed/$uid/$subRequestId',
+      'userSubRequestFeed/$uid/$subRequestId', 'publicSubRequests/$subRequestId',
+      'publicMapPinFeed/$subRequestId', 'SubRequests/$subRequestId']) {
+      final snapshot = await _dbRef(path).get();
+      if (currentUserId != uid) throw StateError('Your session changed.');
+      if (snapshot.value is Map) {
+        final request = SubRequest.fromJson(snapshot.value as Map, subRequestId);
+        return {'cancelled', 'deleted'}.contains(request.status.toLowerCase()) ? null : request;
       }
-    } catch (_) {}
-
-    // 2. Check publicSubRequests
-    try {
-      final pubSnap = await _dbRef('publicSubRequests/$subRequestId').get();
-      if (pubSnap.exists && pubSnap.value is Map) {
-        final req = SubRequest.fromJson(pubSnap.value as Map, subRequestId);
-        final st = req.status.toLowerCase();
-        if (st != 'cancelled' && st != 'deleted') {
-          return req;
-        }
-      }
-    } catch (_) {}
-
-    // 3. Check current user feeds
-    if (currentUserId != null) {
-      try {
-        final feedSnap = await _dbRef('userSubRequestFeed/$currentUserId/$subRequestId').get();
-        if (feedSnap.exists && feedSnap.value is Map) {
-          final req = SubRequest.fromJson(feedSnap.value as Map, subRequestId);
-          final st = req.status.toLowerCase();
-          if (st != 'cancelled' && st != 'deleted') {
-            return req;
-          }
-        }
-      } catch (_) {}
-
-      try {
-        final creatorSnap = await _dbRef('creatorSubRequestFeed/$currentUserId/$subRequestId').get();
-        if (creatorSnap.exists && creatorSnap.value is Map) {
-          final req = SubRequest.fromJson(creatorSnap.value as Map, subRequestId);
-          final st = req.status.toLowerCase();
-          if (st != 'cancelled' && st != 'deleted') {
-            return req;
-          }
-        }
-      } catch (_) {}
     }
-
-    // 4. Check publicMapPinFeed
-    try {
-      final pinSnap = await _dbRef('publicMapPinFeed/$subRequestId').get();
-      if (pinSnap.exists && pinSnap.value is Map) {
-        final req = SubRequest.fromJson(pinSnap.value as Map, subRequestId);
-        final st = req.status.toLowerCase();
-        if (st != 'cancelled' && st != 'deleted') {
-          return req;
-        }
-      }
-    } catch (_) {}
-
     return null;
-  }
+  });
 
   Future<bool> deleteSubRequestAsync(
     String creatorId,
     String subRequestId,
   ) async {
-    try {
       if (subRequestId.isEmpty) return false;
 
       final uid = currentUserId;
       if (uid == null) return false;
       await _functions.httpsCallable('deleteSubRequest').call({'subRequestId': subRequestId});
       return currentUserId == uid;
-    } catch (e) {
-      debugPrint("[FirebaseService] Error deleting subrequest: $e");
-      return false;
-    }
   }
 
-  Future<Map<String, dynamic>> getSubRequestResponsesAsync(String subRequestId) async {
-    final Map<String, dynamic> combined = {};
-
-    // 1. Root SubRequests Responses
-    try {
-      final snapshot = await _dbRef('SubRequests/$subRequestId/Responses').get();
-      if (snapshot.exists && snapshot.value is Map) {
-        (snapshot.value as Map).forEach((k, v) {
-          combined[k.toString()] = v;
-        });
-      }
-    } catch (e) {
-      debugPrint("[FirebaseService] Notice: could not read root SubRequests/$subRequestId/Responses: $e");
-    }
-
-    // 2. BandEvents / SubRequestResponses
-    try {
-      final snap = await _dbRef('BandEvents/SubRequestResponses/$subRequestId').get();
-      if (snap.exists && snap.value is Map) {
-        (snap.value as Map).forEach((k, v) {
-          combined[k.toString()] = v;
-        });
-      }
-    } catch (_) {}
-
-    // 3. Current user personal copy
-    if (currentUserId != null) {
-      try {
-        final userSnap = await _dbRef('users/$currentUserId/SubRequests/$subRequestId/Responses').get();
-        if (userSnap.exists && userSnap.value is Map) {
-          (userSnap.value as Map).forEach((k, v) {
-            combined[k.toString()] = v;
-          });
-        }
-      } catch (_) {}
-    }
-
-    // 4. Manager-only legacy SubRequest response compatibility. This exact
-    // canonical leaf remains until the coordinated SubRequest privacy cutover.
-    try {
-      final sub = await getSubRequestAsync(subRequestId);
-      if (sub != null && sub.bandId != null && sub.eventId != null &&
-          sub.bandId!.isNotEmpty && sub.eventId!.isNotEmpty &&
-          await canManageBandEventAsync(sub.bandId!)) {
-        final invSnap = await _dbRef('Bands/${sub.bandId}/Events/${sub.eventId}/externalInvitees').get();
-        if (invSnap.exists && invSnap.value is Map) {
-          (invSnap.value as Map).forEach((k, v) {
-            if (v is Map) {
-              final linkedSubId = v['subRequestId'] ?? v['SubRequestId'];
-              if (linkedSubId != null && linkedSubId.toString() == subRequestId) {
-                combined[k.toString()] = true;
-              }
-            }
-          });
-        }
-      }
-    } catch (_) {}
-
-    return combined;
-  }
+  Future<Map<String, dynamic>> getSubRequestResponsesAsync(String subRequestId) => _forCurrentSession(() async {
+    final uid = currentUserId;
+    if (uid == null) throw StateError('Sign in to manage responses.');
+    final snapshot = await _dbRef('SubRequests/$subRequestId/Responses').get();
+    if (currentUserId != uid) throw StateError('Your session changed.');
+    return snapshot.value is Map ? Map<String, dynamic>.from(snapshot.value as Map) : {};
+  });
 
   Future<int> getSubRequestResponseCountAsync(String subRequestId) async {
     final responses = await getSubRequestResponsesAsync(subRequestId);
     return responses.length;
   }
+
+  Stream<int> subscribeToSubRequestResponseCount(String subRequestId) =>
+      _sessionStream(_dbRef('SubRequests/$subRequestId/Responses').onValue.map(
+        (event) => event.snapshot.value is Map ? (event.snapshot.value as Map).length : 0,
+      ), 0);
 
   Future<String> createAgreementChatAsync(
     String senderId,
@@ -1721,18 +1466,12 @@ class FirebaseService {
         ? (userId1 == currentUserId ? userId2 : userId1)
         : userId1;
 
-    try {
-      final result = await _functions
-          .httpsCallable('getOrCreateDirectConversation')
-          .call({'otherUserId': targetUserId});
-      final convId = result.data['conversationId']?.toString() ?? '';
-      if (convId.isNotEmpty) return convId;
-    } catch (e) {
-      debugPrint('[FirebaseService] getOrCreateDirectConversation callable notice: $e');
-    }
-
-    final uids = [currentUserId ?? userId1, targetUserId]..sort();
-    return 'direct_${uids[0]}_${uids[1]}';
+    final result = await _functions
+        .httpsCallable('getOrCreateDirectConversation')
+        .call({'otherUserId': targetUserId});
+    final convId = result.data['conversationId']?.toString() ?? '';
+    if (convId.isEmpty) throw StateError('The conversation could not be opened.');
+    return convId;
   }
 
   Future<void> sendConversationMessageAsync(
@@ -1741,15 +1480,11 @@ class FirebaseService {
     String receiverUserId,
     String senderName,
   ) async {
-    try {
       await _functions.httpsCallable('sendDirectMessage').call({
         'conversationId': conversationId,
         'text': text,
         'receiverUserId': receiverUserId,
       });
-    } catch (e) {
-      debugPrint('[FirebaseService] sendConversationMessageAsync callable notice: $e');
-    }
   }
 
   Stream<Map<String, dynamic>?> subscribeToConversationMetadata(
@@ -1765,29 +1500,11 @@ class FirebaseService {
         if (agreementRaw is Map) {
           try {
             agreement = Agreement.fromJson(agreementRaw);
-          } catch (_) {}
+          } catch (accessError) { _rethrowAccessDenied(accessError);}
         }
         participants = _parseList(
           data['Participants'] ?? data['participants'],
         );
-      }
-
-      if (agreement == null) {
-        try {
-          final snap = await _dbRef('BandEvents/Agreements/$conversationId').get();
-          if (snap.exists && snap.value is Map) {
-            agreement = Agreement.fromJson(snap.value as Map);
-          }
-        } catch (_) {}
-      }
-
-      if (agreement == null && currentUserId != null) {
-        try {
-          final snap = await _dbRef('users/$currentUserId/Agreements/$conversationId').get();
-          if (snap.exists && snap.value is Map) {
-            agreement = Agreement.fromJson(snap.value as Map);
-          }
-        } catch (_) {}
       }
 
       return {
@@ -1827,7 +1544,7 @@ class FirebaseService {
       await _functions.httpsCallable('markDirectConversationRead').call({
         'conversationId': conversationId,
       });
-    } catch (e) {
+    } catch (e) { _rethrowAccessDenied(e);
       print("[FirebaseService] Error marking conversation as read: $e");
     }
   }
@@ -1837,7 +1554,7 @@ class FirebaseService {
       await _functions.httpsCallable('markBandSectionConversationRead').call({
         'conversationId': conversationId,
       });
-    } catch (e) {
+    } catch (e) { _rethrowAccessDenied(e);
       print("[FirebaseService] Error marking band section conversation as read: $e");
     }
   }
@@ -1955,70 +1672,17 @@ class FirebaseService {
 
   Stream<List<AppNotification>> subscribeToUserNotifications([String? userId]) {
     final uid = userId ?? currentUserId;
-    if (uid == null || uid.isEmpty) return Stream.value([]);
-
-    late StreamController<List<AppNotification>> controller;
-    StreamSubscription? sub1;
-    StreamSubscription? sub2;
-
-    Map<String, AppNotification> notifsUser = {};
-    Map<String, AppNotification> notifsBand = {};
-
-    void emitMerged() {
-      final Map<String, AppNotification> merged = {};
-      merged.addAll(notifsBand);
-      merged.addAll(notifsUser);
-
-      final list = merged.values.toList();
-      list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-      if (!controller.isClosed) {
-        controller.add(list);
-      }
-    }
-
-    controller = StreamController<List<AppNotification>>.broadcast(
-      onListen: () {
-        sub1 = _dbRef('userNotifications/$uid').onValue.listen((event) {
-          notifsUser = {};
-          final data = event.snapshot.value;
-          if (data is Map) {
-            data.forEach((k, v) {
-              if (v is Map) {
-                try {
-                  notifsUser[k.toString()] = AppNotification.fromJson(v, k.toString());
-                } catch (_) {}
-              }
-            });
-          }
-          emitMerged();
-        }, onError: (err) {
-          debugPrint('[FirebaseService] userNotifications stream notice: $err');
-        });
-
-        sub2 = _dbRef('BandEvents/Notifications/$uid').onValue.listen((event) {
-          notifsBand = {};
-          final data = event.snapshot.value;
-          if (data is Map) {
-            data.forEach((k, v) {
-              if (v is Map) {
-                try {
-                  notifsBand[k.toString()] = AppNotification.fromJson(v, k.toString());
-                } catch (_) {}
-              }
-            });
-          }
-          emitMerged();
-        }, onError: (err) {
-          debugPrint('[FirebaseService] BandEvents/Notifications stream notice: $err');
-        });
-      },
-      onCancel: () {
-        sub1?.cancel();
-        sub2?.cancel();
-      },
-    );
-
-    return controller.stream;
+    if (uid == null || uid != currentUserId) return Stream.value([]);
+    return _sessionStream(_dbRef('userNotifications/$uid').onValue.map((event) {
+      if (uid != currentUserId) return <AppNotification>[];
+      final value = event.snapshot.value;
+      if (value is! Map) return <AppNotification>[];
+      final result = <AppNotification>[];
+      value.forEach((key, item) {
+        if (item is Map) result.add(AppNotification.fromJson(item, key.toString()));
+      });
+      return result;
+    }), <AppNotification>[]);
   }
 
   Stream<int> subscribeToUnreadNotificationCount([String? userId]) {
@@ -2031,27 +1695,7 @@ class FirebaseService {
   }
 
   Future<void> markNotificationReadAsync(String notificationId) async {
-    final uid = currentUserId;
-    if (uid != null && uid.isNotEmpty) {
-      try {
-        await _dbRef('userNotifications/$uid/$notificationId').update({
-          'isRead': true,
-          'readAt': DateTime.now().millisecondsSinceEpoch,
-        });
-      } catch (_) {}
-      try {
-        await _dbRef('BandEvents/Notifications/$uid/$notificationId').update({
-          'isRead': true,
-          'readAt': DateTime.now().millisecondsSinceEpoch,
-        });
-      } catch (_) {}
-    }
-    try {
-      final callable = _functions.httpsCallable('markNotificationRead');
-      await callable.call<Map<String, dynamic>>({
-        'notificationId': notificationId,
-      });
-    } catch (_) {}
+    await _functions.httpsCallable('markNotificationRead').call({'notificationId': notificationId});
   }
 
   Future<void> markFeatureNotificationsReadAsync(String featureId) async {
@@ -2062,70 +1706,21 @@ class FirebaseService {
       await callable.call<Map<String, dynamic>>({
         'featureId': featureId,
       });
-    } catch (e) {
+    } catch (e) { _rethrowAccessDenied(e);
       debugPrint('[FirebaseService] markFeatureNotificationsRead error: $e');
     }
   }
 
   Future<void> markAllNotificationsReadAsync() async {
-    final uid = currentUserId;
-    if (uid != null && uid.isNotEmpty) {
-      try {
-        final snap = await _dbRef('userNotifications/$uid').get();
-        if (snap.exists && snap.value is Map) {
-          final updates = <String, dynamic>{};
-          (snap.value as Map).forEach((k, v) {
-            updates['userNotifications/$uid/$k/isRead'] = true;
-            updates['userNotifications/$uid/$k/readAt'] = DateTime.now().millisecondsSinceEpoch;
-          });
-          await _dbRef().update(updates);
-        }
-      } catch (_) {}
-      try {
-        final bandSnap = await _dbRef('BandEvents/Notifications/$uid').get();
-        if (bandSnap.exists && bandSnap.value is Map) {
-          final updates = <String, dynamic>{};
-          (bandSnap.value as Map).forEach((k, v) {
-            updates['BandEvents/Notifications/$uid/$k/isRead'] = true;
-            updates['BandEvents/Notifications/$uid/$k/readAt'] = DateTime.now().millisecondsSinceEpoch;
-          });
-          await _dbRef().update(updates);
-        }
-      } catch (_) {}
-    }
-    try {
-      final callable = _functions.httpsCallable('markAllNotificationsRead');
-      await callable.call<Map<String, dynamic>>();
-    } catch (_) {}
+    await _functions.httpsCallable('markAllNotificationsRead').call();
   }
 
-  Future<List<Map<String, dynamic>>> getActiveConversationsAsync() async {
+  Future<List<Map<String, dynamic>>> getActiveConversationsAsync() => _forCurrentSession(() async {
     final selfId = currentUserId;
     if (selfId == null) return [];
 
     final snapshot = await _dbRef('userConversations/$selfId').get();
     final List<Map<String, dynamic>> conversations = [];
-    final Set<String> processedConvIds = {};
-
-    // Also pre-fetch user's agreements and BandEvents agreements map
-    final Map<String, dynamic> agreementsMap = {};
-    try {
-      final userAgreementsSnap = await _dbRef('users/$selfId/Agreements').get();
-      if (userAgreementsSnap.exists && userAgreementsSnap.value is Map) {
-        (userAgreementsSnap.value as Map).forEach((k, v) {
-          if (v is Map) agreementsMap[k.toString()] = v;
-        });
-      }
-    } catch (_) {}
-
-    try {
-      final bandAgreementsSnap = await _dbRef('BandEvents/Agreements').get();
-      if (bandAgreementsSnap.exists && bandAgreementsSnap.value is Map) {
-        (bandAgreementsSnap.value as Map).forEach((k, v) {
-          if (v is Map) agreementsMap[k.toString()] ??= v;
-        });
-      }
-    } catch (_) {}
 
     if (snapshot.exists && snapshot.value is Map) {
       final data = snapshot.value as Map;
@@ -2133,7 +1728,6 @@ class FirebaseService {
         final convId = entry.key.toString();
         final item = entry.value;
         if (item is Map) {
-          processedConvIds.add(convId);
           final convType = item['conversationType']?.toString() ?? 'direct';
           final isGroup = convType == 'band_section';
 
@@ -2222,12 +1816,12 @@ class FirebaseService {
           final parsedDt = parseDateTime(rawTs);
 
           // Parse agreement if attached or in agreements map
-          final agreementRaw = item['agreement'] ?? item['Agreement'] ?? agreementsMap[convId];
+          final agreementRaw = item['agreement'] ?? item['Agreement'];
           Agreement? agreement;
           if (agreementRaw is Map) {
             try {
               agreement = Agreement.fromJson(agreementRaw);
-            } catch (_) {}
+            } catch (accessError) { _rethrowAccessDenied(accessError);}
           }
 
           conversations.add({
@@ -2249,45 +1843,6 @@ class FirebaseService {
       }
     }
 
-    // Also include any standalone agreements that might not yet be indexed in userConversations
-    for (final entry in agreementsMap.entries) {
-      final convId = entry.key;
-      if (processedConvIds.contains(convId)) continue;
-      final agreementRaw = entry.value;
-      if (agreementRaw is! Map) continue;
-      try {
-        final agreement = Agreement.fromJson(agreementRaw);
-        final leaderId = agreement.choirLeaderId;
-        final vocalistId = agreement.vocalistId;
-        if (selfId == leaderId || selfId == vocalistId) {
-          processedConvIds.add(convId);
-          final otherId = selfId == leaderId ? vocalistId : leaderId;
-          String otherName = 'Musician';
-          String? profilePic;
-          if (otherId != null && otherId.isNotEmpty) {
-            final profile = await getUserProfileAsync(otherId);
-            if (profile != null) {
-              otherName = profile.displayName ?? profile.nickname ?? 'Musician';
-              profilePic = profile.profilePictureUrl;
-            }
-          }
-          conversations.add({
-            'conversationId': convId,
-            'isGroup': false,
-            'otherUserId': otherId ?? '',
-            'otherUserName': otherName,
-            'otherUserProfilePicture': profilePic,
-            'lastMessageText': 'Confirmed Agreement: ${agreement.voicePart ?? "Gig"}',
-            'lastMessageTimestamp': '',
-            'timestamp': DateTime.now(),
-            'hasUnread': false,
-            'conversationType': 'direct',
-            'agreement': agreement,
-          });
-        }
-      } catch (_) {}
-    }
-
     conversations.sort((a, b) {
       if (a['hasUnread'] != b['hasUnread']) {
         return (a['hasUnread'] == true) ? -1 : 1;
@@ -2307,8 +1862,9 @@ class FirebaseService {
       return 0;
     });
 
+    if (currentUserId != selfId) throw StateError('Your session changed.');
     return conversations;
-  }
+  });
 
   // ==========================================
   // 7. Calendar Events
@@ -2318,7 +1874,7 @@ class FirebaseService {
     final bandId = event.bandId;
     if (bandId == null) return;
 
-    final ref = _dbRef('BandEvents/$bandId').push();
+    final ref = _dbRef('Bands/$bandId/Calendar').push();
     final key = ref.key;
     if (key != null) {
       final updated = CalendarEvent(
@@ -2336,7 +1892,8 @@ class FirebaseService {
         startTime: event.startTime,
         endTime: event.endTime,
       );
-      await ref.set(updated.toJson());
+      await _functions.httpsCallable('mutateBandEvent').call({
+        'action':'saveCalendar', 'bandId':bandId, 'eventId':key, 'event':updated.toJson()});
     }
   }
 
@@ -2532,7 +2089,7 @@ class FirebaseService {
       final snapshot = await uploadTask;
       final url = await snapshot.ref.getDownloadURL();
       return url;
-    } catch (e) {
+    } catch (e) { _rethrowAccessDenied(e);
       print("[FirebaseService] Error uploading band file: $e");
       rethrow;
     }
@@ -2544,7 +2101,7 @@ class FirebaseService {
       if (userId == null) return;
       await _dbRef('users/$userId/info/PushToken').set(token);
       print("[FirebaseService] Push Token saved for user $userId");
-    } catch (e) {
+    } catch (e) { _rethrowAccessDenied(e);
       print("[FirebaseService] Error saving push token: $e");
     }
   }
@@ -2605,12 +2162,12 @@ class FirebaseService {
       String? currentToken;
       try {
         currentToken = await messaging.getToken();
-      } catch (e) {
+      } catch (e) { _rethrowAccessDenied(e);
         print("PUSH: First getToken attempt failed: $e, retrying in 2 seconds...");
         await Future.delayed(const Duration(seconds: 2));
         try {
           currentToken = await messaging.getToken();
-        } catch (e2) {
+        } catch (e2) { _rethrowAccessDenied(e2);
           print("PUSH: Second getToken attempt failed: $e2");
         }
       }
@@ -2642,7 +2199,7 @@ class FirebaseService {
           _notificationClickStreamController.add(message.data);
         }
       });
-    } catch (e) {
+    } catch (e) { _rethrowAccessDenied(e);
       print("PUSH: ERROR Initializing: $e");
     }
   }
@@ -2661,7 +2218,7 @@ class FirebaseService {
           'customToken': customToken.trim(),
       });
       return Map<String, dynamic>.from(result.data);
-    } catch (e) {
+    } catch (e) { _rethrowAccessDenied(e);
       debugPrint("Error calling sendTestPushNotification: $e");
       rethrow;
     }
@@ -2698,7 +2255,7 @@ class FirebaseService {
         final snapshot = await uploadTask;
         final url = await snapshot.ref.getDownloadURL();
         urls.add(url);
-      } catch (e) {
+      } catch (e) { _rethrowAccessDenied(e);
         print("[FirebaseService] Error uploading image: $e");
         rethrow;
       }
@@ -3145,7 +2702,7 @@ class FirebaseService {
         });
       }
       return assignments;
-    } catch (e) {
+    } catch (e) { _rethrowAccessDenied(e);
       debugPrint('[FirebaseService] Error getting substitute assignments: $e');
       return {};
     }
@@ -3353,7 +2910,7 @@ class FirebaseService {
         'action':'inviteResponse','bandId':bandId,'eventId':eventId,
         'status':status,'comment':comment,
       });
-    } catch (e) {
+    } catch (e) { _rethrowAccessDenied(e);
       debugPrint('[FirebaseService] updateExternalInviteeResponseAsync notice: $e');
     }
   }
@@ -3455,7 +3012,7 @@ class FirebaseService {
       subSessionSequence: session.subSessionSequence,
       sessionChatId: session.sessionChatId,
     );
-    await _dbRef('Collabs/Sessions/$id').set(newSession.toJson());
+    await _dbRef('Collabs/Sessions/$id').set(newSession.toJson()..remove('Responses'));
     return id;
   }
 
@@ -3540,7 +3097,7 @@ class FirebaseService {
         sessionChatId: s.sessionChatId,
       );
 
-      multiLocationMap['$id'] = fullSession.toJson();
+      multiLocationMap['$id'] = fullSession.toJson()..remove('Responses');
     }
 
     await _dbRef('Collabs/Sessions').update(multiLocationMap);
@@ -3548,8 +3105,11 @@ class FirebaseService {
   }
 
   Future<void> deleteCollabSessionAsync(String sessionId) async {
-    await _dbRef('Collabs/Sessions/$sessionId').remove();
-    await _dbRef('Collabs/Applications/$sessionId').remove();
+    await _dbRef().update({
+      'Collabs/Sessions/$sessionId': null,
+      'Collabs/Applications/$sessionId': null,
+      'Collabs/SessionResponses/$sessionId': null,
+    });
   }
 
   Future<List<CollabSession>> getCollabSessionsAsync() async {
@@ -3579,7 +3139,7 @@ class FirebaseService {
 
   Future<List<CollabSessionApplication>> getCollabSessionApplicationsAsync(
     String sessionId,
-  ) async {
+  ) => _forCurrentSession(() async {
     final snapshot = await _dbRef('Collabs/Applications/$sessionId').get();
     final List<CollabSessionApplication> apps = [];
     if (snapshot.exists && snapshot.value is Map) {
@@ -3591,12 +3151,12 @@ class FirebaseService {
       });
     }
     return apps;
-  }
+  });
 
   Future<CollabSessionApplication?> getCollabSessionApplicationAsync(
     String sessionId,
     String applicantId,
-  ) async {
+  ) => _forCurrentSession(() async {
     final snapshot = await _dbRef(
       'Collabs/Applications/$sessionId/$applicantId',
     ).get();
@@ -3607,45 +3167,16 @@ class FirebaseService {
       );
     }
     return null;
-  }
+  });
 
   Future<void> updateCollabApplicationStatusAsync(
     String sessionId,
     String applicantId,
     String status,
   ) async {
-    try {
-      await _functions.httpsCallable('updateSessionApplicationStatus').call({
-        'sessionId': sessionId,
-        'applicantId': applicantId,
-        'status': status,
-      });
-    } catch (e) {
-      debugPrint('updateSessionApplicationStatus error, using direct DB update: $e');
-      await _dbRef(
-        'Collabs/Applications/$sessionId/$applicantId/Status',
-      ).set(status);
-
-      if (status == 'accepted') {
-        final sessionSnapshot = await _dbRef('Collabs/Sessions/$sessionId').get();
-        if (sessionSnapshot.exists && sessionSnapshot.value is Map) {
-          final sessionData = sessionSnapshot.value as Map;
-          final chatId = sessionData['SessionChatId']?.toString() ??
-              sessionData['sessionChatId']?.toString();
-          if (chatId != null && chatId.isNotEmpty) {
-            try {
-              await addParticipantToSessionChatAsync(
-                sessionId: sessionId,
-                chatId: chatId,
-                participantId: applicantId,
-              );
-            } catch (err) {
-              debugPrint('Error adding accepted participant to session chat: $err');
-            }
-          }
-        }
-      }
-    }
+    await _functions.httpsCallable('updateSessionApplicationStatus').call({
+      'sessionId': sessionId, 'applicantId': applicantId, 'status': status,
+    });
   }
 
   Future<void> cancelCollabSessionApplicationAsync(
@@ -3673,8 +3204,8 @@ class FirebaseService {
       uncertainReason: uncertainReason,
     );
 
-    // Direct write to /Collabs/Sessions/$sessionId/Responses/$userId governed by RTDB security rules
-    await _dbRef('Collabs/Sessions/$sessionId/Responses/$userId')
+    // Direct write to /Collabs/SessionResponses/$sessionId/$userId governed by RTDB security rules
+    await _dbRef('Collabs/SessionResponses/$sessionId/$userId')
         .set(response.toJson());
   }
 
@@ -3684,48 +3215,12 @@ class FirebaseService {
     required String sessionTitle,
     required String createdBy,
   }) async {
-    try {
-      final result = await _functions.httpsCallable('createSessionConversation').call({
-        'sessionId': sessionId,
-        'sessionTitle': sessionTitle,
-      });
-      final convId = result.data['conversationId']?.toString() ?? '';
-      if (convId.isNotEmpty) {
-        return convId;
-      }
-    } catch (e) {
-      debugPrint('createSessionConversation error, fallback to direct DB: $e');
-    }
-
-    final ref = _dbRef('conversations').push();
-    final chatId = ref.key!;
-    final nowIso = DateTime.now().toIso8601String();
-
-    final convData = {
-      'conversationType': 'session_chat',
-      'sessionId': sessionId,
-      'sessionTitle': sessionTitle,
-      'createdBy': createdBy,
-      'participants': {
-        createdBy: true,
-      },
-      'Participants': [createdBy],
-      'createdTimestamp': nowIso,
-    };
-
-    await ref.set(convData);
-    await _dbRef('Collabs/Sessions/$sessionId/SessionChatId').set(chatId);
-    await _dbRef('userConversations/$createdBy/$chatId').set({
-      'conversationType': 'session_chat',
-      'sessionId': sessionId,
-      'otherUserId': '',
-      'otherUserName': sessionTitle,
-      'lastMessageText': '',
-      'lastMessageTimestamp': nowIso,
-      'hasUnread': false,
+    final result = await _functions.httpsCallable('createSessionConversation').call({
+      'sessionId': sessionId, 'sessionTitle': sessionTitle,
     });
-
-    return chatId;
+    final id = result.data['conversationId']?.toString() ?? '';
+    if (id.isEmpty) throw StateError('The session chat could not be opened.');
+    return id;
   }
 
   Future<void> addParticipantToSessionChatAsync({
@@ -3733,23 +3228,8 @@ class FirebaseService {
     required String chatId,
     required String participantId,
   }) async {
-    final sessionSnapshot = await _dbRef('Collabs/Sessions/$sessionId').get();
-    String sessionTitle = 'Session Chat';
-    if (sessionSnapshot.exists && sessionSnapshot.value is Map) {
-      final sData = sessionSnapshot.value as Map;
-      sessionTitle = sData['Title']?.toString() ?? sData['title']?.toString() ?? 'Session Chat';
-    }
-
-    final nowIso = DateTime.now().toIso8601String();
-    await _dbRef('conversations/$chatId/participants/$participantId').set(true);
-    await _dbRef('userConversations/$participantId/$chatId').set({
-      'conversationType': 'session_chat',
-      'sessionId': sessionId,
-      'otherUserId': '',
-      'otherUserName': sessionTitle,
-      'lastMessageText': 'You joined the session chat',
-      'lastMessageTimestamp': nowIso,
-      'hasUnread': true,
+    await _functions.httpsCallable('updateSessionApplicationStatus').call({
+      'sessionId': sessionId, 'applicantId': participantId, 'status': 'accepted',
     });
   }
 
@@ -3792,7 +3272,7 @@ class FirebaseService {
       await _functions.httpsCallable('mutateBandEvent').call({
         'action':'setRoom','bandId':bandId,'eventId':eventId,'roomId':roomId,
       });
-    } catch (e) {
+    } catch (e) { _rethrowAccessDenied(e);
       debugPrint('[FirebaseService] createTemporaryEventRoomAsync notice: $e');
     }
     return roomId;
@@ -3822,7 +3302,7 @@ class FirebaseService {
   ]) async {
     try {
       await _dbRef('Bands/$bandId/eventRooms/$roomId/members/$userId').set(role);
-    } catch (e) {
+    } catch (e) { _rethrowAccessDenied(e);
       debugPrint('[FirebaseService] addMemberToEventRoomAsync notice: $e');
     }
   }
@@ -3838,7 +3318,7 @@ class FirebaseService {
       } else {
         await _dbRef('Bands/$bandId/eventRooms/$roomId/isClosed').set(true);
       }
-    } catch (e) {
+    } catch (e) { _rethrowAccessDenied(e);
       debugPrint('[FirebaseService] closeOrDeleteEventRoomAsync notice: $e');
     }
   }
@@ -3864,14 +3344,14 @@ class FirebaseService {
         return Map<String, dynamic>.from(result.data as Map);
       }
       return {'status': 'completed', 'successCount': 0};
-    } on FirebaseFunctionsException catch (e) {
+    } on FirebaseFunctionsException catch (e) { _rethrowAccessDenied(e);
       return {
         'status': 'error',
         'code': e.code,
         'message': e.message ?? e.toString(),
         'successCount': 0,
       };
-    } catch (e) {
+    } catch (e) { _rethrowAccessDenied(e);
       return {
         'status': 'error',
         'code': 'unknown',
@@ -3932,7 +3412,7 @@ class FirebaseService {
     if (uid != null) {
       try {
         await _dbRef('users/$uid/PublicEvents/$eventId').set(json);
-      } catch (e) {
+      } catch (e) { _rethrowAccessDenied(e);
         debugPrint('[FirebaseService] Could not save users/$uid/PublicEvents: $e');
       }
     }
@@ -3940,7 +3420,7 @@ class FirebaseService {
     // 2. Save under global /PublicEvents
     try {
       await _dbRef('PublicEvents/$eventId').set(json);
-    } catch (e) {
+    } catch (e) { _rethrowAccessDenied(e);
       debugPrint('[FirebaseService] Global PublicEvents write notice: $e');
       if (uid == null) {
         rethrow;
@@ -3961,13 +3441,13 @@ class FirebaseService {
           if (value is Map) {
             try {
               eventsMap[key.toString()] = PublicCalendarEvent.fromJson(value, key.toString());
-            } catch (e) {
+            } catch (e) { _rethrowAccessDenied(e);
               debugPrint('Error parsing PublicCalendarEvent ($key): $e');
             }
           }
         });
       }
-    } catch (e) {
+    } catch (e) { _rethrowAccessDenied(e);
       debugPrint('Notice: could not read global PublicEvents: $e');
     }
 
@@ -3981,11 +3461,11 @@ class FirebaseService {
             if (value is Map) {
               try {
                 eventsMap[key.toString()] = PublicCalendarEvent.fromJson(value, key.toString());
-              } catch (_) {}
+              } catch (accessError) { _rethrowAccessDenied(accessError);}
             }
           });
         }
-      } catch (_) {}
+      } catch (accessError) { _rethrowAccessDenied(accessError);}
     }
 
     return eventsMap.values.toList();
@@ -3995,7 +3475,7 @@ class FirebaseService {
     // 1. Remove from global PublicEvents
     try {
       await _dbRef('PublicEvents/$eventId').remove();
-    } catch (e) {
+    } catch (e) { _rethrowAccessDenied(e);
       debugPrint('[FirebaseService] Notice: could not remove global PublicEvents/$eventId: $e');
     }
 
@@ -4004,7 +3484,7 @@ class FirebaseService {
     if (uid != null) {
       try {
         await _dbRef('users/$uid/PublicEvents/$eventId').remove();
-      } catch (e) {
+      } catch (e) { _rethrowAccessDenied(e);
         debugPrint('[FirebaseService] Notice: could not remove users/$uid/PublicEvents/$eventId: $e');
       }
     }
@@ -4034,7 +3514,7 @@ class FirebaseService {
       final snapshot = await uploadTask;
       final url = await snapshot.ref.getDownloadURL();
       return url;
-    } catch (e) {
+    } catch (e) { _rethrowAccessDenied(e);
       debugPrint("Error uploading public event cover image: $e");
       rethrow;
     }

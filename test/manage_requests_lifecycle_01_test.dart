@@ -14,6 +14,9 @@ import 'package:musicians_flutter/utils/sub_request_card_helper.dart';
 import 'package:musicians_flutter/views/sub_request_responses_screen.dart';
 
 class ManageService extends Fake implements FirebaseService {
+  @override
+  Stream<int> subscribeToSubRequestResponseCount(String id) => const Stream<int>.empty();
+
   List<SubRequest> requests = [];
   List<SubRequest> bandRequests = [];
   final countReads = <String>[];
@@ -58,6 +61,8 @@ class ManageService extends Fake implements FirebaseService {
 }
 
 class ManageState extends ChangeNotifier implements AppState {
+  @override
+  String? get activeBandId => null;
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
   @override

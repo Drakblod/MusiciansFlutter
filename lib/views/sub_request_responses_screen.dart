@@ -35,7 +35,48 @@ class _SubRequestResponsesScreenState extends State<SubRequestResponsesScreen>
   bool _isBandAdmin = false;
   bool _isLoading = true;
   Timer? _expirationTimer;
+  final _accessSubscriptions = <StreamSubscription<int>>[];
+  void _cancelAccessSubscriptions() {
+    for (final subscription in _accessSubscriptions) { unawaited(subscription.cancel()); }
+    _accessSubscriptions.clear();
+  }
+
   int _loadGeneration = 0;
+  AppState? _observedState;
+  String? _observedUid;
+  String? _observedBand;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final state = Provider.of<AppState>(context, listen: false);
+    if (identical(state, _observedState)) return;
+    _observedState?.removeListener(_sessionChanged);
+    _cancelAccessSubscriptions();
+    _observedState = state;
+    _observedUid = state.currentUserId;
+    _observedBand = state.activeBandId;
+    state.addListener(_sessionChanged);
+  }
+
+  void _sessionChanged() {
+    final state = _observedState;
+    if (state == null || (state.currentUserId == _observedUid && state.activeBandId == _observedBand)) return;
+    _observedUid = state.currentUserId;
+    _observedBand = state.activeBandId;
+    _loadGeneration++;
+    _expirationTimer?.cancel();
+    _cancelAccessSubscriptions();
+    if (!mounted) return;
+    setState(() {
+      _substituteRequests = [];
+      _memberRequests = [];
+      _responseCounts = {};
+      _viewedResponseCounts = {};
+      _isBandAdmin = false;
+    });
+    unawaited(_loadRequests());
+  }
   DateTime get _now => (widget.clock ?? DateTime.now)();
 
   @override
@@ -91,6 +132,8 @@ class _SubRequestResponsesScreenState extends State<SubRequestResponsesScreen>
 
   @override
   void dispose() {
+    _observedState?.removeListener(_sessionChanged);
+    _cancelAccessSubscriptions();
     _expirationTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _loadGeneration++;
@@ -100,6 +143,7 @@ class _SubRequestResponsesScreenState extends State<SubRequestResponsesScreen>
 
   Future<void> _loadRequests() async {
     final generation = ++_loadGeneration;
+    _cancelAccessSubscriptions();
     setState(() {
       _isLoading = true;
       _isBandAdmin = false;
@@ -153,7 +197,7 @@ class _SubRequestResponsesScreenState extends State<SubRequestResponsesScreen>
               }
             }
           }
-        } catch (_) {}
+        } catch (_) { rethrow; }
       }
 
       // 2. Filter requests matching the selected band (or show all if bandId is empty or 'all')
@@ -219,6 +263,28 @@ class _SubRequestResponsesScreenState extends State<SubRequestResponsesScreen>
         _responseCounts = counts;
         _viewedResponseCounts = viewedMap;
       });
+      for (final request in bandRequests) {
+        final id = request.subRequestId ?? request.id;
+        if (id == null) continue;
+        _accessSubscriptions.add(appState.firebaseService.subscribeToSubRequestResponseCount(id).listen((count) {
+          if (current()) setState(() => _responseCounts[id] = count);
+        }, onError: (Object error) {
+          if (!mounted || !current()) return;
+          _loadGeneration++;
+          _cancelAccessSubscriptions();
+          _expirationTimer?.cancel();
+          setState(() {
+            _substituteRequests = [];
+            _memberRequests = [];
+            _responseCounts = {};
+            _viewedResponseCounts = {};
+            _isBandAdmin = false;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Requests are unavailable for your current access. Please try again.'),
+          ));
+        }));
+      }
       // Re-evaluate after asynchronous counts/preferences, then arm the timer.
       _expireVisibleRequests();
     } catch (e) {
@@ -226,7 +292,7 @@ class _SubRequestResponsesScreenState extends State<SubRequestResponsesScreen>
       if (mounted && current()) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to load requests: $e'),
+            content: const Text('Requests are unavailable for your current access. Please try again.'),
             backgroundColor: AppTheme.danger,
           ),
         );

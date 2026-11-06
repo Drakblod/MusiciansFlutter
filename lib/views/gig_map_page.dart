@@ -9,6 +9,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:file_picker/file_picker.dart';
 import 'edit_band_info_screen.dart';
+import 'public_band_profile_screen.dart';
 import '../providers/app_state.dart';
 import '../theme/app_theme.dart';
 import '../models/sub_request.dart';
@@ -1264,16 +1265,26 @@ class GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Rou
     required String bandId,
   }) async {
     final appState = Provider.of<AppState>(context, listen: false);
+    final viewerId = appState.currentUserId;
     try {
       final band = await appState.firebaseService.getBandInfoAsync(bandId);
+      if (viewerId != appState.currentUserId) return;
       if (band != null && context.mounted) {
+        final screen = band.membersBand.containsKey(viewerId)
+            ? EditBandInfoScreen(band: band)
+            : PublicBandProfileScreen(band: band);
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (_) => EditBandInfoScreen(band: band)),
+          MaterialPageRoute(builder: (_) => screen),
         );
       }
     } catch (e) {
       debugPrint('[MapPin] Error loading band info: $e');
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('This band profile is currently unavailable.')),
+        );
+      }
     }
   }
 

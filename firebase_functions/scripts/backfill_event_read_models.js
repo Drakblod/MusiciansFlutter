@@ -23,11 +23,7 @@ function configuration(args,env=process.env) {
       env.FIREBASE_DATABASE_EMULATOR_HOST&&env.FIREBASE_DATABASE_EMULATOR_HOST!==url.host)
       throw new Error('Local target must be an explicit matching demo emulator');
   }else{
-    if(env.FIREBASE_DATABASE_EMULATOR_HOST||url.protocol!=='https:'||url.search||
-      ![`${projectId}.firebaseio.com`,`${projectId}-default-rtdb.firebaseio.com`,
-        `${projectId}-default-rtdb.europe-west1.firebasedatabase.app`].includes(url.hostname)||
-      !args.includes('--allow-production')||option('confirm-production')!==projectId)
-      throw new Error('Remote target requires exact project and separate production confirmations');
+    throw new Error('Event projection validation is local/emulator only; remote targets are forbidden');
   }
   return {projectId,databaseURL,local,apply:args.includes('--apply')};
 }
@@ -39,8 +35,8 @@ function userIdsAt(root,band,event){
 
 async function run(db,options={apply:false}) {
   const roots=['Bands','bandMemberEvents','bandManagerEvents',
-    'userEventReadModels','eventReadProjectionIndex','BandEvents','bandMemberCalendarEvents'];
-  const [bands,member,manager,users,index,legacy,calendar]=await Promise.all(roots.map(async root=>
+    'userEventReadModels','eventReadProjectionIndex','bandMemberCalendarEvents'];
+  const [bands,member,manager,users,index,calendar]=await Promise.all(roots.map(async root=>
     (await db.ref(root).get()).val()||{}));
   const identities=new Set();
   for(const [bandId,band] of Object.entries(bands))for(const eventId of Object.keys(band?.Events||{}))
@@ -91,14 +87,14 @@ async function run(db,options={apply:false}) {
     }
   }
   const calendars=new Set();
-  for(const [bandId,events] of Object.entries(legacy))if(bands[bandId])
-    for(const eventId of Object.keys(events||{}))calendars.add(`${bandId}\0${eventId}`);
+  for(const [bandId,events] of Object.entries(bands))
+    for(const eventId of Object.keys(events?.Calendar||{}))calendars.add(`${bandId}\0${eventId}`);
   for(const [bandId,events] of Object.entries(calendar))
     for(const eventId of Object.keys(events||{}))calendars.add(`${bandId}\0${eventId}`);
   for(const identity of [...calendars].sort()){
     const [bandId,eventId]=identity.split('\0');
     if(!key(bandId)||!key(eventId)){counts.malformedRecords++;continue;}
-    const source=legacy?.[bandId]?.[eventId]??null;
+    const source=bands?.[bandId]?.Calendar?.[eventId]??null;
     if(source!=null)counts.legacyCalendarEvents++;
     const next=bands[bandId]?legacyCalendarEvent(bandId,eventId,source):null;
     if(next)counts.eligibleCalendarProjections++;

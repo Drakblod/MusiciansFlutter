@@ -429,8 +429,8 @@ describe('MAP-VIEW-FEED-03B: Real Firebase Emulator Security & Projection Test S
     await assertFails(bobCtx.database().ref('SubRequests/sub_direct_2').get());
     await assertSucceeds(bobCtx.database().ref(`userSubRequestFeed/${userBob}/sub_direct_2`).get());
 
-    // Bob can write response to SubRequests/sub_direct_2/Responses/user_bob
-    await assertSucceeds(
+    // Bob must use respondToSubRequest; direct writes cannot create responses
+    await assertFails(
       bobCtx.database().ref(`SubRequests/sub_direct_2/Responses/${userBob}`).set(true)
     );
 

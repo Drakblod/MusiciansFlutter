@@ -130,7 +130,7 @@ for (const ruleFile of ['database.rules.json','database.transitional.rules.json'
       assert.strictEqual((await members())[target].Role,'Member');
       assert.strictEqual((await db.ref(`userBandMembershipIndex/${target}/${band}`).get()).val(),true);
       assert.strictEqual((await db.ref(`bandconversations/${band}/members/${target}`).get()).val(),true);
-      assert.strictEqual((await db.ref(`users/${target}/Bands/${band}`).get()).val().Events,undefined);
+      assert.strictEqual((await db.ref(`users/${target}/Bands/${band}`).get()).val(),null);
     }
   });
   it('Leader promotes Member to Admin then demotes to Member',async()=>{
@@ -293,7 +293,8 @@ for (const ruleFile of ['database.rules.json','database.transitional.rules.json'
       for(const p of ['info/MainInstrument','info/Instruments','info/Genres','info/DisplayName','info/PushToken','Nickname','DisplayName','Favorites/target','metrics/buttonClicks/profile','PublicEvents/event']) await assertFails(outsider.ref(`users/${id}/${p}`).set('forged'));
       await signOut(auth);await signInWithEmailAndPassword(auth,email,password);
       assert.strictEqual(auth.currentUser.uid,id);
-      const profile=(await client.ref(`users/${id}`).get()).val();
+      await assertFails(client.ref(`users/${id}`).get());
+      const profile={info:(await client.ref(`users/${id}/info`).get()).val()};
       assert.strictEqual(profile.info.MainInstrument,'Piano');assert.deepStrictEqual(profile.info.Instruments,['Piano','Guitar','Vocals']);assert.deepStrictEqual(profile.info.Genres,['Jazz']);assert.strictEqual(profile.info.PushToken,'local-test-token');
     } finally { await deleteApp(app); }
   });

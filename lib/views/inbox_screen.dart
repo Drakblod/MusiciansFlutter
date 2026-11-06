@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -21,30 +22,74 @@ class InboxScreen extends StatefulWidget {
 class _InboxScreenState extends State<InboxScreen> {
   List<Map<String, dynamic>> _threads = [];
   bool _isLoading = true;
+  AppState? _observedState;
+  String? _observedUid;
+  int _generation = 0;
+  final _bandAccess = <StreamSubscription<bool>>[];
+  void _cancelBandAccess() {
+    for (final subscription in _bandAccess) { unawaited(subscription.cancel()); }
+    _bandAccess.clear();
+  }
+  String? _accessError;
+  void _identityChanged() {
+    final uid = _observedState?.currentUserId;
+    if (uid == _observedUid) return;
+    _observedUid = uid;
+    _generation++;
+    _cancelBandAccess();
+    if (!mounted) return;
+    setState(() { _threads = []; _accessError = null; });
+    _loadThreads();
+  }
+  @override
+  void dispose() {
+    _cancelBandAccess();
+    _generation++;
+    _observedState?.removeListener(_identityChanged);
+    super.dispose();
+  }
   int _activeTab = 0; // 0: Direct Chats, 1: Gigs & Agreements
 
   @override
   void initState() {
     super.initState();
+    _observedState = Provider.of<AppState>(context, listen: false);
+    _observedUid = _observedState!.currentUserId;
+    _observedState!.addListener(_identityChanged);
     _loadThreads();
   }
 
   Future<void> _loadThreads() async {
-    setState(() => _isLoading = true);
+    final generation = ++_generation;
+    _cancelBandAccess();
+    setState(() { _isLoading = true; _threads = []; _accessError = null; });
+    final appState = Provider.of<AppState>(context, listen: false);
+    final uid = appState.currentUserId;
+    bool current() => mounted && generation == _generation && appState.currentUserId == uid;
     try {
-      final appState = Provider.of<AppState>(context, listen: false);
+      if (uid == null) return;
       final list = await appState.firebaseService.getActiveConversationsAsync();
-      if (mounted) {
-        setState(() {
-          _threads = list;
-        });
+      if (!current()) return;
+      setState(() => _threads = list);
+      for (final bandId in list.where((thread) => thread['isGroup'] == true)
+          .map((thread) => thread['bandId']).whereType<String>().toSet()) {
+        void clear() {
+          if (!current()) return;
+          setState(() { _threads.removeWhere((thread) => thread['bandId'] == bandId && thread['isGroup'] == true); });
+        }
+        _bandAccess.add(appState.firebaseService.subscribeToBandProfileAccess(bandId).listen(
+          (allowed) { if (!allowed) clear(); }, onError: (Object error) => clear(),
+        ));
       }
     } catch (e) {
-      debugPrint("Error loading conversations: $e");
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
+      if (current()) {
+        setState(() {
+        _threads = [];
+        _accessError = 'Conversations are currently unavailable. Please try again.';
+        });
       }
+    } finally {
+      if (current()) setState(() => _isLoading = false);
     }
   }
 
@@ -468,6 +513,12 @@ class _InboxScreenState extends State<InboxScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_accessError != null) {
+      return GradientScaffold(
+        appBar: const CustomTopBar(title: 'Messages', showBack: true),
+        body: Center(child: Text(_accessError!)),
+      );
+    }
     final appState = Provider.of<AppState>(context);
 
     return GradientScaffold(

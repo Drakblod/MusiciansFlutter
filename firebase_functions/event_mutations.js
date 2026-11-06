@@ -1,6 +1,6 @@
 'use strict';
 const {HttpsError}=require('firebase-functions/v2/https');
-const {key,manualInvite}=require('./event_read_models');
+const {key,manualInvite,legacyCalendarEvent}=require('./event_read_models');
 const {requireManager}=require('./membership_authority');
 const record=value=>value!==null&&typeof value==='object'&&!Array.isArray(value);
 const text=(value,max=4000)=>typeof value==='string'&&value.trim().length>0&&
@@ -104,6 +104,12 @@ async function mutate(db,uid,data) {
     return {success:true,eventId};
   }
   await requireManager(db,bandId,uid);
+  if(action==='saveCalendar'){
+    const safe=legacyCalendarEvent(bandId,eventId,data.event);
+    if(!safe)throw new HttpsError('invalid-argument','Calendar title is required.');
+    await db.ref(`Bands/${bandId}/Calendar/${eventId}`).set({...safe,CreatorId:uid});
+    return {success:true,eventId};
+  }
   if(action==='delete'){
     await ref.remove();return {success:true,eventId};
   }

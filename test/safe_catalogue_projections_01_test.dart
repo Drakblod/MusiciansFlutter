@@ -26,6 +26,9 @@ import 'registration_secondary_skills_01_test.dart' as fixtures;
 import 'membership_authority_hardening_01_test.dart' as authority;
 
 class CatalogueService extends FirebaseService {
+  @override
+  Stream<bool> subscribeToBandProfileAccess(String bandId) => Stream.value(true);
+
   CatalogueService(Future<Object?> Function(String) read)
     : super(catalogueRead: read);
   String? uid = 'a';
@@ -349,7 +352,9 @@ void main() {
           'if (targetId != currentUserId) return getPublicUserProfileAsync(targetId);',
         ),
       );
-      expect(code, contains("_dbRef('users/\$targetId').get()"));
+      expect(code, isNot(contains("_dbRef('users/\$targetId').get()")));
+      expect(code, contains("const fields = ['info', 'UserType', 'Nickname', 'DisplayName'];"));
+      expect(code, contains("_dbRef('users/\$targetId/\$field').get()"));
     },
   );
   test(

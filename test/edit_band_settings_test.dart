@@ -14,6 +14,9 @@ import 'package:musicians_flutter/widgets/custom_top_bar.dart';
 import 'package:provider/provider.dart';
 
 class MockSettingsFirebaseService extends FirebaseService {
+  @override
+  Stream<bool> subscribeToBandProfileAccess(String bandId) => Stream.value(true);
+
   Band? bandToReturn;
   Map<String, String> userBandsToReturn = {};
   final List<Map<String, String>> addedMembers = [];

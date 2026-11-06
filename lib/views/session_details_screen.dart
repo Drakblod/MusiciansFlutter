@@ -25,19 +25,51 @@ class _SessionDetailsScreenState extends State<SessionDetailsScreen> {
   List<CollabSessionApplication> _allApplications = [];
   Map<String, UserProfile> _loadedProfiles = {};
   UserProfile? _creatorProfile;
+  AppState? _identityState;
+  String? _loadedUid;
+  int _loadGeneration = 0;
+  String? _accessError;
+
+  void _identityChanged() {
+    final next = _identityState?.currentUserId;
+    if (next == _loadedUid) return;
+    _loadedUid = next;
+    _loadGeneration++;
+    if (!mounted) return;
+    setState(() {
+      _myApplication = null;
+      _allApplications = [];
+      _loadedProfiles = {};
+      _creatorProfile = null;
+      _accessError = null;
+    });
+    _loadApplicationsData();
+    _loadCreatorProfile();
+  }
+
+  @override
+  void dispose() {
+    _loadGeneration++;
+    _identityState?.removeListener(_identityChanged);
+    super.dispose();
+  }
 
   @override
   void initState() {
     super.initState();
-    _loadCreatorProfile();
+    _identityState = Provider.of<AppState>(context, listen: false);
+    _loadedUid = _identityState!.currentUserId;
+    _identityState!.addListener(_identityChanged);
     _loadApplicationsData();
+    _loadCreatorProfile();
   }
 
   Future<void> _loadCreatorProfile() async {
+    final generation = _loadGeneration;
     try {
       final appState = Provider.of<AppState>(context, listen: false);
       final profile = await appState.firebaseService.getUserProfileAsync(widget.session.creatorId);
-      if (mounted) {
+      if (mounted && generation == _loadGeneration) {
         setState(() {
           _creatorProfile = profile;
         });
@@ -49,40 +81,47 @@ class _SessionDetailsScreenState extends State<SessionDetailsScreen> {
 
   Future<void> _loadApplicationsData() async {
     if (!mounted) return;
-    setState(() => _isLoadingApp = true);
+    final generation = ++_loadGeneration;
+    setState(() {
+      _isLoadingApp = true;
+      _myApplication = null;
+      _allApplications = [];
+      _loadedProfiles = {};
+      _accessError = null;
+    });
     final appState = Provider.of<AppState>(context, listen: false);
     final userId = appState.currentUserId;
-
+    bool current() => mounted && generation == _loadGeneration && userId == appState.currentUserId;
     if (userId == null) {
       setState(() => _isLoadingApp = false);
       return;
     }
-
     try {
-      final isCreator = widget.session.creatorId == userId;
-
-      if (isCreator) {
-        // Creator loads all applications
-        _allApplications = await appState.firebaseService.getCollabSessionApplicationsAsync(widget.session.id ?? '');
-        // Fetch profiles of applicants in parallel
-        for (var app in _allApplications) {
-          if (!_loadedProfiles.containsKey(app.userId)) {
-            final profile = await appState.firebaseService.getUserProfileAsync(app.userId);
-            if (profile != null) {
-              _loadedProfiles[app.userId] = profile;
-            }
-          }
+      if (widget.session.creatorId == userId) {
+        final applications = await appState.firebaseService.getCollabSessionApplicationsAsync(widget.session.id ?? '');
+        if (!current()) return;
+        final profiles = <String, UserProfile>{};
+        for (final application in applications) {
+          final profile = await appState.firebaseService.getPublicUserProfileAsync(application.userId);
+          if (!current()) return;
+          if (profile != null) profiles[application.userId] = profile;
         }
+        _allApplications = applications;
+        _loadedProfiles = profiles;
       } else {
-        // Non-creator loads only their own application
-        _myApplication = await appState.firebaseService.getCollabSessionApplicationAsync(widget.session.id ?? '', userId);
+        final application = await appState.firebaseService.getCollabSessionApplicationAsync(widget.session.id ?? '', userId);
+        if (!current()) return;
+        _myApplication = application;
       }
     } catch (e) {
-      debugPrint("Error loading applications: $e");
-    } finally {
-      if (mounted) {
-        setState(() => _isLoadingApp = false);
+      if (current()) {
+        _myApplication = null;
+        _allApplications = [];
+        _loadedProfiles = {};
+        _accessError = 'Session applications are unavailable. Please try again.';
       }
+    } finally {
+      if (current()) setState(() => _isLoadingApp = false);
     }
   }
 
@@ -273,6 +312,12 @@ class _SessionDetailsScreenState extends State<SessionDetailsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_accessError != null) {
+      return GradientScaffold(
+        appBar: const CustomTopBar(title: 'Session', showBack: true),
+        body: Center(child: Text(_accessError!)),
+      );
+    }
     final appState = Provider.of<AppState>(context);
     final selfId = appState.currentUserId;
     final isCreator = widget.session.creatorId == selfId;

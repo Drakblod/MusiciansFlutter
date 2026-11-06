@@ -13,14 +13,9 @@ async function reconcileMembershipIndex(db, bandId, uid) {
   for (let attempt = 0; attempt < 10; attempt++) {
     const member = (await ref.get()).val();
     const active = validMember(member);
-    const name = (await db.ref(`Bands/${bandId}/Name`).get()).val();
-    // Safe compatibility metadata only: never copy Events/other members/private data.
-    const compatibility = record(member) && typeof name === 'string'
-      ? { Name:name, Members_band:{ [uid]:member } } : null;
     await db.ref().update({
       [indexPath(uid, bandId)]: active ? true : null,
       [`bandconversations/${bandId}/members/${uid}`]: active ? true : null,
-      [`users/${uid}/Bands/${bandId}`]: compatibility,
     });
     if (JSON.stringify((await ref.get()).val()) === JSON.stringify(member)) return;
   }

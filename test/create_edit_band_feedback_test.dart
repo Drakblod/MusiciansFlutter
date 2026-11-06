@@ -11,6 +11,9 @@ import 'package:musicians_flutter/views/edit_band_info_screen.dart';
 import 'package:provider/provider.dart';
 
 class MockBandFirebaseService extends FirebaseService {
+  @override
+  Stream<bool> subscribeToBandProfileAccess(String bandId) => Stream.value(true);
+
   Band? createdBand;
   Band? updatedBand;
 

@@ -16,6 +16,9 @@ import 'package:musicians_flutter/widgets/searchable_category_multi_select_sheet
 
 class MockGen01FirebaseService extends FirebaseService {
   @override
+  Stream<bool> subscribeToBandProfileAccess(String bandId) => Stream.value(true);
+
+  @override
   Future<UserProfile?> getUserProfileAsync([String? userId]) async {
     return UserProfile(
       userId: 'test_user_1',

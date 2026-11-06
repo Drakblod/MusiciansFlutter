@@ -30,6 +30,9 @@ describe('SANITIZED-EVENT-READ-MODEL-01 backfill safety',()=>{
     assert.throws(()=>configuration(['--project=demo-musicians-test'],{}));
     assert.throws(()=>configuration(['--project=live-prod',
       '--database-url=https://live-prod-default-rtdb.firebaseio.com/'],{}));
+    assert.throws(()=>configuration(['--project=live-prod',
+      '--database-url=https://live-prod-default-rtdb.firebaseio.com/',
+      '--apply','--allow-production','--confirm-production=live-prod'],{}));
     const options=configuration(['--project=demo-musicians-test',
       '--database-url=http://127.0.0.1:9000/?ns=demo-musicians-test'],{});
     assert.equal(options.apply,false);

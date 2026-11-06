@@ -16,6 +16,9 @@ import 'package:musicians_flutter/views/sub_request_response_details_screen.dart
 import 'package:musicians_flutter/utils/sub_request_card_helper.dart';
 
 class MockCardsFirebaseService extends FirebaseService {
+  @override
+  Stream<int> subscribeToSubRequestResponseCount(String id) => const Stream<int>.empty();
+
   final List<SubRequest> requests = [];
   final Set<String> appliedIds = {};
   final Map<String, int> responseCounts = {};
