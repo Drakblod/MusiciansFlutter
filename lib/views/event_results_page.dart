@@ -97,6 +97,9 @@ class EventResultsPage extends StatefulWidget {
 class _EventResultsPageState extends State<EventResultsPage> {
   BandEvent? _event;
   StreamSubscription<BandEvent?>? _eventSubscription;
+  AppState? _observedAppState;
+  String? _observedUid;
+  String? _observedBandId;
   String? _bandName;
   List<BandMember> _members = [];
   Map<String, UserProfile> _cachedProfiles = {};
@@ -110,13 +113,45 @@ class _EventResultsPageState extends State<EventResultsPage> {
   @override
   void initState() {
     super.initState();
-    _event = widget.initialEvent;
-    _subscribeToEvent();
     _loadData();
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final appState = Provider.of<AppState>(context, listen: false);
+    if (identical(_observedAppState, appState)) {
+      return;
+    }
+    _observedAppState?.removeListener(_onSessionChanged);
+    _observedAppState = appState;
+    _observedUid = appState.currentUserId;
+    _observedBandId = appState.activeBandId;
+    appState.addListener(_onSessionChanged);
+  }
+
+  void _onSessionChanged() {
+    final appState = _observedAppState;
+    if (appState == null ||
+        (appState.currentUserId == _observedUid &&
+            appState.activeBandId == _observedBandId)) {
+      return;
+    }
+    _eventSubscription?.cancel();
+    if (!mounted) return;
+    setState(() {
+      _event = null;
+      _members = [];
+      _cachedProfiles = {};
+      _linkedSubEvents = [];
+      _isLoading = false;
+      _errorMessage = 'Event results are no longer available.';
+    });
+  }
+
+  @override
   void dispose() {
+    _observedAppState?.removeListener(_onSessionChanged);
     _eventSubscription?.cancel();
     super.dispose();
   }
@@ -125,12 +160,27 @@ class _EventResultsPageState extends State<EventResultsPage> {
     _eventSubscription?.cancel();
     final targetId = _event?.id ?? widget.eventId;
     final appState = Provider.of<AppState>(context, listen: false);
+    final uid=appState.currentUserId;
+    final selectedBand=appState.activeBandId;
     _eventSubscription = appState.firebaseService
-        .subscribeToBandEvent(widget.bandId, targetId)
+        .subscribeToManagerBandEvent(widget.bandId, targetId)
         .listen((updatedEvent) {
-      if (updatedEvent != null && mounted) {
+      if (mounted) {
         setState(() {
-          _event = updatedEvent;
+          if(appState.currentUserId!=uid || appState.activeBandId!=selectedBand){
+            _event=null;_errorMessage='Event results are no longer available.';
+          }else{
+            _event=updatedEvent;
+            if (updatedEvent == null) {
+              _errorMessage='Event results are no longer available.';
+            }
+          }
+        });
+      }
+    },onError:(_){
+      if (mounted) {
+        setState(() {
+          _event=null;_errorMessage='Event results are no longer available.';
         });
       }
     });
@@ -139,12 +189,38 @@ class _EventResultsPageState extends State<EventResultsPage> {
   Future<void> _loadData() async {
     if (!mounted) return;
     setState(() {
-      _isLoading = _event == null;
+      _isLoading = true;
       _errorMessage = null;
+      _event = null;
+      _members=[];
+      _cachedProfiles={};
     });
 
     try {
       final appState = Provider.of<AppState>(context, listen: false);
+      final uid=appState.currentUserId;
+      final selectedBand=appState.activeBandId;
+      if(uid==null || !await appState.firebaseService.canManageBandEventAsync(widget.bandId) ||
+          !mounted || appState.currentUserId!=uid || appState.activeBandId!=selectedBand){
+        if (mounted) {
+          setState(() {
+            _isLoading=false;
+            _errorMessage='Only current band leaders and admins can view event results.';
+          });
+        }
+        return;
+      }
+      _event=await appState.firebaseService.getManagerBandEventOnceAsync(widget.bandId,widget.eventId);
+      if(!mounted || appState.currentUserId!=uid || appState.activeBandId!=selectedBand){
+        if (mounted) {
+          setState(() {_event=null;_isLoading=false;
+            _errorMessage='Event results are no longer available.';});
+        }
+        return;
+      }
+      if(_event==null){setState((){_isLoading=false;
+        _errorMessage='Event results are no longer available.';});return;}
+      _subscribeToEvent();
 
       // Resolve band name safely
       if (appState.activeBandId == widget.bandId &&
@@ -166,7 +242,7 @@ class _EventResultsPageState extends State<EventResultsPage> {
       _members = members;
 
       // Load band events for occurrence switcher & event fallback
-      final allEvents = await appState.firebaseService.getBandEventsListAsync(widget.bandId);
+      final allEvents = await appState.firebaseService.getManagerBandEventsListAsync(widget.bandId);
       if (_event == null) {
         final found = allEvents.where((e) => e.id == widget.eventId);
         if (found.isNotEmpty) {
@@ -232,11 +308,14 @@ class _EventResultsPageState extends State<EventResultsPage> {
         } catch (_) {}
       }));
 
-      if (mounted) {
+      if (mounted && appState.currentUserId==uid && appState.activeBandId==selectedBand) {
         setState(() {
           _cachedProfiles = profiles;
           _isLoading = false;
         });
+      } else if(mounted) {
+        setState((){_event=null;_isLoading=false;
+          _errorMessage='Event results are no longer available.';});
       }
     } catch (e) {
       debugPrint('[EventResultsPage] Error loading data: $e');
@@ -750,6 +829,17 @@ class _EventResultsPageState extends State<EventResultsPage> {
                       ),
                     ],
                   ),
+                ],
+                if (event.description.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Text('Event Description', style: GoogleFonts.inter(
+                    fontSize: 12, fontWeight: FontWeight.w600,
+                    color: AppTheme.primaryAccent,
+                  )),
+                  const SizedBox(height: 4),
+                  Text(event.description, style: GoogleFonts.inter(
+                    fontSize: 13, color: Colors.white70,
+                  )),
                 ],
               ],
             ),

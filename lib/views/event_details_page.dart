@@ -7,7 +7,6 @@ import '../providers/app_state.dart';
 import '../theme/app_theme.dart';
 import '../models/band_event.dart';
 import '../models/event_room.dart';
-import '../models/band.dart';
 import '../models/user_profile.dart';
 import '../widgets/gradient_scaffold.dart';
 import '../widgets/custom_top_bar.dart';
@@ -67,12 +66,14 @@ class EventDetailsPage extends StatefulWidget {
 class _EventDetailsPageState extends State<EventDetailsPage> {
   final ScrollController _scrollController = ScrollController();
   BandEvent? _event;
+  bool _eventResolved = false;
   StreamSubscription<BandEvent?>? _eventSubscription;
   String? _bandName;
-  List<BandMember> _members = [];
   Map<String, UserProfile> _cachedProfiles = {};
-  bool _isLoadingMembers = true;
-  String? _currentUserRole;
+  bool _canManageEvent = false;
+  AppState? _observedAppState;
+  String? _observedUid;
+  String? _observedBandId;
   bool _isDescriptionExpanded = false;
 
   // Sequential RSVP state
@@ -87,7 +88,9 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
   @override
   void initState() {
     super.initState();
-    _event = widget.initialEvent;
+    // The route argument is only an identity hint. Display data after the
+    // exact authorized read model has arrived.
+    _event = null;
     final appState = Provider.of<AppState>(context, listen: false);
     if (appState.activeBandId == widget.bandId &&
         appState.activeBandName != null &&
@@ -99,7 +102,47 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final appState = Provider.of<AppState>(context, listen: false);
+    if (identical(_observedAppState, appState)) {
+      return;
+    }
+    _observedAppState?.removeListener(_onSessionChanged);
+    _observedAppState = appState;
+    _observedUid = appState.currentUserId;
+    _observedBandId = appState.activeBandId;
+    appState.addListener(_onSessionChanged);
+  }
+
+  void _onSessionChanged() {
+    final appState = _observedAppState;
+    if (appState == null ||
+        (appState.currentUserId == _observedUid &&
+            appState.activeBandId == _observedBandId)) {
+      return;
+    }
+    _eventSubscription?.cancel();
+    if (!mounted) return;
+    for (final controller in _draftCommentControllers.values) {
+      controller.dispose();
+    }
+    setState(() {
+      _event = null;
+      _eventResolved = true;
+      _canManageEvent = false;
+      _cachedProfiles = {};
+      _linkedSubEvents = [];
+      _draftCommentControllers.clear();
+      _draftSelectedStatus.clear();
+      _savingIndices.clear();
+      _hasInitializedExpansion = false;
+    });
+  }
+
+  @override
   void dispose() {
+    _observedAppState?.removeListener(_onSessionChanged);
     _eventSubscription?.cancel();
     _scrollController.dispose();
     for (final controller in _draftCommentControllers.values) {
@@ -110,13 +153,32 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
 
   void _subscribeToEvent() {
     final appState = Provider.of<AppState>(context, listen: false);
+    final uid=appState.currentUserId;
+    final selectedBand=appState.activeBandId;
     _eventSubscription = appState.firebaseService
         .subscribeToBandEvent(widget.bandId, widget.eventId)
         .listen((updatedEvent) {
-      if (updatedEvent != null && mounted) {
+      if (mounted) {
+        final firstLoad = _event == null && updatedEvent != null;
         setState(() {
-          _event = updatedEvent;
-          _syncDraftState(updatedEvent);
+          if(appState.currentUserId!=uid || appState.activeBandId!=selectedBand){
+            _event=null;
+            _eventResolved=true;
+            _canManageEvent=false;
+          }else{
+            _event=updatedEvent;
+            _eventResolved=true;
+            if (updatedEvent != null) {
+              _syncDraftState(updatedEvent);
+            }
+          }
+        });
+        if (firstLoad) unawaited(_loadMembersAndProfiles());
+      }
+    },onError:(_){
+      if (mounted) {
+        setState(() {
+          _event=null;_eventResolved=true;_canManageEvent=false;
         });
       }
     });
@@ -158,7 +220,6 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
 
   Future<void> _loadMembersAndProfiles() async {
     if (!mounted) return;
-    setState(() => _isLoadingMembers = true);
 
     try {
       final appState = Provider.of<AppState>(context, listen: false);
@@ -170,7 +231,7 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
         _bandName = appState.activeBandName!.trim();
       }
       try {
-        final band = await appState.firebaseService.getBandInfoAsync(widget.bandId);
+        final band = await appState.firebaseService.getPublicBandProfileAsync(widget.bandId);
         if (band?.name != null && band!.name!.trim().isNotEmpty) {
           _bandName = band.name!.trim();
         }
@@ -178,7 +239,9 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
         debugPrint('[EventDetailsPage] Error fetching band info: $e');
       }
 
-      final members = await appState.firebaseService.getBandMembersAsync(widget.bandId);
+      final uid=appState.currentUserId;
+      final selectedBand=appState.activeBandId;
+      final canManage=await appState.firebaseService.canManageBandEventAsync(widget.bandId);
 
       if (_event != null) {
         final allEvents = await appState.firebaseService.getBandEventsListAsync(widget.bandId);
@@ -208,46 +271,16 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
       }
 
       final Map<String, UserProfile> profiles = {};
-      await Future.wait(members.map((m) async {
-        final userId = m.userId;
-        if (userId != null) {
-          final profile = await appState.firebaseService.getUserProfileAsync(userId);
-          if (profile != null) {
-            profiles[userId] = profile;
-          }
-        }
-      }));
-
-      final extUserIds = _event?.externalInvitees.keys.toList() ?? [];
-      await Future.wait(extUserIds.map((userId) async {
-        if (!profiles.containsKey(userId)) {
-          final profile = await appState.firebaseService.getUserProfileAsync(userId);
-          if (profile != null) {
-            profiles[userId] = profile;
-          }
-        }
-      }));
-
       final lockedBy = _event?.lockedBy;
-      if (lockedBy != null && !profiles.containsKey(lockedBy)) {
-        final profile = await appState.firebaseService.getUserProfileAsync(lockedBy);
-        if (profile != null) {
-          profiles[lockedBy] = profile;
-        }
+      if(lockedBy!=null && lockedBy.isNotEmpty){
+        final profile=await appState.firebaseService.getPublicUserProfileAsync(lockedBy);
+        if(profile!=null)profiles[lockedBy]=profile;
       }
 
-      final currentUserId = appState.currentUserId;
-      final currentMember = members.firstWhere(
-        (m) => m.userId == currentUserId,
-        orElse: () => BandMember(role: 'Member'),
-      );
-
-      if (mounted) {
+      if (mounted && uid==appState.currentUserId && selectedBand==appState.activeBandId) {
         setState(() {
-          _members = members;
           _cachedProfiles = profiles;
-          _currentUserRole = currentMember.role;
-          _isLoadingMembers = false;
+          _canManageEvent = canManage;
           if (_event != null) {
             _syncDraftState(_event!);
           }
@@ -255,14 +288,11 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
       }
     } catch (e) {
       debugPrint("Error loading event member profiles: $e");
-      if (mounted) {
-        setState(() => _isLoadingMembers = false);
-      }
     }
   }
 
   bool get _isAdmin {
-    return _currentUserRole == 'Leader' || _currentUserRole == 'Admin';
+    return _canManageEvent;
   }
 
   List<_EventScheduleItemModel> _buildScheduleItems(BandEvent event, String? currentUserId) {
@@ -529,9 +559,11 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
   @override
   Widget build(BuildContext context) {
     if (_event == null) {
-      return const GradientScaffold(
+      return GradientScaffold(
         appBar: CustomTopBar(title: 'Event Details', showBack: true),
-        body: Center(child: CircularProgressIndicator(color: AppTheme.primaryAccent)),
+        body: Center(child: _eventResolved
+            ? const Text('Event unavailable')
+            : const CircularProgressIndicator(color: AppTheme.primaryAccent)),
       );
     }
 
@@ -706,7 +738,9 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                     const SizedBox(height: 14),
                     const Divider(height: 1, color: Color(0xFF2E2A4E)),
                     const SizedBox(height: 12),
-                    Row(
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 2,
                       children: [
                         Text(
                           'FULL EVENT DESCRIPTION',
@@ -717,9 +751,7 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                             letterSpacing: 0.8,
                           ),
                         ),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
+                        Text(
                             '(for ALL parts of Main Event)',
                             style: GoogleFonts.inter(
                               fontSize: 11,
@@ -727,7 +759,6 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                               fontStyle: FontStyle.italic,
                             ),
                             overflow: TextOverflow.ellipsis,
-                          ),
                         ),
                       ],
                     ),
@@ -1434,10 +1465,10 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
               ),
             ],
 
-            // Event Creator Actions (Strictly for actual Event Creator)
-            if (currentUserId != null && currentUserId == event.createdBy) ...[
+            // Current band manager actions.
+            if (_isAdmin) ...[
               Text(
-                'EVENT CREATOR ACTIONS',
+                'BAND MANAGER ACTIONS',
                 style: GoogleFonts.outfit(
                   fontSize: 12,
                   fontWeight: FontWeight.bold,
@@ -1487,16 +1518,35 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
 
               // Edit Event
               AnimatedTapDetector(
-                onTap: () {
+                onTap: () async {
+                  final appState = Provider.of<AppState>(context, listen: false);
+                  final uid = appState.currentUserId;
+                  final selectedBand = appState.activeBandId;
+                  final managerEvent = await appState.firebaseService
+                      .getManagerBandEventOnceAsync(widget.bandId, widget.eventId);
+                  if (!context.mounted || !mounted || uid == null || appState.currentUserId != uid ||
+                      appState.activeBandId != selectedBand || !_canManageEvent ||
+                      managerEvent == null) {
+                    return;
+                  }
+                  final managerGroup = await appState.firebaseService
+                      .getManagerBandEventsListAsync(widget.bandId);
+                  if (!context.mounted || !mounted || appState.currentUserId != uid ||
+                      appState.activeBandId != selectedBand || !_canManageEvent) {
+                    return;
+                  }
+                  final related = managerGroup.where((item) =>
+                      item.id == managerEvent.id ||
+                      (managerEvent.parentEventId != null &&
+                          item.parentEventId == managerEvent.parentEventId) ||
+                      item.parentEventId == managerEvent.id).toList();
                   Navigator.push(
                     context,
                     MaterialPageRoute(
                       builder: (context) => CreateEventPage(
                         bandId: widget.bandId,
-                        existingEvent: _event,
-                        existingGroupEvents: _linkedSubEvents.isNotEmpty
-                            ? _linkedSubEvents
-                            : (_event != null ? [_event!] : null),
+                        existingEvent: managerEvent,
+                        existingGroupEvents: related,
                       ),
                     ),
                   );

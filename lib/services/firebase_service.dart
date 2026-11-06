@@ -409,11 +409,23 @@ class FirebaseService {
   }
 
   Future<Band?> getBandInfoAsync(String bandId) async {
-    final snapshot = await _dbRef('Bands/$bandId').get();
-    if (snapshot.exists && snapshot.value is Map) {
-      return Band.fromJson(snapshot.value as Map, bandId);
+    // Band metadata and roster are read as exact leaves. A whole-band read
+    // would also transfer every canonical Event and its private descendants.
+    const fields = [
+      'Name','EnsembleType','Genres','Qualification','RehearsalLocation',
+      'RehearsalDayOfWeek','RehearsalDate','RehearsalTime',
+      'RehearsalStartTime','RehearsalEndTime','Description','About','UserRole',
+      'Location','PublicLocation','RehearsalDateTime','Members_band',
+      'Style_band','Style','Level','Address','Contact','Members','History',
+      'ConcertsProjects',
+    ];
+    final snapshots = await Future.wait(fields.map((field) =>
+        _dbRef('Bands/$bandId/$field').get()));
+    final data = <String, dynamic>{};
+    for (var index = 0; index < fields.length; index++) {
+      if (snapshots[index].exists) data[fields[index]] = snapshots[index].value;
     }
-    return null;
+    return data.isEmpty ? null : Band.fromJson(data, bandId);
   }
 
   /// One server-owned mutation; production never falls back to protected RTDB writes.
@@ -1628,10 +1640,13 @@ class FirebaseService {
       } catch (_) {}
     }
 
-    // 4. Scan externalInvitees if bandId/eventId are accessible
+    // 4. Manager-only legacy SubRequest response compatibility. This exact
+    // canonical leaf remains until the coordinated SubRequest privacy cutover.
     try {
       final sub = await getSubRequestAsync(subRequestId);
-      if (sub != null && sub.bandId != null && sub.eventId != null && sub.bandId!.isNotEmpty && sub.eventId!.isNotEmpty) {
+      if (sub != null && sub.bandId != null && sub.eventId != null &&
+          sub.bandId!.isNotEmpty && sub.eventId!.isNotEmpty &&
+          await canManageBandEventAsync(sub.bandId!)) {
         final invSnap = await _dbRef('Bands/${sub.bandId}/Events/${sub.eventId}/externalInvitees').get();
         if (invSnap.exists && invSnap.value is Map) {
           (invSnap.value as Map).forEach((k, v) {
@@ -2326,7 +2341,10 @@ class FirebaseService {
   }
 
   Future<List<CalendarEvent>> getBandEventsAsync(String bandId) async {
-    final snapshot = await _dbRef('BandEvents/$bandId').get();
+    final uid=currentUserId;
+    if(uid==null)return [];
+    final snapshot = await _dbRef('bandMemberCalendarEvents/$bandId').get();
+    if(currentUserId!=uid)return [];
     final List<CalendarEvent> events = [];
     if (snapshot.exists && snapshot.value is Map) {
       (snapshot.value as Map).forEach((k, v) {
@@ -2849,7 +2867,9 @@ class FirebaseService {
       placeId: event.placeId,
       locationStatus: event.locationStatus,
     );
-    await _dbRef('Bands/$bandId/Events/$eventId').set(created.toJson());
+    await _functions.httpsCallable('mutateBandEvent').call({
+      'action':'save','bandId':bandId,'eventId':eventId,'event':created.toJson(),
+    });
     return eventId;
   }
 
@@ -2858,7 +2878,6 @@ class FirebaseService {
     String eventId,
     Map<String, dynamic> editableFields,
   ) async {
-    final eventRef = _dbRef('Bands/$bandId/Events/$eventId');
     final Map<String, dynamic> updateMap = {};
     for (final key in _eventEditableWhitelist) {
       if (editableFields.containsKey(key)) {
@@ -2866,7 +2885,9 @@ class FirebaseService {
       }
     }
     updateMap['updatedAt'] = DateTime.now().millisecondsSinceEpoch;
-    await eventRef.update(updateMap);
+    await _functions.httpsCallable('mutateBandEvent').call({
+      'action':'save','bandId':bandId,'eventId':eventId,'event':updateMap,
+    });
   }
 
   Future<String> saveBandEventAsync(String bandId, BandEvent event) async {
@@ -2900,41 +2921,212 @@ class FirebaseService {
   }
 
   Future<List<BandEvent>> getBandEventsListAsync(String bandId) async {
-    final snapshot = await _dbRef('Bands/$bandId/Events').get();
+    final uid = currentUserId;
+    if (uid == null) return [];
+    final snapshots = await Future.wait([
+      _dbRef('bandMemberEvents/$bandId').get(),
+      _dbRef('userEventReadModels/$uid/$bandId').get(),
+    ]);
+    if (currentUserId != uid) return [];
+    final snapshot = snapshots[0];
+    final own = snapshots[1].value is Map ? snapshots[1].value as Map : const {};
     final List<BandEvent> list = [];
     if (snapshot.exists && snapshot.value is Map) {
       (snapshot.value as Map).forEach((k, v) {
         if (v is Map) {
-          list.add(BandEvent.fromJson(v, k.toString()));
+          list.add(_eventFromReadModel(v, own[k], k.toString()));
         }
       });
     }
     return list;
   }
 
-  Stream<BandEvent?> subscribeToBandEvent(String bandId, String eventId) {
-    return _dbRef('Bands/$bandId/Events/$eventId').onValue.map((event) {
-      final data = event.snapshot.value;
-      if (data is Map) {
-        return BandEvent.fromJson(data, eventId);
+  BandEvent _eventFromReadModel(Map event, Object? own, String eventId) {
+    final merged = Map<dynamic, dynamic>.from(event);
+    if (own is Map) {
+      for (final field in [
+        'Responses','ScheduleResponses','externalInvitees','excludedMemberIds',
+      ]) {
+        if (own.containsKey(field)) merged[field] = own[field];
       }
-      return null;
+    }
+    return BandEvent.fromJson(merged, eventId);
+  }
+
+  Future<bool> canManageBandEventAsync(String bandId) async {
+    final uid = currentUserId;
+    if (uid == null) return false;
+    final snapshot = await _dbRef('Bands/$bandId/Members_band/$uid').get();
+    if (currentUserId != uid || snapshot.value is! Map) return false;
+    return BandMembershipPolicy.canManageMember(
+        BandMember.fromJson(snapshot.value as Map, uid));
+  }
+
+  Future<BandEvent?> getManagerBandEventOnceAsync(String bandId, String eventId) async {
+    final uid = currentUserId;
+    if (uid == null || !await canManageBandEventAsync(bandId)) return null;
+    final snapshot = await _dbRef('bandManagerEvents/$bandId/$eventId').get();
+    if (currentUserId != uid || snapshot.value is! Map) return null;
+    return BandEvent.fromJson(snapshot.value as Map, eventId);
+  }
+
+  Future<List<BandEvent>> getManagerBandEventsListAsync(String bandId) async {
+    final uid = currentUserId;
+    if (uid == null || !await canManageBandEventAsync(bandId)) return [];
+    final snapshot = await _dbRef('bandManagerEvents/$bandId').get();
+    if (currentUserId != uid || snapshot.value is! Map) return [];
+    final result = <BandEvent>[];
+    (snapshot.value as Map).forEach((id,value) {
+      if (value is Map) result.add(BandEvent.fromJson(value,id.toString()));
     });
+    return result;
+  }
+
+  Stream<BandEvent?> subscribeToBandEvent(String bandId, String eventId) {
+    final uid = currentUserId;
+    if (uid == null) return Stream.value(null);
+    return _watchBandEvent(bandId,eventId,uid);
+  }
+
+  Stream<BandEvent?> _watchBandEvent(String bandId,String eventId,String uid) async* {
+    final member = await _dbRef('Bands/$bandId/Members_band/$uid').get();
+    if (currentUserId != uid) return;
+    final active = member.value is Map && BandMembershipPolicy.isValidStatus(
+        (member.value as Map)['Status'] ?? (member.value as Map)['status']);
+    if (!active) {
+      yield* _dbRef('userEventReadModels/$uid/$bandId/$eventId').onValue.map((event) {
+        if (currentUserId != uid) return null;
+        final data=event.snapshot.value;
+        return data is Map ? BandEvent.fromJson(data,eventId) : null;
+      });
+      return;
+    }
+    late StreamController<BandEvent?> controller;
+    StreamSubscription<DatabaseEvent>? memberSub,userSub,authoritySub;
+    StreamSubscription<User?>? authSub;
+    Object? base,own;
+    bool baseReady=false;
+    bool activeMember=true;
+    void emit() {
+      if(controller.isClosed)return;
+      if(currentUserId!=uid || !activeMember){controller.add(null);return;}
+      if(!baseReady)return;
+      controller.add(base is Map ? _eventFromReadModel(base as Map,own,eventId) : null);
+    }
+    controller=StreamController<BandEvent?>(onListen:(){
+      authoritySub=_dbRef('Bands/$bandId/Members_band/$uid').onValue.listen((event){
+        final value=event.snapshot.value;
+        activeMember=currentUserId==uid && value is Map &&
+            BandMembershipPolicy.isValidStatus(value['Status'] ?? value['status']);
+        if(!activeMember)emit();
+      },onError:(Object error){
+        activeMember=false;
+        if(!controller.isClosed){controller.add(null);controller.addError(error);}
+      });
+      memberSub=_dbRef('bandMemberEvents/$bandId/$eventId').onValue.listen((event){
+        baseReady=true;base=event.snapshot.value;emit();
+      },onError:(Object error){controller.add(null);controller.addError(error);});
+      userSub=_dbRef('userEventReadModels/$uid/$bandId/$eventId').onValue.listen((event){
+        own=event.snapshot.value;emit();
+      },onError:(Object error){controller.add(null);controller.addError(error);});
+      authSub=_auth.authStateChanges().listen((user){
+        if(user?.uid!=uid && !controller.isClosed)controller.add(null);
+      });
+    },onCancel:() async {
+      await memberSub?.cancel();await userSub?.cancel();await authoritySub?.cancel();
+      await authSub?.cancel();
+    });
+    yield* controller.stream;
+  }
+
+  Stream<BandEvent?> subscribeToManagerBandEvent(String bandId,String eventId) async* {
+    final uid=currentUserId;
+    if(uid==null || !await canManageBandEventAsync(bandId)) {
+      yield null;return;
+    }
+    late StreamController<BandEvent?> controller;
+    StreamSubscription<DatabaseEvent>? authoritySub,eventSub;
+    StreamSubscription<User?>? authSub;
+    bool managerAuthorized=false;
+    controller=StreamController<BandEvent?>(onListen:(){
+      authoritySub=_dbRef('Bands/$bandId/Members_band/$uid').onValue.listen((event){
+        final value=event.snapshot.value;
+        final authorized=currentUserId==uid && value is Map &&
+            BandMembershipPolicy.canManageMember(BandMember.fromJson(value,uid));
+        managerAuthorized=authorized;
+        if(!authorized){
+          eventSub?.cancel();eventSub=null;
+          if(!controller.isClosed)controller.add(null);
+          return;
+        }
+        eventSub ??= _dbRef('bandManagerEvents/$bandId/$eventId').onValue.listen((event){
+          if(controller.isClosed){
+            return;
+          }
+          final data=event.snapshot.value;
+          controller.add(managerAuthorized && currentUserId==uid && data is Map
+              ? BandEvent.fromJson(data,eventId) : null);
+        },onError:(Object error){
+          if(!controller.isClosed){controller.add(null);controller.addError(error);}
+        });
+      },onError:(Object error){
+        if(!controller.isClosed){controller.add(null);controller.addError(error);}
+      });
+      authSub=_auth.authStateChanges().listen((user){
+        if(user?.uid!=uid && !controller.isClosed)controller.add(null);
+      });
+    },onCancel:() async {
+      await authoritySub?.cancel();await eventSub?.cancel();await authSub?.cancel();
+    });
+    yield* controller.stream;
   }
 
   Stream<List<BandEvent>> subscribeToBandEvents(String bandId) {
-    return _dbRef('Bands/$bandId/Events').onValue.map((event) {
-      final List<BandEvent> list = [];
-      final data = event.snapshot.value;
-      if (data is Map) {
-        data.forEach((k, v) {
-          if (v is Map) {
-            list.add(BandEvent.fromJson(v, k.toString()));
+    final uid=currentUserId;
+    if(uid==null)return Stream.value([]);
+    late StreamController<List<BandEvent>> controller;
+    StreamSubscription<DatabaseEvent>? memberSub,userSub,authoritySub;
+    StreamSubscription<User?>? authSub;
+    Object? base,own;
+    bool activeMember=false;
+    void emit(){
+      if(controller.isClosed)return;
+      if(currentUserId!=uid || !activeMember){controller.add([]);return;}
+      final result=<BandEvent>[];
+      final ownMap=own is Map ? own as Map : const {};
+      if (base is Map) {
+        (base as Map).forEach((id, value) {
+          if (value is Map) {
+            result.add(_eventFromReadModel(value, ownMap[id], id.toString()));
           }
         });
       }
-      return list;
+      controller.add(result);
+    }
+    controller=StreamController<List<BandEvent>>(onListen:(){
+      authoritySub=_dbRef('Bands/$bandId/Members_band/$uid').onValue.listen((event){
+        final value=event.snapshot.value;
+        activeMember=currentUserId==uid && value is Map &&
+            BandMembershipPolicy.isValidStatus(value['Status'] ?? value['status']);
+        emit();
+      },onError:(Object error){
+        activeMember=false;
+        if(!controller.isClosed){controller.add([]);controller.addError(error);}
+      });
+      memberSub=_dbRef('bandMemberEvents/$bandId').onValue.listen((event){
+        base=event.snapshot.value;emit();
+      },onError:(Object error){controller.add([]);controller.addError(error);});
+      userSub=_dbRef('userEventReadModels/$uid/$bandId').onValue.listen((event){
+        own=event.snapshot.value;emit();
+      },onError:(Object error){controller.add([]);controller.addError(error);});
+      authSub=_auth.authStateChanges().listen((user){
+        if(user?.uid!=uid && !controller.isClosed)controller.add([]);
+      });
+    },onCancel:() async {
+      await memberSub?.cancel();await userSub?.cancel();await authoritySub?.cancel();
+      await authSub?.cancel();
     });
+    return controller.stream;
   }
 
   Future<Map<String, SubstituteAssignment>> getSubstituteAssignmentsAsync(
@@ -2942,7 +3134,8 @@ class FirebaseService {
     String eventId,
   ) async {
     try {
-      final snap = await _dbRef('Bands/$bandId/Events/$eventId/substituteAssignments').get();
+      if (!await canManageBandEventAsync(bandId)) return {};
+      final snap = await _dbRef('bandManagerEvents/$bandId/$eventId/substituteAssignments').get();
       final Map<String, SubstituteAssignment> assignments = {};
       if (snap.exists && snap.value is Map) {
         (snap.value as Map).forEach((k, v) {
@@ -2992,7 +3185,9 @@ class FirebaseService {
   }
 
   Future<void> deleteBandEventAsync(String bandId, String eventId) async {
-    await _dbRef('Bands/$bandId/Events/$eventId').remove();
+    await _functions.httpsCallable('mutateBandEvent').call({
+      'action':'delete','bandId':bandId,'eventId':eventId,
+    });
   }
 
   Future<void> addBandMemberAsync(
@@ -3121,11 +3316,16 @@ class FirebaseService {
     String bandId,
     String eventId,
   ) async {
-    final snapshot = await _dbRef('Bands/$bandId/Events/$eventId').get();
-    if (snapshot.exists && snapshot.value is Map) {
-      return BandEvent.fromJson(snapshot.value as Map, eventId);
-    }
-    return null;
+    final uid=currentUserId;
+    if(uid==null)return null;
+    // Read the exact own projection first. A denial is surfaced and never
+    // retried against canonical Event data.
+    final own=await _dbRef('userEventReadModels/$uid/$bandId/$eventId').get();
+    if(currentUserId!=uid)return null;
+    if(own.value is Map)return BandEvent.fromJson(own.value as Map,eventId);
+    final member=await _dbRef('bandMemberEvents/$bandId/$eventId').get();
+    if(currentUserId!=uid)return null;
+    return member.value is Map ? BandEvent.fromJson(member.value as Map,eventId) : null;
   }
 
   Future<void> addExternalInviteesToEventAsync(
@@ -3134,26 +3334,10 @@ class FirebaseService {
     List<String> userIds, {
     String? subRequestId,
   }) async {
-    final timestamp = DateTime.now().millisecondsSinceEpoch;
-    final updates = <String, dynamic>{};
-    for (final uid in userIds) {
-      final profile = await getUserProfileAsync(uid);
-      final invitee = ExternalInvitee(
-        userId: uid,
-        status: 'pending',
-        instrument: profile?.instruments.isNotEmpty == true
-            ? profile?.instruments.first
-            : profile?.userType,
-        invitedAt: timestamp,
-        source: subRequestId != null ? 'subRequest' : null,
-        subRequestId: subRequestId,
-        displayName: profile?.displayName ?? profile?.nickname,
-      );
-      updates['Bands/$bandId/Events/$eventId/externalInvitees/$uid'] = invitee
-          .toJson();
-    }
-    updates['Bands/$bandId/Events/$eventId/updatedAt'] = timestamp;
-    await _dbRef().update(updates);
+    if(subRequestId!=null)throw StateError('Staffing invitations use the SubRequest callable.');
+    await _functions.httpsCallable('mutateBandEvent').call({
+      'action':'addInvitees','bandId':bandId,'eventId':eventId,'userIds':userIds,
+    });
   }
 
   Future<void> updateExternalInviteeResponseAsync(
@@ -3164,33 +3348,25 @@ class FirebaseService {
     String? comment,
   }) async {
     try {
-      final updates = {'status': status, if (comment != null) 'comment': comment};
-      await _dbRef(
-        'Bands/$bandId/Events/$eventId/externalInvitees/$userId',
-      ).update(updates);
+      if(currentUserId!=userId)throw StateError('Your session changed.');
+      await _functions.httpsCallable('mutateBandEvent').call({
+        'action':'inviteResponse','bandId':bandId,'eventId':eventId,
+        'status':status,'comment':comment,
+      });
     } catch (e) {
       debugPrint('[FirebaseService] updateExternalInviteeResponseAsync notice: $e');
     }
   }
 
   Future<void> lockBandEventAsync(String bandId, String eventId) async {
-    final timestamp = DateTime.now().millisecondsSinceEpoch;
-    final userId = currentUserId ?? '';
-    await _dbRef('Bands/$bandId/Events/$eventId').update({
-      'isLocked': true,
-      'lockedAt': timestamp,
-      'lockedBy': userId,
-      'updatedAt': timestamp,
+    await _functions.httpsCallable('mutateBandEvent').call({
+      'action':'lock','bandId':bandId,'eventId':eventId,
     });
   }
 
   Future<void> unlockBandEventAsync(String bandId, String eventId) async {
-    final timestamp = DateTime.now().millisecondsSinceEpoch;
-    await _dbRef('Bands/$bandId/Events/$eventId').update({
-      'isLocked': false,
-      'lockedAt': null,
-      'lockedBy': null,
-      'updatedAt': timestamp,
+    await _functions.httpsCallable('mutateBandEvent').call({
+      'action':'unlock','bandId':bandId,'eventId':eventId,
     });
   }
 
@@ -3613,7 +3789,9 @@ class FirebaseService {
 
     try {
       await ref.set(eventRoom.toJson());
-      await _dbRef('Bands/$bandId/Events/$eventId/temporaryRoomId').set(roomId);
+      await _functions.httpsCallable('mutateBandEvent').call({
+        'action':'setRoom','bandId':bandId,'eventId':eventId,'roomId':roomId,
+      });
     } catch (e) {
       debugPrint('[FirebaseService] createTemporaryEventRoomAsync notice: $e');
     }

@@ -3197,10 +3197,16 @@ class _BandRoomChatScreenState extends State<_BandRoomContent>
     return AnimatedTapDetector(
       onTap: () {
         if (bandId != null && event.id != null) {
+          final currentMember=_members.where((member)=>member.userId==currentUserId).firstOrNull;
+          final manager=BandMembershipPolicy.canManageMember(currentMember);
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (context) => EventResultsPage(
+              builder: (context) => manager ? EventResultsPage(
+                bandId: bandId,
+                eventId: event.id!,
+                initialEvent: event,
+              ) : EventDetailsPage(
                 bandId: bandId,
                 eventId: event.id!,
                 initialEvent: event,

@@ -480,10 +480,10 @@ describe('Real RTDB Emulator Rules Tests', function () {
       await assertFails(unauth.database().ref('SubRequests/sub_slot_1').set({ Status: 'hacked' }));
     });
 
-    it('3. Band Leader can write to externalInvitees for any candidate', async () => {
+    it('3. Band Leader cannot bypass the server-owned invitation mutation', async () => {
       const leader = testEnvFinal.authenticatedContext('user_leader');
       const ref = leader.database().ref('Bands/band_rules_test/Events/event_open/externalInvitees/user_sub_cand_1');
-      await assertSucceeds(
+      await assertFails(
         ref.set({
           userId: 'user_sub_cand_1',
           status: 'attending',
@@ -493,10 +493,10 @@ describe('Real RTDB Emulator Rules Tests', function () {
       );
     });
 
-    it('4. Band Admin can write to externalInvitees for any candidate', async () => {
+    it('4. Band Admin cannot bypass the server-owned invitation mutation', async () => {
       const admin = testEnvFinal.authenticatedContext('user_admin');
       const ref = admin.database().ref('Bands/band_rules_test/Events/event_open/externalInvitees/user_sub_cand_2');
-      await assertSucceeds(
+      await assertFails(
         ref.set({
           userId: 'user_sub_cand_2',
           status: 'attending',
@@ -506,10 +506,10 @@ describe('Real RTDB Emulator Rules Tests', function () {
       );
     });
 
-    it('5. Candidate can write their OWN response under externalInvitees when event is not locked', async () => {
+    it('5. Candidate cannot directly mutate an invitation; response uses a callable', async () => {
       const candidate = testEnvFinal.authenticatedContext('user_sub_cand_1');
       const ref = candidate.database().ref('Bands/band_rules_test/Events/event_open/externalInvitees/user_sub_cand_1');
-      await assertSucceeds(
+      await assertFails(
         ref.set({
           userId: 'user_sub_cand_1',
           status: 'attending',
@@ -551,10 +551,10 @@ describe('Real RTDB Emulator Rules Tests', function () {
       );
     });
 
-    it('9. Band Leader CAN still manage externalInvitees when event is locked', async () => {
+    it('9. Band Leader cannot directly mutate locked Event invitations', async () => {
       const leader = testEnvFinal.authenticatedContext('user_leader');
       const ref = leader.database().ref('Bands/band_rules_test/Events/event_locked/externalInvitees/user_sub_cand_1');
-      await assertSucceeds(
+      await assertFails(
         ref.set({
           userId: 'user_sub_cand_1',
           status: 'attending',
@@ -573,10 +573,10 @@ describe('Real RTDB Emulator Rules Tests', function () {
       );
     });
 
-    it('11. Creator or Band Leader can write to substituteAssignments for an event slot', async () => {
+    it('11. Creator or Leader cannot directly forge substitute assignments', async () => {
       const leader = testEnvFinal.authenticatedContext('user_leader');
       const ref = leader.database().ref('Bands/band_rules_test/Events/event_open/substituteAssignments/slot_guitar_1');
-      await assertSucceeds(
+      await assertFails(
         ref.set({
           slotId: 'slot_guitar_1',
           subRequestId: 'sub_req_1',
@@ -1095,6 +1095,7 @@ describe('Real RTDB Emulator Rules Tests', function () {
             user_external: {
               userId: 'user_external',
               status: 'pending',
+              source: 'manual',
             },
           },
         });
@@ -1257,10 +1258,10 @@ describe('Real RTDB Emulator Rules Tests', function () {
       await assertFails(eventRef.child('isLocked').set(true));
     });
 
-    it('10. Event Creator CAN update event details and lock event', async () => {
+    it('10. Event Creator cannot directly update details or lock an Event', async () => {
       const creator = testEnvFinal.authenticatedContext('user_creator');
       const eventRef = creator.database().ref(`Bands/${BAND_ID}/Events/${EVENT_OPEN}`);
-      await assertSucceeds(eventRef.update({
+      await assertFails(eventRef.update({
         title: 'Updated Festival Title',
         description: 'Updated Description',
         isLocked: true,
@@ -1269,30 +1270,30 @@ describe('Real RTDB Emulator Rules Tests', function () {
       }));
     });
 
-    it('11. Band Leader / Admin CAN update event details and lock event', async () => {
+    it('11. Band Leader / Admin must use the server mutation for Event details', async () => {
       const leader = testEnvFinal.authenticatedContext('user_leader');
       const admin = testEnvFinal.authenticatedContext('user_admin');
-      await assertSucceeds(leader.database().ref(`Bands/${BAND_ID}/Events/${EVENT_OPEN}`).update({
+      await assertFails(leader.database().ref(`Bands/${BAND_ID}/Events/${EVENT_OPEN}`).update({
         title: 'Leader Updated Title',
       }));
-      await assertSucceeds(admin.database().ref(`Bands/${BAND_ID}/Events/${EVENT_OPEN}`).update({
+      await assertFails(admin.database().ref(`Bands/${BAND_ID}/Events/${EVENT_OPEN}`).update({
         title: 'Admin Updated Title',
       }));
     });
 
-    it('12. Event Creator and Band Leader CAN assign substitutes', async () => {
+    it('12. Event Creator and Leader cannot forge direct substitute assignments', async () => {
       const creator = testEnvFinal.authenticatedContext('user_creator');
       const leader = testEnvFinal.authenticatedContext('user_leader');
       const subRef1 = creator.database().ref(`Bands/${BAND_ID}/Events/${EVENT_OPEN}/substituteAssignments/slot_1`);
       const subRef2 = leader.database().ref(`Bands/${BAND_ID}/Events/${EVENT_OPEN}/substituteAssignments/slot_2`);
-      await assertSucceeds(subRef1.set({
+      await assertFails(subRef1.set({
         slotId: 'slot_1',
         assignedUserId: 'user_sub_1',
         assignedUserName: 'Sam Sub',
         instrument: 'Bass',
         status: 'assigned',
       }));
-      await assertSucceeds(subRef2.set({
+      await assertFails(subRef2.set({
         slotId: 'slot_2',
         assignedUserId: 'user_sub_2',
         assignedUserName: 'Alex Sub',

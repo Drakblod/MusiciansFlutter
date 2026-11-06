@@ -69,6 +69,27 @@ class MockResultsFirebaseService extends FirebaseService {
   }
 
   @override
+  Future<bool> canManageBandEventAsync(String bandId) async => true;
+
+  @override
+  Future<BandEvent?> getManagerBandEventOnceAsync(String bandId, String eventId) async {
+    if (mockEvent?.id == eventId) return mockEvent;
+    for (final event in mockBandEvents) {
+      if (event.id == eventId) return event;
+    }
+    return null;
+  }
+
+  @override
+  Future<List<BandEvent>> getManagerBandEventsListAsync(String bandId) async =>
+      mockBandEvents.isNotEmpty ? mockBandEvents : (mockEvent == null ? [] : [mockEvent!]);
+
+  @override
+  Stream<BandEvent?> subscribeToManagerBandEvent(String bandId, String eventId) =>
+      Stream.value(mockEvent?.id == eventId ? mockEvent :
+          mockBandEvents.where((event) => event.id == eventId).firstOrNull);
+
+  @override
   Stream<BandEvent?> subscribeToBandEvent(String bandId, String eventId) {
     if (mockEvent != null && mockEvent!.id == eventId) {
       return Stream.value(mockEvent);
@@ -255,10 +276,10 @@ void main() {
           ),
         );
 
-        await tester.pumpAndSettle();
+        await tester.pump(const Duration(milliseconds: 300));
 
         // 1. Verify Header title and metadata
-        expect(find.text('"Friday Big Show"'), findsWidgets);
+        expect(find.text('”Friday Big Show”'), findsWidgets);
         expect(find.text('Grand Ballroom'), findsWidgets);
 
         // 2. Verify all 4 exact category pills are present with counts
@@ -269,18 +290,18 @@ void main() {
 
         // Tap YES (2) to expand
         await tester.tap(find.text('YES (2)'));
-        await tester.pumpAndSettle();
+        await tester.pump(const Duration(milliseconds: 300));
         expect(find.text('Alice Vocalist'), findsOneWidget);
         expect(find.text('Bob Guitar'), findsOneWidget);
 
         // Tap NO (1) to expand
         await tester.tap(find.text('NO (1)'));
-        await tester.pumpAndSettle();
+        await tester.pump(const Duration(milliseconds: 300));
         expect(find.text('Charlie Bass'), findsOneWidget);
 
         // Tap UNCERTAIN (2) to expand
         await tester.tap(find.text('UNCERTAIN (2)'));
-        await tester.pumpAndSettle();
+        await tester.pump(const Duration(milliseconds: 300));
         expect(find.text('Diana Drum'), findsOneWidget);
         expect(find.text('Evan Keys'), findsOneWidget);
         expect(find.textContaining('Flight might be delayed'), findsOneWidget);
@@ -288,7 +309,7 @@ void main() {
 
         // Tap NO ANSWER (1) to expand
         await tester.tap(find.text('NO ANSWER (1)'));
-        await tester.pumpAndSettle();
+        await tester.pump(const Duration(milliseconds: 300));
         expect(find.text('Frank Horn'), findsOneWidget);
 
         // 5. Zero write calls occurred
@@ -377,14 +398,14 @@ void main() {
           ),
         );
 
-        await tester.pumpAndSettle();
+        await tester.pump(const Duration(milliseconds: 300));
 
         // Header shows 2 distinct confirmed substitutes pill
         expect(find.text('SUBSTITUTES (2)'), findsOneWidget);
 
         // Tap SUBSTITUTES (2) pill to expand
         await tester.tap(find.text('SUBSTITUTES (2)'));
-        await tester.pumpAndSettle();
+        await tester.pump(const Duration(milliseconds: 300));
 
         // Confirmed slot visible
         expect(find.text('Sam Substitute'), findsOneWidget);
@@ -427,11 +448,11 @@ void main() {
           initialEvent: event,
         ),
       );
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 300));
 
       expect(find.text('SUBSTITUTES (0)'), findsOneWidget);
       await tester.tap(find.text('SUBSTITUTES (0)'));
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 300));
       expect(find.text('No substitutes assigned.'), findsOneWidget);
     });
 
@@ -463,7 +484,7 @@ void main() {
           initialEvent: event,
         ),
       );
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 300));
 
       // No interactive management/RSVP buttons
       expect(find.text('Find Sub'), findsNothing);
@@ -528,7 +549,7 @@ void main() {
           initialEvent: eventPart1,
         ),
       );
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 300));
 
       // In Part 1: YES (1), NO (0)
       expect(find.textContaining('YES (1)'), findsOneWidget);
@@ -538,7 +559,7 @@ void main() {
       final part2Chip = find.textContaining('Part 2');
       expect(part2Chip, findsOneWidget);
       await tester.tap(part2Chip);
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 300));
 
       // In Part 2: YES (0), NO (1)
       expect(find.textContaining('YES (0)'), findsOneWidget);
@@ -637,7 +658,7 @@ void main() {
             initialEvent: eventPart1,
           ),
         );
-        await tester.pumpAndSettle();
+        await tester.pump(const Duration(milliseconds: 300));
 
         // 1. Verify synthetic parent is NOT counted as an occurrence
         // Only Part 1 and Part 2 are shown in date chips
@@ -655,12 +676,12 @@ void main() {
 
         // Tap UNCERTAIN (1) -> Reason displayed
         await tester.tap(find.text('UNCERTAIN (1)'));
-        await tester.pumpAndSettle();
+        await tester.pump(const Duration(milliseconds: 300));
         expect(find.text('"Has dentist appointment"'), findsOneWidget);
 
         // Tap SUBSTITUTES (1) -> Substitute visible
         await tester.tap(find.text('SUBSTITUTES (1)'));
-        await tester.pumpAndSettle();
+        await tester.pump(const Duration(milliseconds: 300));
         expect(find.text('Sam On Bass'), findsOneWidget);
         expect(find.text('Leo On Drums'), findsNothing);
 
@@ -668,7 +689,7 @@ void main() {
         final part2Chip = find.textContaining('Part 2');
         expect(part2Chip, findsOneWidget);
         await tester.tap(part2Chip);
-        await tester.pumpAndSettle();
+        await tester.pump(const Duration(milliseconds: 300));
 
         // 4. Verify Part 2 details:
         // Metadata changes
@@ -682,22 +703,22 @@ void main() {
 
         // Tap SUBSTITUTES (1) -> Leo On Drums visible
         await tester.tap(find.text('SUBSTITUTES (1)'));
-        await tester.pumpAndSettle();
+        await tester.pump(const Duration(milliseconds: 300));
         expect(find.text('Leo On Drums'), findsOneWidget);
         expect(find.text('Sam On Bass'), findsNothing);
 
         // 5. Switch back to Part 1
         final part1Chip = find.textContaining('Part 1');
         await tester.tap(part1Chip);
-        await tester.pumpAndSettle();
+        await tester.pump(const Duration(milliseconds: 300));
 
         // Verify Part 1 is restored
         expect(find.text('Stockholm Globe'), findsOneWidget);
         await tester.tap(find.text('UNCERTAIN (1)'));
-        await tester.pumpAndSettle();
+        await tester.pump(const Duration(milliseconds: 300));
         expect(find.text('"Has dentist appointment"'), findsOneWidget);
         await tester.tap(find.text('SUBSTITUTES (1)'));
-        await tester.pumpAndSettle();
+        await tester.pump(const Duration(milliseconds: 300));
         expect(find.text('Sam On Bass'), findsOneWidget);
       },
     );
@@ -820,7 +841,7 @@ void main() {
             initialEvent: event,
           ),
         );
-        await tester.pumpAndSettle();
+        await tester.pump(const Duration(milliseconds: 300));
 
         // 1. Check substitutes pill count:
         // Alice has 2 slots (Bass + Synth).
@@ -831,7 +852,7 @@ void main() {
 
         // Tap SUBSTITUTES (3) to expand
         await tester.tap(find.text('SUBSTITUTES (3)'));
-        await tester.pumpAndSettle();
+        await tester.pump(const Duration(milliseconds: 300));
 
         // 2. Both slots for Alice are visible
         expect(find.text('Alice Valid Bass'), findsOneWidget);
@@ -896,7 +917,7 @@ void main() {
             initialEvent: event,
           ),
         );
-        await tester.pumpAndSettle();
+        await tester.pump(const Duration(milliseconds: 300));
 
         // 1. Exact title: CustomTopBar has title 'RSVP RESULTS', redundant body heading removed
         expect(
@@ -916,7 +937,7 @@ void main() {
         expect(find.text('The Rolling Stones'), findsOneWidget);
 
         // 4. Quoted event name directly below band name
-        expect(find.text('"Summer Tour"'), findsOneWidget);
+        expect(find.text('”Summer Tour”'), findsOneWidget);
 
         // 5. Location and date
         expect(find.text('Wembley Stadium, London'), findsOneWidget);
@@ -965,11 +986,11 @@ void main() {
             initialEvent: event,
           ),
         );
-        await tester.pumpAndSettle();
+        await tester.pump(const Duration(milliseconds: 300));
 
         // Band fallback
         expect(find.text('Band'), findsWidgets);
-        expect(find.text('"Acoustic Gig"'), findsOneWidget);
+        expect(find.text('”Acoustic Gig”'), findsOneWidget);
         expect(
           find.byWidgetPredicate(
             (w) => w.runtimeType.toString() == 'CustomTopBar' && (w as dynamic).title == 'RSVP RESULTS',
@@ -1011,7 +1032,7 @@ void main() {
             initialEvent: event,
           ),
         );
-        await tester.pumpAndSettle();
+        await tester.pump(const Duration(milliseconds: 300));
 
         expect(
           find.byWidgetPredicate(
@@ -1020,7 +1041,7 @@ void main() {
           findsOneWidget,
         );
         expect(find.text('Very Long Symphonic Orchestra Band Name That Wraps'), findsOneWidget);
-        expect(find.text('"Extremely Long Event Title For Annual Summer Tour Festival Gala"'), findsOneWidget);
+        expect(find.text('”Extremely Long Event Title For Annual Summer Tour Festival Gala”'), findsOneWidget);
         expect(tester.takeException(), isNull);
       },
     );

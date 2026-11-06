@@ -12,6 +12,7 @@ import 'package:musicians_flutter/providers/app_state.dart';
 import 'package:musicians_flutter/services/firebase_service.dart';
 import 'package:musicians_flutter/views/event_details_page.dart';
 import 'package:musicians_flutter/views/event_results_page.dart';
+import 'package:musicians_flutter/widgets/animated_tap_detector.dart';
 
 class MockEventDetailsFirebaseService extends FirebaseService {
   BandEvent? mockEvent;
@@ -28,6 +29,20 @@ class MockEventDetailsFirebaseService extends FirebaseService {
   Future<Band?> getBandInfoAsync(String bandId) async {
     return mockBand;
   }
+
+  @override
+  Future<Band?> getPublicBandProfileAsync(String bandId) async => mockBand;
+
+  @override
+  Future<bool> canManageBandEventAsync(String bandId) async => mockMembers.any(
+      (member) => member.role == 'Leader' || member.role == 'Admin');
+
+  @override
+  Future<BandEvent?> getManagerBandEventOnceAsync(String bandId, String eventId) async => mockEvent;
+
+  @override
+  Future<List<BandEvent>> getManagerBandEventsListAsync(String bandId) async =>
+      mockEvent == null ? [] : [mockEvent!];
 
   @override
   Future<List<BandMember>> getBandMembersAsync(String bandId) async {
@@ -115,8 +130,8 @@ void main() {
       description: description,
       eventType: 'Concert',
       location: location,
-      startDateTime: '2026-09-16T19:00:00Z',
-      endDateTime: '2026-09-16T21:00:00Z',
+      startDateTime: '2027-09-16T19:00:00Z',
+      endDateTime: '2027-09-16T21:00:00Z',
       additionalNotes: '',
       createdBy: createdBy,
       createdAt: DateTime.now().millisecondsSinceEpoch,
@@ -163,9 +178,9 @@ void main() {
       );
 
       await tester.pumpWidget(createTestWidget(event: event, mockFirebase: mockFb));
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 300));
 
-      expect(find.text('"Torsdagskul"'), findsOneWidget);
+      expect(find.text('”Torsdagskul”'), findsOneWidget);
       expect(
         find.byWidgetPredicate(
           (w) => w.runtimeType.toString() == 'CustomTopBar' && (w as dynamic).title == 'Event Details',
@@ -203,7 +218,7 @@ void main() {
       );
 
       await tester.pumpWidget(createTestWidget(event: event, mockFirebase: mockFb));
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 300));
 
       expect(find.text('WHY ARE YOU UNCERTAIN? (mandatory)'), findsOneWidget);
       expect(find.text('Might be late'), findsOneWidget);
@@ -222,7 +237,7 @@ void main() {
         mockFirebase: mockFb,
         role: 'Leader',
       ));
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 300));
 
       expect(find.text('REMINDER SETTINGS'), findsNothing);
       expect(find.text('Trigger 24h Reminder'), findsNothing);
@@ -241,10 +256,10 @@ void main() {
       );
 
       await tester.pumpWidget(createTestWidget(event: event, mockFirebase: mockFb));
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 300));
 
       expect(find.text('The Rolling Beats'), findsOneWidget);
-      expect(find.text('"Summer Tour Kickoff"'), findsOneWidget);
+      expect(find.text('”Summer Tour Kickoff”'), findsOneWidget);
       expect(find.text('Central Arena'), findsOneWidget);
       expect(find.text('Important rehearsal before summer gig.'), findsOneWidget);
 
@@ -254,7 +269,7 @@ void main() {
 
       // Verify vertical positioning: Band name above quoted title, quoted title above Date/Time
       final bandPos = tester.getTopLeft(find.text('The Rolling Beats')).dy;
-      final titlePos = tester.getTopLeft(find.text('"Summer Tour Kickoff"')).dy;
+      final titlePos = tester.getTopLeft(find.text('”Summer Tour Kickoff”')).dy;
       final datePos = tester.getTopLeft(find.byIcon(Icons.calendar_today_outlined)).dy;
       final locationPos = tester.getTopLeft(find.text('Central Arena')).dy;
       final descPos = tester.getTopLeft(find.text('Important rehearsal before summer gig.')).dy;
@@ -271,10 +286,10 @@ void main() {
       final event = createTestBandEvent(title: 'Local Jam');
 
       await tester.pumpWidget(createTestWidget(event: event, mockFirebase: mockFb));
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 300));
 
       expect(find.text('Band'), findsOneWidget);
-      expect(find.text('"Local Jam"'), findsOneWidget);
+      expect(find.text('”Local Jam”'), findsOneWidget);
     });
 
     testWidgets('6. Attendance breakdown is completely removed from Event Details', (tester) async {
@@ -289,7 +304,7 @@ void main() {
       );
 
       await tester.pumpWidget(createTestWidget(event: event, mockFirebase: mockFb));
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 300));
 
       // Attendance breakdown heading and pills must not exist
       expect(find.text('ATTENDANCE RESPONSES'), findsNothing);
@@ -311,7 +326,7 @@ void main() {
         mockFirebase: mockFb,
         currentUserId: 'different_user_123',
       ));
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 300));
 
       expect(find.text('EVENT CREATOR ACTIONS'), findsNothing);
       expect(find.text('View RSVP Results'), findsNothing);
@@ -320,7 +335,7 @@ void main() {
       expect(find.text('Find Substitute(s)'), findsNothing);
     });
 
-    testWidgets('8. Event Creator sees Event Creator Actions and View RSVP Results navigates to RSVP Results', (tester) async {
+    testWidgets('8. Current Leader sees manager actions and View RSVP Results navigates to RSVP Results', (tester) async {
       final mockFb = MockEventDetailsFirebaseService();
       final event = createTestBandEvent(
         title: 'Festival Headliner',
@@ -331,18 +346,24 @@ void main() {
         event: event,
         mockFirebase: mockFb,
         currentUserId: 'creator_789',
+        role: 'Leader',
       ));
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 300));
 
-      expect(find.text('EVENT CREATOR ACTIONS'), findsOneWidget);
+      expect(find.text('BAND MANAGER ACTIONS'), findsOneWidget);
       expect(find.text('View RSVP Results'), findsOneWidget);
       expect(find.text('Edit Event'), findsOneWidget);
       expect(find.text('Finalize Event & Lock RSVPs'), findsOneWidget);
       expect(find.text('Find Substitute(s)'), findsOneWidget);
 
       // Tap View RSVP Results and verify navigation
-      await tester.tap(find.text('View RSVP Results'));
-      await tester.pumpAndSettle();
+      final resultsAction = tester.widget<AnimatedTapDetector>(find.ancestor(
+        of: find.text('View RSVP Results'),
+        matching: find.byType(AnimatedTapDetector),
+      ).first);
+      resultsAction.onTap();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
 
       expect(find.byType(EventResultsPage), findsOneWidget);
       expect(
@@ -372,8 +393,7 @@ void main() {
         mockFirebase: mockFb,
         currentUserId: 'creator_789',
       ));
-      await tester.pumpAndSettle();
-
+      await tester.pump(const Duration(milliseconds: 300));
       expect(tester.takeException(), isNull);
     });
 
@@ -416,11 +436,11 @@ void main() {
       );
 
       await tester.pumpWidget(createTestWidget(event: event, mockFirebase: mockFb));
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 300));
 
       // Header overview has Band name and quoted title
       expect(find.text('Multi Band'), findsOneWidget);
-      expect(find.text('"Tour 2026"'), findsOneWidget);
+      expect(find.text('”Tour 2026”'), findsOneWidget);
 
       // No Event Type and no EVENT SCHEDULE badge in overview header
       expect(find.textContaining('EVENT SCHEDULE ('), findsNothing);

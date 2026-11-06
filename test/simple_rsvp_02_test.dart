@@ -33,6 +33,26 @@ class MockSimpleRsvpFirebaseService extends FirebaseService {
   }
 
   @override
+  Future<bool> canManageBandEventAsync(String bandId) async => true;
+
+  @override
+  Future<BandEvent?> getManagerBandEventOnceAsync(String bandId, String eventId) async {
+    if (mockEvent?.id == eventId) return mockEvent;
+    for (final event in mockBandEvents) {
+      if (event.id == eventId) return event;
+    }
+    return null;
+  }
+
+  @override
+  Future<List<BandEvent>> getManagerBandEventsListAsync(String bandId) async =>
+      mockBandEvents.isNotEmpty ? mockBandEvents : (mockEvent == null ? [] : [mockEvent!]);
+
+  @override
+  Stream<BandEvent?> subscribeToManagerBandEvent(String bandId, String eventId) =>
+      Stream.fromFuture(getManagerBandEventOnceAsync(bandId, eventId));
+
+  @override
   Future<Band?> getBandInfoAsync(String bandId) async {
     return Band(
       id: bandId,

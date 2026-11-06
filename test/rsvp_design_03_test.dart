@@ -21,6 +21,7 @@ import 'package:musicians_flutter/utils/date_parser.dart';
 
 class MockRsvpDesignFirebaseService extends FirebaseService {
   BandEvent? mockEvent;
+  bool mockCanManage = true;
   List<BandMember> mockMembers = [];
   Map<String, UserProfile> mockProfiles = {};
   List<BandEvent> mockBandEvents = [];
@@ -41,6 +42,9 @@ class MockRsvpDesignFirebaseService extends FirebaseService {
   Future<String?> getUserBandRoleAsync(String bandId, String userId) async {
     return 'Leader';
   }
+
+  @override
+  Future<bool> canManageBandEventAsync(String bandId) async => mockCanManage;
 
   @override
   Future<Band?> getBandInfoAsync(String bandId) async {
@@ -273,7 +277,7 @@ void main() {
       expect(find.text('Maximum 6 events per Event Schedule.'), findsOneWidget);
     });
 
-    testWidgets('7. EventDetailsPage restricts Creator Actions strictly to createdBy user', (tester) async {
+    testWidgets('7. EventDetailsPage restricts manager actions to current band managers', (tester) async {
       tester.view.physicalSize = const Size(1200, 3000);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() {
@@ -304,7 +308,8 @@ void main() {
         BandMember(userId: 'actual_creator_123', role: 'Member'),
       ];
 
-      // Case A: Current user is NOT the creator (even if Leader)
+      // Case A: A current Leader can manage even when someone else created the event.
+      mockService.mockCanManage = true;
       final appStateNonCreator = MockRsvpDesignAppState(mockService, testUserId: 'non_creator_leader');
 
       await tester.pumpWidget(
@@ -323,14 +328,16 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
       await tester.pump(const Duration(milliseconds: 300));
 
-      // Creator actions should NOT be shown
-      expect(find.text('EVENT CREATOR ACTIONS'), findsNothing);
-      expect(find.text('Edit Event'), findsNothing);
-      expect(find.text('Finalize Event & Lock RSVPs'), findsNothing);
-      expect(find.text('Find Substitute(s)'), findsNothing);
+      expect(find.text('BAND MANAGER ACTIONS'), findsOneWidget);
+      expect(find.text('Edit Event'), findsOneWidget);
+      expect(find.text('Finalize Event & Lock RSVPs'), findsOneWidget);
+      expect(find.text('Find Substitute(s)'), findsOneWidget);
 
-      // Case B: Current user IS the creator
+      // Case B: Creator identity cannot grant a Member manager access.
+      mockService.mockCanManage = false;
       final appStateCreator = MockRsvpDesignAppState(mockService, testUserId: 'actual_creator_123');
+
+      await tester.pumpWidget(const SizedBox.shrink());
 
       await tester.pumpWidget(
         ChangeNotifierProvider<AppState>.value(
@@ -348,11 +355,10 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
       await tester.pump(const Duration(milliseconds: 300));
 
-      // Creator actions SHOULD be shown
-      expect(find.text('EVENT CREATOR ACTIONS'), findsOneWidget);
-      expect(find.text('Edit Event'), findsOneWidget);
-      expect(find.text('Finalize Event & Lock RSVPs'), findsOneWidget);
-      expect(find.text('Find Substitute(s)'), findsOneWidget);
+      expect(find.text('BAND MANAGER ACTIONS'), findsNothing);
+      expect(find.text('Edit Event'), findsNothing);
+      expect(find.text('Finalize Event & Lock RSVPs'), findsNothing);
+      expect(find.text('Find Substitute(s)'), findsNothing);
     });
 
     testWidgets('8 & 9. Band Room Events tab displays exact headings and routes finalized/past to Results', (tester) async {

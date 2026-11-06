@@ -9,6 +9,12 @@ const crypto = require('crypto');
 const membershipAuthority = require('./membership_authority');
 const cityPlaces = require('./google_places_cities');
 const cityGate = require('./city_verification');
+const eventReadModels = require('./event_read_models');
+const eventMutations = require('./event_mutations');
+exports.mutateBandEvent = onCall({region:'europe-west1'},async request=>{
+  if(!request.auth)throw new HttpsError('unauthenticated','Sign in first.');
+  return eventMutations.mutate(admin.database(),request.auth.uid,request.data);
+});
 const cityPlacesKey = defineSecret('GOOGLE_PLACES_API_KEY');
 const cityBody = (data,keys) => data && typeof data === 'object' && !Array.isArray(data) &&
   JSON.stringify(data).length <= 512 && Object.keys(data).every(key => keys.includes(key)) &&
@@ -124,7 +130,10 @@ if (!admin.apps.length) {
 const isEmulator = process.env.FUNCTIONS_EMULATOR === 'true' ||
   process.env.FIREBASE_DATABASE_EMULATOR_HOST !== undefined ||
   process.env.FIREBASE_EMULATOR_HUB !== undefined;
-const databaseTriggerRegion = isEmulator ? 'us-central1' : 'europe-west1';
+// The deployed manifest must not change region merely because a developer's
+// shell has FIREBASE_DATABASE_EMULATOR_HOST or FIREBASE_EMULATOR_HUB set.
+const databaseTriggerRegion = process.env.FUNCTIONS_EMULATOR === 'true'
+  ? 'us-central1' : 'europe-west1';
 
 // In emulator environment, stub outbound FCM messaging to avoid external network timeouts on fake tokens
 if (isEmulator) {
@@ -145,7 +154,29 @@ if (isEmulator) {
 exports.onCatalogueUserWritten = onValueWritten({ref:'/users/{userId}',region:databaseTriggerRegion,retry:true},
   event => require('./catalogue_projections').reconcile(admin.database(),'user',event.params.userId));
 exports.onCatalogueBandWritten = onValueWritten({ref:'/Bands/{bandId}',region:databaseTriggerRegion,retry:true},
-  event => require('./catalogue_projections').reconcile(admin.database(),'band',event.params.bandId));
+  async event => {
+    await require('./catalogue_projections').reconcile(admin.database(),'band',event.params.bandId);
+    const beforeName=event.data.before.val()?.Name;
+    const afterName=event.data.after.val()?.Name;
+    if(!event.data.after.exists())await eventReadModels.reconcileBand(admin.database(),event.params.bandId);
+    else if(beforeName!==afterName &&
+      (await admin.database().ref(`bandMemberEvents/${event.params.bandId}`).get()).exists())
+      await eventReadModels.reconcileBand(admin.database(),event.params.bandId);
+  });
+exports.onBandEventReadModelWritten = onValueWritten({
+  ref:'/Bands/{bandId}/Events/{eventId}',region:databaseTriggerRegion,retry:true,
+},event=>eventReadModels.reconcile(admin.database(),event.params.bandId,event.params.eventId));
+const nonCalendarBandEvents = new Set(['Agreements','CancelledSubRequests',
+  'Notifications','PublishedSubRequests','SubRequestResponses']);
+exports.onLegacyBandCalendarEventWritten = onValueWritten({
+  ref:'/BandEvents/{bandId}/{eventId}',region:databaseTriggerRegion,retry:true,
+},event=>{
+  // BandEvents also contains unrelated legacy response, agreement and
+  // notification namespaces. Those records are never calendar events.
+  if(nonCalendarBandEvents.has(event.params.bandId))return null;
+  return eventReadModels.reconcileLegacyCalendar(admin.database(),
+    event.params.bandId,event.params.eventId);
+});
 
 const KNOWN_FEATURE_IDS = ['find_gigs', 'find_musicians', 'collabs', 'band_room', 'messages'];
 
@@ -4433,6 +4464,7 @@ exports.onBandMemberWritten = onValueWritten({
   try {
     await require('./band_membership_index').reconcileMembershipIndex(
       admin.database(), event.params.bandId, event.params.memberId);
+    await eventReadModels.reconcileBand(admin.database(),event.params.bandId,event.params.memberId);
   } finally {
     // Preserve audience reconciliation even if index maintenance needs a retry.
     await handleBandMemberChange(event);

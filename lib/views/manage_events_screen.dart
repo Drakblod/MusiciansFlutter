@@ -41,6 +41,10 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> with SingleTick
   // All loaded events: bandId -> List<BandEvent>
   final Map<String, List<BandEvent>> _bandEventsMap = {};
   final List<StreamSubscription<List<BandEvent>>> _subscriptions = [];
+  AppState? _observedAppState;
+  String? _observedUid;
+  String? _observedBandId;
+  int _sessionEpoch = 0;
 
   @override
   void initState() {
@@ -50,7 +54,48 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> with SingleTick
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final appState = Provider.of<AppState>(context, listen: false);
+    if (identical(_observedAppState, appState)) {
+      return;
+    }
+    _observedAppState?.removeListener(_onSessionChanged);
+    _observedAppState = appState;
+    _observedUid = appState.currentUserId;
+    _observedBandId = appState.activeBandId;
+    appState.addListener(_onSessionChanged);
+  }
+
+  void _onSessionChanged() {
+    final appState = _observedAppState;
+    if (appState == null ||
+        (appState.currentUserId == _observedUid &&
+            appState.activeBandId == _observedBandId)) {
+      return;
+    }
+    _observedUid = appState.currentUserId;
+    _observedBandId = appState.activeBandId;
+    _sessionEpoch++;
+    for (final sub in _subscriptions) {
+      sub.cancel();
+    }
+    _subscriptions.clear();
+    if (!mounted) return;
+    setState(() {
+      _userBands = {};
+      _userRoles = {};
+      _bandEventsMap.clear();
+      _isLoading = false;
+    });
+    if (_observedUid != null) {
+      unawaited(_loadBandsAndEvents());
+    }
+  }
+
+  @override
   void dispose() {
+    _observedAppState?.removeListener(_onSessionChanged);
     _tabController.dispose();
     _searchController.dispose();
     for (final sub in _subscriptions) {
@@ -60,6 +105,7 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> with SingleTick
   }
 
   Future<void> _loadBandsAndEvents() async {
+    final epoch = _sessionEpoch;
     setState(() => _isLoading = true);
     for (final sub in _subscriptions) {
       sub.cancel();
@@ -75,6 +121,7 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> with SingleTick
       }
 
       final bands = await appState.firebaseService.getUserBandsAsync(userId);
+      if (!mounted || epoch != _sessionEpoch || appState.currentUserId != userId) return;
       final Map<String, String> roles = {};
 
       for (final bandId in bands.keys) {
@@ -84,6 +131,7 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> with SingleTick
         } catch (_) {
           roles[bandId] = 'member';
         }
+        if (!mounted || epoch != _sessionEpoch || appState.currentUserId != userId) return;
       }
 
       if (mounted) {
@@ -96,7 +144,7 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> with SingleTick
       // Subscribe to events for each band
       for (final bandId in bands.keys) {
         final sub = appState.firebaseService.subscribeToBandEvents(bandId).listen((events) {
-          if (mounted) {
+          if (mounted && epoch == _sessionEpoch && appState.currentUserId == userId) {
             setState(() {
               _bandEventsMap[bandId] = events;
               _isLoading = false;
@@ -571,14 +619,12 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> with SingleTick
     final iconData = _getEventTypeIcon(sessionType);
 
     final appState = Provider.of<AppState>(context, listen: false);
-    final currentUserId = appState.currentUserId;
-    final isCreator = currentUserId != null && currentUserId == event.createdBy;
-    final canEdit = isCreator;
-    final canDelete = isCreator || isAuthorized;
+    final canEdit = isAuthorized;
+    final canDelete = isAuthorized;
 
     void openEvent() {
       if (event.id != null) {
-        if (event.isLocked || tabType == EventTabType.past) {
+        if (isAuthorized && (event.isLocked || tabType == EventTabType.past)) {
           Navigator.push(
             context,
             MaterialPageRoute(
@@ -684,14 +730,22 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> with SingleTick
                         icon: const Icon(Icons.more_vert, color: AppTheme.textSecondary),
                         color: const Color(0xFF1A1635),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        onSelected: (action) {
+                        onSelected: (action) async {
                           if (action == 'edit') {
+                            final uid = appState.currentUserId;
+                            if (uid == null || event.id == null) return;
+                            final managerEvent = await appState.firebaseService
+                                .getManagerBandEventOnceAsync(bandId, event.id!);
+                            if (!context.mounted || appState.currentUserId != uid ||
+                                managerEvent == null) {
+                              return;
+                            }
                             Navigator.push(
                               context,
                               MaterialPageRoute(
                                 builder: (_) => CreateEventPage(
                                   bandId: bandId,
-                                  existingEvent: event,
+                                  existingEvent: managerEvent,
                                 ),
                               ),
                             );
@@ -804,7 +858,7 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> with SingleTick
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
-                    TextButton.icon(
+                    if (isAuthorized) TextButton.icon(
                       style: TextButton.styleFrom(
                         foregroundColor: AppTheme.primaryAccent,
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
