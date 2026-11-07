@@ -1132,7 +1132,8 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        if (!FeatureToggles.showMapInTopBar) ...[
+                        if (FeatureToggles.enableMapView &&
+                            !FeatureToggles.showMapInTopBar) ...[
                           TextButton.icon(
                             onPressed: () {
                               Navigator.pushNamed(context, '/gig-map');

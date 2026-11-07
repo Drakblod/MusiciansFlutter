@@ -1,3 +1,5 @@
+import 'package:musicians_flutter/config/feature_toggles.dart';
+import 'package:musicians_flutter/widgets/custom_top_bar.dart';
 import 'package:musicians_flutter/widgets/city_location_picker_field.dart';
 import 'package:musicians_flutter/models/city_location.dart';
 import 'international_city_picker_01_test.dart' as picker;
@@ -317,17 +319,25 @@ void main() {
 
       expect(rehearsalLocFinder, findsOneWidget);
       expect(scheduleFinder, findsOneWidget);
-      expect(mapViewFinder, findsOneWidget);
+      expect(mapViewFinder,
+          FeatureToggles.enableMapView ? findsOneWidget : findsNothing);
+      expect(find.byType(SpinningGlobeIcon),
+          FeatureToggles.enableMapView && FeatureToggles.showMapInTopBar
+              ? findsOneWidget
+              : findsNothing);
 
       final rehearsalLocY = tester.getTopLeft(rehearsalLocFinder).dy;
       final scheduleY = tester.getTopLeft(scheduleFinder).dy;
-      final mapViewY = tester.getTopLeft(mapViewFinder).dy;
 
       expect(rehearsalLocY, lessThan(scheduleY), reason: 'Rehearsal Location must be above Schedule');
-      expect(scheduleY, lessThan(mapViewY), reason: 'Schedule must be above Map View location');
+      if (FeatureToggles.enableMapView) {
+        final mapViewY = tester.getTopLeft(mapViewFinder).dy;
+        expect(scheduleY, lessThan(mapViewY),
+            reason: 'Schedule must be above Map View location');
+      }
     });
 
-    testWidgets('8. Exact disclaimer heading and body are displayed in Create Band and Edit Band', (tester) async {
+    testWidgets('8. Both band forms show the exact disclaimer only when Map View is enabled', (tester) async {
       tester.view.physicalSize = const Size(800, 3000);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -340,16 +350,18 @@ void main() {
       await tester.pumpWidget(createTestWidget(const CreateBandScreen()));
       await pumpUiTransitions(tester);
 
-      expect(find.text(expectedHeading), findsOneWidget);
-      expect(find.text(expectedBody), findsOneWidget);
+      final disclaimerMatcher =
+          FeatureToggles.enableMapView ? findsOneWidget : findsNothing;
+      expect(find.text(expectedHeading), disclaimerMatcher);
+      expect(find.text(expectedBody), disclaimerMatcher);
 
       // Edit Band
       final band = Band(id: 'b1', name: 'Disclaimer Test Band');
       await tester.pumpWidget(createTestWidget(EditBandInfoScreen(band: band)));
       await pumpUiTransitions(tester);
 
-      expect(find.text(expectedHeading), findsOneWidget);
-      expect(find.text(expectedBody), findsOneWidget);
+      expect(find.text(expectedHeading), disclaimerMatcher);
+      expect(find.text(expectedBody), disclaimerMatcher);
     });
 
     test('9. Existing Band serialization remains backward compatible', () {

@@ -7,12 +7,25 @@ const jwt = require('jsonwebtoken');
  * Kept strictly on the backend via environment variables / Firebase params.
  * NEVER exposed to mobile clients.
  */
+const liveBroadcastsEnabled = false;
+
+function onLiveBroadcastCall(handler) {
+  return onCall({ region: 'europe-west1' }, (request) => {
+    if (!liveBroadcastsEnabled) {
+      throw new HttpsError('failed-precondition', 'Live broadcasts are currently unavailable.');
+    }
+    return handler(request);
+  });
+}
+
 function getLiveKitConfig() {
-  return {
-    apiKey: process.env.LIVEKIT_API_KEY || 'APIQ97KxhUGgXdz',
-    apiSecret: process.env.LIVEKIT_API_SECRET || 'CVV6TkKaA5iBIgMRdbkdaLmrnDl8s1KcIOBUg1D5nOA',
-    serverUrl: process.env.LIVEKIT_URL || 'wss://musiciansapp-b9yg950s.livekit.cloud',
-  };
+  const apiKey = process.env.LIVEKIT_API_KEY?.trim();
+  const apiSecret = process.env.LIVEKIT_API_SECRET?.trim();
+  const serverUrl = process.env.LIVEKIT_URL?.trim();
+  if (!apiKey || !apiSecret || !serverUrl) {
+    throw new HttpsError('failed-precondition', 'Live broadcasts are currently unavailable.');
+  }
+  return { apiKey, apiSecret, serverUrl };
 }
 
 /**
@@ -65,7 +78,7 @@ function createAuthoritativeLiveKitToken({ identity, roomName, role, userName })
  * creates an active broadcast record at /LiveBroadcasts/{broadcastId},
  * and returns a publisher token restricted to microphone audio.
  */
-const startLiveBroadcast = onCall({ region: 'europe-west1' }, async (request) => {
+const startLiveBroadcast = onLiveBroadcastCall(async (request) => {
   if (!request.auth) {
     throw new HttpsError('unauthenticated', 'User must be signed in to start a live broadcast.');
   }
@@ -118,6 +131,15 @@ const startLiveBroadcast = onCall({ region: 'europe-west1' }, async (request) =>
   const broadcastId = `broadcast_${bandId}_${now}`;
   const roomName = `room_${broadcastId}`;
 
+  // Validate configuration and sign before publishing the broadcast.
+  const tokenResult = createAuthoritativeLiveKitToken({
+    identity: callerUid,
+    roomName,
+    role: 'publisher',
+    userName: callerName,
+  });
+
+
   // 4. Create broadcast metadata in RTDB
   const broadcastPayload = {
     bandId,
@@ -140,14 +162,6 @@ const startLiveBroadcast = onCall({ region: 'europe-west1' }, async (request) =>
 
   await db.ref(`/LiveBroadcasts/${broadcastId}`).set(broadcastPayload);
 
-  // 5. Generate publisher token
-  const tokenResult = createAuthoritativeLiveKitToken({
-    identity: callerUid,
-    roomName,
-    role: 'publisher',
-    userName: callerName,
-  });
-
   return {
     broadcastId,
     roomName,
@@ -163,7 +177,7 @@ const startLiveBroadcast = onCall({ region: 'europe-west1' }, async (request) =>
  * Verifies broadcast is active, increments listener count, and returns
  * a subscriber-only listener token.
  */
-const joinLiveBroadcast = onCall({ region: 'europe-west1' }, async (request) => {
+const joinLiveBroadcast = onLiveBroadcastCall(async (request) => {
   if (!request.auth) {
     throw new HttpsError('unauthenticated', 'User must be signed in to listen to a live broadcast.');
   }
@@ -194,6 +208,15 @@ const joinLiveBroadcast = onCall({ region: 'europe-west1' }, async (request) => 
     userName = uVal.name || uVal.username || 'Listener';
   }
 
+  const roomName = bVal.livekitRoomName || `room_${broadcastId}`;
+  const tokenResult = createAuthoritativeLiveKitToken({
+    identity: callerUid,
+    roomName,
+    role: 'listener',
+    userName,
+  });
+
+
   // Register unique active listener and update authoritative listener count
   const now = Date.now();
   await db.ref(`/LiveBroadcasts/${broadcastId}/activeListeners/${callerUid}`).set({
@@ -204,14 +227,6 @@ const joinLiveBroadcast = onCall({ region: 'europe-west1' }, async (request) => 
   const listenersSnap = await db.ref(`/LiveBroadcasts/${broadcastId}/activeListeners`).once('value');
   const activeCount = listenersSnap.exists() ? Object.keys(listenersSnap.val() || {}).length : 1;
   await db.ref(`/LiveBroadcasts/${broadcastId}/listenerCount`).set(activeCount);
-
-  const roomName = bVal.livekitRoomName || `room_${broadcastId}`;
-  const tokenResult = createAuthoritativeLiveKitToken({
-    identity: callerUid,
-    roomName,
-    role: 'listener',
-    userName,
-  });
 
   return {
     broadcastId,
@@ -228,7 +243,7 @@ const joinLiveBroadcast = onCall({ region: 'europe-west1' }, async (request) => 
  *
  * Authoritatively removes caller from activeListeners and updates listener count.
  */
-const leaveLiveBroadcast = onCall({ region: 'europe-west1' }, async (request) => {
+const leaveLiveBroadcast = onLiveBroadcastCall(async (request) => {
   if (!request.auth) {
     throw new HttpsError('unauthenticated', 'User must be signed in to leave a live broadcast.');
   }
@@ -260,7 +275,7 @@ const leaveLiveBroadcast = onCall({ region: 'europe-west1' }, async (request) =>
  * Verifies caller is the original broadcaster or a band Leader/Admin,
  * and sets broadcast status to 'ended'.
  */
-const stopLiveBroadcast = onCall({ region: 'europe-west1' }, async (request) => {
+const stopLiveBroadcast = onLiveBroadcastCall(async (request) => {
   if (!request.auth) {
     throw new HttpsError('unauthenticated', 'User must be signed in to stop a live broadcast.');
   }

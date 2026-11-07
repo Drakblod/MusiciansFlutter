@@ -70,9 +70,9 @@ class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
                     child: _buildHomeLogo(context, appState),
                   ),
                   // Column 3: Map View (Globe Icon)
-                  Expanded(
-                    child: _buildMapGlobe(context, appState),
-                  ),
+                  if (FeatureToggles.enableMapView &&
+                      FeatureToggles.showMapInTopBar)
+                    Expanded(child: _buildMapGlobe(context)),
                   // Column 4: Inbox / Direct Messages
                   Expanded(
                     child: _buildInbox(context, appState),
@@ -90,7 +90,7 @@ class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
     );
   }
 
-  Widget _buildMapGlobe(BuildContext context, AppState appState) {
+  Widget _buildMapGlobe(BuildContext context) {
     return AnimatedTapDetector(
       onTap: () {
         if (ModalRoute.of(context)?.settings.name == '/gig-map') {

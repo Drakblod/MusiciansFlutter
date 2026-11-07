@@ -1,3 +1,4 @@
+import '../config/feature_toggles.dart';
 import '../utils/catalogue_loading.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -920,130 +921,132 @@ class _CreateBandScreenState extends State<CreateBandScreen> {
               ],
               const SizedBox(height: 20),
 
-              // Map View Location (if other than Rehearsal Location)
-              Text.rich(
-                TextSpan(
-                  children: [
-                    TextSpan(
-                      text: 'Map View Location',
-                      style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
-                    ),
-                    TextSpan(
-                      text: ' (if other than Rehearsal Location)',
-                      style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.normal, color: Colors.white),
-                    ),
-                  ],
+              if (FeatureToggles.enableMapView) ...[
+                // Map View Location (if other than Rehearsal Location)
+                Text.rich(
+                  TextSpan(
+                    children: [
+                      TextSpan(
+                        text: 'Map View Location',
+                        style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                      ),
+                      TextSpan(
+                        text: ' (if other than Rehearsal Location)',
+                        style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.normal, color: Colors.white),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(height: 8),
+                const SizedBox(height: 8),
 
-              // Klickbar ruta: "What is Map View?"
-              Semantics(
-                button: true,
-                label: 'What is Map View? Click to read full guide.',
-                child: AnimatedTapDetector(
-                  onTap: () => showWhatIsMapViewDialog(
-                  context,
-                  description:
-                      'Explore Map View to discover audio snippets from gigs, rehearsals, recordings and gig promos, as well as requests for band members, subs and paid gigs.',
-                ),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF0F0C20).withValues(alpha: 0.95),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppTheme.primaryAccent.withValues(alpha: 0.5), width: 1.2),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            const Icon(Icons.help_outline_rounded, color: AppTheme.primaryAccent, size: 16),
-                            const SizedBox(width: 6),
-                            Expanded(child: Text(
-                              'What is Map View?',
-                              style: GoogleFonts.outfit(
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                              ),
-                            )),
-                            const SizedBox(width: 6),
-                            const Icon(Icons.arrow_forward_ios_rounded, color: AppTheme.primaryAccent, size: 12),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Explore Map View to discover audio snippets from gigs, rehearsals, recordings and gig promos, as well as requests for band members, subs and paid gigs.',
-                          style: GoogleFonts.inter(fontSize: 11.5, color: const Color(0xFFD4CEEB), height: 1.35),
-                        ),
-                      ],
+                // Klickbar ruta: "What is Map View?"
+                Semantics(
+                  button: true,
+                  label: 'What is Map View? Click to read full guide.',
+                  child: AnimatedTapDetector(
+                    onTap: () => showWhatIsMapViewDialog(
+                    context,
+                    description:
+                        'Explore Map View to discover audio snippets from gigs, rehearsals, recordings and gig promos, as well as requests for band members, subs and paid gigs.',
+                  ),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0F0C20).withValues(alpha: 0.95),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppTheme.primaryAccent.withValues(alpha: 0.5), width: 1.2),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.help_outline_rounded, color: AppTheme.primaryAccent, size: 16),
+                              const SizedBox(width: 6),
+                              Expanded(child: Text(
+                                'What is Map View?',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              )),
+                              const SizedBox(width: 6),
+                              const Icon(Icons.arrow_forward_ios_rounded, color: AppTheme.primaryAccent, size: 12),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Explore Map View to discover audio snippets from gigs, rehearsals, recordings and gig promos, as well as requests for band members, subs and paid gigs.',
+                            style: GoogleFonts.inter(fontSize: 11.5, color: const Color(0xFFD4CEEB), height: 1.35),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 8),
-              TextFormField(
-                controller: _mapViewLocationController,
-                style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
-                decoration: const InputDecoration(
-                  hintText: 'Enter FULL address for Map View Pin (Street, City, Country)',
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: _mapViewLocationController,
+                  style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
+                  decoration: const InputDecoration(
+                    hintText: 'Enter FULL address for Map View Pin (Street, City, Country)',
+                  ),
                 ),
-              ),
-              const SizedBox(height: 12),
+                const SizedBox(height: 12),
 
-              // Map Location & Media Permission Disclaimer Container
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: AppTheme.cardBackground,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: const Color(0xFF2E2A4E), width: 1.2),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Checkbox(
-                      value: _isMapDisclaimerAccepted,
-                      activeColor: AppTheme.primaryAccent,
-                      checkColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-                      side: const BorderSide(color: Colors.white54),
-                      onChanged: (val) {
-                        setState(() {
-                          _isMapDisclaimerAccepted = val ?? false;
-                        });
-                      },
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () {
+                // Map Location & Media Permission Disclaimer Container
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: AppTheme.cardBackground,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFF2E2A4E), width: 1.2),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Checkbox(
+                        value: _isMapDisclaimerAccepted,
+                        activeColor: AppTheme.primaryAccent,
+                        checkColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                        side: const BorderSide(color: Colors.white54),
+                        onChanged: (val) {
                           setState(() {
-                            _isMapDisclaimerAccepted = !_isMapDisclaimerAccepted;
+                            _isMapDisclaimerAccepted = val ?? false;
                           });
                         },
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Location & Media disclaimer for Map View',
-                              style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'By checking this box, you give MUSICIANS permission to display your band’s location in "Map View" and make your uploaded media available through your band’s map icon. You confirm that you have all necessary rights and permissions for the media you upload.',
-                              style: GoogleFonts.inter(fontSize: 11, color: Colors.white70, height: 1.4),
-                            ),
-                          ],
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _isMapDisclaimerAccepted = !_isMapDisclaimerAccepted;
+                            });
+                          },
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Location & Media disclaimer for Map View',
+                                style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'By checking this box, you give MUSICIANS permission to display your band’s location in "Map View" and make your uploaded media available through your band’s map icon. You confirm that you have all necessary rights and permissions for the media you upload.',
+                                style: GoogleFonts.inter(fontSize: 11, color: Colors.white70, height: 1.4),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(height: 24),
+                const SizedBox(height: 24),
+              ],
 
               // Band Members Section
               _buildBandMembersSection(),

@@ -9,6 +9,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:musicians_flutter/views/gig_map_page.dart';
+import 'package:musicians_flutter/config/feature_flags.dart';
 import 'package:musicians_flutter/providers/app_state.dart';
 import 'package:musicians_flutter/services/firebase_service.dart';
 import 'package:musicians_flutter/services/live_broadcast_service.dart';
@@ -44,6 +45,8 @@ class MockAppStateForLifecycle extends AppState {
 }
 
 class FakeLiveBroadcastService implements ILiveBroadcastService {
+  int tokenRequests = 0;
+  int streamRequests = 0;
   final List<String> stopCalls = [];
   final List<String> leaveCalls = [];
   final StreamController<List<LiveBroadcast>> _broadcastsController =
@@ -57,6 +60,7 @@ class FakeLiveBroadcastService implements ILiveBroadcastService {
     String? description,
     String? genre,
   }) async {
+    tokenRequests++;
     return const LiveBroadcastSessionToken(
       broadcastId: 'broadcast_123',
       roomName: 'room_123',
@@ -70,6 +74,7 @@ class FakeLiveBroadcastService implements ILiveBroadcastService {
   Future<LiveBroadcastSessionToken> joinLiveBroadcast({
     required String broadcastId,
   }) async {
+    tokenRequests++;
     return LiveBroadcastSessionToken(
       broadcastId: broadcastId,
       roomName: 'room_$broadcastId',
@@ -91,11 +96,13 @@ class FakeLiveBroadcastService implements ILiveBroadcastService {
 
   @override
   Stream<List<LiveBroadcast>> streamActiveBroadcasts() {
+    streamRequests++;
     return _broadcastsController.stream;
   }
 
   @override
   Stream<LiveBroadcast?> streamBroadcast(String broadcastId) {
+    streamRequests++;
     return Stream.value(null);
   }
 
@@ -200,6 +207,34 @@ void main() {
   }
 
   group('GigMapPage Direct Lifecycle Tests', () {
+    if (!FeatureFlags.enableRealLiveBroadcasts) {
+      testWidgets('Map implementation performs no Live work with Live off',
+          (tester) async {
+        final liveService = FakeLiveBroadcastService();
+        final audio = FakeLiveKitAudioController();
+        await tester.pumpWidget(createTestWidget(
+          liveService: liveService,
+          liveKitController: audio,
+          rehearsalController: FakeMockRehearsalAudioController(),
+        ));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+        expect(find.text('Go Live'), findsNothing);
+        expect(liveService.tokenRequests, 0);
+        expect(liveService.streamRequests, 0);
+        expect(audio.isConnected, isFalse);
+
+        await tester.pumpWidget(const SizedBox.shrink());
+        expect(liveService.stopCalls, isEmpty);
+        expect(liveService.leaveCalls, isEmpty);
+        expect(audio.disconnectCallCount, 0);
+        expect(audio.disposeCallCount, 0);
+        await audio.dispose();
+        liveService.dispose();
+      });
+      return;
+    }
+
     testWidgets('A. Broadcaster + didPushNext: stops broadcast on server, disconnects audio, and pauses local audio',
         (tester) async {
       final liveService = FakeLiveBroadcastService();

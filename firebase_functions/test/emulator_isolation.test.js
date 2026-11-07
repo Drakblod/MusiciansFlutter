@@ -36,6 +36,8 @@ describe('EMULATOR-ISOLATION-GATE-01 fail-closed bootstrap', function() {
   });
 
   it('retains the deterministic emulator FCM stub', async function() {
+    // Load the entry point that installs the stub, even in a focused run.
+    require('../index');
     const result=await admin.messaging().sendEach([{token:'emulator-fake-token',
       notification:{title:'local'}}]);
     assert.equal(result.successCount,1);

@@ -195,6 +195,8 @@ void main() {
     await tester.pump();
     expect(find.textContaining('Safe Concert'), findsWidgets);
     service.managerUpdates!.add(null);
+    // Deliver the async projection event before the first frame after revocation.
+    await tester.idle();
     await tester.pump();
     expect(find.textContaining('Safe Concert'), findsNothing);
     expect(find.text('Event results are no longer available.'), findsOneWidget);

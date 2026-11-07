@@ -1,5 +1,6 @@
-"""Run the complete emulator suite without ambient credentials or providers."""
+"""Run registered emulator tests without ambient credentials or providers."""
 
+import argparse
 import json
 import os
 from pathlib import Path
@@ -178,7 +179,15 @@ def summarize(expected, run_code, temp):
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--test-file", action="append", default=[],
+                        help="Run this registered test file plus the isolation tests")
+    args = parser.parse_args()
     expected = preflight()
+    if args.test_file:
+        if not set(args.test_file).issubset(expected):
+            parser.error("--test-file must name a registered test:emulator file")
+        expected = sorted(set(args.test_file) | {"test/emulator_isolation.test.js"})
     ROOT.joinpath("build").mkdir(exist_ok=True)
     previous = SECRET.read_bytes() if SECRET.exists() else None
     previous_env = LOCAL_ENV.read_bytes() if LOCAL_ENV.exists() else None
@@ -200,9 +209,13 @@ def main():
             firebase_cli = shutil.which("firebase.cmd") or shutil.which("firebase")
             if not firebase_cli:
                 raise RuntimeError("Firebase CLI is unavailable")
+            test_command = ("npm --prefix firebase_functions run test:emulator -- "
+                            if not args.test_file else
+                            "cd firebase_functions && node node_modules/mocha/bin/mocha.js --exit "
+                            + " ".join(expected) + " ")
             command = [firebase_cli, "emulators:exec", "--project", PROJECT,
                        "--only", "auth,database,functions,storage",
-                       "npm --prefix firebase_functions run test:emulator -- "
+                       test_command +
                        "--reporter json --reporter-option output=../build/emulator-isolation-results.json"]
             print("Running isolated demo Auth, Database and Functions emulators")
             with LOG.open("w", encoding="utf-8") as log:

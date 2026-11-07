@@ -22,9 +22,15 @@ class LiveBroadcastSessionToken {
   });
 
   factory LiveBroadcastSessionToken.fromMap(Map<dynamic, dynamic> map) {
+    final token = map['token'];
+    final serverUrl = map['serverUrl'];
+    if (token is! String || token.trim().isEmpty ||
+        serverUrl is! String || serverUrl.trim().isEmpty) {
+      throw const FormatException('Live broadcasts are currently unavailable.');
+    }
     return LiveBroadcastSessionToken(
-      token: (map['token'] ?? '').toString(),
-      serverUrl: (map['serverUrl'] ?? '').toString(),
+      token: token,
+      serverUrl: serverUrl,
       roomName: (map['roomName'] ?? '').toString(),
       role: LiveBroadcastParticipantRole.fromString(map['role']?.toString()),
       broadcastId: (map['broadcastId'] ?? '').toString(),

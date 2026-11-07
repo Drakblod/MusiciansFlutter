@@ -4,6 +4,17 @@ import 'package:musicians_flutter/services/live_broadcast_service.dart';
 
 void main() {
   group('LiveBroadcastSessionToken & Service Contract Tests', () {
+    test('missing or blank server credentials cannot form a session', () {
+      for (final response in [
+        <String, String>{},
+        {'token': 'mock_token', 'serverUrl': ' '},
+        {'token': ' ', 'serverUrl': 'wss://example.invalid'},
+      ]) {
+        expect(() => LiveBroadcastSessionToken.fromMap(response),
+            throwsFormatException);
+      }
+    });
+
     test('1. LiveBroadcastSessionToken deserialization and toMap round-trip', () {
       final tokenData = {
         'token': 'mock_jwt_publisher_token',

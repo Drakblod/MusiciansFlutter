@@ -1,3 +1,5 @@
+import 'config/feature_flags.dart';
+import 'config/feature_toggles.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'dart:ui' show PlatformDispatcher;
 import 'package:flutter/material.dart';
@@ -99,6 +101,29 @@ class MyApp extends StatelessWidget {
 
   const MyApp({super.key});
 
+  static Route<void>? buildDiscoveryRoute(RouteSettings settings) {
+    final name = Uri.tryParse(settings.name ?? '')?.path;
+    final isMap = name == '/gig-map';
+    final isLive = name == '/live' ||
+        name == '/go-live' ||
+        name == '/live-broadcast' ||
+        (name?.startsWith('/live-broadcast/') ?? false);
+    if (!isMap && !isLive) return null;
+
+    final enabled = FeatureToggles.enableMapView &&
+        (isMap || FeatureFlags.enableRealLiveBroadcasts);
+    final title = isMap ? 'Map View' : 'Live broadcasts';
+    return MaterialPageRoute<void>(
+      settings: settings,
+      builder: (context) => enabled
+          ? const GigMapPage()
+          : Scaffold(
+              appBar: AppBar(title: Text(title)),
+              body: Center(child: Text('$title currently unavailable.')),
+            ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider<AppState>(
@@ -178,7 +203,6 @@ class MyApp extends StatelessWidget {
           '/band-room': (context) => const BandRoomChatScreen(),
           '/profile': (context) => const ProfileTabScreen(),
           '/producer-search': (context) => const ProducerSearchScreen(),
-          '/gig-map': (context) => const GigMapPage(),
           '/marketplace': (context) => const MarketplacePage(),
           '/create-listing': (context) => const CreateListingPage(),
           '/my-listings': (context) => const MyListingsPage(),
@@ -192,6 +216,9 @@ class MyApp extends StatelessWidget {
           '/manage-events': (context) => const ManageEventsScreen(),
         },
         onGenerateRoute: (settings) {
+          final discoveryRoute = buildDiscoveryRoute(settings);
+          if (discoveryRoute != null) return discoveryRoute;
+
           if (settings.name == '/edit-band') {
             final band = settings.arguments as Band;
             return MaterialPageRoute(

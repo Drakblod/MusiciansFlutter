@@ -9,6 +9,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:image_picker/image_picker.dart';
+import '../config/feature_toggles.dart';
 import '../models/user_profile.dart';
 import '../models/band.dart';
 import '../models/sub_request.dart';
@@ -1486,11 +1487,13 @@ class FirebaseService {
     if (uid == null) throw StateError('Sign in to view requests.');
     for (final path in ['creatorSubRequestFeed/$uid/$subRequestId',
       'userSubRequestFeed/$uid/$subRequestId', 'publicSubRequests/$subRequestId',
-      'publicMapPinFeed/$subRequestId', 'SubRequests/$subRequestId']) {
+      if (FeatureToggles.enableMapView) 'publicMapPinFeed/$subRequestId',
+      'SubRequests/$subRequestId']) {
       final snapshot = await _dbRef(path).get();
       if (currentUserId != uid) throw StateError('Your session changed.');
       if (snapshot.value is Map) {
         final request = SubRequest.fromJson(snapshot.value as Map, subRequestId);
+        if (!FeatureToggles.enableMapView && request.isMapOnlyPin) return null;
         return {'cancelled', 'deleted'}.contains(request.status.toLowerCase()) ? null : request;
       }
     }
