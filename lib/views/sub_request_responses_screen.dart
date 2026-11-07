@@ -6,28 +6,44 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../providers/app_state.dart';
 import '../theme/app_theme.dart';
 import '../models/sub_request.dart';
+import '../models/request_management_access.dart';
 import '../widgets/custom_top_bar.dart';
 import '../widgets/gradient_scaffold.dart';
 import '../utils/sub_request_card_helper.dart';
+import '../widgets/request_management_gate.dart';
 
-class SubRequestResponsesScreen extends StatefulWidget {
+class SubRequestResponsesScreen extends StatelessWidget {
+  const SubRequestResponsesScreen({super.key,required this.bandId,this.clock});
+  final String bandId;
+  final DateTime Function()? clock;
+  @override
+  Widget build(BuildContext context) => RequestManagementGate(
+    bandId:bandId,
+    builder:(access) => _AuthorizedSubRequestResponsesScreen(bandId:bandId,clock:clock,access:access),
+  );
+}
+
+class _AuthorizedSubRequestResponsesScreen extends StatefulWidget {
   final String bandId;
   final DateTime Function()? clock;
 
-  const SubRequestResponsesScreen({
-    super.key,
+  final RequestManagementAccess access;
+
+  const _AuthorizedSubRequestResponsesScreen({
+    required this.access,
     required this.bandId,
     this.clock,
   });
 
   @override
-  State<SubRequestResponsesScreen> createState() =>
-      _SubRequestResponsesScreenState();
+  State<_AuthorizedSubRequestResponsesScreen> createState() =>
+      __AuthorizedSubRequestResponsesScreenState();
 }
 
-class _SubRequestResponsesScreenState extends State<SubRequestResponsesScreen>
+class __AuthorizedSubRequestResponsesScreenState extends State<_AuthorizedSubRequestResponsesScreen>
     with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late TabController _tabController;
+  bool get _current => mounted && widget.access.isValid;
   List<SubRequest> _substituteRequests = [];
   List<SubRequest> _memberRequests = [];
   Map<String, int> _responseCounts = {};
@@ -35,10 +51,28 @@ class _SubRequestResponsesScreenState extends State<SubRequestResponsesScreen>
   bool _isBandAdmin = false;
   bool _isLoading = true;
   Timer? _expirationTimer;
-  final _accessSubscriptions = <StreamSubscription<int>>[];
+  final _accessSubscriptions = <StreamSubscription<dynamic>>[];
   void _cancelAccessSubscriptions() {
     for (final subscription in _accessSubscriptions) { unawaited(subscription.cancel()); }
     _accessSubscriptions.clear();
+  }
+
+  void _accessLost(int generation) {
+    if (!mounted || !_current || generation != _loadGeneration) return;
+    _loadGeneration++;
+    _cancelAccessSubscriptions();
+    _expirationTimer?.cancel();
+    setState(() {
+      _substituteRequests = [];
+      _memberRequests = [];
+      _responseCounts = {};
+      _viewedResponseCounts = {};
+      _isBandAdmin = false;
+      _isLoading = false;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+      content: Text('Requests are unavailable for your current access. Please try again.'),
+    ));
   }
 
   int _loadGeneration = 0;
@@ -67,7 +101,7 @@ class _SubRequestResponsesScreenState extends State<SubRequestResponsesScreen>
     _loadGeneration++;
     _expirationTimer?.cancel();
     _cancelAccessSubscriptions();
-    if (!mounted) return;
+    if (!mounted || !_current) return;
     setState(() {
       _substituteRequests = [];
       _memberRequests = [];
@@ -104,7 +138,7 @@ class _SubRequestResponsesScreenState extends State<SubRequestResponsesScreen>
   }
 
   void _expireVisibleRequests() {
-    if (!mounted) return;
+    if (!mounted || !_current) return;
     final now = _now;
     setState(() {
       _substituteRequests = filterActiveManageRequests(
@@ -142,6 +176,7 @@ class _SubRequestResponsesScreenState extends State<SubRequestResponsesScreen>
   }
 
   Future<void> _loadRequests() async {
+    if (!mounted || !_current) return;
     final generation = ++_loadGeneration;
     _cancelAccessSubscriptions();
     setState(() {
@@ -156,7 +191,7 @@ class _SubRequestResponsesScreenState extends State<SubRequestResponsesScreen>
     final appState = Provider.of<AppState>(context, listen: false);
     final userId = appState.currentUserId;
     bool current() =>
-        mounted &&
+        _current &&
         generation == _loadGeneration &&
         userId == appState.currentUserId;
     try {
@@ -186,11 +221,7 @@ class _SubRequestResponsesScreenState extends State<SubRequestResponsesScreen>
             for (final req in allRequests) {
               final reqId = req.subRequestId ?? req.id ?? '';
               if (reqId.isEmpty || seenIds.contains(reqId)) continue;
-              final matchesBand =
-                  (req.bandId != null && req.bandId == widget.bandId) ||
-                  (req.bandName != null &&
-                      (req.bandName!.replaceAll(' ', '_') == widget.bandId ||
-                          req.bandName == widget.bandId));
+              final matchesBand = req.bandId == widget.bandId;
               if (matchesBand) {
                 seenIds.add(reqId);
                 list.add(req);
@@ -200,26 +231,39 @@ class _SubRequestResponsesScreenState extends State<SubRequestResponsesScreen>
         } catch (_) { rethrow; }
       }
 
-      // 2. Filter requests matching the selected band (or show all if bandId is empty or 'all')
-      final selectedRequests = (widget.bandId.isEmpty || widget.bandId == 'all')
-          ? list
-          : list.where((req) {
-              if (req.bandId != null && req.bandId == widget.bandId) {
-                return true;
-              }
-              if (req.bandName == null) return false;
-              final cleanBandName = req.bandName!.replaceAll(' ', '_');
-              return cleanBandName == widget.bandId ||
-                  req.bandName == widget.bandId;
-            }).toList();
+      // Exact canonical owning band only; band names and passed models are not authority.
+      final selectedRequests = list.where((req) => req.bandId == widget.bandId).toList();
 
       if (!current()) return;
       // Evaluate exact positions before response reads or tab classification.
-      final bandRequests = filterActiveManageRequests(
+      final candidates = filterActiveManageRequests(
         selectedRequests,
         now: _now,
       );
 
+      final bandRequests = <SubRequest>[];
+      for (final hint in candidates) {
+        if (!current()) return;
+        final id=hint.subRequestId ?? hint.id;
+        if (id == null) continue;
+        try {
+          final access=await appState.firebaseService.authorizeRequestManagement(
+            bandId:widget.bandId,requestId:id,expectedCreatorId:hint.creatorUserId ?? hint.userId,isCurrent:current);
+          if (!current()) return;
+          if (access.request != null && isActiveManageRequest(access.request!, now: _now)) {
+            _accessSubscriptions.add(appState.firebaseService.watchRequestManagementAccess(access).listen(
+              (allowed) { if (!allowed) _accessLost(generation); },
+              onError: (Object _) => _accessLost(generation),
+            ));
+            bandRequests.add(access.request!);
+          }
+        } catch (_) {
+          // A stale creator feed is not permission to enumerate this request.
+          if (!current()) return;
+        }
+      }
+
+      if (!current()) return;
       // 3. Concurrently fetch responses count for each active request
       final Map<String, int> counts = {};
       await Future.wait(
@@ -268,28 +312,13 @@ class _SubRequestResponsesScreenState extends State<SubRequestResponsesScreen>
         if (id == null) continue;
         _accessSubscriptions.add(appState.firebaseService.subscribeToSubRequestResponseCount(id).listen((count) {
           if (current()) setState(() => _responseCounts[id] = count);
-        }, onError: (Object error) {
-          if (!mounted || !current()) return;
-          _loadGeneration++;
-          _cancelAccessSubscriptions();
-          _expirationTimer?.cancel();
-          setState(() {
-            _substituteRequests = [];
-            _memberRequests = [];
-            _responseCounts = {};
-            _viewedResponseCounts = {};
-            _isBandAdmin = false;
-          });
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Requests are unavailable for your current access. Please try again.'),
-          ));
-        }));
+        }, onError: (Object _) => _accessLost(generation)));
       }
       // Re-evaluate after asynchronous counts/preferences, then arm the timer.
       _expireVisibleRequests();
     } catch (e) {
       debugPrint("Error loading sub requests: $e");
-      if (mounted && current()) {
+      if (mounted && _current && current()) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: const Text('Requests are unavailable for your current access. Please try again.'),
@@ -298,13 +327,14 @@ class _SubRequestResponsesScreenState extends State<SubRequestResponsesScreen>
         );
       }
     } finally {
-      if (mounted && generation == _loadGeneration) {
+      if (_current && generation == _loadGeneration) {
         setState(() => _isLoading = false);
       }
     }
   }
 
   Future<void> _deleteRequest(SubRequest request) async {
+    final generation = _loadGeneration;
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -339,7 +369,7 @@ class _SubRequestResponsesScreenState extends State<SubRequestResponsesScreen>
     );
 
     if (confirm != true) return;
-    if (!mounted) return;
+    if (!mounted || !_current || generation != _loadGeneration) return;
 
     setState(() => _isLoading = true);
     try {
@@ -348,9 +378,15 @@ class _SubRequestResponsesScreenState extends State<SubRequestResponsesScreen>
       final requestId = request.subRequestId ?? request.id;
       
       if (userId != null && requestId != null) {
+        await appState.firebaseService.authorizeRequestManagement(
+          bandId: widget.bandId, requestId: requestId,
+          expectedCreatorId: request.creatorUserId ?? request.userId,
+          isCurrent: () => _current && generation == _loadGeneration,
+        );
+        if (!mounted || !_current || generation != _loadGeneration) return;
         final success = await appState.firebaseService.deleteSubRequestAsync(userId, requestId);
         if (success) {
-          if (mounted) {
+          if (mounted && _current) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
                 content: Text('Request deleted successfully.'),
@@ -364,15 +400,15 @@ class _SubRequestResponsesScreenState extends State<SubRequestResponsesScreen>
         }
       }
     } catch (e) {
-      if (mounted) {
+      if (mounted && _current) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to delete request: $e'),
+            content: const Text('Request management is unavailable for your current access.'),
             backgroundColor: AppTheme.danger,
           ),
         );
       }
-      setState(() => _isLoading = false);
+      if (mounted && _current) setState(() => _isLoading = false);
     }
   }
 
@@ -395,18 +431,36 @@ class _SubRequestResponsesScreenState extends State<SubRequestResponsesScreen>
       return;
     }
     final reqId = req.subRequestId ?? req.id;
+    final appState = Provider.of<AppState>(context, listen: false);
+    try {
+      final access = await appState.firebaseService.authorizeRequestManagement(
+        requestId: reqId ?? '', bandId: widget.bandId,
+        expectedCreatorId: req.creatorUserId ?? req.userId,
+        isCurrent: () => _current,
+      );
+      if (!mounted || !_current) return;
+      req = access.request!;
+    } catch (_) {
+      if (mounted && _current) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Request management is unavailable for your current access.'),
+        ));
+      }
+      return;
+    }
     if (reqId != null) {
       final currentCount = _responseCounts[reqId] ?? 0;
       final prefs = await SharedPreferences.getInstance();
+      if (!mounted || !_current) return;
       await prefs.setInt('viewed_resp_$reqId', currentCount);
-      if (mounted) {
+      if (mounted && _current) {
         setState(() {
           _viewedResponseCounts[reqId] = currentCount;
         });
       }
 
       // Mark matching unread response notifications as read
-      if (!mounted) return;
+      if (!mounted || !_current) return;
       try {
         final appState = Provider.of<AppState>(context, listen: false);
         for (final notif in appState.userNotifications) {
@@ -420,7 +474,7 @@ class _SubRequestResponsesScreenState extends State<SubRequestResponsesScreen>
       } catch (_) {}
     }
 
-    if (!mounted) return;
+    if (!mounted || !_current) return;
     await Navigator.pushNamed(
       context,
       '/sub-request-response-details',

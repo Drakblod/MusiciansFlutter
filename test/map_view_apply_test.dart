@@ -7,12 +7,28 @@ import 'package:firebase_core_platform_interface/test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:musicians_flutter/models/sub_request.dart';
+import 'package:musicians_flutter/models/request_management_access.dart';
 import 'package:musicians_flutter/models/user_profile.dart';
 import 'package:musicians_flutter/providers/app_state.dart';
 import 'package:musicians_flutter/services/firebase_service.dart';
 import 'package:musicians_flutter/widgets/map_pin_details_card.dart';
 
 class MockMapApplyFirebaseService extends FirebaseService {
+  final canonicalRequests=<String,SubRequest>{};
+  @override Stream<String?> get catalogueIdentityChanges => const Stream.empty();
+  @override Stream<bool> watchRequestManagementAccess(RequestManagementAccess access) => const Stream.empty();
+  @override
+  Future<RequestManagementAccess> authorizeRequestManagement({String? bandId,String? requestId,String? expectedCreatorId,bool Function()? isCurrent}) async {
+    final request=canonicalRequests[requestId];
+    if(request==null || request.bandId!=bandId || request.creatorUserId!=expectedCreatorId ||
+        (isCurrent!=null && !isCurrent())) throw const PrivateDataAccessException();
+    final personal=bandId=='freelance' || bandId=='standalone';
+    if(personal ? request.creatorUserId!=currentUserId : !(bandAdmins[bandId]?.contains(currentUserId)??false)) {
+      throw const PrivateDataAccessException();
+    }
+    return RequestManagementAccess(userId:currentUserId!,bandId:bandId!,request:request);
+  }
+
   String _currentUserId = 'musician_user_b';
   final Set<String> backendAppliedIds = {};
   final Map<String, Set<String>> bandAdmins = {};
@@ -80,7 +96,7 @@ class MockMapApplyAppState extends AppState {
   String _userId;
 
   MockMapApplyAppState(this.mockService, {String userId = 'musician_user_b'})
-      : _userId = userId;
+      : _userId = userId { mockService.setCurrentUserId(userId); }
 
   void setUserId(String uid) {
     _userId = uid;
@@ -159,6 +175,7 @@ Widget _wrapCard({
   void Function(SubRequest)? onEditPin,
   void Function(SubRequest)? onDeletePin,
 }) {
+  appState.mockService.canonicalRequests[gig.subRequestId ?? gig.id!] = gig;
   return ChangeNotifierProvider<AppState>.value(
     value: appState,
     child: MaterialApp(
@@ -261,8 +278,9 @@ void main() {
       expect(find.byKey(const ValueKey('map_pin_apply_button')), findsNothing);
     });
 
-    testWidgets('5. Request creator sees "Manage Request" and never sees Apply', (tester) async {
+    testWidgets('5. Active exact-band manager who created the request sees "Manage Request" and never sees Apply', (tester) async {
       final service = MockMapApplyFirebaseService();
+      service.bandAdmins['Deku_Tree_Bongo'] = {'creator_user_a'};
       final appState = MockMapApplyAppState(service, userId: 'creator_user_a');
       final gig = _buildStaffingRequest(
         id: 'sub_creator_1',
@@ -287,6 +305,15 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('map_pin_manage_request_button')));
       await tester.pump();
       expect(managedGig?.id, 'sub_creator_1');
+    });
+
+    testWidgets('Creator without current exact-band manager authority cannot manage staffing from Map', (tester) async {
+      final service=MockMapApplyFirebaseService();
+      final state=MockMapApplyAppState(service,userId:'creator_user_a');
+      await tester.pumpWidget(_wrapCard(gig:_buildStaffingRequest(),appState:state));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('map_pin_manage_request_button')),findsNothing);
+      expect(service.submittedSubRequestIds,isEmpty);
     });
 
     testWidgets('6. Band Leader/Admin of the band that owns the request sees "Manage Request" and never sees Apply', (tester) async {

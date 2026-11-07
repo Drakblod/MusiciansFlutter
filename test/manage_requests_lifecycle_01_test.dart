@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:musicians_flutter/models/sub_request.dart';
+import 'package:musicians_flutter/models/request_management_access.dart';
 import 'package:musicians_flutter/models/user_profile.dart';
 import 'package:musicians_flutter/models/app_notification.dart';
 import 'package:musicians_flutter/providers/app_state.dart';
@@ -14,6 +15,23 @@ import 'package:musicians_flutter/utils/sub_request_card_helper.dart';
 import 'package:musicians_flutter/views/sub_request_responses_screen.dart';
 
 class ManageService extends Fake implements FirebaseService {
+  // Lifecycle fixtures model an already authorized exact-band manager. The
+  // focused security suite exercises the production authorization implementation.
+  @override
+  Stream<String?> get catalogueIdentityChanges => const Stream.empty();
+  @override
+  Stream<bool> watchRequestManagementAccess(RequestManagementAccess access) => const Stream.empty();
+  @override
+  Future<RequestManagementAccess> authorizeRequestManagement({String? bandId,
+    String? requestId, String? expectedCreatorId, bool Function()? isCurrent}) async {
+    if (bandId != 'band' || (isCurrent != null && !isCurrent())) {
+      throw const PrivateDataAccessException();
+    }
+    final request = requestId == null ? null : [...requests,...bandRequests]
+        .firstWhere((r) => (r.subRequestId ?? r.id) == requestId);
+    return RequestManagementAccess(userId:'manager',bandId:bandId!,request:request);
+  }
+
   @override
   Stream<int> subscribeToSubRequestResponseCount(String id) => const Stream<int>.empty();
 
@@ -118,7 +136,7 @@ Future<void> mount(
   WidgetTester tester,
   ManageService service, {
   DateTime Function()? clock,
-  String band = 'all',
+  String band = 'band',
   void Function(SubRequest)? navigated,
 }) async {
   await tester.pumpWidget(

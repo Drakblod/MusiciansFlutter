@@ -158,7 +158,7 @@ for(const ruleFile of ['database.rules.json','database.transitional.rules.json']
     await assertFails(other.ref(`Collabs/Applications/${session}`).get());
   });
 
-  it('current Leader reads manager data; role loss denies member/manager projections but preserves exact creator request access',async()=>{
+  it('current Leader reads manager data; role loss denies member/manager projections and canonical creator request access',async()=>{
     const c=client(ids.leader);
     const section=await call('leader','createBandSectionConversation',{
       bandId:band,groupName:'Private section',participantIds:[ids.member],
@@ -167,8 +167,8 @@ for(const ruleFile of ['database.rules.json','database.transitional.rules.json']
     await assertSucceeds(c.ref(`bandManagerEvents/${band}/event`).get());
     await db.ref(`Bands/${band}/Members_band/${ids.leader}/Status`).set('inactive');
     await assertFails(c.ref(`bandManagerEvents/${band}/event`).get());
-    // Exact creator access is explicitly retained for their own request.
-    await assertSucceeds(c.ref(`SubRequests/${request}/Responses`).get());
+    // Real-band creator identity is not management authority.
+    await assertFails(c.ref(`SubRequests/${request}/Responses`).get());
     await assertFails(c.ref(`bandMemberEvents/${band}/event`).get());
     await assertFails(c.ref(`conversations/${section.conversationId}`).get());
     await waitFor(`userConversations/${ids.leader}/${section.conversationId}`,value=>value==null);

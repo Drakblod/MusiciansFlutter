@@ -59,6 +59,21 @@ async function authorizeRequest(db, uid, request, suppliedBand, suppliedEvent) {
   }
   return { bandId:bandless ? null : bandId, eventId:bandless ? null : eventId, creatorId };
 }
+// Ordinary Map pins have their own ownership contract. Absence of a band is
+// personal ownership, never authority over a band or a staffing request.
+async function authorizeMapPin(db, uid, record) {
+  if (!uid) throw new HttpsError('unauthenticated', 'Sign in first.');
+  key(uid, 'caller ID');
+  const bandId = canonicalField(record, 'BandId', 'bandId');
+  const creatorId = canonicalField(record, 'CreatorUserId', 'creatorUserId') ||
+    canonicalField(record, 'UserId', 'userId');
+  key(creatorId, 'creator ID');
+  if (bandId == null || bandId === 'freelance' || bandId === 'standalone') {
+    if (creatorId !== uid) throw new HttpsError('permission-denied', 'Only the pin owner may manage this pin.');
+  } else {
+    await requireManager(db, bandId, uid);
+  }
+}
 const metadataFields = ['Name','EnsembleType','Genres','Qualification','Location','PublicLocation','Style_band','Style','Level',
   'RehearsalLocation','RehearsalDayOfWeek','RehearsalDate','RehearsalTime','RehearsalStartTime','RehearsalEndTime',
   'RehearsalDateTime','About','Description','Address','Contact','Members','History','ConcertsProjects'];
@@ -293,4 +308,4 @@ async function mutate(db, uid, data) {
   if (deleted) await db.ref().update({ [`membershipMutationOperations/${bandId}`]:null, [`bandconversations/${bandId}`]:null, [`bandSectionConversations/${bandId}`]:null });
   return { success:true, bandId };
 }
-module.exports = { normalize, role, manager, leader, key, bandKey, canonicalField, requireManager, authorizeRequest, mutate, metadataFields };
+module.exports = { normalize, role, manager, leader, key, bandKey, canonicalField, requireManager, authorizeRequest, authorizeMapPin, mutate, metadataFields };

@@ -5488,19 +5488,12 @@ exports.createMapPin = onCall({ region: 'europe-west1' }, async (request) => {
     throw new HttpsError('invalid-argument', 'Only Music subCategory is allowed for ordinary map pins.');
   }
 
-  // 5. Band membership verification if bandId provided
-  const bandId = validateOptionalString(data.bandId !== undefined ? data.bandId : data.BandId, 'bandId', 128);
+  // Explicit canonical Map ownership, validated by the shared authority module.
+  const bandId = membershipAuthority.canonicalField(data, 'BandId', 'bandId');
   const db = admin.database();
-
-  if (bandId) {
-    if (bandId.includes('/') || bandId.includes('.') || bandId.includes('#') || bandId.includes('$') || bandId.includes('[') || bandId.includes(']')) {
-      throw new HttpsError('invalid-argument', 'Invalid bandId format.');
-    }
-    const memberSnap = await db.ref(`Bands/${bandId}/Members_band/${callerUid}`).once('value');
-    if (!memberSnap.exists()) {
-      throw new HttpsError('permission-denied', 'You are not a member of this band.');
-    }
-  }
+  await membershipAuthority.authorizeMapPin(db, callerUid, {
+    CreatorUserId: callerUid, ...(bandId != null ? {BandId: bandId} : {}),
+  });
 
   // 6. Generate server-owned Firebase push ID
   const subRequestsRef = db.ref('SubRequests');
@@ -5635,23 +5628,7 @@ exports.updateMapPin = onCall({ region: 'europe-west1' }, async (request) => {
   if (notifMode !== 'map_pin') {
     throw new HttpsError('failed-precondition', 'updateMapPin can only update ordinary map pins.');
   }
-  const creatorUid = existing.CreatorUserId || existing.creatorUserId || existing.UserId || existing.userId;
-
-  let isAuthorized = (creatorUid === callerUid);
-  if (!isAuthorized) {
-    const bandId = existing.bandId || existing.BandId;
-    if (bandId) {
-      const memberRoleSnap = await db.ref(`Bands/${bandId}/Members_band/${callerUid}/Role`).get();
-      const role = memberRoleSnap.val();
-      if (role === 'Leader' || role === 'Admin') {
-        isAuthorized = true;
-      }
-    }
-  }
-
-  if (!isAuthorized) {
-    throw new HttpsError('permission-denied', 'Only the pin creator or band leader may update this pin.');
-  }
+  await membershipAuthority.authorizeMapPin(db, callerUid, existing);
 
   const updates = {};
   if (data.title !== undefined || data.Title !== undefined) {
@@ -5824,24 +5801,8 @@ exports.deleteMapPin = onCall({ region: 'europe-west1' }, async (request) => {
     throw new HttpsError('failed-precondition', 'deleteMapPin can only delete ordinary map pins.');
   }
 
-  const creatorUid = existing.CreatorUserId || existing.creatorUserId || existing.UserId || existing.userId;
-  let isAuthorized = (creatorUid === callerUid);
-  if (!isAuthorized) {
-    const bandId = existing.bandId || existing.BandId;
-    if (bandId) {
-      const memberRoleSnap = await db.ref(`Bands/${bandId}/Members_band/${callerUid}/Role`).get();
-      const role = memberRoleSnap.val();
-      if (role === 'Leader' || role === 'Admin') {
-        isAuthorized = true;
-      }
-    }
-  }
+  await membershipAuthority.authorizeMapPin(db, callerUid, existing);
 
-  if (!isAuthorized) {
-    throw new HttpsError('permission-denied', 'Only the pin creator or band leader may delete this pin.');
-  }
-
-  // Atomically delete the canonical pin and its supported public projection.
   const updates = {};
   updates[`SubRequests/${pinId}`] = null;
   updates[`publicMapPinFeed/${pinId}`] = null;

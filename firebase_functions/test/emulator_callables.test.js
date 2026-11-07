@@ -1488,16 +1488,16 @@ describe('Real Cloud Functions Emulator Integration Tests (JS Client SDK + Emula
         assert.strictEqual(pin.TargetUserIds, undefined, 'TargetUserIds must be stripped');
       });
 
-      it('39. Band membership verification allows band member and rejects non-member', async () => {
+      it('39. Band membership verification allows active band manager and rejects non-member', async () => {
         const bandId = 'band_membership_pin_test';
         await adminDb.ref(`Bands/${bandId}`).set({
           Name: 'Pin Test Band',
           Members_band: {
-            user_a: { Role: 'Member' },
+            user_a: { Role: 'Admin', Status: 'active' },
           },
         });
 
-        // user_a is a member -> succeeds
+        // user_a is an active Admin -> succeeds
         const callableA = httpsCallable(functionsUserA, 'createMapPin');
         const resultA = await callableA({
           eventType: 'gigConcert',
@@ -1644,7 +1644,7 @@ describe('Real Cloud Functions Emulator Integration Tests (JS Client SDK + Emula
         await adminDb.ref(`Bands/${bandId}`).set({
           Name: 'Matrix Band',
           Members_band: {
-            user_a: { Role: 'Member' },  // Creator is only Member in band
+            user_a: { Role: 'Admin', Status: 'active' },  // Creator has active management authority
             user_b: { Role: 'Leader' },  // user_b is Leader
             user_c: { Role: 'Member' },  // user_c is ordinary Member
           },
@@ -1820,7 +1820,7 @@ describe('Real Cloud Functions Emulator Integration Tests (JS Client SDK + Emula
           Name: 'Band Del Test',
           Members_band: {
             user_b: { Role: 'Leader' },
-            user_a: { Role: 'Member' },
+            user_a: { Role: 'Admin', Status: 'active' },
           },
         });
 

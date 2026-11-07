@@ -7,12 +7,22 @@ import 'package:musicians_flutter/models/app_notification.dart';
 import 'package:musicians_flutter/models/band.dart';
 import 'package:musicians_flutter/models/band_event.dart';
 import 'package:musicians_flutter/models/sub_request.dart';
+import 'package:musicians_flutter/models/request_management_access.dart';
 import 'package:musicians_flutter/models/user_profile.dart';
 import 'package:musicians_flutter/providers/app_state.dart';
 import 'package:musicians_flutter/services/firebase_service.dart';
 import 'package:musicians_flutter/views/find_sub_screen.dart';
 
 class MockRoutingFirebaseService extends Fake implements FirebaseService {
+  // This routing fixture already declares user_1 as the canonical band_1 Leader.
+  @override Stream<String?> get catalogueIdentityChanges => const Stream.empty();
+  @override Stream<bool> watchRequestManagementAccess(RequestManagementAccess access) => const Stream.empty();
+  @override
+  Future<RequestManagementAccess> authorizeRequestManagement({String? bandId,String? requestId,String? expectedCreatorId,bool Function()? isCurrent}) async {
+    if(bandId!='band_1' || (isCurrent!=null && !isCurrent())) throw const PrivateDataAccessException();
+    return RequestManagementAccess(userId:currentUserId!,bandId:bandId!);
+  }
+
   final List<SubRequest> subRequests = [];
   final Map<String, String> userBands = {'band_1': 'Rock Band'};
 
@@ -131,6 +141,10 @@ void main() {
 
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 200));
+
+    // The banner action resolves its own canonical permission after the form loads.
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
 
     // Check that active requests banner is present
     expect(find.text('1 Active Request'), findsOneWidget);

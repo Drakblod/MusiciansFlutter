@@ -12,6 +12,7 @@ import 'package:image_picker/image_picker.dart';
 import '../models/user_profile.dart';
 import '../models/band.dart';
 import '../models/sub_request.dart';
+import '../models/request_management_access.dart';
 import '../models/message.dart';
 import '../models/calendar_event.dart';
 import '../models/agreement.dart';
@@ -1355,7 +1356,7 @@ class FirebaseService {
           : (await _dbRef(path).get()).value;
       return currentUserId == uid &&
           raw is Map &&
-          BandMembershipPolicy.canManageMember(BandMember.fromJson(raw, uid));
+          _isCanonicalManager(raw, uid);
     } catch (accessError) { _rethrowAccessDenied(accessError);
       return false;
     }
@@ -1366,6 +1367,116 @@ class FirebaseService {
     if (uid == null || uid != userId) throw StateError('Sign in to respond.');
     await _functions.httpsCallable('respondToSubRequest').call({'subRequestId': subRequestId});
     if (currentUserId != uid) throw StateError('Your session changed.');
+  }
+
+  Future<RequestManagementAccess> authorizeRequestManagement({
+    String? bandId, String? requestId, String? expectedCreatorId,
+    bool Function()? isCurrent,
+  }) => _forCurrentSession(() async {
+    final uid = currentUserId;
+    if (uid == null) throw const PrivateDataAccessException();
+    var sessionChanged = false;
+    final identitySubscription = catalogueIdentityChanges.listen((next) {
+      if (next != uid) sessionChanged = true;
+    });
+    try {
+    bool current() => !sessionChanged && uid == currentUserId && (isCurrent?.call() ?? true);
+    if (requestId == null) {
+      if (bandId == 'freelance' || bandId == 'standalone') {
+        return RequestManagementAccess(userId: uid, bandId: bandId!);
+      }
+      if (!BandMembershipPolicy.isRealId(bandId) ||
+          !await isBandLeaderOrAdminAsync(bandId!, uid)) {
+        throw const PrivateDataAccessException();
+      }
+      return RequestManagementAccess(userId: uid, bandId: bandId);
+    }
+    if (!CatalogueProfiles.validId(requestId)) throw const PrivateDataAccessException();
+    // Read only authorization metadata. Rules independently authorize each leaf;
+    // never fetch request bodies, response IDs/counts or profiles at this stage.
+    Future<Object?> read(String path) async {
+      if (!current()) throw const PrivateDataAccessException();
+      final value = _membershipRead != null ? await _membershipRead(path) : (await _dbRef(path).get()).value;
+      if (!current()) throw const PrivateDataAccessException();
+      return value;
+    }
+    const fields = ['BandId','bandId','CreatorUserId','creatorUserId','UserId','userId',
+      'createdBy','NotificationMode','notificationMode'];
+    final values = await Future.wait(fields.map((f) => read('SubRequests/$requestId/$f')));
+    if (!current()) throw const PrivateDataAccessException();
+    final headers = <String,Object?>{for (var i=0;i<fields.length;i++) fields[i]:values[i]};
+    Object? canonical(String a,String b) {
+      if (headers[a] != null && headers[b] != null && headers[a] != headers[b]) {
+        throw const PrivateDataAccessException();
+      }
+      return headers[a] ?? headers[b];
+    }
+    final ownerBand = canonical('BandId','bandId');
+    final creator = canonical('CreatorUserId','creatorUserId') ??
+        canonical('UserId','userId') ?? headers['createdBy'];
+    if (headers['NotificationMode'] == 'map_pin' || headers['notificationMode'] == 'map_pin' ||
+        ownerBand is! String || creator is! String || !CatalogueProfiles.validId(creator) ||
+        (bandId != null && bandId != ownerBand) ||
+        (expectedCreatorId != null && expectedCreatorId != creator)) {
+      throw const PrivateDataAccessException();
+    }
+    final freelance = ownerBand == 'freelance' || ownerBand == 'standalone';
+    if (freelance ? creator != uid :
+        (!BandMembershipPolicy.isRealId(ownerBand) || !await isBandLeaderOrAdminAsync(ownerBand,uid))) {
+      throw const PrivateDataAccessException();
+    }
+    if (!current()) throw const PrivateDataAccessException();
+    final value = await read('SubRequests/$requestId');
+    if (!current() || value is! Map) throw const PrivateDataAccessException();
+    final raw = value;
+    if (headers.entries.any((entry) => raw[entry.key] != entry.value)) {
+      throw const PrivateDataAccessException();
+    }
+    return RequestManagementAccess(userId:uid,bandId:ownerBand,
+      request:SubRequest.fromJson(raw,requestId),headers:headers);
+    } finally {
+      await identitySubscription.cancel();
+    }
+  });
+
+  Stream<bool> watchRequestManagementAccess(RequestManagementAccess access) {
+    final subscriptions = <StreamSubscription>[];
+    late StreamController<bool> controller;
+    void fail() { if (!controller.isClosed) controller.add(false); }
+    controller = StreamController<bool>(onListen: () {
+      if (currentUserId != access.userId) { fail(); return; }
+      subscriptions.add(catalogueIdentityChanges.listen((uid) {
+        if (uid != access.userId) fail();
+      },onError:(Object _) => fail()));
+      if (BandMembershipPolicy.isRealId(access.bandId)) {
+        subscriptions.add(_dbRef('Bands/${access.bandId}/Members_band/${access.userId}').onValue.listen((event) {
+          final value=event.snapshot.value;
+          if (value is! Map || !_isCanonicalManager(value,access.userId)) fail();
+        },onError:(Object _) => fail()));
+      }
+      final id=access.request?.subRequestId ?? access.request?.id;
+      if (id != null) {
+        for (final entry in access.headers.entries) {
+          subscriptions.add(_dbRef('SubRequests/$id/${entry.key}').onValue.listen((event) {
+            if (event.snapshot.value != entry.value) fail();
+          },onError:(Object _) => fail()));
+        }
+      }
+    },onCancel:() async {
+      for (final subscription in subscriptions) { await subscription.cancel(); }
+    });
+    return controller.stream;
+  }
+
+  bool _isCanonicalManager(Map raw,String uid) {
+    String normalized(Object? value) => value is String ? value.trim().toLowerCase() : '';
+    for (final pair in [['Role','role'],['Status','status']]) {
+      if (raw[pair[0]] != null && raw[pair[1]] != null &&
+          normalized(raw[pair[0]]) != normalized(raw[pair[1]])) {
+        return false;
+      }
+    }
+    return BandMembershipPolicy.canManageMember(BandMember.fromJson(raw,uid));
   }
 
   Future<SubRequest?> getSubRequestAsync(String subRequestId) => _forCurrentSession(() async {

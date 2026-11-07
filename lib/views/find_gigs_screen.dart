@@ -1,3 +1,4 @@
+import '../widgets/request_management_gate.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -573,7 +574,24 @@ class _FindGigsScreenState extends State<FindGigsScreen>
     });
   }
 
-  void _openManageRequest(SubRequest req) {
+  Future<void> _openManageRequest(SubRequest req) async {
+    final state=Provider.of<AppState>(context,listen:false);
+    final uid=state.currentUserId, band=state.activeBandId;
+    final generation=_authGeneration;
+    try {
+      final access=await state.firebaseService.authorizeRequestManagement(
+        requestId:req.subRequestId ?? req.id ?? '',bandId:req.bandId,
+        expectedCreatorId:req.creatorUserId ?? req.userId,
+        isCurrent:()=>mounted && generation==_authGeneration && uid==state.currentUserId && band==state.activeBandId);
+      if (!mounted || state.currentUserId != uid || state.activeBandId != band) return;
+      req=access.request!;
+    } catch (_) {
+      if (mounted) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content:Text('Request management is unavailable for your current access.')));
+              }
+      return;
+    }
+
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -781,7 +799,7 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                                   ),
                                 )
                               else if (isReqAdmin)
-                                ElevatedButton(
+                                RequestManagementGate(hideWhenDenied:true,requestId:reqId,bandId:req.bandId,expectedCreatorId:req.creatorUserId ?? req.userId,builder:(_) => ElevatedButton(
                                   key: ValueKey('details_manage_request_$reqId'),
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: AppTheme.primaryAccent,
@@ -799,7 +817,7 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                                       color: Colors.white,
                                     ),
                                   ),
-                                )
+                                ))
                               else if (isReqPending)
                                 SizedBox(
                                   key: ValueKey('details_auth_pending_$reqId'),
@@ -1384,7 +1402,7 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                   Row(
                     children: [
                       if (isCreator || isAdmin)
-                        ElevatedButton(
+                        RequestManagementGate(hideWhenDenied:true,requestId:primaryReqId,bandId:group.requests.first.bandId,expectedCreatorId:group.requests.first.creatorUserId ?? group.requests.first.userId,builder:(_) => ElevatedButton(
                           key: ValueKey('find_gigs_manage_request_$primaryReqId'),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppTheme.primaryAccent,
@@ -1400,7 +1418,7 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                               color: Colors.white,
                             ),
                           ),
-                        )
+                        ))
                       else if (isAuthPending)
                         SizedBox(
                           key: ValueKey('find_gigs_auth_pending_$primaryReqId'),

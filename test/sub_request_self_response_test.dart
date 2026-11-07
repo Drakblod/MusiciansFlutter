@@ -5,6 +5,7 @@ import 'package:firebase_core_platform_interface/test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:musicians_flutter/models/sub_request.dart';
+import 'package:musicians_flutter/models/request_management_access.dart';
 import 'package:musicians_flutter/models/user_profile.dart';
 import 'package:musicians_flutter/providers/app_state.dart';
 import 'package:musicians_flutter/services/firebase_service.dart';
@@ -12,6 +13,15 @@ import 'package:musicians_flutter/views/find_gigs_screen.dart';
 import 'package:musicians_flutter/views/sub_request_details_screen.dart';
 
 class MockSelfResponseFirebaseService extends FirebaseService {
+  @override Stream<String?> get catalogueIdentityChanges => const Stream.empty();
+  @override Stream<bool> watchRequestManagementAccess(RequestManagementAccess access) => const Stream.empty();
+  @override
+  Future<RequestManagementAccess> authorizeRequestManagement({String? bandId,String? requestId,String? expectedCreatorId,bool Function()? isCurrent}) async {
+    final request=_subRequests[requestId];
+    if(request==null || request.bandId!='freelance' || bandId!='freelance' ||
+        request.creatorUserId!=currentUserId || (isCurrent!=null && !isCurrent())) throw const PrivateDataAccessException();
+    return RequestManagementAccess(userId:currentUserId!,bandId:bandId!,request:request);
+  }
   String _currentUserId = 'user_creator_123';
   final Map<String, SubRequest> _subRequests = {};
   final Set<String> _appliedIds = {};
@@ -117,6 +127,7 @@ void main() {
       mock.addMockSubRequest(SubRequest(
         id: 'sub_test_slot_1',
         subRequestId: 'sub_test_slot_1',
+        bandId: 'freelance',
         creatorUserId: 'creator_user_1',
         userId: 'creator_user_1',
         bandName: 'The Rockers',

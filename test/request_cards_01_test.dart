@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
 
 import 'package:musicians_flutter/models/sub_request.dart';
+import 'package:musicians_flutter/models/request_management_access.dart';
 import 'package:musicians_flutter/models/user_profile.dart';
 import 'package:musicians_flutter/providers/app_state.dart';
 import 'package:musicians_flutter/services/firebase_service.dart';
@@ -16,6 +17,29 @@ import 'package:musicians_flutter/views/sub_request_response_details_screen.dart
 import 'package:musicians_flutter/utils/sub_request_card_helper.dart';
 
 class MockCardsFirebaseService extends FirebaseService {
+  String? Function()? userIdProvider;
+  @override Stream<String?> get catalogueIdentityChanges => const Stream.empty();
+  @override Stream<bool> watchRequestManagementAccess(RequestManagementAccess access) => const Stream.empty();
+  @override
+  Future<RequestManagementAccess> authorizeRequestManagement({String? bandId,String? requestId,String? expectedCreatorId,bool Function()? isCurrent}) async {
+    final uid=currentUserId;
+    SubRequest? request;
+    if(requestId!=null) request=requests.firstWhere((r)=>(r.subRequestId??r.id)==requestId);
+    if(uid==null || bandId==null || (request!=null && (request.bandId!=bandId ||
+        (expectedCreatorId!=null && request.creatorUserId!=expectedCreatorId)))) throw const PrivateDataAccessException();
+    final personal=bandId=='freelance' || bandId=='standalone';
+    if(personal) {
+      if(request!=null && request.creatorUserId!=uid) throw const PrivateDataAccessException();
+    } else {
+      if(shouldFailAdminLookup) throw StateError('Authorization unavailable');
+      final allowed=delayedAdminCompleter!=null ? await delayedAdminCompleter!.future :
+          ['leader','admin'].contains(bandRoles['$bandId/$uid']);
+      if(!allowed) throw const PrivateDataAccessException();
+    }
+    if(isCurrent!=null && !isCurrent()) throw const PrivateDataAccessException();
+    return RequestManagementAccess(userId:uid,bandId:bandId,request:request);
+  }
+
   @override
   Stream<int> subscribeToSubRequestResponseCount(String id) => const Stream<int>.empty();
 
@@ -26,7 +50,7 @@ class MockCardsFirebaseService extends FirebaseService {
   final List<String> deletedRequestIds = [];
 
   @override
-  String? get currentUserId => 'test_user_active';
+  String? get currentUserId => userIdProvider?.call() ?? 'test_user_active';
 
   @override
   Future<List<SubRequest>> getUserSubRequestFeedAsync() async => List.from(requests);
@@ -104,12 +128,27 @@ class MockCardsFirebaseService extends FirebaseService {
   }
 }
 
+// Presentation-only fixture with explicit exact-band manager authority.
+class AuthorizedCardsService extends MockCardsFirebaseService {
+  @override String? get currentUserId => 'test_creator';
+  @override Stream<String?> get catalogueIdentityChanges => const Stream.empty();
+  @override Stream<bool> watchRequestManagementAccess(RequestManagementAccess access) => const Stream.empty();
+  @override Future<bool> isBandLeaderOrAdminAsync(String bandId,String userId) async => bandId=='presentation_band' && userId==currentUserId;
+  @override
+  Future<RequestManagementAccess> authorizeRequestManagement({String? bandId,String? requestId,String? expectedCreatorId,bool Function()? isCurrent}) async {
+    if(bandId!='presentation_band' || (isCurrent!=null && !isCurrent())) throw const PrivateDataAccessException();
+    final request=requestId==null ? null : requests.firstWhere((r)=>r.subRequestId==requestId);
+    return RequestManagementAccess(userId:currentUserId!,bandId:bandId!,request:request);
+  }
+}
+
 class MockCardsAppState extends AppState {
   final MockCardsFirebaseService mockService;
   String? activeUserId;
   UserProfile? activeProfile;
 
   MockCardsAppState(this.mockService, {this.activeUserId = 'test_user_active', List<String>? instruments}) {
+    mockService.userIdProvider=()=>activeUserId;
     activeProfile = UserProfile(
       userId: activeUserId,
       displayName: 'Active User',
@@ -203,10 +242,11 @@ void main() {
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
 
-      final mockService = MockCardsFirebaseService();
+      final mockService = AuthorizedCardsService();
       final req = SubRequest(
         id: 'manage_1',
         subRequestId: 'manage_1',
+        bandId: 'presentation_band',
         creatorUserId: 'test_creator',
         userId: 'test_creator',
         bandName: 'Deku Tree Bongo',
@@ -228,7 +268,7 @@ void main() {
       await tester.pumpWidget(createTestApp(
         // Keep this presentation fixture active independently of wall-clock time.
         child: SubRequestResponsesScreen(
-          bandId: 'all',
+          bandId: 'presentation_band',
           clock: () => DateTime(2026, 10, 30, 18),
         ),
         appState: appState,
@@ -591,7 +631,7 @@ void main() {
       final mockService = MockCardsFirebaseService();
       mockService.requests.add(SubRequest(
         id: 'creator_req_1',
-        subRequestId: 'creator_req_1',
+        subRequestId: 'creator_req_1', bandId: 'freelance',
         creatorUserId: 'test_creator_123',
         bandName: 'My Awesome Band',
         voicePart: 'Drums',
@@ -746,7 +786,7 @@ void main() {
       final mockService = MockCardsFirebaseService();
       final targetReq = SubRequest(
         id: 'req_target_24',
-        subRequestId: 'req_target_24',
+        subRequestId: 'req_target_24', bandId: 'freelance',
         creatorUserId: 'test_creator',
         bandName: 'Target Band',
         voicePart: 'Trumpet',
@@ -757,7 +797,7 @@ void main() {
 
       final appState = MockCardsAppState(mockService, activeUserId: 'test_creator');
       await tester.pumpWidget(createTestApp(
-        child: const SubRequestResponsesScreen(bandId: 'all'),
+        child: const SubRequestResponsesScreen(bandId: 'freelance'),
         appState: appState,
       ));
       await tester.pump();
@@ -781,15 +821,15 @@ void main() {
 
       final mockService = MockCardsFirebaseService();
       mockService.requests.addAll([
-        SubRequest(id: 'iso_1', subRequestId: 'iso_1', creatorUserId: 'creator_iso', bandName: 'Band A', voicePart: 'Flute', date: '2026-11-20'),
-        SubRequest(id: 'iso_2', subRequestId: 'iso_2', creatorUserId: 'creator_iso', bandName: 'Band B', voicePart: 'Oboe', date: '2026-11-20'),
+        SubRequest(id: 'iso_1', subRequestId: 'iso_1', bandId: 'freelance', creatorUserId: 'creator_iso', bandName: 'Band A', voicePart: 'Flute', date: '2026-11-20'),
+        SubRequest(id: 'iso_2', subRequestId: 'iso_2', bandId: 'freelance', creatorUserId: 'creator_iso', bandName: 'Band B', voicePart: 'Oboe', date: '2026-11-20'),
       ]);
       mockService.responseCounts['iso_1'] = 5;
       mockService.responseCounts['iso_2'] = 1;
 
       final appState = MockCardsAppState(mockService, activeUserId: 'creator_iso');
       await tester.pumpWidget(createTestApp(
-        child: const SubRequestResponsesScreen(bandId: 'all'),
+        child: const SubRequestResponsesScreen(bandId: 'freelance'),
         appState: appState,
       ));
       await tester.pump();
@@ -808,7 +848,7 @@ void main() {
       final mockService = MockCardsFirebaseService();
       mockService.requests.add(SubRequest(
         id: 'del_test_26',
-        subRequestId: 'del_test_26',
+        subRequestId: 'del_test_26', bandId: 'freelance',
         creatorUserId: 'creator_del',
         bandName: 'Delete Me Band',
         voicePart: 'Bass',
@@ -817,7 +857,7 @@ void main() {
 
       final appState = MockCardsAppState(mockService, activeUserId: 'creator_del');
       await tester.pumpWidget(createTestApp(
-        child: const SubRequestResponsesScreen(bandId: 'all'),
+        child: const SubRequestResponsesScreen(bandId: 'freelance'),
         appState: appState,
       ));
       await tester.pump();
@@ -838,7 +878,7 @@ void main() {
       final mockService = MockCardsFirebaseService();
       mockService.requests.add(SubRequest(
         id: 'del_confirm_27',
-        subRequestId: 'del_confirm_27',
+        subRequestId: 'del_confirm_27', bandId: 'freelance',
         creatorUserId: 'creator_del',
         bandName: 'Confirm Delete Band',
         voicePart: 'Bass',
@@ -847,7 +887,7 @@ void main() {
 
       final appState = MockCardsAppState(mockService, activeUserId: 'creator_del');
       await tester.pumpWidget(createTestApp(
-        child: const SubRequestResponsesScreen(bandId: 'all'),
+        child: const SubRequestResponsesScreen(bandId: 'freelance'),
         appState: appState,
       ));
       await tester.pump();
@@ -1004,7 +1044,7 @@ void main() {
       final mockService = MockCardsFirebaseService();
       mockService.requests.add(SubRequest(
         id: 'narrow_manage',
-        subRequestId: 'narrow_manage',
+        subRequestId: 'narrow_manage', bandId: 'freelance',
         creatorUserId: 'active_creator',
         bandName: 'Very Long Symphony Orchestra Ensemble Project Name',
         voicePart: 'First Principal French Horn',
@@ -1021,7 +1061,7 @@ void main() {
 
       final appState = MockCardsAppState(mockService, activeUserId: 'active_creator');
       await tester.pumpWidget(createTestApp(
-        child: const SubRequestResponsesScreen(bandId: 'all'),
+        child: const SubRequestResponsesScreen(bandId: 'freelance'),
         appState: appState,
         size: const Size(320, 1000),
       ));
@@ -1070,6 +1110,7 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
 
       final mockService = MockCardsFirebaseService();
+      mockService.bandRoles['band_100/user_active']='leader';
       final req1 = SubRequest(
         id: 'req_single_1',
         subRequestId: 'req_single_1',
@@ -1102,6 +1143,7 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
 
       final mockService = MockCardsFirebaseService();
+      mockService.bandRoles['shared_band_1/same_band_creator']='leader';
       final reqA = SubRequest(
         id: 'req_A',
         subRequestId: 'req_A',
@@ -1145,6 +1187,7 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
 
       final mockService = MockCardsFirebaseService();
+      mockService.bandRoles['shared_band_2/same_band_creator2']='leader';
       final reqA = SubRequest(
         id: 'req_A2',
         subRequestId: 'req_A2',
@@ -1190,7 +1233,7 @@ void main() {
       final mockService = MockCardsFirebaseService();
       final req = SubRequest(
         id: 'req_nav_back',
-        subRequestId: 'req_nav_back',
+        subRequestId: 'req_nav_back', bandId: 'freelance',
         creatorUserId: 'creator_back',
         bandName: 'Return Band',
         role: 'Cellist',
@@ -1225,7 +1268,7 @@ void main() {
       final mockService = MockCardsFirebaseService();
       final slot1 = SubRequest(
         id: 'grp_slot_1',
-        subRequestId: 'grp_slot_1',
+        subRequestId: 'grp_slot_1', bandId: 'freelance',
         requestGroupId: 'common_group_1',
         creatorUserId: 'group_creator',
         bandName: 'Multi Slot Band',
@@ -1233,7 +1276,7 @@ void main() {
       );
       final slot2 = SubRequest(
         id: 'grp_slot_2',
-        subRequestId: 'grp_slot_2',
+        subRequestId: 'grp_slot_2', bandId: 'freelance',
         requestGroupId: 'common_group_1',
         creatorUserId: 'group_creator',
         bandName: 'Multi Slot Band',
@@ -1516,7 +1559,7 @@ void main() {
       expect(mockService.adminLookupCalls, equals(2));
     });
 
-    testWidgets('45. Creator identification renders Manage Request immediately without waiting for admin check', (tester) async {
+    testWidgets('45. Real-band creator cannot bypass unresolved or denied manager authorization', (tester) async {
       tester.view.physicalSize = const Size(800, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -1538,8 +1581,11 @@ void main() {
       await tester.pumpWidget(createTestApp(child: const FindGigsScreen(), appState: appState));
       await tester.pump();
 
-      // Renders Manage Request immediately!
-      expect(find.byKey(const ValueKey('find_gigs_manage_request_creator_fast_gig')), findsOneWidget);
+      // Creator identity does not resolve the management policy.
+      expect(find.byKey(const ValueKey('find_gigs_manage_request_creator_fast_gig')), findsNothing);
+      mockService.delayedAdminCompleter!.complete(false);
+      await tester.pump();
+      expect(find.byKey(const ValueKey('find_gigs_manage_request_creator_fast_gig')), findsNothing);
       expect(find.byKey(const ValueKey('find_gigs_auth_pending_creator_fast_gig')), findsNothing);
     });
 

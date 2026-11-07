@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../providers/app_state.dart';
 import '../theme/app_theme.dart';
+import '../utils/login_feedback.dart';
 import '../widgets/gradient_scaffold.dart';
 import '../widgets/animated_tap_detector.dart';
 
@@ -18,6 +19,8 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
+  bool _submitting = false;
+  String? _failure;
 
   @override
   void dispose() {
@@ -27,36 +30,21 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _handleLogin() async {
-    if (!_formKey.currentState!.validate()) return;
-
+    if (_submitting || !_formKey.currentState!.validate()) return;
     final appState = Provider.of<AppState>(context, listen: false);
+    setState(() { _submitting = true; _failure = null; });
     try {
-      await appState.login(
-        _emailController.text.trim(),
-        _passwordController.text.trim(),
-      );
-      if (mounted) {
-        Navigator.pushReplacementNamed(context, '/main-nav');
-      }
-    } catch (e) {
-      if (mounted) {
-        String errMsg = e.toString();
-        if (errMsg.contains('user-not-found') || errMsg.contains('wrong-password') || errMsg.contains('invalid-credential')) {
-          errMsg = 'Invalid email or password. Please try again.';
-        }
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(errMsg),
-            backgroundColor: AppTheme.danger,
-          ),
-        );
-      }
+      await appState.login(_emailController.text.trim(), _passwordController.text.trim());
+      if (mounted) Navigator.pushReplacementNamed(context, '/main-nav');
+    } catch (error) {
+      if (mounted) setState(() => _failure = loginFailureMessage(error));
+    } finally {
+      if (mounted) setState(() => _submitting = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final appState = Provider.of<AppState>(context);
 
     return GradientScaffold(
       body: SafeArea(
@@ -132,7 +120,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       return 'Please enter your email';
                     }
                     if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value.trim())) {
-                      return 'Please enter a valid email address';
+                      return 'Enter a valid email address.';
                     }
                     return null;
                   },
@@ -142,6 +130,8 @@ class _LoginScreenState extends State<LoginScreen> {
                 // Password field
                 TextFormField(
                   controller: _passwordController,
+                  textInputAction: TextInputAction.done,
+                  onFieldSubmitted: (_) => _handleLogin(),
                   obscureText: _obscurePassword,
                   style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
                   decoration: InputDecoration(
@@ -172,10 +162,17 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 30),
 
-                // Submit button
-                appState.isLoading
+                if (_failure != null) ...[
+                  Semantics(liveRegion: true, child: Text(
+                    _failure!, key: const Key('login_failure'),
+                    style: const TextStyle(color: AppTheme.danger),
+                  )),
+                  const SizedBox(height: 16),
+                ],
+                // Button and keyboard share the same synchronous submission guard.
+                _submitting
                     ? const Center(
-                        child: CircularProgressIndicator(color: AppTheme.primaryAccent),
+                        child: CircularProgressIndicator(color: AppTheme.primaryAccent, semanticsLabel: 'Signing in'),
                       )
                     : AnimatedTapDetector(
                         onTap: _handleLogin,
@@ -207,8 +204,9 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 24),
 
                 // Switch to Register Screen link
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                Wrap(
+                  alignment: WrapAlignment.center,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     Text(
                       "Don't have an account? ",

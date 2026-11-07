@@ -123,6 +123,7 @@ describe('MAP-VIEW-FEED-03B: Real Firebase Emulator Security & Projection Test S
     // 2. Canonical Direct Invitation to Bob
     await adminDb.ref('SubRequests/sub_direct_2').set({
       SubRequestId: 'sub_direct_2',
+      BandId: 'freelance',
       CreatorUserId: userAlice,
       VoicePart: 'Bass',
       Status: 'published',
@@ -441,4 +442,60 @@ describe('MAP-VIEW-FEED-03B: Real Firebase Emulator Security & Projection Test S
     // Creator Alice can read Bob's response
     await assertSucceeds(aliceCtx.database().ref(`SubRequests/sub_direct_2/Responses/${userBob}`).get());
   });
+  for (const role of ['Leader','Admin']) {
+    it(`AUTH guard: active ${role} creates and manages exact-band pins`, async()=>{
+      const bandId='map_auth_'+role;
+      await adminDb.ref(`Bands/${bandId}`).set({Name:'Map authority',Members_band:{[userAlice]:{Role:role,Status:'active'}}});
+      const created=await httpsCallable(clientFunctionsAlice,'createMapPin')({bandId,eventType:'gigConcert',latitude:59.33,longitude:18.06});
+      await httpsCallable(clientFunctionsAlice,'updateMapPin')({pinId:created.data.id,title:'Authorized'});
+      await httpsCallable(clientFunctionsAlice,'deleteMapPin')({pinId:created.data.id});
+    });
+  }
+  for (const [label, member] of [
+    ['ordinary Member',{Role:'Member',Status:'active'}],
+    ['inactive Leader',{Role:'Leader',Status:'inactive'}],
+    ['removed Leader',null],
+    ['conflicting aliases',{Role:'Member',role:'Admin',Status:'active'}],
+  ]) {
+    it(`AUTH guard: ${label} cannot create, update or delete band-owned pins even as creator`,async()=>{
+      const bandId='map_auth_denied';
+      await adminDb.ref(`Bands/${bandId}`).set({Name:'Map authority',Members_band:member?{[userAlice]:member}:null});
+      const pinId='map_auth_denied_pin';
+      await adminDb.ref(`SubRequests/${pinId}`).set({CreatorUserId:userAlice,BandId:bandId,NotificationMode:'map_pin'});
+      const denied=e=>e.code==='functions/permission-denied';
+      await assert.rejects(httpsCallable(clientFunctionsAlice,'createMapPin')({bandId,eventType:'gigConcert',latitude:59.33,longitude:18.06}),denied);
+      await assert.rejects(httpsCallable(clientFunctionsAlice,'updateMapPin')({pinId,title:'Forbidden'}),denied);
+      await assert.rejects(httpsCallable(clientFunctionsAlice,'deleteMapPin')({pinId}),denied);
+      assert((await adminDb.ref(`SubRequests/${pinId}`).get()).exists());
+    });
+  }
+  it('AUTH guard: other-band Admin cannot manage a band-owned pin',async()=>{
+    await adminDb.ref('Bands/map_other').set({Name:'Other',Members_band:{[userBob]:{Role:'Admin',Status:'active'}}});
+    await adminDb.ref('SubRequests/map_other_pin').set({CreatorUserId:userAlice,BandId:'map_exact',NotificationMode:'map_pin'});
+    for(const name of ['updateMapPin','deleteMapPin'])
+      await assert.rejects(httpsCallable(clientFunctionsBob,name)({pinId:'map_other_pin',title:'Forbidden'}),e=>e.code==='functions/permission-denied');
+  });
+  it('AUTH guard: conflicting band aliases fail closed',async()=>{
+    await assert.rejects(httpsCallable(clientFunctionsAlice,'createMapPin')({BandId:'first',bandId:'second',eventType:'gigConcert',latitude:59.33,longitude:18.06}),e=>e.code==='functions/failed-precondition');
+  });
+
+  for (const bandId of [null, 'freelance', 'standalone']) {
+    it(`AUTH guard: ${bandId ?? 'missing band'} personal pin remains exact-creator only`, async () => {
+      const pinId='map_personal_'+(bandId ?? 'missing');
+      await adminDb.ref(`SubRequests/${pinId}`).set({CreatorUserId:userAlice,
+        ...(bandId == null ? {} : {BandId:bandId}),NotificationMode:'map_pin'});
+      await adminDb.ref(`Bands/map_personal_other/Members_band/${userBob}`).set({Role:'Admin',Status:'active'});
+      for (const name of ['updateMapPin','deleteMapPin']) {
+        await assert.rejects(httpsCallable(clientFunctionsBob,name)({pinId,title:'Forbidden'}),e=>e.code==='functions/permission-denied');
+      }
+      await httpsCallable(clientFunctionsAlice,'updateMapPin')({pinId,title:'Owner update'});
+      await httpsCallable(clientFunctionsAlice,'deleteMapPin')({pinId});
+    });
+  }
+  for(const bandId of ['', 'bad/path', 'all']) {
+    it(`AUTH guard: malformed band ${JSON.stringify(bandId)} cannot become personal authority`,async()=>{
+      await assert.rejects(httpsCallable(clientFunctionsAlice,'createMapPin')({bandId,eventType:'gigConcert',latitude:59.33,longitude:18.06}),e=>e.code==='functions/invalid-argument');
+    });
+  }
+
 });

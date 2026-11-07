@@ -13,7 +13,7 @@ import '../views/event_details_page.dart';
 import '../views/sub_request_details_screen.dart';
 
 class AppState extends ChangeNotifier {
-  final FirebaseService firebaseService = FirebaseService();
+  final FirebaseService firebaseService;
 
   UserProfile? _currentUserProfile;
   String? _activeBandId;
@@ -74,7 +74,8 @@ class AppState extends ChangeNotifier {
 
   StreamSubscription<bool>? _unreadSubscription;
 
-  AppState() {
+  AppState({FirebaseService? firebaseService})
+      : firebaseService = firebaseService ?? FirebaseService() {
     _listenToNotifications();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initializeAuthListener();
@@ -461,7 +462,7 @@ class AppState extends ChangeNotifier {
 
   Future<void> login(String email, String password) async {
     _bandSessionEnding = false;
-    _isLoading = true;
+    // LoginScreen owns attempt loading; AuthGate must retain the form.
     _clearProfileState();
     notifyListeners();
     try {

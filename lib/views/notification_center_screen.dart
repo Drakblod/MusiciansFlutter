@@ -329,6 +329,18 @@ class _NotificationPanelContentState extends State<NotificationPanelContent> {
           final bandId = (data['bandId'] ?? data['BandId'] ?? '').toString();
           final eventId = (data['eventId'] ?? data['EventId'] ?? '').toString();
           if (subRequestId.isNotEmpty) {
+            final uid=appState.currentUserId, selectedBand=appState.activeBandId;
+            try {
+              await appState.firebaseService.authorizeRequestManagement(
+                requestId:subRequestId,bandId:bandId.isEmpty ? null : bandId);
+              if (!context.mounted || appState.currentUserId != uid || appState.activeBandId != selectedBand) return;
+            } catch (_) {
+              if (context.mounted) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                content:Text('Request management is unavailable for your current access.')));
+              }
+              return;
+            }
+
             navigator.push(
               MaterialPageRoute(
                 builder: (context) => SubRequestResponseDetailsScreen(

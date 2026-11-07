@@ -1,3 +1,4 @@
+import '../widgets/request_management_gate.dart';
 import '../utils/catalogue_loading.dart';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
@@ -1014,7 +1015,7 @@ class _FindSubScreenState extends State<_FindSubForm> {
       if (!mounted) return;
       final appState = Provider.of<AppState>(context, listen: false);
       final currentUserId = appState.currentUserId;
-      final bandId = widget.bandId ?? appState.activeBandId ?? '';
+      final bandId = widget.bandId ?? appState.activeBandId ?? 'freelance';
       final eventId = slot.eventId ?? widget.eventId ?? '';
       final subRequestId = slot.subRequestId ?? slot.slotId;
 
@@ -1107,7 +1108,7 @@ class _FindSubScreenState extends State<_FindSubForm> {
         await appState.firebaseService.revokeSubstituteAssignmentAsync(
           subRequestId: subRequestId,
           candidateUserId: candidateId,
-          bandId: widget.bandId ?? appState.activeBandId ?? '',
+          bandId: widget.bandId ?? appState.activeBandId ?? 'freelance',
           eventId: slot.eventId ?? widget.eventId ?? '',
           slotId: slot.slotId,
         );
@@ -1181,7 +1182,7 @@ class _FindSubScreenState extends State<_FindSubForm> {
                             letterSpacing: 1.2,
                           ),
                         ),
-                        TextButton.icon(
+                        RequestManagementGate(hideWhenDenied:true,bandId:widget.bandId ?? appState.activeBandId ?? 'freelance',builder:(_) => TextButton.icon(
                           key: const Key('manage_requests_btn'),
                           style: TextButton.styleFrom(
                             backgroundColor: AppTheme.primaryAccent.withOpacity(0.15),
@@ -1201,14 +1202,14 @@ class _FindSubScreenState extends State<_FindSubForm> {
                             ),
                           ),
                           onPressed: () {
-                            final effectiveBandId = widget.bandId ?? appState.activeBandId ?? '';
+                            final effectiveBandId = widget.bandId ?? appState.activeBandId ?? 'freelance';
                             Navigator.pushNamed(
                               context,
                               '/sub-request-responses',
                               arguments: {'bandId': effectiveBandId},
                             );
                           },
-                        ),
+                        )),
                       ],
                     ),
                     const SizedBox(height: 16),
@@ -1272,7 +1273,7 @@ class _FindSubScreenState extends State<_FindSubForm> {
                                 ],
                               ),
                             ),
-                            ElevatedButton(
+                            RequestManagementGate(hideWhenDenied:true,bandId:widget.bandId ?? appState.activeBandId ?? 'freelance',builder:(_) => ElevatedButton(
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: AppTheme.primaryAccent,
                                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -1297,7 +1298,7 @@ class _FindSubScreenState extends State<_FindSubForm> {
                                   color: Colors.white,
                                 ),
                               ),
-                            ),
+                            )),
                           ],
                         ),
                       ),

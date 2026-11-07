@@ -1,3 +1,4 @@
+import 'request_management_gate.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/sub_request.dart';
@@ -641,7 +642,7 @@ class _MapPinDetailsCardState extends State<MapPinDetailsCard> {
             rawBandId != 'freelance' &&
             rawBandId != 'standalone')
         ? rawBandId
-        : 'all';
+        : (rawBandId == 'standalone' ? 'standalone' : 'freelance');
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -1105,7 +1106,7 @@ class _MapPinDetailsCardState extends State<MapPinDetailsCard> {
                 const SizedBox(height: 12),
                 SizedBox(
                   width: double.infinity,
-                  child: ElevatedButton.icon(
+                  child: RequestManagementGate(hideWhenDenied:true,requestId:widget.gig.subRequestId ?? widget.gig.id ?? '',bandId:widget.gig.bandId,expectedCreatorId:widget.gig.creatorUserId ?? widget.gig.userId,builder:(_) => ElevatedButton.icon(
                     key: const ValueKey('map_pin_manage_request_button'),
                     onPressed: () => _handleManageRequest(context),
                     icon: const Icon(Icons.manage_accounts_rounded, size: 16, color: Colors.white),
@@ -1122,7 +1123,7 @@ class _MapPinDetailsCardState extends State<MapPinDetailsCard> {
                       padding: const EdgeInsets.symmetric(vertical: 10),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
-                  ),
+                  )),
                 ),
               ] else if (showAppliedBadgeButton) ...[
                 const SizedBox(height: 12),

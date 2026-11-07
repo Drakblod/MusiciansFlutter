@@ -1,3 +1,4 @@
+import '../widgets/request_management_gate.dart';
 import '../utils/catalogue_loading.dart';
 import '../utils/membership_mutation_feedback.dart';
 import '../utils/band_membership_policy.dart';
@@ -412,7 +413,7 @@ class _BandRoomChatScreenState extends State<_BandRoomContent>
                 const Divider(color: Color(0xFF2E2A4E), height: 16),
 
                 // Manage Sub Requests option
-                ListTile(
+                RequestManagementGate(hideWhenDenied:true,bandId:bandId,builder:(_) => ListTile(
                   leading: const Icon(Icons.people_outline, color: AppTheme.primaryAccent),
                   title: Text(
                     'Manage Sub Requests',
@@ -431,7 +432,7 @@ class _BandRoomChatScreenState extends State<_BandRoomContent>
                       arguments: {'bandId': bandId},
                     );
                   },
-                ),
+                )),
                 const SizedBox(height: 12),
               ],
             ),

@@ -1,3 +1,4 @@
+import '../widgets/request_management_gate.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -224,7 +225,7 @@ class HomeScreen extends StatelessWidget {
               const SizedBox(height: 12),
 
               // Option 2: Manage Active Requests
-              AnimatedTapDetector(
+              RequestManagementGate(hideWhenDenied:true,bandId:bandId,builder:(_) => AnimatedTapDetector(
                 onTap: () {
                   Navigator.pop(sheetContext, 'manage');
                 },
@@ -285,7 +286,7 @@ class HomeScreen extends StatelessWidget {
                     ],
                   ),
                 ),
-              ),
+              )),
             ],
           ),
         );
@@ -1098,7 +1099,7 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
               const SizedBox(height: 12),
 
               // Option 2: Manage Active Requests
-              AnimatedTapDetector(
+              RequestManagementGate(hideWhenDenied:true,bandId:bandId,builder:(_) => AnimatedTapDetector(
                 onTap: () {
                   Navigator.pop(sheetContext, 'manage');
                 },
@@ -1158,7 +1159,7 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
                     ],
                   ),
                 ),
-              ),
+              )),
             ],
           ),
         );

@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 
 import 'package:musicians_flutter/models/canonical_location.dart';
 import 'package:musicians_flutter/models/sub_request.dart';
+import 'package:musicians_flutter/models/request_management_access.dart';
 import 'package:musicians_flutter/models/user_profile.dart';
 import 'package:musicians_flutter/services/firebase_service.dart';
 import 'package:musicians_flutter/providers/app_state.dart';
@@ -15,11 +16,21 @@ import 'package:musicians_flutter/views/sub_request_responses_screen.dart';
 import 'package:musicians_flutter/views/sub_request_response_details_screen.dart';
 
 class MockConsistencyFirebaseService extends FirebaseService {
+  String? fixtureUid;
+  @override Stream<String?> get catalogueIdentityChanges => const Stream.empty();
+  @override Stream<bool> watchRequestManagementAccess(RequestManagementAccess access) => const Stream.empty();
+  @override
+  Future<RequestManagementAccess> authorizeRequestManagement({String? bandId,String? requestId,String? expectedCreatorId,bool Function()? isCurrent}) async {
+    final request=requests.firstWhere((r)=>(r.subRequestId??r.id)==requestId);
+    if(request.bandId!=bandId || !['leader','admin'].contains(bandRoles['$bandId/$currentUserId']) ||
+        (isCurrent!=null && !isCurrent())) throw const PrivateDataAccessException();
+    return RequestManagementAccess(userId:currentUserId!,bandId:bandId!,request:request);
+  }
   @override
   Stream<int> subscribeToSubRequestResponseCount(String id) => const Stream<int>.empty();
 
   @override
-  String? get currentUserId => 'test_user_active';
+  String? get currentUserId => fixtureUid ?? 'test_user_active';
   final List<SubRequest> requests = [];
   final Set<String> appliedIds = {};
   final Map<String, int> responseCounts = {};
@@ -360,6 +371,8 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
 
       final mockService = MockConsistencyFirebaseService();
+      mockService.fixtureUid='creator_1';
+      mockService.bandRoles['band_aurora/creator_1']='leader';
       final gig = SubRequest(
         id: 'manage_sub_1',
         subRequestId: 'manage_sub_1',

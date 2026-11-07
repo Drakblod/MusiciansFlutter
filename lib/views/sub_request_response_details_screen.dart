@@ -5,25 +5,41 @@ import 'package:intl/intl.dart';
 import '../providers/app_state.dart';
 import '../theme/app_theme.dart';
 import '../models/sub_request.dart';
+import '../models/request_management_access.dart';
 import '../models/message.dart';
 import '../widgets/custom_top_bar.dart';
 import '../widgets/gradient_scaffold.dart';
 import '../widgets/animated_tap_detector.dart';
 import 'chat_detail_screen.dart';
 import '../utils/sub_request_card_helper.dart';
+import '../widgets/request_management_gate.dart';
 
-class SubRequestResponseDetailsScreen extends StatefulWidget {
+class SubRequestResponseDetailsScreen extends StatelessWidget {
+  const SubRequestResponseDetailsScreen({super.key,required this.subRequest});
   final SubRequest subRequest;
-
-  const SubRequestResponseDetailsScreen({super.key, required this.subRequest});
-
   @override
-  State<SubRequestResponseDetailsScreen> createState() =>
-      _SubRequestResponseDetailsScreenState();
+  Widget build(BuildContext context) => RequestManagementGate(
+    requestId:subRequest.subRequestId ?? subRequest.id ?? '',
+    bandId:subRequest.bandId,
+    expectedCreatorId:subRequest.creatorUserId ?? subRequest.userId,
+    builder:(access) => _AuthorizedSubRequestResponseDetailsScreen(subRequest:access.request!,access:access),
+  );
 }
 
-class _SubRequestResponseDetailsScreenState
-    extends State<SubRequestResponseDetailsScreen> {
+class _AuthorizedSubRequestResponseDetailsScreen extends StatefulWidget {
+  final SubRequest subRequest;
+
+  final RequestManagementAccess access;
+  const _AuthorizedSubRequestResponseDetailsScreen({required this.subRequest,required this.access});
+
+  @override
+  State<_AuthorizedSubRequestResponseDetailsScreen> createState() =>
+      __AuthorizedSubRequestResponseDetailsScreenState();
+}
+
+class __AuthorizedSubRequestResponseDetailsScreenState
+    extends State<_AuthorizedSubRequestResponseDetailsScreen> {
+  bool get _current => mounted && widget.access.isValid;
   List<ResponderItem> _responders = [];
   String? _selectedUserId;
   bool _isLoading = true;
@@ -44,21 +60,18 @@ class _SubRequestResponseDetailsScreenState
         throw Exception("Invalid request ID");
       }
 
-      // 1. Fetch targeted SubRequest or fallback to widget.subRequest
-      final freshReq = await appState.firebaseService.getSubRequestAsync(reqId);
-      final effectiveReq = freshReq ?? widget.subRequest;
-
-      // 2. Collect responder IDs from both the subrequest object and all RTDB paths
-      final Map<String, dynamic> responses = Map<String, dynamic>.from(effectiveReq.responses);
-      final asyncResponses = await appState.firebaseService.getSubRequestResponsesAsync(reqId);
-      responses.addAll(asyncResponses);
+      // The outer destination guard supplied the canonical authorized request.
+      final responses = await appState.firebaseService.getSubRequestResponsesAsync(reqId);
+      if (!mounted || !_current) return;
 
       final responderIds = responses.keys.toList();
       final List<ResponderItem> items = [];
 
       // 3. Fetch profiles for each responder ID
       for (final uid in responderIds) {
+        if (!mounted || !_current) return;
         final profile = await appState.firebaseService.getUserProfileAsync(uid);
+        if (!mounted || !_current) return;
         if (profile != null) {
           final primarySkill = profile.mainSkills.isNotEmpty
               ? profile.mainSkills.first
@@ -90,7 +103,7 @@ class _SubRequestResponseDetailsScreenState
         }
       }
 
-      if (mounted) {
+      if (mounted && _current) {
         setState(() {
           _responders = items;
           if (items.length == 1) {
@@ -111,17 +124,17 @@ class _SubRequestResponseDetailsScreenState
       } catch (_) {}
     } catch (e) {
       debugPrint("Error loading responses: $e");
-      if (mounted) {
+      if (mounted && _current) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to load responders: $e'),
+            content: Text('Request management is unavailable for your current access.'),
             backgroundColor: AppTheme.danger,
           ),
         );
       }
     } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
+      if (mounted && _current) {
+        if (mounted && _current) setState(() => _isLoading = false);
       }
     }
   }
@@ -139,13 +152,30 @@ class _SubRequestResponseDetailsScreenState
     final reqId = widget.subRequest.subRequestId ?? widget.subRequest.id;
 
     if (currentUserId == null || reqId == null) {
-      setState(() => _isLoading = false);
+      if (mounted && _current) setState(() => _isLoading = false);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Missing user ID or request ID"), backgroundColor: AppTheme.danger),
       );
       return;
     }
 
+    try {
+      await appState.firebaseService.authorizeRequestManagement(
+        requestId: reqId,
+        bandId: widget.subRequest.bandId,
+        expectedCreatorId: widget.subRequest.creatorUserId ?? widget.subRequest.userId,
+        isCurrent: () => _current && appState.currentUserId == currentUserId,
+      );
+    } catch (_) {
+      if (mounted && _current) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Request management is unavailable for your current access.'),
+        ));
+      }
+      return;
+    }
+    if (!mounted || !_current) return;
     final bool isMemberRequest =
         widget.subRequest.role == 'New Member' ||
         widget.subRequest.role == 'Member';
@@ -157,6 +187,7 @@ class _SubRequestResponseDetailsScreenState
           currentUserId,
           selectedSub.userId,
         );
+        if (!mounted || !_current) return;
 
         final introMessage = Message(
           id: '',
@@ -176,11 +207,11 @@ class _SubRequestResponseDetailsScreenState
             introMessage.senderName ?? 'Band Leader',
           );
         } catch (e) {
-          debugPrint("[SubRequestResponseDetailsScreen] sendConversationMessageAsync notice: $e");
+          debugPrint("[_AuthorizedSubRequestResponseDetailsScreen] sendConversationMessageAsync notice: $e");
         }
 
-        if (mounted) {
-          setState(() => _isLoading = false);
+        if (mounted && _current) {
+          if (mounted && _current) setState(() => _isLoading = false);
           final shouldOpen = await showDialog<bool>(
             context: context,
             builder: (ctx) => AlertDialog(
@@ -214,7 +245,7 @@ class _SubRequestResponseDetailsScreenState
             ),
           );
 
-          if ((shouldOpen == true || shouldOpen == null) && mounted) {
+          if ((shouldOpen == true || shouldOpen == null) && mounted && _current) {
             Navigator.push(
               context,
               MaterialPageRoute(
@@ -230,23 +261,21 @@ class _SubRequestResponseDetailsScreenState
         }
         return;
       } catch (e) {
-        debugPrint("[SubRequestResponseDetailsScreen] member message error: $e");
-        setState(() => _isLoading = false);
+        debugPrint("[_AuthorizedSubRequestResponseDetailsScreen] member message error: $e");
+        if (mounted && _current) setState(() => _isLoading = false);
         return;
       }
     }
 
     try {
 
-      SubRequest effectiveReq = widget.subRequest;
-      try {
-        final freshReq = await appState.firebaseService.getSubRequestAsync(reqId);
-        if (freshReq != null) {
-          effectiveReq = freshReq;
-        }
-      } catch (_) {}
+      final access = await appState.firebaseService.authorizeRequestManagement(
+        requestId:reqId,bandId:widget.subRequest.bandId,
+        expectedCreatorId:widget.subRequest.creatorUserId ?? widget.subRequest.userId,
+        isCurrent: () => _current && appState.currentUserId == currentUserId);
+      if (!mounted || !_current) return;
+      SubRequest effectiveReq = access.request!;
 
-      // If connected to event and location or date is still missing, enrich from the event
       if ((effectiveReq.location == null || effectiveReq.location!.isEmpty || effectiveReq.date == null || effectiveReq.date!.isEmpty) &&
           effectiveReq.bandId != null &&
           effectiveReq.eventId != null &&
@@ -257,6 +286,7 @@ class _SubRequestResponseDetailsScreenState
             effectiveReq.bandId!,
             effectiveReq.eventId!,
           );
+          if (!mounted || !_current) return;
           if (event != null) {
             final startLocal = DateTime.tryParse(event.startDateTime)?.toLocal();
             final endLocal = DateTime.tryParse(event.endDateTime)?.toLocal();
@@ -279,6 +309,7 @@ class _SubRequestResponseDetailsScreenState
       }
 
       // Server-authoritative assignment & Agreement creation
+      if (!mounted || !_current) return;
       String conversationId = '';
       try {
         await appState.firebaseService.assignSubstituteCandidateAsync(
@@ -289,9 +320,9 @@ class _SubRequestResponseDetailsScreenState
           roleOrInstrument: effectiveReq.voicePart ?? effectiveReq.role ?? '',
           candidateName: selectedSub.name,
         );
+        if (!mounted || !_current) return;
         conversationId = appState.firebaseService.lastAssignedAgreementConversationId ?? '';
       } catch (e) {
-        debugPrint("[SubRequestResponseDetailsScreen] assignSubstituteCandidateAsync notice: $e");
         rethrow;
       }
 
@@ -308,6 +339,7 @@ class _SubRequestResponseDetailsScreenState
             bandId,
             eventId,
           );
+          if (!mounted || !_current) return;
           if (event != null) {
             if (event.temporaryRoomId != null &&
                 event.temporaryRoomId!.isNotEmpty) {
@@ -320,14 +352,14 @@ class _SubRequestResponseDetailsScreenState
             }
           }
         } catch (roomErr) {
-          debugPrint("[SubRequestResponseDetailsScreen] Event room step notice: $roomErr");
+          debugPrint("[_AuthorizedSubRequestResponseDetailsScreen] Event room step notice: $roomErr");
         }
       }
 
       // 4. SubRequest is marked assigned by the server operation
 
       // 5. Navigate to Receipt Screen
-      if (mounted) {
+      if (mounted && _current) {
         Navigator.pushReplacementNamed(
           context,
           '/receipt',
@@ -344,15 +376,15 @@ class _SubRequestResponseDetailsScreenState
       }
     } catch (e) {
       debugPrint("Error confirming selection: $e");
-      if (mounted) {
+      if (mounted && _current) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to confirm candidate: $e'),
+            content: Text('Unable to complete this request. Please try again.'),
             backgroundColor: AppTheme.danger,
           ),
         );
       }
-      setState(() => _isLoading = false);
+      if (mounted && _current) setState(() => _isLoading = false);
     }
   }
 

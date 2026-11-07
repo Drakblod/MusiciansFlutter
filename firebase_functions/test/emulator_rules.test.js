@@ -749,8 +749,9 @@ describe('Real RTDB Emulator Rules Tests', function () {
         const db = context.database();
         await db.ref('SubRequests/sub_fav_targeted_1').set({
           SubRequestId: 'sub_fav_targeted_1',
+          BandId: 'freelance',
           CreatorUserId: 'user_leader',
-          bandId: 'band_rules_test',
+          bandId: 'freelance',
           eventId: 'event_open',
           VoicePart: 'Electric Guitar',
           SearchSource: 'favorites',
@@ -775,7 +776,7 @@ describe('Real RTDB Emulator Rules Tests', function () {
       await assertFails(outsider.database().ref('SubRequests/sub_fav_targeted_1').get());
     });
 
-    it('34. Creator CAN read their own SubRequest regardless of audience', async () => {
+    it('34. Explicit freelance creator CAN read their own SubRequest regardless of audience', async () => {
       const creator = testEnvFinal.authenticatedContext('user_leader');
       const snap = await assertSucceeds(creator.database().ref('SubRequests/sub_fav_targeted_1').get());
       assert.strictEqual(snap.val().CreatorUserId, 'user_leader');
@@ -1728,6 +1729,7 @@ describe('Real RTDB Emulator Rules Tests', function () {
                 },
                 parity_direct_inv: {
                   SubRequestId: 'parity_direct_inv',
+                  BandId: 'freelance',
                   CreatorUserId: 'alice',
                   NotificationMode: 'direct',
                   Status: 'published',
@@ -1910,6 +1912,7 @@ describe('Real RTDB Emulator Rules Tests', function () {
           const alice = getEnv().authenticatedContext('alice');
           await assertFails(alice.database().ref('SubRequests/parity_direct_inv').set({
             SubRequestId: 'parity_direct_inv',
+                  BandId: 'freelance',
             CreatorUserId: 'alice',
             Status: 'published',
             Responses: { bob: false },
@@ -1970,7 +1973,7 @@ describe('Real RTDB Emulator Rules Tests', function () {
           await assertSucceeds(bob.database().ref('SubRequests/parity_favorites/Responses/bob').get());
         });
 
-        it('19d. Creator CAN read approved canonical data and responses collection and leaf', async () => {
+        it('19d. Explicit freelance creator CAN read canonical data and responses', async () => {
           const alice = getEnv().authenticatedContext('alice');
           await assertSucceeds(alice.database().ref('SubRequests/parity_direct_inv').get());
           await assertSucceeds(alice.database().ref('SubRequests/parity_direct_inv/Responses').get());

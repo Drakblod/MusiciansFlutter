@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
 
 import 'package:musicians_flutter/models/agreement.dart';
+import 'package:musicians_flutter/models/request_management_access.dart';
 import 'package:musicians_flutter/models/band_event.dart';
 import 'package:musicians_flutter/models/message.dart';
 import 'package:musicians_flutter/models/sub_request.dart';
@@ -20,6 +21,23 @@ import 'package:musicians_flutter/views/inbox_screen.dart';
 import 'package:musicians_flutter/views/sub_request_response_details_screen.dart';
 
 class MockAgreementIntegrityService extends FirebaseService {
+  // These Agreement tests use an authorized organizer fixture; ownership
+  // rejection and live revocation are exercised by the focused guard suite.
+  @override
+  Stream<String?> get catalogueIdentityChanges => const Stream.empty();
+  @override
+  Stream<bool> watchRequestManagementAccess(RequestManagementAccess access) => const Stream.empty();
+  @override
+  Future<RequestManagementAccess> authorizeRequestManagement({String? bandId,
+    String? requestId, String? expectedCreatorId, bool Function()? isCurrent}) async {
+    final request=mockSubRequest;
+    if (request == null || request.subRequestId != requestId ||
+        request.bandId != bandId || bandId != 'band_26' || currentUserId != 'creator_alice' ||
+        (expectedCreatorId != null && expectedCreatorId != request.creatorUserId) ||
+        (isCurrent != null && !isCurrent())) throw const PrivateDataAccessException();
+    return RequestManagementAccess(userId:currentUserId!,bandId:bandId!,request:request);
+  }
+
   final List<Map<String, dynamic>> conversations = [];
   final Map<String, Agreement> conversationAgreements = {};
   final Map<String, List<Message>> conversationMessages = {};
@@ -1051,6 +1069,7 @@ void main() {
       final req = SubRequest(
         id: 'sub_single_action_1',
         subRequestId: 'sub_single_action_1',
+        creatorUserId: 'creator_alice',
         bandId: 'band_26',
         bandName: 'Band 26',
         eventId: 'evt_26',
