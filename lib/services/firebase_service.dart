@@ -28,6 +28,7 @@ import '../utils/date_parser.dart';
 import '../utils/secondary_skills_utils.dart';
 import '../utils/band_membership_policy.dart';
 import '../utils/catalogue_profiles.dart';
+import 'storage_media_service.dart';
 
 class PrivateDataAccessException implements Exception {
   const PrivateDataAccessException();
@@ -372,7 +373,7 @@ class FirebaseService {
     try {
       final ref = FirebaseStorage.instance
           .ref()
-          .child('profileAudio')
+          .child('publicMedia/profileAudio')
           .child(userId)
           .child('snippet_${DateTime.now().millisecondsSinceEpoch}.mp3');
 
@@ -404,7 +405,8 @@ class FirebaseService {
     try {
       final ref = FirebaseStorage.instance
           .ref()
-          .child('profilePictures')
+          .child('publicMedia/profilePictures')
+          .child(userId)
           .child(
             'profile_${userId}_${DateTime.now().millisecondsSinceEpoch}.jpg',
           );
@@ -2097,6 +2099,7 @@ class FirebaseService {
           final Map<String, String> fileData = {
             'FileName': fileName,
             'FileUrl': fileUrl,
+            'UploadedBy': v['UploadedBy']?.toString() ?? '',
           };
           if (category.isNotEmpty) {
             fileData['Category'] = category;
@@ -2116,25 +2119,22 @@ class FirebaseService {
     String fileUrl, [
     String? category,
   ]) async {
-    final ref = _dbRef('files/$bandId').push();
-    final uid = currentUserId;
-    final Map<String, dynamic> data = {
-      'FileName': fileName,
-      'FileUrl': fileUrl,
-      'UploadedAt': DateTime.now().millisecondsSinceEpoch,
-    };
-    if (uid != null && uid.isNotEmpty) {
-      data['UploadedBy'] = uid;
-    }
-    if (category != null && category.isNotEmpty) {
-      data['Category'] = category;
-    }
-    await ref.set(data);
+    final id = _mediaId(fileUrl);
+    await _forCurrentSession(() => StorageMediaService().registerBandFile(id, category ?? '', bandId));
   }
 
-  Future<void> removeBandFileAsync(String bandId, String fileId) async {
-    await _dbRef('files/$bandId/$fileId').remove();
+  String _mediaId(String handle) {
+    if (!RegExp(r'^secure-media:[a-f0-9]{32}$').hasMatch(handle)) {
+      throw const PrivateDataAccessException();
+    }
+    return handle.substring(13);
   }
+
+  Future<Uint8List> downloadBandFileAsync(String fileUrl) =>
+      _forCurrentSession(() => StorageMediaService().download(_mediaId(fileUrl)));
+
+  Future<void> removeBandFileAsync(String bandId, String fileId) =>
+      _forCurrentSession(() => StorageMediaService().delete(fileId, bandId: bandId));
 
   String _getMimeType(String fileName) {
     final ext = fileName.split('.').last.toLowerCase().trim();
@@ -2179,31 +2179,25 @@ class FirebaseService {
     String? path,
     String fileName,
   ) async {
-    try {
-      final ref = FirebaseStorage.instance
-          .ref()
-          .child('bandFiles')
-          .child(bandId)
-          .child('${DateTime.now().millisecondsSinceEpoch}_$fileName');
+    final data = bytes ?? (path != null && !kIsWeb ? await File(path).readAsBytes() : null);
+    if (data == null || data.isEmpty) throw ArgumentError('A file is required.');
+    return _forCurrentSession(() async {
+      final id = await StorageMediaService().upload(kind: 'band', bandId: bandId,
+          bytes: data, fileName: fileName, contentType: _getMimeType(fileName));
+      return 'secure-media:$id';
+    });
+  }
 
-      final mimeType = _getMimeType(fileName);
-      final metadata = SettableMetadata(contentType: mimeType);
-
-      UploadTask uploadTask;
-      if (bytes != null && bytes.isNotEmpty) {
-        uploadTask = ref.putData(bytes, metadata);
-      } else if (path != null && path.isNotEmpty) {
-        uploadTask = ref.putFile(File(path), metadata);
-      } else {
-        throw Exception("Both file bytes and path are null for upload");
-      }
-      final snapshot = await uploadTask;
-      final url = await snapshot.ref.getDownloadURL();
-      return url;
-    } catch (e) { _rethrowAccessDenied(e);
-      print("[FirebaseService] Error uploading band file: $e");
-      rethrow;
-    }
+  Future<String> uploadMapAudioAsync(String userId, Uint8List? bytes, String? path,
+      {String? bandId}) async {
+    if (userId != currentUserId) throw const PrivateDataAccessException();
+    final data = bytes ?? (path != null && !kIsWeb ? await File(path).readAsBytes() : null);
+    if (data == null || data.isEmpty) throw ArgumentError('Audio is required.');
+    return _forCurrentSession(() async {
+      final id = await StorageMediaService().upload(kind: 'map', bandId: bandId,
+          bytes: data, fileName: 'audio.mp3', contentType: 'audio/mpeg');
+      return 'secure-media:$id';
+    });
   }
 
   Future<void> savePushTokenAsync(String token) async {
@@ -2349,7 +2343,8 @@ class FirebaseService {
         final image = images[i];
         final ref = FirebaseStorage.instance
             .ref()
-            .child('marketplaceImages')
+            .child('publicMedia/marketplaceImages')
+            .child(currentUserId ?? (throw const PrivateDataAccessException()))
             .child(listingId)
             .child('image_${i}_${DateTime.now().millisecondsSinceEpoch}.jpg');
 
@@ -3609,7 +3604,8 @@ class FirebaseService {
       final id = eventId ?? 'event_${DateTime.now().millisecondsSinceEpoch}';
       final ref = FirebaseStorage.instance
           .ref()
-          .child('publicEventImages')
+          .child('publicMedia/publicEventImages')
+          .child(currentUserId ?? (throw const PrivateDataAccessException()))
           .child(id)
           .child('cover_${DateTime.now().millisecondsSinceEpoch}.jpg');
 

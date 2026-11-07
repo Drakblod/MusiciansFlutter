@@ -1,7 +1,7 @@
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const { onValueCreated, onValueWritten } = require('firebase-functions/v2/database');
-const { onCall, HttpsError } = require('firebase-functions/v2/https');
+const { onCall, onRequest, HttpsError } = require('firebase-functions/v2/https');
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { defineSecret } = require('firebase-functions/params');
 const logger = require('firebase-functions/logger');
@@ -11,6 +11,8 @@ const cityPlaces = require('./google_places_cities');
 const cityGate = require('./city_verification');
 const eventReadModels = require('./event_read_models');
 const eventMutations = require('./event_mutations');
+exports.storageMedia = onRequest({region:'europe-west1', cors:true, timeoutSeconds:540},
+  require('./storage_media').handler(admin));
 exports.mutateBandEvent = onCall({region:'europe-west1'},async request=>{
   if(!request.auth)throw new HttpsError('unauthenticated','Sign in first.');
   return eventMutations.mutate(admin.database(),request.auth.uid,request.data);
@@ -132,8 +134,7 @@ const isEmulator = process.env.FUNCTIONS_EMULATOR === 'true' ||
   process.env.FIREBASE_EMULATOR_HUB !== undefined;
 // The deployed manifest must not change region merely because a developer's
 // shell has FIREBASE_DATABASE_EMULATOR_HOST or FIREBASE_EMULATOR_HUB set.
-const databaseTriggerRegion = process.env.FUNCTIONS_EMULATOR === 'true'
-  ? 'us-central1' : 'europe-west1';
+const databaseTriggerRegion = require('./deployment_region').databaseRegion();
 
 // In emulator environment, stub outbound FCM messaging to avoid external network timeouts on fake tokens
 if (isEmulator) {
@@ -247,7 +248,7 @@ async function recordUserNotification(recipientUserId, notificationData) {
 /**
  * Helper to record multiple user notifications in batch
  */
-async function recordUserNotificationsBatch(recipientUserIds, notificationDataBuilder) {
+async function recordUserNotificationsBatch(recipientUserIds, notificationDataBuilder, {createOnly = false} = {}) {
   if (!recipientUserIds || recipientUserIds.length === 0) return;
   try {
     const updates = {};
@@ -276,7 +277,12 @@ async function recordUserNotificationsBatch(recipientUserIds, notificationDataBu
       };
     }
     if (Object.keys(updates).length > 0) {
-      await admin.database().ref().update(updates);
+      if (createOnly) {
+        await Promise.all(Object.entries(updates).map(([path, value]) =>
+          admin.database().ref(path).transaction(current => current || value)));
+      } else {
+        await admin.database().ref().update(updates);
+      }
     }
   } catch (err) {
     console.error('Error batch recording user notifications:', err);
@@ -2657,7 +2663,7 @@ exports.onEventResponseChanged = functions.region(databaseTriggerRegion).databas
  * Scheduled cron job running every hour to send automatic RSVP reminders
  * to members who have not responded after 48h, 72h, and 84h.
  */
-exports.checkEventReminders = functions.pubsub
+exports.checkEventReminders = functions.region('europe-west1').pubsub
   .schedule('every 1 hours')
   .onRun(async (context) => {
     try {
@@ -5074,19 +5080,13 @@ exports.onBandFileUploaded = functions.region(databaseTriggerRegion).database
       const bandVal = bandSnap.val() || {};
       const bandName = bandVal.Name || bandVal.name || bandId;
 
-      let memberIds = [];
-      if (bandVal.Members_band) {
-        memberIds = Object.keys(bandVal.Members_band);
-      } else if (bandVal.Members) {
-        memberIds = Object.keys(bandVal.Members);
-      }
-
-      if (memberIds.length === 0) {
-        const convMembersSnap = await db.ref(`/bandconversations/${bandId}/members`).once('value');
-        if (convMembersSnap.exists() && convMembersSnap.val()) {
-          memberIds = Object.keys(convMembersSnap.val());
-        }
-      }
+      // File names are private band data too. Legacy mirrors and stale roles
+      // must never expand the current canonical audience.
+      const memberIds = Object.entries(bandVal.Members_band || {}).filter(([, member]) =>
+        require('./band_membership_index').validMember(member) &&
+        !(member.Status != null && member.status != null &&
+          String(member.Status).trim().toLowerCase() !== String(member.status).trim().toLowerCase()))
+        .map(([uid]) => uid);
 
       const recipients = memberIds.filter(uid => uid && uid !== uploaderId);
       if (recipients.length === 0) return null;
@@ -5106,7 +5106,7 @@ exports.onBandFileUploaded = functions.region(databaseTriggerRegion).database
           uploadedBy: uploaderId || '',
           featureId: 'band_room',
         },
-      }));
+      }), {createOnly:true});
 
       return null;
     } catch (err) {
@@ -5564,9 +5564,14 @@ exports.createMapPin = onCall({ region: 'europe-west1' }, async (request) => {
   if (audioSnippetTitle) persistedPayload.audioSnippetTitle = audioSnippetTitle;
   if (infoAudioTrack) persistedPayload.infoAudioTrack = infoAudioTrack;
 
+  const media = await require('./storage_media').bindMap(db, callerUid, generatedId,
+    persistedPayload.BandId, audioSnippetUrl, admin.app().options.projectId || process.env.GCLOUD_PROJECT);
+  if (media) { persistedPayload.audioSnippetUrl = media.url; persistedPayload.MediaObjectId = media.id; }
+
   // 8. Write atomically to canonical SubRequests/{generatedId} and publicMapPinFeed/{generatedId}
   const sanitizedProjection = sanitizeMapPinProjection(persistedPayload);
   const writeBatch = {};
+  if (media) writeBatch[media.path] = generatedId;
   writeBatch[`SubRequests/${generatedId}`] = persistedPayload;
   if (sanitizedProjection) {
     writeBatch[`publicMapPinFeed/${generatedId}`] = sanitizedProjection;
@@ -5722,9 +5727,18 @@ exports.updateMapPin = onCall({ region: 'europe-west1' }, async (request) => {
   updates['UpdatedAt'] = Date.now();
   updates['updatedAt'] = Date.now();
 
+  const media = data.audioSnippetUrl === undefined ? null :
+    await require('./storage_media').bindMap(db, callerUid, pinId, existing.BandId,
+      data.audioSnippetUrl, admin.app().options.projectId || process.env.GCLOUD_PROJECT);
+  if (data.audioSnippetUrl !== undefined) {
+    updates.MediaObjectId = media?.id ?? null;
+    if (media) updates.audioSnippetUrl = media.url;
+  }
+
   // Atomically update canonical pin and publicMapPinFeed projection
   const merged = { ...existing, ...updates };
   const rootUpdates = {};
+  if (media) rootUpdates[media.path] = pinId;
   for (const [k, v] of Object.entries(updates)) {
     rootUpdates[`SubRequests/${pinId}/${k}`] = v;
   }

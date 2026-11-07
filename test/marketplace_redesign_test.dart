@@ -1,3 +1,4 @@
+import 'support/bounded_ui_pump.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:firebase_core/firebase_core.dart' hide FirebaseService;
@@ -363,7 +364,7 @@ void main() {
         child: const MarketplacePage(),
         mockService: mockService,
       ));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text("I'M LOOKING FOR"), findsOneWidget);
       expect(find.text("I'M OFFERING"), findsOneWidget);
@@ -382,11 +383,11 @@ void main() {
         child: const MarketplacePage(),
         mockService: mockService,
       ));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Tap I'M LOOKING FOR card
       await tester.tap(find.text("I'M LOOKING FOR"));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.byType(MarketplaceCategorySheet), findsOneWidget);
       expect(find.text("I'M LOOKING FOR"), findsNWidgets(2)); // Header in sheet & background card
@@ -411,11 +412,11 @@ void main() {
         child: const MarketplacePage(),
         mockService: mockService,
       ));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Tap I'M OFFERING card
       await tester.tap(find.text("I'M OFFERING"));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.byType(MarketplaceCategorySheet), findsOneWidget);
       expect(find.text('Instruments/Gear'), findsOneWidget);
@@ -437,15 +438,15 @@ void main() {
         child: const MarketplacePage(),
         mockService: mockService,
       ));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Tap I'M LOOKING FOR
       await tester.tap(find.text("I'M LOOKING FOR"));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Select Instrument/Gear
       await tester.tap(find.text('Instrument/Gear'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Modal closed
       expect(find.byType(MarketplaceCategorySheet), findsNothing);
@@ -459,7 +460,7 @@ void main() {
 
       // Reopening populated card by tapping again
       await tester.tap(find.text("I'M LOOKING FOR"));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       expect(find.byType(MarketplaceCategorySheet), findsOneWidget);
     });
 
@@ -468,37 +469,37 @@ void main() {
         child: const MarketplacePage(),
         mockService: mockService,
       ));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Select I'M LOOKING FOR -> Instrument/Gear
       await tester.tap(find.text("I'M LOOKING FOR"));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       await tester.tap(find.text('Instrument/Gear'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Roland Juno is visible
       expect(find.text('Roland Juno-DS Synthesizer'), findsOneWidget);
 
       // Search for non-matching text
       await tester.enterText(find.byType(TextField), 'Yamaha');
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Roland Juno-DS Synthesizer'), findsNothing);
       expect(find.text('No Listings Found'), findsOneWidget);
 
       // Search for matching text
       await tester.enterText(find.byType(TextField), 'Roland');
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Roland Juno-DS Synthesizer'), findsOneWidget);
 
       // Switch to I'M OFFERING -> Repairs (which has no offering listings in mock)
       await tester.enterText(find.byType(TextField), '');
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       await tester.tap(find.text("I'M OFFERING"));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       await tester.tap(find.text('Repairs'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('No Listing Made'), findsOneWidget);
     });
@@ -511,14 +512,14 @@ void main() {
         ),
         mockService: mockService,
       ));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Check preselection preserved
       expect(find.text('Teacher/School'), findsOneWidget);
 
       // Switch to OFFERING intent
       await tester.tap(find.text("I'M OFFERING"));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Now category dropdown should have offering categories like 'Instruments/Gear'
       expect(find.text('Instruments/Gear'), findsOneWidget);
@@ -527,7 +528,7 @@ void main() {
       await tester.enterText(find.widgetWithText(TextFormField, 'e.g., Fender Stratocaster 2021'), 'Test Guitar');
       await tester.ensureVisible(find.text('Publish Listing'));
       await tester.tap(find.text('Publish Listing'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Price and description are required
       expect(find.text('Please enter a price'), findsOneWidget);
@@ -539,20 +540,20 @@ void main() {
         child: const MarketplacePage(),
         mockService: mockService,
       ));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       final firstCard = find.byType(MarketplaceFilterSelector);
       expect(firstCard, findsOneWidget);
 
       // Reset filter works
       await tester.tap(find.text("I'M LOOKING FOR"));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       await tester.tap(find.text('Instrument/Gear'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Reset Filter'), findsOneWidget);
       await tester.tap(find.text('Reset Filter'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Reset Filter'), findsNothing);
     });
@@ -580,7 +581,7 @@ void main() {
         child: ListingDetailsPage(listing: listing),
         mockService: mockService,
       ));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Detail Test Guitar'), findsOneWidget);
       expect(find.text('Instruments/Gear'), findsOneWidget);
@@ -596,7 +597,7 @@ void main() {
         ),
         mockService: mockService,
       ));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Top bar has 'Create Listing'
       expect(
@@ -636,7 +637,7 @@ void main() {
 
       // 2. Verify looking_for mode: OFFERING TYPE is absent
       await tester.tap(find.text("I'M LOOKING FOR"));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       expect(find.text('OFFERING TYPE'), findsNothing);
 
       // 3. Verify MarketplacePage empty state button is 'Create Listing'
@@ -644,12 +645,12 @@ void main() {
         child: const MarketplacePage(),
         mockService: mockService,
       ));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       // In initial state Roland Juno is present, filter to empty category
       await tester.tap(find.text("I'M OFFERING"));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       await tester.tap(find.text('Repairs'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('No Listing Made'), findsOneWidget);
       expect(find.text('Create Listing'), findsOneWidget);
@@ -668,7 +669,7 @@ void main() {
         child: const MyListingsPage(),
         mockService: MockMarketplaceFirebaseService(),
       ));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       expect(find.text('Create Listing'), findsOneWidget);
       expect(
         find.ancestor(

@@ -1,3 +1,5 @@
+import 'package:musicians_flutter/models/sub_request.dart';
+import 'support/bounded_ui_pump.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:firebase_core/firebase_core.dart' hide FirebaseService;
@@ -15,6 +17,23 @@ import 'package:musicians_flutter/views/find_sub_screen.dart';
 import 'package:musicians_flutter/widgets/searchable_category_multi_select_sheet.dart';
 
 class MockGen01FirebaseService extends FirebaseService {
+  @override
+  Future<List<SubRequest>> getUserSubRequestsAsync(String uid) async => [];
+
+  @override
+  Future<Map<String, int>> getButtonClicksAsync(String userId) async => {};
+
+  @override
+  bool get isLoggedIn => true;
+  @override
+  String? get currentUserId => 'test_user_1';
+  @override
+  Future<void> initializePushNotifications() async {}
+  @override
+  Future<Map<String, String>> getUserBandsAsync(String userId) async => {'picker_band': 'Picker Band'};
+  @override
+  Future<Band?> getBandInfoAsync(String bandId) async => Band(id: bandId, name: 'Picker Band', membersBand: {'test_user_1': BandMember(userId: 'test_user_1', role: 'Leader', status: 'active')});
+
   @override
   Stream<bool> subscribeToBandProfileAccess(String bandId) => Stream.value(true);
 
@@ -40,6 +59,9 @@ class MockGen01FirebaseService extends FirebaseService {
 }
 
 class MockAppStateForGen01 extends AppState {
+  String? fixedBand;
+  @override
+  String? get activeBandId => fixedBand ?? super.activeBandId;
   @override
   final FirebaseService firebaseService = MockGen01FirebaseService();
 
@@ -58,7 +80,7 @@ class MockAppStateForGen01 extends AppState {
 
 Widget createTestWidget(Widget child) {
   return ChangeNotifierProvider<AppState>(
-    create: (_) => MockAppStateForGen01(),
+    create: (_) => MockAppStateForGen01()..fixedBand = child is EditBandInfoScreen ? child.band.id : null,
     child: MaterialApp(
       home: Scaffold(body: child),
     ),
@@ -108,7 +130,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
-      final secondaryLabel = find.text('Secondary Skills (Optional)');
+      final secondaryLabel = find.text('Secondary Skills (optional)');
       expect(secondaryLabel, findsOneWidget);
       await tester.tap(secondaryLabel);
       await tester.pump();
@@ -213,10 +235,11 @@ void main() {
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() => tester.view.resetPhysicalSize());
 
-      await tester.pumpWidget(createTestWidget(const FindSubScreen()));
+      await tester.pumpWidget(createTestWidget(const FindSubScreen(bandId: 'picker_band')));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
+      await pumpUiTransitions(tester);
       final instrumentTitle = find.text('Role / Instrument');
       expect(instrumentTitle, findsOneWidget);
       expect(find.text('+ Select'), findsNothing);

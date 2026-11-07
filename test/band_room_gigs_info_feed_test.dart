@@ -1,3 +1,5 @@
+import 'support/bounded_ui_pump.dart';
+import 'package:musicians_flutter/utils/band_membership_policy.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:firebase_core/firebase_core.dart' hide FirebaseService;
@@ -17,6 +19,23 @@ import 'package:musicians_flutter/views/event_results_page.dart';
 import 'package:musicians_flutter/widgets/animated_tap_detector.dart';
 
 class MockGigsInfoFirebaseService extends FirebaseService {
+  @override
+  Future<Band?> getPublicBandProfileAsync(String bandId) => getBandInfoAsync(bandId);
+  @override
+  Future<UserProfile?> getPublicUserProfileAsync(String uid) => getUserProfileAsync(uid);
+
+  @override
+  Future<Map<String, int>> getButtonClicksAsync(String userId) async => {};
+
+  @override
+  Future<BandEvent?> getManagerBandEventOnceAsync(String bandId, String eventId) async => await subscribeToBandEvent(bandId, eventId).first;
+  @override
+  Future<List<BandEvent>> getManagerBandEventsListAsync(String bandId) => getBandEventsListAsync(bandId);
+  @override
+  Stream<BandEvent?> subscribeToManagerBandEvent(String bandId, String eventId) => subscribeToBandEvent(bandId, eventId);
+  @override
+  Future<bool> canManageBandEventAsync(String bandId) async => BandMembershipPolicy.canStaff(await getBandInfoAsync(bandId), currentUserId);
+
   @override
   bool get isLoggedIn => true;
   @override
@@ -199,7 +218,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
 
     // Switch to Gigs/Info tab
-    final gigsTab = find.text('Gigs/Info');
+    final gigsTab = find.text('4. Gigs / Info');
     expect(gigsTab, findsOneWidget);
     await tester.tap(gigsTab);
     for (int i = 0; i < 10; i++) {
@@ -207,7 +226,7 @@ void main() {
     }
 
     // 1. Verify Event Card Title & Location rendered
-    expect(find.text('Summer Fest Gig'), findsOneWidget);
+    expect(find.text('”Summer Fest Gig”'), findsOneWidget);
     expect(find.text('Main Stage'), findsOneWidget);
 
     // Verify Gig Type Badge 'Concert' is displayed
@@ -219,7 +238,7 @@ void main() {
 
     // Tapping Change expands RSVP buttons
     await tester.tap(find.text('Change'));
-    await tester.pumpAndSettle();
+    await pumpUiTransitions(tester);
     expect(find.text('Yes'), findsOneWidget);
     expect(find.text('No'), findsOneWidget);
     expect(find.text('Maybe'), findsOneWidget);
@@ -236,7 +255,7 @@ void main() {
 
     // 5. Verify whole card is wrapped in AnimatedTapDetector and trigger navigation
     final cardFinder = find.ancestor(
-      of: find.text('Summer Fest Gig'),
+      of: find.text('”Summer Fest Gig”'),
       matching: find.byType(AnimatedTapDetector),
     );
     expect(cardFinder, findsOneWidget);
@@ -244,7 +263,7 @@ void main() {
     final tapDetector = tester.widget<AnimatedTapDetector>(cardFinder);
     tapDetector.onTap();
 
-    await tester.pumpAndSettle();
+    await pumpUiTransitions(tester);
 
     // EventResultsPage should be active with its 4 regular member groups
     expect(find.byType(EventResultsPage), findsOneWidget);
@@ -330,7 +349,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
 
     // Tap Gigs/Info tab
-    await tester.tap(find.text('Gigs/Info'));
+    await tester.tap(find.text('4. Gigs / Info'));
     for (int i = 0; i < 10; i++) {
       await tester.pump(const Duration(milliseconds: 50));
     }
@@ -346,20 +365,20 @@ void main() {
 
     // Switch to Past Events
     await tester.tap(find.text('Past Events'));
-    await tester.pumpAndSettle();
+    await pumpUiTransitions(tester);
 
     expect(find.text('No past events found.'), findsOneWidget);
 
     // Switch to Other tab
     await tester.tap(find.text('Other'));
-    await tester.pumpAndSettle();
+    await pumpUiTransitions(tester);
 
     expect(find.text('Create Post / Update'), findsOneWidget);
     expect(find.text('No posts or updates found.'), findsOneWidget);
 
     // Tap Create Post / Update to open dialog
     await tester.tap(find.text('Create Post / Update'));
-    await tester.pumpAndSettle();
+    await pumpUiTransitions(tester);
 
     expect(find.text('POST GIG / NEWS'), findsOneWidget);
     expect(find.text('News Update'), findsOneWidget);
@@ -464,30 +483,30 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
 
     // Switch to Gigs/Info tab
-    await tester.tap(find.text('Gigs/Info'));
+    await tester.tap(find.text('4. Gigs / Info'));
     for (int i = 0; i < 10; i++) {
       await tester.pump(const Duration(milliseconds: 50));
     }
 
     // Default sub-filter is New Events
-    expect(find.text('Sooner Gig'), findsOneWidget);
-    expect(find.text('Later Gig'), findsOneWidget);
+    expect(find.text('”Sooner Gig”'), findsOneWidget);
+    expect(find.text('”Later Gig”'), findsOneWidget);
 
     // Verify chronological order for upcoming events: Sooner Gig is above Later Gig
-    final soonerTop = tester.getTopLeft(find.text('Sooner Gig')).dy;
-    final laterTop = tester.getTopLeft(find.text('Later Gig')).dy;
+    final soonerTop = tester.getTopLeft(find.text('”Sooner Gig”')).dy;
+    final laterTop = tester.getTopLeft(find.text('”Later Gig”')).dy;
     expect(soonerTop, lessThan(laterTop));
 
     // Verify 1-tap RSVP button works: tap Change to expand options on Sooner Gig, then tap Yes
     final changeFinder = find.text('Change');
     expect(changeFinder, findsWidgets);
     await tester.tap(changeFinder.first);
-    await tester.pumpAndSettle();
+    await pumpUiTransitions(tester);
 
     final yesFinder = find.widgetWithText(AnimatedTapDetector, 'Yes');
     expect(yesFinder, findsWidgets);
     await tester.tap(yesFinder.first);
-    await tester.pumpAndSettle();
+    await pumpUiTransitions(tester);
 
     expect(mockService.updatedResponses.length, 1);
     expect(mockService.updatedResponses.first['eventId'], 'ev_near');
@@ -496,14 +515,14 @@ void main() {
 
     // Switch to Past Events
     await tester.tap(find.text('Past Events'));
-    await tester.pumpAndSettle();
+    await pumpUiTransitions(tester);
 
-    expect(find.text('Past Newer Event'), findsOneWidget);
-    expect(find.text('Past Older Event'), findsOneWidget);
+    expect(find.text('”Past Newer Event”'), findsOneWidget);
+    expect(find.text('”Past Older Event”'), findsOneWidget);
 
     // Verify chronological order for past events: Past Newer Event is above Past Older Event
-    final newerTop = tester.getTopLeft(find.text('Past Newer Event')).dy;
-    final olderTop = tester.getTopLeft(find.text('Past Older Event')).dy;
+    final newerTop = tester.getTopLeft(find.text('”Past Newer Event”')).dy;
+    final olderTop = tester.getTopLeft(find.text('”Past Older Event”')).dy;
     expect(newerTop, lessThan(olderTop));
 
     // Past events should have NO RSVP buttons

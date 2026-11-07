@@ -1,3 +1,4 @@
+import 'support/bounded_ui_pump.dart';
 // ignore_for_file: depend_on_referenced_packages
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -73,7 +74,7 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('PRIMARY SKILL/TALENT'), findsOneWidget);
       expect(find.text('PRIMARY Skills/Talents'), findsNothing);
@@ -101,7 +102,7 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Genres/Band Types section heading is unique (not duplicated)
       expect(find.text('Genres/Band Types'), findsOneWidget);
@@ -135,7 +136,7 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Collaborations'), findsOneWidget);
       expect(
@@ -165,7 +166,7 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Genres/Band Types'), findsOneWidget);
       expect(find.text('None specified'), findsWidgets);
@@ -192,10 +193,11 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('PRIMARY SKILL/TALENT'), findsOneWidget);
-      expect(find.text('SECONDARY Skills/Talents'), findsOneWidget);
+      expect(find.text('SECONDARY Skills/Talents'), findsNothing);
+      expect(find.text('SECONDARY SKILLS'), findsNothing);
       expect(find.text('Genres/Band Types'), findsOneWidget);
       expect(find.text('Level'), findsOneWidget);
       expect(find.text('About'), findsOneWidget);
@@ -229,7 +231,7 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('PRIMARY SKILL/TALENT'), findsOneWidget);
       expect(find.text('PRIMARY Skills/Talents'), findsNothing);
@@ -256,7 +258,7 @@ void main() {
       expect(find.text("I'm looking for musical collaborations!"), findsNothing);
     });
 
-    testWidgets('ProfileTabScreen displays all fields even if empty with None specified', (tester) async {
+    testWidgets('ProfileTabScreen omits empty secondary skills and retains other empty-field fallbacks', (tester) async {
       final user = UserProfile(
         userId: 'self_1',
         displayName: 'My Own Profile',
@@ -276,10 +278,11 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('PRIMARY SKILL/TALENT'), findsOneWidget);
-      expect(find.text('SECONDARY Skills/Talents'), findsOneWidget);
+      expect(find.text('SECONDARY Skills/Talents'), findsNothing);
+      expect(find.text('SECONDARY SKILLS'), findsNothing);
       expect(find.text('Genres/Band Types'), findsOneWidget);
       expect(find.text('Level'), findsOneWidget);
       expect(find.text('About'), findsOneWidget);
@@ -309,7 +312,7 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Header displays the formatted subtitle
       expect(find.text('Big Band • Modern/Contemporary'), findsOneWidget);

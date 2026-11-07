@@ -1,3 +1,4 @@
+import 'support/bounded_ui_pump.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:musicians_flutter/models/band.dart';
@@ -22,6 +23,9 @@ class MockFeatureFirebaseService extends Fake implements FirebaseService {
 
   @override
   Future<List<SubRequest>> getUserSubRequestFeedAsync() async => feedRequests;
+
+  @override
+  Future<List<SubRequest>> getAllSubRequestsAsync() async => feedRequests;
 
   @override
   Future<Set<String>> getUserAppliedSubRequestIdsAsync(String uid) async => appliedIds;
@@ -103,6 +107,10 @@ class MockFeatureAppState extends Fake with ChangeNotifier implements AppState {
 
   @override
   Future<void> refreshProfile() async {}
+  @override
+  Set<String> get sessionAppliedSubRequestIds => _mockService.appliedIds;
+  @override
+  void markSubRequestsApplied(Iterable<String> ids, {bool notify = true}) => _mockService.appliedIds.addAll(ids);
 }
 
 Widget createTestApp(Widget child, AppState appState) {
@@ -130,12 +138,12 @@ void main() {
       final appState = MockFeatureAppState(mockService);
 
       await tester.pumpWidget(createTestApp(const FindGigsScreen(), appState));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
-      expect(find.text('Substitute Requests'), findsOneWidget);
-      expect(find.text('New Member Requests'), findsOneWidget);
-      expect(find.text('Applied'), findsOneWidget);
-      expect(find.text('Saved'), findsOneWidget);
+      expect(find.text('1. Substitute Requests'), findsOneWidget);
+      expect(find.text('2. New Member Requests'), findsOneWidget);
+      expect(find.text('3. Applied'), findsOneWidget);
+      expect(find.text('4. Saved'), findsOneWidget);
     });
 
     testWidgets('2. FindGigsScreen displays Sub and New Member tags on gig cards', (tester) async {
@@ -162,9 +170,9 @@ void main() {
       final appState = MockFeatureAppState(mockService);
 
       await tester.pumpWidget(createTestApp(const FindGigsScreen(), appState));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
-      expect(find.text('Sub'), findsWidgets);
+      expect(find.text('Substitute · Bass'), findsWidgets);
     });
 
     testWidgets('3. CreateBandScreen displays Band Members section with Leader and Add Member button', (tester) async {
@@ -180,7 +188,7 @@ void main() {
       );
 
       await tester.pumpWidget(createTestApp(const CreateBandScreen(), appState));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Band Members'), findsOneWidget);
       expect(find.text('Set Admin Roles'), findsOneWidget);
@@ -219,7 +227,7 @@ void main() {
       final appState = MockFeatureAppState(mockService);
 
       await tester.pumpWidget(createTestApp(const ManageEventsScreen(initialBandId: 'b1', embedded: true), appState));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Inline RSVP controls removed per OCT-SPRINT-01
       expect(find.text('RSVP Required'), findsNothing);
@@ -228,7 +236,7 @@ void main() {
       expect(find.text('Maybe'), findsNothing);
 
       // Event title rendered within straight quotes
-      expect(find.text('"Gig at Stadium"'), findsOneWidget);
+      expect(find.text('”Gig at Stadium”'), findsOneWidget);
     });
   });
 }

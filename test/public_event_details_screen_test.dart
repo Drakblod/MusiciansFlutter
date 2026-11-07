@@ -1,3 +1,4 @@
+import 'support/bounded_ui_pump.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:firebase_core/firebase_core.dart' hide FirebaseService;
@@ -99,6 +100,7 @@ void main() {
 
   final testEvent = PublicCalendarEvent(
     id: 'mock_test_1',
+    createdBy: 'test_user_1',
     title: 'Stockholm Jazz Night',
     eventType: PublicEventType.liveGig,
     organizerName: 'Stockholm Jazz Collective',
@@ -193,19 +195,19 @@ void main() {
   }
 
   group('PublicEventDetailsScreen & Integration Tests', () {
-    testWidgets('1. Renders all details fields, genres, DEMO EVENT, and price correctly', (tester) async {
+    testWidgets('1. Renders all details fields, genres and price without a production demo badge', (tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() => tester.view.resetPhysicalSize());
 
       await tester.pumpWidget(createDetailsTestWidget(event: testEvent));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       await tester.tap(find.text('Open Details'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Stockholm Jazz Night'), findsOneWidget);
-      expect(find.text('DEMO EVENT'), findsOneWidget);
+      expect(find.text('DEMO EVENT'), findsNothing);
       expect(find.text('Live/Gig'), findsOneWidget);
       expect(find.text('Stockholm Jazz Collective'), findsOneWidget);
       expect(find.text('Jazzbaren, Stockholm'), findsOneWidget);
@@ -223,10 +225,10 @@ void main() {
       addTearDown(() => tester.view.resetPhysicalSize());
 
       await tester.pumpWidget(createDetailsTestWidget(event: testFreeEvent));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       await tester.tap(find.text('Open Details'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Open Co-writing Session'), findsOneWidget);
       expect(find.text('Free'), findsOneWidget);
@@ -240,10 +242,10 @@ void main() {
 
       final eventWithImage = testEvent.copyWith(imageUrl: 'https://example.com/test_cover.jpg');
       await tester.pumpWidget(createDetailsTestWidget(event: eventWithImage));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       await tester.tap(find.text('Open Details'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.image(const NetworkImage('https://example.com/test_cover.jpg')), findsOneWidget);
     });
@@ -254,10 +256,10 @@ void main() {
       addTearDown(() => tester.view.resetPhysicalSize());
 
       await tester.pumpWidget(createDetailsTestWidget(routeArgument: 'invalid_string_argument'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       await tester.tap(find.text('Open Details'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Event Not Found'), findsOneWidget);
       expect(find.text('The requested event could not be loaded.'), findsOneWidget);
@@ -269,15 +271,15 @@ void main() {
       addTearDown(() => tester.view.resetPhysicalSize());
 
       await tester.pumpWidget(createDetailsTestWidget(event: testEvent));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       await tester.tap(find.text('Open Details'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Stockholm Jazz Night'), findsOneWidget);
 
       await tester.tap(find.text('Back to Calendar'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Open Details'), findsOneWidget);
     });
@@ -289,14 +291,14 @@ void main() {
 
       final spyRepo = SpyingPublicEventRepository();
       await tester.pumpWidget(createDetailsTestWidget(event: testEvent, repository: spyRepo));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       await tester.tap(find.text('Open Details'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Delete'), findsOneWidget);
       await tester.tap(find.text('Delete'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Dialog is displayed
       expect(find.text('Delete Event'), findsOneWidget);
@@ -304,7 +306,7 @@ void main() {
 
       // Tap Cancel
       await tester.tap(find.text('Cancel'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Delete Event'), findsNothing);
       expect(find.text('Stockholm Jazz Night'), findsOneWidget);
@@ -318,19 +320,19 @@ void main() {
 
       final spyRepo = SpyingPublicEventRepository();
       await tester.pumpWidget(createDetailsTestWidget(event: testEvent, repository: spyRepo));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       await tester.tap(find.text('Open Details'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       await tester.tap(find.text('Delete'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Tap Delete in dialog (there are two Delete texts: one on the button and one on the dialog)
       final dialogDeleteBtn = find.widgetWithText(ElevatedButton, 'Delete');
       expect(dialogDeleteBtn, findsOneWidget);
       await tester.tap(dialogDeleteBtn);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(spyRepo.deletedEventIds, contains('mock_test_1'));
       expect(find.text('Event "Stockholm Jazz Night" deleted.'), findsOneWidget);
@@ -345,16 +347,16 @@ void main() {
       final creatorEvent = testEvent.copyWith(createdBy: 'test_user_1');
       final spyRepo = SpyingPublicEventRepository();
       await tester.pumpWidget(createDetailsTestWidget(event: creatorEvent, repository: spyRepo));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       await tester.tap(find.text('Open Details'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Find Edit button
       final editBtn = find.text('Edit');
       expect(editBtn, findsOneWidget);
       await tester.tap(editBtn);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Check edit screen is shown with pre-populated values
       expect(find.text('EDIT EVENT'), findsOneWidget);
@@ -365,11 +367,11 @@ void main() {
       final titleField = find.widgetWithText(TextFormField, 'Stockholm Jazz Night');
       expect(titleField, findsOneWidget);
       await tester.enterText(titleField, 'Stockholm Jazz & Blues');
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Save changes
       await tester.tap(find.text('Save Changes'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Verify updateEvent was called on repository
       expect(spyRepo.updatedEvents, isNotEmpty);
@@ -405,10 +407,10 @@ void main() {
       expect(eventCalendarAction, findsOneWidget);
 
       await tester.tap(eventCalendarAction);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('EVENT CALENDAR'), findsOneWidget);
-      expect(find.text('DEMO EVENTS'), findsOneWidget);
+      expect(find.text('DEMO EVENTS'), findsNothing);
     });
 
     testWidgets('6. Existing /calendar route resolves to private CalendarScreen', (tester) async {

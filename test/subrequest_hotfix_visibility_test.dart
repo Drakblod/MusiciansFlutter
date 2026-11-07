@@ -1,3 +1,6 @@
+import 'support/bounded_ui_pump.dart';
+import 'package:musicians_flutter/models/request_management_access.dart';
+import 'package:musicians_flutter/utils/band_membership_policy.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -19,6 +22,29 @@ import 'package:provider/provider.dart';
 
 class MockHotfixFirebaseService extends FirebaseService {
   @override
+  Future<List<SubRequest>> getAllSubRequestsAsync() async => publicFeeds.values.toList();
+
+  @override
+  Future<bool> isBandLeaderOrAdminAsync(String bandId, String userId) async => BandMembershipPolicy.canStaff(bands[bandId], userId);
+
+  @override
+  Future<Map<String, int>> getButtonClicksAsync(String userId) async => {};
+
+  @override
+  Stream<String?> get catalogueIdentityChanges => const Stream.empty();
+  @override
+  Stream<bool> watchRequestManagementAccess(RequestManagementAccess access) => Stream.value(BandMembershipPolicy.canStaff(bands[access.bandId], currentUserId));
+  @override
+  Future<RequestManagementAccess> authorizeRequestManagement({String? bandId, String? requestId, String? expectedCreatorId, bool Function()? isCurrent}) async {
+    final request = canonicalSubRequests[requestId];
+    final exactBand = bandId ?? request?.bandId;
+    if (!(isCurrent?.call() ?? true) || !BandMembershipPolicy.canStaff(bands[exactBand], currentUserId) ||
+        (requestId != null && (request == null || request.bandId != exactBand)))
+      throw const PrivateDataAccessException();
+    return RequestManagementAccess(userId: currentUserId!, bandId: exactBand!, request: request);
+  }
+
+  @override
   Stream<int> subscribeToSubRequestResponseCount(String id) => const Stream<int>.empty();
 
   String? _currentUserId = 'creator_user_1';
@@ -33,7 +59,7 @@ class MockHotfixFirebaseService extends FirebaseService {
       StreamController<List<SubRequest>>.broadcast();
 
   final Map<String, Band> bands = {
-    'band_1': Band(id: 'band_1', name: 'Stockholm Jazz Quartet'),
+    'band_1': Band(id: 'band_1', name: 'Stockholm Jazz Quartet', membersBand: {'creator_user_1': BandMember(userId: 'creator_user_1', role: 'Leader', status: 'active')}),
   };
 
   final Map<String, BandEvent> events = {};
@@ -273,7 +299,7 @@ void main() {
       );
 
       await tester.pump();
-      await tester.pump(const Duration(milliseconds: 500));
+      await pumpUiTransitions(tester);
 
       expect(find.text('Manage Requests'), findsOneWidget);
     });
@@ -299,14 +325,14 @@ void main() {
       );
 
       await tester.pump();
-      await tester.pump(const Duration(milliseconds: 500));
+      await pumpUiTransitions(tester);
 
       final manageBtn = find.text('Manage Requests');
       expect(manageBtn, findsOneWidget);
 
       await tester.tap(manageBtn);
       await tester.pump();
-      await tester.pump(const Duration(milliseconds: 500));
+      await pumpUiTransitions(tester);
 
       expect(find.byType(SubRequestResponsesScreen), findsOneWidget);
     });
@@ -330,6 +356,7 @@ void main() {
         latitude: 59.3325,
         longitude: 18.0649,
       );
+      mockService.canonicalSubRequests['req_created_1'] = req;
       mockService.creatorFeeds.putIfAbsent(creatorUid, () => {})['req_created_1'] = req;
 
       final appState = MockHotfixAppState(mockService);
@@ -344,10 +371,10 @@ void main() {
       );
 
       await tester.pump();
-      await tester.pump(const Duration(milliseconds: 500));
+      await pumpUiTransitions(tester);
 
       expect(find.text('Stockholm Jazz Quartet'), findsOneWidget);
-      expect(find.text('”Substitute”'), findsOneWidget);
+      expect(find.text('Substitute · Electric Guitar'), findsOneWidget);
     });
 
     testWidgets('4. Other creator’s private request is not displayed', (tester) async {
@@ -379,7 +406,7 @@ void main() {
       );
 
       await tester.pump();
-      await tester.pump(const Duration(milliseconds: 500));
+      await pumpUiTransitions(tester);
 
       expect(find.text('No active requests found.'), findsOneWidget);
       expect(find.text('Drums'), findsNothing);
@@ -502,7 +529,7 @@ void main() {
       );
 
       await tester.pump();
-      await tester.pump(const Duration(milliseconds: 500));
+      await pumpUiTransitions(tester);
 
       // Find the Publish button
       final publishBtn = find.text('PUBLISH SUBSTITUTE REQUESTS (1)');
@@ -510,11 +537,11 @@ void main() {
 
       await tester.tap(publishBtn);
       await tester.pump();
-      await tester.pump(const Duration(milliseconds: 500));
+      await pumpUiTransitions(tester);
 
       // Must display validation message requiring coordinates
       expect(
-        find.text('Please confirm a valid location with coordinates before publishing.'),
+        find.text('Please confirm a valid venue location with exact coordinates before publishing.'),
         findsOneWidget,
       );
     });
@@ -535,7 +562,7 @@ void main() {
       );
 
       await tester.pump();
-      await tester.pump(const Duration(milliseconds: 500));
+      await pumpUiTransitions(tester);
 
       // Ensure screen is still present and interactive
       expect(find.byType(FindSubScreen), findsOneWidget);
@@ -699,7 +726,7 @@ void main() {
       );
 
       await tester.pump();
-      await tester.pump(const Duration(milliseconds: 500));
+      await pumpUiTransitions(tester);
 
       expect(tester.takeException(), isNull);
       expect(find.text('Manage Requests'), findsOneWidget);

@@ -1,3 +1,4 @@
+import 'support/bounded_ui_pump.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:firebase_core/firebase_core.dart' hide FirebaseService;
@@ -105,18 +106,18 @@ void main() {
       };
 
       await tester.pumpWidget(createTestWidget(const CollabsLandingScreen(), service: service));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Enter Description / Details
       await tester.enterText(
         find.widgetWithText(TextFormField, "Describe what the collaboration is about (e.g. 'I am looking for a co-writer to compose acoustic tracks on weekends')"),
         'Looking for acoustic track co-writer',
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Open Favorites List panel
       await tester.tap(find.text('FAVORITES LIST'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Initial state: starts unselected with "Select all" button and "0 selected"
       expect(find.text('0 selected'), findsOneWidget);
@@ -130,7 +131,7 @@ void main() {
 
       // 1. "Select all" selects every Favorite
       await tester.tap(find.text('Select all'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('3 selected'), findsOneWidget);
       expect(find.text('Clear all'), findsOneWidget);
@@ -141,7 +142,7 @@ void main() {
 
       // 3. Individual deselection still works
       await tester.tap(find.widgetWithText(CheckboxListTile, 'Bob Drummer'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('2 selected'), findsOneWidget);
       expect(find.text('Select all'), findsOneWidget);
@@ -152,13 +153,13 @@ void main() {
 
       // Tap Select all again to select Bob back
       await tester.tap(find.text('Select all'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       expect(find.text('3 selected'), findsOneWidget);
       expect(find.text('Clear all'), findsOneWidget);
 
       // 4. "Clear all" removes all selections
       await tester.tap(find.text('Clear all'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('0 selected'), findsOneWidget);
       expect(find.text('Select all'), findsOneWidget);
@@ -169,11 +170,11 @@ void main() {
 
       // Re-select all with "Select all" and publish
       await tester.tap(find.text('Select all'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // 5. Publishing uses the selected Favorite IDs and 2. No duplicate IDs are created
       await tester.tap(find.text('Send Collaboration Request'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(service.savedRequest, isNotNull);
       final published = service.savedRequest!;
@@ -197,22 +198,22 @@ void main() {
       };
 
       await tester.pumpWidget(createTestWidget(const FindCollabsScreen(), service: service));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       await tester.tap(find.text('FAVORITES LIST'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Select all'), findsOneWidget);
       expect(find.text('0 selected'), findsOneWidget);
 
       await tester.tap(find.text('Select all'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('2 selected'), findsOneWidget);
       expect(find.text('Clear all'), findsOneWidget);
 
       await tester.tap(find.text('Clear all'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('0 selected'), findsOneWidget);
       expect(find.text('Select all'), findsOneWidget);

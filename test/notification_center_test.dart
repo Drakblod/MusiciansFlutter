@@ -1,3 +1,4 @@
+import 'support/bounded_ui_pump.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -343,7 +344,7 @@ void main() {
 
       // Tap 'Message' shortcut
       await tester.tap(find.text('Message'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       expect(pushedRoute, '/inbox');
     });
 
@@ -378,7 +379,7 @@ void main() {
       );
 
       await tester.tap(find.text('Session Application'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(tappedItem, isNotNull);
       expect(tappedItem!.id, 'n_tap_1');
@@ -415,7 +416,7 @@ void main() {
       );
 
       await tester.tap(find.text('Mark all as read'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(markAllCalled, isTrue);
     });
@@ -454,7 +455,7 @@ void main() {
         ),
       );
 
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       expect(tester.takeException(), isNull);
     });
   });
@@ -504,7 +505,7 @@ void main() {
       expect(find.text('5'), findsOneWidget);
 
       appState.setUnreadNotificationCountForTest(99);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       expect(find.text('99'), findsOneWidget);
     });
 
@@ -731,10 +732,10 @@ void main() {
         ),
       );
 
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       mockService.emitNotifications([subResponseNotif]);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(appState.hasUnreadSubResponses, isTrue);
       expect(appState.unreadSubResponsesCount, 1);

@@ -1696,6 +1696,7 @@ class _FindSubScreenState extends State<_FindSubForm> {
 
                   // 4. Location / Venue (City precision enforced for New Band Member)
                   LocationPickerField(
+                    wrapCitySuggestion: true,
                     key: ValueKey('location_picker_new_member_'),
                     controller: section.locationController,
                     initialLocation: section.canonicalLocation,
@@ -1897,6 +1898,7 @@ class _FindSubScreenState extends State<_FindSubForm> {
 
                   // 4. Location / Venue
                   LocationPickerField(
+                    wrapCitySuggestion: true,
                     key: ValueKey('location_picker_substitute_'),
                     controller: section.locationController,
                     initialLocation: section.canonicalLocation,

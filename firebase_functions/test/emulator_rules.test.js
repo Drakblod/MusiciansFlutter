@@ -1345,12 +1345,14 @@ describe('Real RTDB Emulator Rules Tests', function () {
       );
     });
 
-    it('3. Files write with legitimate UploadedBy matching auth.uid is accepted', async () => {
+    it('3. Files metadata is server-owned even when UploadedBy matches an active member', async () => {
       await testEnvFinal.withSecurityRulesDisabled(async c => {
         await c.database().ref('Bands/band_test/Members_band/legit_uid').set({Role:'Member',Status:'active'});
       });
       const legitUser = testEnvFinal.authenticatedContext('legit_uid');
-      await assertSucceeds(
+      // The Storage integration suite proves the authorized upload/register
+      // path. A client-supplied URL or owner can no longer mint a file record.
+      await assertFails(
         legitUser.database().ref('files/band_test/file_legit').set({
           FileName: 'sheet.pdf',
           FileUrl: 'https://example.com/sheet.pdf',

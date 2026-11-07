@@ -1,3 +1,4 @@
+import 'support/bounded_ui_pump.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:firebase_core/firebase_core.dart' hide FirebaseService;
@@ -215,7 +216,7 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Check title and headers
       expect(find.text('ADD TO EVENT CALENDAR'), findsOneWidget);
@@ -223,11 +224,11 @@ void main() {
 
       final publishFinder = find.text('Publish Event');
       await tester.ensureVisible(publishFinder);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Tap Publish with empty fields
       await tester.tap(publishFinder);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Should show validation error snackbar
       expect(find.text('Please fill in all required fields.'), findsOneWidget);
@@ -253,7 +254,7 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Enter Event Title
       final titleField = find.widgetWithText(TextFormField, 'e.g. Stockholm Live Showcase, Jazz Jam');
@@ -278,16 +279,16 @@ void main() {
       // Toggle Free Admission
       final switchFinder = find.byType(Switch);
       await tester.ensureVisible(switchFinder);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       await tester.tap(switchFinder);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Tap Publish Event
       final publishFinder = find.text('Publish Event');
       await tester.ensureVisible(publishFinder);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       await tester.tap(publishFinder);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Verify repository has the created event
       final events = await repo.getUpcomingEvents();
@@ -317,7 +318,7 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Check Cover Image section title and upload prompt
       expect(find.text('COVER IMAGE & POSTER'), findsOneWidget);
@@ -339,16 +340,16 @@ void main() {
       // Enter custom image URL
       final urlField = find.widgetWithText(TextFormField, 'https://example.com/poster.jpg');
       await tester.ensureVisible(urlField);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       await tester.enterText(urlField, 'https://example.com/custom_poster.jpg');
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Tap Publish Event
       final publishFinder = find.text('Publish Event');
       await tester.ensureVisible(publishFinder);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       await tester.tap(publishFinder);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       final events = await repo.getUpcomingEvents();
       final created = events.firstWhere((e) => e.title == 'Poster Showcase');
@@ -370,7 +371,7 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Expect Add Event buttons
       expect(find.text('Add Event'), findsWidgets);

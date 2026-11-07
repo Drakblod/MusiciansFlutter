@@ -1,3 +1,5 @@
+import 'package:musicians_flutter/widgets/location_picker_field.dart';
+import 'support/bounded_ui_pump.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:musicians_flutter/models/band.dart';
@@ -100,6 +102,8 @@ class MockFirebaseService extends Fake implements FirebaseService {
 }
 
 class MockAppState extends Fake with ChangeNotifier implements AppState {
+  @override
+  String? get activeBandId => 'band_1';
   final MockFirebaseService mockFirebase = MockFirebaseService();
 
   @override
@@ -180,7 +184,7 @@ void main() {
         ),
       );
 
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Check for expandable Edit Band Members card
       expect(find.text('EDIT BAND MEMBERS (& SUBS)'), findsOneWidget);
@@ -188,7 +192,7 @@ void main() {
 
       // Tap on the header to expand
       await tester.tap(find.text('EDIT BAND MEMBERS (& SUBS)'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Now sub-sections should be visible
       expect(find.text('ADD SUB (if needed)'), findsOneWidget);
@@ -214,11 +218,11 @@ void main() {
         ),
       );
 
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Expand card
       await tester.tap(find.text('EDIT BAND MEMBERS (& SUBS)'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Find switches - first 3 are members (Alice, Bob, Charlie), 4th is Create Event Chat
       final switches = find.byType(Switch);
@@ -226,22 +230,22 @@ void main() {
 
       // Toggle Bob (index 1)
       await tester.tap(switches.at(1));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('2/3 Included'), findsOneWidget);
       expect(find.text('Excluded'), findsOneWidget);
 
       // Fill in required fields to save
       await tester.enterText(find.widgetWithText(TextFormField, 'Main Event Name'), 'Gothic Night');
-      await tester.enterText(find.widgetWithText(TextFormField, 'Location (City, Country)'), 'Stockholm');
+      await tester.enterText(find.descendant(of: find.byType(LocationPickerField), matching: find.byType(TextFormField)), 'Stockholm');
 
       // Scroll to bottom
       await tester.drag(find.byType(ListView), const Offset(0, -600));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Tap Publish Event
       await tester.tap(find.text('Publish Event'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(appState.mockFirebase.lastSavedEvent, isNotNull);
       expect(appState.mockFirebase.lastSavedEvent!.title, 'Gothic Night');
@@ -261,15 +265,15 @@ void main() {
         ),
       );
 
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Expand card
       await tester.tap(find.text('EDIT BAND MEMBERS (& SUBS)'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Tap + Add Sub
       await tester.tap(find.text('+ Add Sub'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Check sheet opened with Dave Bass (u4)
       expect(find.text('Add Sub for this Event'), findsOneWidget);
@@ -279,11 +283,11 @@ void main() {
 
       // Tap + Add on Dave Bass
       await tester.tap(find.text('+ Add'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Close sheet by tapping close icon in bottom sheet
       await tester.tap(find.byIcon(Icons.close).last);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Check that Dave Bass is now rendered as a Sub
       expect(find.text('+1 Sub'), findsOneWidget);
@@ -292,14 +296,14 @@ void main() {
 
       // Save event
       await tester.enterText(find.widgetWithText(TextFormField, 'Main Event Name'), 'Special Show');
-      await tester.enterText(find.widgetWithText(TextFormField, 'Location (City, Country)'), 'Uppsala');
+      await tester.enterText(find.descendant(of: find.byType(LocationPickerField), matching: find.byType(TextFormField)), 'Uppsala');
 
       // Scroll to bottom
       await tester.drag(find.byType(ListView), const Offset(0, -600));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       await tester.tap(find.text('Publish Event'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(appState.mockFirebase.lastSavedEvent, isNotNull);
       expect(appState.mockFirebase.lastSavedEvent!.externalInvitees.containsKey('u4'), true);
@@ -364,7 +368,7 @@ void main() {
         ),
       );
 
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Main Event schedule card should display the derived date range across the sub-events
       expect(find.text('"Festival Weekend"'), findsOneWidget);
@@ -372,10 +376,10 @@ void main() {
 
       // Save the event
       await tester.drag(find.byType(ListView), const Offset(0, -600));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       await tester.tap(find.text('Publish Event'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(appState.mockFirebase.lastSavedEvent, isNotNull);
       expect(appState.mockFirebase.lastSavedEvent!.startDateTime.startsWith('2026-10-02'), isTrue);

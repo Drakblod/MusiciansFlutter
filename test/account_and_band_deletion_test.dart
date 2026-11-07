@@ -1,3 +1,4 @@
+import 'support/bounded_ui_pump.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:firebase_core/firebase_core.dart' hide FirebaseService;
@@ -82,6 +83,9 @@ class MockDeletionAppState extends AppState {
   String? get currentUserId => _customUserId ?? mockFirebase.currentUserId;
 
   @override
+  String? get activeBandId => 'band_1';
+
+  @override
   bool get hasUnreadMessages => false;
 
   @override
@@ -147,15 +151,14 @@ void main() {
         },
       );
 
-      await tester.pumpWidget(
+      await tester.pumpWidget(ChangeNotifierProvider<AppState>.value(value: appState, child:
         MaterialApp(
           home: ChangeNotifierProvider<AppState>.value(
             value: appState,
             child: EditBandInfoScreen(band: band),
           ),
-        ),
-      );
-      await tester.pumpAndSettle();
+        )),);
+      await pumpUiTransitions(tester);
 
       expect(find.text('BAND LEADER ACTIONS'), findsOneWidget);
       expect(find.text('Delete Band'), findsOneWidget);
@@ -181,15 +184,14 @@ void main() {
         },
       );
 
-      await tester.pumpWidget(
+      await tester.pumpWidget(ChangeNotifierProvider<AppState>.value(value: appState, child:
         MaterialApp(
           home: ChangeNotifierProvider<AppState>.value(
             value: appState,
             child: EditBandInfoScreen(band: band),
           ),
-        ),
-      );
-      await tester.pumpAndSettle();
+        )),);
+      await pumpUiTransitions(tester);
 
       expect(find.text('BAND LEADER ACTIONS'), findsNothing);
       expect(find.text('Delete Band'), findsNothing);
@@ -214,7 +216,7 @@ void main() {
         },
       );
 
-      await tester.pumpWidget(
+      await tester.pumpWidget(ChangeNotifierProvider<AppState>.value(value: appState, child:
         MaterialApp(
           routes: {
             '/': (context) => ChangeNotifierProvider<AppState>.value(
@@ -222,9 +224,8 @@ void main() {
                   child: EditBandInfoScreen(band: band),
                 ),
           },
-        ),
-      );
-      await tester.pumpAndSettle();
+        )),);
+      await pumpUiTransitions(tester);
 
       // Scroll to bottom and tap Delete Band
       await tester.scrollUntilVisible(
@@ -232,10 +233,10 @@ void main() {
         100,
         scrollable: find.byType(Scrollable).first,
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       await tester.tap(find.text('Delete Band'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Confirmation dialog should be visible
       expect(find.text('Are you sure you want to permanently delete "The Rockers"? This will remove the band, its events, and chat rooms for all band members.'), findsOneWidget);
@@ -244,7 +245,7 @@ void main() {
 
       // Tap Delete in dialog
       await tester.tap(find.text('Delete'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(mockService.deletedBandId, equals('band_1'));
     });
@@ -259,7 +260,7 @@ void main() {
       final mockService = MockDeletionFirebaseService();
       final appState = MockDeletionAppState(mockService, userId: 'user_leader_1');
 
-      await tester.pumpWidget(
+      await tester.pumpWidget(ChangeNotifierProvider<AppState>.value(value: appState, child:
         MaterialApp(
           routes: {
             '/': (context) => ChangeNotifierProvider<AppState>.value(
@@ -270,20 +271,19 @@ void main() {
                 ),
             '/login': (context) => const Scaffold(body: Text('Login Screen')),
           },
-        ),
-      );
-      await tester.pumpAndSettle();
+        )),);
+      await pumpUiTransitions(tester);
 
       // Tap settings cog icon in top bar
       await tester.tap(find.byIcon(Icons.settings_outlined));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('SETTINGS'), findsOneWidget);
       expect(find.text('Delete Account'), findsOneWidget);
 
       // Tap Delete Account
       await tester.tap(find.text('Delete Account'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Are you sure you want to permanently delete your account? This action cannot be undone and will delete all your profile data, notification feeds, and band memberships.'), findsOneWidget);
       expect(find.text('Cancel'), findsOneWidget);
@@ -291,7 +291,7 @@ void main() {
 
       // Tap Delete in confirmation dialog
       await tester.tap(find.text('Delete'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(mockService.deleteAccountCalled, isTrue);
       expect(find.text('Login Screen'), findsOneWidget);
@@ -305,7 +305,7 @@ void main() {
       final mockService = MockDeletionFirebaseService();
       final appState = MockDeletionAppState(mockService, userId: 'user_leader_1');
 
-      await tester.pumpWidget(
+      await tester.pumpWidget(ChangeNotifierProvider<AppState>.value(value: appState, child:
         MaterialApp(
           routes: {
             '/': (context) => ChangeNotifierProvider<AppState>.value(
@@ -314,9 +314,8 @@ void main() {
                 ),
             '/login': (context) => const Scaffold(body: Text('Login Screen')),
           },
-        ),
-      );
-      await tester.pumpAndSettle();
+        )),);
+      await pumpUiTransitions(tester);
 
       // Scroll to bottom
       await tester.scrollUntilVisible(
@@ -324,18 +323,18 @@ void main() {
         100,
         scrollable: find.byType(Scrollable).first,
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('DANGER ZONE'), findsOneWidget);
       expect(find.text('Delete Account'), findsOneWidget);
 
       await tester.tap(find.text('Delete Account'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Are you sure you want to permanently delete your account? This action cannot be undone and will delete all your profile data, notification feeds, and band memberships.'), findsOneWidget);
 
       await tester.tap(find.text('Delete'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(mockService.deleteAccountCalled, isTrue);
       expect(find.text('Login Screen'), findsOneWidget);

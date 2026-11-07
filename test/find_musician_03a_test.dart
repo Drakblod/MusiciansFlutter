@@ -1,3 +1,4 @@
+import 'support/bounded_ui_pump.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:firebase_core/firebase_core.dart' hide FirebaseService;
@@ -302,14 +303,14 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
 
       await tester.pumpWidget(createWidgetUnderTest(eventId: null));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.textContaining('EVENT 1'), findsNothing);
       expect(find.text('Event Type'), findsOneWidget);
       expect(find.text('Request Type'), findsOneWidget);
-      expect(find.text('Location'), findsOneWidget);
+      expect(find.text('Location / Venue'), findsOneWidget);
       expect(find.text('Date & Time'), findsOneWidget);
-      expect(find.text('Description (optional)'), findsOneWidget);
+      expect(find.text('Description / Details'), findsOneWidget);
     });
 
     testWidgets('2. Standalone entry allows selecting Request Type', (WidgetTester tester) async {
@@ -318,7 +319,7 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
 
       await tester.pumpWidget(createWidgetUnderTest(eventId: null));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.widgetWithText(DropdownButtonFormField<String>, 'Substitute'), findsOneWidget);
     });
@@ -329,17 +330,17 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
 
       await tester.pumpWidget(createWidgetUnderTest(eventId: null));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       final eventTypeFinder = find.widgetWithText(DropdownButtonFormField<String>, 'Select Event Type');
       expect(eventTypeFinder, findsOneWidget);
 
       await tester.ensureVisible(eventTypeFinder);
       await tester.tap(eventTypeFinder, warnIfMissed: false);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       await tester.tap(find.text('Rehearsal').last);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Rehearsal'), findsWidgets);
     });
@@ -350,10 +351,10 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
 
       await tester.pumpWidget(createWidgetUnderTest(eventId: null));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
-      expect(find.text('Description (optional)'), findsOneWidget);
-      expect(find.text('Location'), findsOneWidget);
+      expect(find.text('Description / Details'), findsOneWidget);
+      expect(find.text('Location / Venue'), findsOneWidget);
       expect(find.text('Date & Time'), findsOneWidget);
 
       final descField = find.widgetWithText(TextField, '');
@@ -383,7 +384,7 @@ void main() {
       mockFirebaseService.bandEvents['band_123'] = [existingEvent];
 
       await tester.pumpWidget(createWidgetUnderTest(eventId: 'event_existing_1'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Concert'), findsWidgets);
       expect(find.text('Special annual charity rock gala'), findsOneWidget);
@@ -413,13 +414,13 @@ void main() {
       mockFirebaseService.bandEvents['band_123'] = [existingEvent];
 
       await tester.pumpWidget(createWidgetUnderTest(eventId: 'event_existing_2'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       final descFinder = find.widgetWithText(TextField, 'Main festival stage');
       expect(descFinder, findsOneWidget);
 
       await tester.enterText(descFinder, 'Festival Substitute Search Call');
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Festival Substitute Search Call'), findsWidgets);
     });
@@ -447,13 +448,13 @@ void main() {
       mockFirebaseService.bandEvents['band_123'] = [existingEvent];
 
       await tester.pumpWidget(createWidgetUnderTest(eventId: 'event_existing_3'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       await tester.tap(find.text('Concert').first);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       await tester.tap(find.text('Club Gig').last);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Club Gig'), findsWidgets);
     });
@@ -481,12 +482,12 @@ void main() {
       mockFirebaseService.bandEvents['band_123'] = [existingEvent];
 
       await tester.pumpWidget(createWidgetUnderTest(eventId: 'event_source_check'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Edit description
       final descField = find.widgetWithText(TextField, 'Untouched Source Description');
       await tester.enterText(descField, 'Heavily Edited Request Snapshot');
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Verify zero write calls were triggered
       expect(mockFirebaseService.eventWriteCalls, 0);
@@ -523,15 +524,15 @@ void main() {
       mockFirebaseService.bandEvents['band_123'] = [existingEvent];
 
       await tester.pumpWidget(createWidgetUnderTest(eventId: 'event_dismiss_test'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       final descField = find.widgetWithText(TextField, 'Gig desc');
       await tester.enterText(descField, 'Discarded Description Edit');
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Pump a replacement empty widget to simulate dismissal/navigation away
       await tester.pumpWidget(const MaterialApp(home: Scaffold(body: Text('Dismissed'))));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(mockFirebaseService.eventWriteCalls, 0);
       expect(mockFirebaseService.totalWriteCalls, 0);
@@ -561,27 +562,27 @@ void main() {
       mockFirebaseService.bandEvents['band_123'] = [existingEvent];
 
       await tester.pumpWidget(createWidgetUnderTest(eventId: 'event_mode_test'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       final descField = find.widgetWithText(TextField, 'Original mode desc');
       await tester.enterText(descField, 'Custom Request Description 2026');
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Switch to New Band Member mode
       final reqTypeDropdown = find.widgetWithText(DropdownButtonFormField<String>, 'Substitute');
       await tester.tap(reqTypeDropdown);
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('New Member').last);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
+      await tester.tap(find.text('New Band Member').last);
+      await pumpUiTransitions(tester);
 
-      expect(find.text('New Band Member Recruitment'), findsOneWidget);
+      expect(find.text('New Band Member'), findsOneWidget);
 
       // Switch back to Substitute mode
-      final memberDropdown = find.widgetWithText(DropdownButtonFormField<String>, 'New Member');
+      final memberDropdown = find.widgetWithText(DropdownButtonFormField<String>, 'New Band Member');
       await tester.tap(memberDropdown);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       await tester.tap(find.text('Substitute').last);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Custom Request Description 2026'), findsWidgets);
     });
@@ -629,7 +630,7 @@ void main() {
       mockFirebaseService.bandEvents['band_123'] = [ev1, ev2];
 
       await tester.pumpWidget(createWidgetUnderTest(eventId: 'ev_multi_parent'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       final desc1Field = find.widgetWithText(TextField, 'Rehearsal day 1');
       final desc2Field = find.widgetWithText(TextField, 'Tour gig day 2');
@@ -639,7 +640,7 @@ void main() {
 
       await tester.enterText(desc1Field, 'Rehearsal 1 (Warmup Set)');
       await tester.enterText(desc2Field, 'Tour Gig (Main Stage)');
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Rehearsal 1 (Warmup Set)'), findsWidgets);
       expect(find.text('Tour Gig (Main Stage)'), findsWidgets);
@@ -700,16 +701,17 @@ void main() {
       mockFirebaseService.bandEvents['band_123'] = [ev1, ev2];
 
       await tester.pumpWidget(createWidgetUnderTest(eventId: 'ev_pub_parent'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       final desc1Field = find.widgetWithText(TextField, 'Notes 1');
       await tester.enterText(desc1Field, 'Edited Snapshot Description 1');
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       final publishBtn = find.text('PUBLISH MULTIPLE REQUEST');
       await tester.ensureVisible(publishBtn);
+      confirmRequestLocations(tester);
       await tester.tap(publishBtn);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(mockFirebaseService.publishCalls, 1);
       final ev1Req = mockFirebaseService.allSubRequests.firstWhere((r) => r.eventId == 'ev_pub_1');
@@ -773,16 +775,17 @@ void main() {
       mockFirebaseService.bandEvents['band_123'] = [ev1, ev2];
 
       await tester.pumpWidget(createWidgetUnderTest(eventId: 'ev_pub2_parent'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       final desc2Field = find.widgetWithText(TextField, 'N2');
       await tester.enterText(desc2Field, 'Custom Snapshot N2');
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       final publishBtn = find.text('PUBLISH MULTIPLE REQUEST');
       await tester.ensureVisible(publishBtn);
+      confirmRequestLocations(tester);
       await tester.tap(publishBtn);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       final ev2Req = mockFirebaseService.allSubRequests.firstWhere((r) => r.eventId == 'ev_pub2_2');
       expect(ev2Req.eventTitle, 'E2');
@@ -796,7 +799,7 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
 
       await tester.pumpWidget(createWidgetUnderTest(eventId: null));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Assigned substitute'), findsNothing);
       expect(find.text('No substitute assigned yet'), findsNothing);
@@ -808,7 +811,7 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
 
       await tester.pumpWidget(createWidgetUnderTest(eventId: 'event_single'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Assigned substitute'), findsNothing);
       expect(find.text('No substitute assigned yet'), findsNothing);
@@ -820,11 +823,11 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
 
       await tester.pumpWidget(createWidgetUnderTest(eventId: null));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Switch search source to Favorites List
       await tester.tap(find.text('Favorites List'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Jimi Hendrix is selected as target favorite notification recipient
       expect(find.text('Jimi Hendrix'), findsWidgets);
@@ -873,7 +876,7 @@ void main() {
       mockFirebaseService.eventSubRequests['event_assigned'] = [assignedSubRequest];
 
       await tester.pumpWidget(createWidgetUnderTest(eventId: 'event_assigned'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Assigned substitute'), findsOneWidget);
       expect(find.text('Assigned: Alice Bass'), findsOneWidget);
@@ -918,7 +921,7 @@ void main() {
       mockFirebaseService.eventSubRequests['event_empty_assigned'] = [emptyAssignedSubRequest];
 
       await tester.pumpWidget(createWidgetUnderTest(eventId: 'event_empty_assigned'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Assigned substitute'), findsNothing);
       expect(find.textContaining('Assigned:'), findsNothing);
@@ -964,7 +967,7 @@ void main() {
       mockFirebaseService.eventSubRequests['event_revoke'] = [assignedSubRequest];
 
       await tester.pumpWidget(createWidgetUnderTest(eventId: 'event_revoke'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Assigned substitute'), findsOneWidget);
       expect(find.text('Assigned: Alice Bass'), findsOneWidget);
@@ -973,14 +976,14 @@ void main() {
       expect(revokeBtn, findsOneWidget);
 
       await tester.tap(revokeBtn);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Confirmation dialog appears
       expect(find.text('Revoke Assignment?'), findsOneWidget);
 
       // Confirm revocation in dialog
       await tester.tap(find.widgetWithText(ElevatedButton, 'Revoke'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(mockFirebaseService.revokeCalls, 1);
       // Section is now hidden again
@@ -995,12 +998,13 @@ void main() {
 
       // Open standalone (no eventId) -> Event Type is unselected
       await tester.pumpWidget(createWidgetUnderTest(eventId: null));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       final publishBtn = find.textContaining('PUBLISH SUBSTITUTE REQUESTS');
       await tester.ensureVisible(publishBtn);
+      confirmRequestLocations(tester);
       await tester.tap(publishBtn);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Publication should be blocked and show error SnackBar
       expect(find.text('Please select an Event Type before publishing.'), findsOneWidget);
@@ -1030,7 +1034,7 @@ void main() {
       mockFirebaseService.bandEvents['band_123'] = [singleEvent];
 
       await tester.pumpWidget(createWidgetUnderTest(eventId: 'event_narrow'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(tester.takeException(), isNull);
 
@@ -1038,9 +1042,9 @@ void main() {
       final reqTypeFinder = find.widgetWithText(DropdownButtonFormField<String>, 'Substitute');
       await tester.ensureVisible(reqTypeFinder);
       await tester.tap(reqTypeFinder);
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('New Member').last);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
+      await tester.tap(find.text('New Band Member').last);
+      await pumpUiTransitions(tester);
 
       expect(tester.takeException(), isNull);
     });

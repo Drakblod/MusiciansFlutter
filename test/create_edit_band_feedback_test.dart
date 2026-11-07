@@ -1,3 +1,8 @@
+import 'package:musicians_flutter/widgets/city_location_picker_field.dart';
+import 'package:musicians_flutter/models/city_location.dart';
+import 'international_city_picker_01_test.dart' as picker;
+import 'international_city_forms_01_test.dart' show chooseBerlin;
+import 'support/bounded_ui_pump.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:firebase_core/firebase_core.dart' hide FirebaseService;
@@ -14,6 +19,7 @@ class MockBandFirebaseService extends FirebaseService {
   @override
   Stream<bool> subscribeToBandProfileAccess(String bandId) => Stream.value(true);
 
+  List<BandMember> members = [];
   Band? createdBand;
   Band? updatedBand;
 
@@ -29,7 +35,7 @@ class MockBandFirebaseService extends FirebaseService {
 
   @override
   Future<List<BandMember>> getBandMembersAsync(String bandId) async {
-    return [];
+    return members;
   }
 
   @override
@@ -48,21 +54,25 @@ class MockBandAppState extends AppState {
 
   @override
   String? get currentUserId => 'test_user_123';
+  String? selectedBand;
+  @override
+  String? get activeBandId => selectedBand;
 
   @override
   Future<void> refreshProfile() async {}
 
   @override
-  void selectBand(String bandId, String bandName) {}
+  void selectBand(String bandId, String bandName) {selectedBand = bandId;}
 }
 
 Widget createTestWidget(Widget child, [MockBandAppState? appState]) {
   final state = appState ?? MockBandAppState(MockBandFirebaseService());
+  if (child is EditBandInfoScreen) {state.selectBand(child.band.id!, child.band.name!);state.mockService.members = child.band.membersBand.values.toList();}
   return ChangeNotifierProvider<AppState>.value(
     value: state,
     child: MaterialApp(
       key: UniqueKey(),
-      home: child,
+      home: CitySearchProviderScope(provider: picker.FakeCities(), child: child),
     ),
   );
 }
@@ -81,7 +91,7 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
 
       await tester.pumpWidget(createTestWidget(const CreateBandScreen()));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       final bandNameFinder = find.text('Band Name');
       final aboutFinder = find.text('About');
@@ -106,7 +116,7 @@ void main() {
 
       final band = Band(id: 'b1', name: 'My Band', about: 'Our band bio');
       await tester.pumpWidget(createTestWidget(EditBandInfoScreen(band: band)));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       final bandNameFinder = find.text('Band Name');
       final aboutFinder = find.text('About');
@@ -130,13 +140,13 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
 
       await tester.pumpWidget(createTestWidget(const CreateBandScreen()));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('About'), findsOneWidget, reason: 'Exactly one About heading must exist in CreateBand');
 
       final band = Band(id: 'b1', name: 'My Band');
       await tester.pumpWidget(createTestWidget(EditBandInfoScreen(band: band)));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('About'), findsOneWidget, reason: 'Exactly one About heading in EditBand');
     });
@@ -147,7 +157,7 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
 
       await tester.pumpWidget(createTestWidget(const CreateBandScreen()));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       final switchFinder = find.byType(Switch);
       expect(switchFinder, findsOneWidget);
@@ -164,13 +174,13 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
 
       await tester.pumpWidget(createTestWidget(const CreateBandScreen()));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       final switchFinder = find.byType(Switch);
 
       // Turn on
       await tester.tap(switchFinder);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(tester.widget<Switch>(switchFinder).value, isTrue);
       expect(find.text('Day'), findsOneWidget);
@@ -179,7 +189,7 @@ void main() {
 
       // Turn off
       await tester.tap(switchFinder);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(tester.widget<Switch>(switchFinder).value, isFalse);
       expect(find.text('Day'), findsNothing);
@@ -202,7 +212,7 @@ void main() {
       );
 
       await tester.pumpWidget(createTestWidget(EditBandInfoScreen(band: bandWithSchedule)));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       final switchFinder = find.byType(Switch);
       expect(tester.widget<Switch>(switchFinder).value, isTrue);
@@ -218,7 +228,7 @@ void main() {
       );
 
       await tester.pumpWidget(createTestWidget(EditBandInfoScreen(band: bandWithoutSchedule)));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       final switchFinder2 = find.byType(Switch);
       expect(tester.widget<Switch>(switchFinder2).value, isFalse);
@@ -236,18 +246,19 @@ void main() {
       final appState = MockBandAppState(mockService);
 
       await tester.pumpWidget(createTestWidget(const CreateBandScreen(), appState));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       await tester.enterText(find.widgetWithText(TextFormField, 'Enter band name'), 'Off Schedule Band');
-      await tester.enterText(find.widgetWithText(TextFormField, 'Stockholm, Sweden'), 'Stockholm');
+      await chooseBerlin(tester);
 
       // Tap Save Band (switch is off by default)
       await tester.tap(find.text('Save Band'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(mockService.createdBand, isNotNull);
       expect(mockService.createdBand!.name, 'Off Schedule Band');
-      expect(mockService.createdBand!.location, 'Stockholm');
+      expect(mockService.createdBand!.location, 'Berlin, Germany');
+      expect(mockService.createdBand!.publicLocation?.city, 'Berlin');
       expect(mockService.createdBand!.rehearsalDayOfWeek, isNull);
       expect(mockService.createdBand!.rehearsalStartTime, isNull);
       expect(mockService.createdBand!.rehearsalEndTime, isNull);
@@ -264,6 +275,8 @@ void main() {
       final existingBand = Band(
         id: 'b_edit',
         name: 'Edit Band',
+        publicLocation: CityLocation.confirmed(city: 'Stockholm', country: 'Sweden'),
+        membersBand: {'test_user_123': BandMember(userId: 'test_user_123', role: 'Leader', status: 'active')},
         location: 'Stockholm',
         rehearsalDayOfWeek: 'Friday',
         rehearsalStartTime: '17:00',
@@ -271,17 +284,17 @@ void main() {
       );
 
       await tester.pumpWidget(createTestWidget(EditBandInfoScreen(band: existingBand), appState));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(tester.widget<Switch>(find.byType(Switch)).value, isTrue);
 
       // Toggle off
       await tester.tap(find.byType(Switch));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       expect(tester.widget<Switch>(find.byType(Switch)).value, isFalse);
 
       await tester.tap(find.text('Save Changes'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(mockService.updatedBand, isNotNull);
       expect(mockService.updatedBand!.name, 'Edit Band');
@@ -296,7 +309,7 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
 
       await tester.pumpWidget(createTestWidget(const CreateBandScreen()));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       final rehearsalLocFinder = find.text('Rehearsal Location (if any)');
       final scheduleFinder = find.text('Regular Rehearsal Day & Time (if any)');
@@ -325,7 +338,7 @@ void main() {
 
       // Create Band
       await tester.pumpWidget(createTestWidget(const CreateBandScreen()));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text(expectedHeading), findsOneWidget);
       expect(find.text(expectedBody), findsOneWidget);
@@ -333,7 +346,7 @@ void main() {
       // Edit Band
       final band = Band(id: 'b1', name: 'Disclaimer Test Band');
       await tester.pumpWidget(createTestWidget(EditBandInfoScreen(band: band)));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text(expectedHeading), findsOneWidget);
       expect(find.text(expectedBody), findsOneWidget);

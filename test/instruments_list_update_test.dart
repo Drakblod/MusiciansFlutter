@@ -1,3 +1,6 @@
+import 'package:musicians_flutter/models/sub_request.dart';
+import 'support/bounded_ui_pump.dart';
+import 'package:musicians_flutter/models/band.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:firebase_core/firebase_core.dart' hide FirebaseService;
@@ -13,6 +16,18 @@ import 'package:musicians_flutter/widgets/searchable_category_multi_select_sheet
 
 class MockInstrumentFirebaseService extends FirebaseService {
   @override
+  Future<List<SubRequest>> getUserSubRequestsAsync(String uid) async => [];
+
+  @override
+  bool get isLoggedIn => true;
+  @override
+  String? get currentUserId => 'test_user_inst';
+  @override
+  Future<void> initializePushNotifications() async {}
+  @override
+  Future<Map<String, int>> getButtonClicksAsync(String uid) async => {};
+
+  @override
   Future<UserProfile?> getUserProfileAsync([String? userId]) async {
     return UserProfile(
       userId: 'test_user_inst',
@@ -22,6 +37,11 @@ class MockInstrumentFirebaseService extends FirebaseService {
       instruments: ['Guitar'],
     );
   }
+
+  @override
+  Future<Map<String, String>> getUserBandsAsync(String uid) async => {'instrument_band':'Instrument Band'};
+  @override
+  Future<Band?> getBandInfoAsync(String bandId) async => Band(id: bandId, name: 'Instrument Band', membersBand: {'test_user_inst': BandMember(userId: 'test_user_inst', role: 'Leader', status: 'active')});
 
   @override
   Future<List<String>> getFavoriteUserIdsAsync() async {
@@ -100,7 +120,8 @@ void main() {
 
       expect(find.byType(SearchableCategoryMultiSelectSheet), findsOneWidget);
 
-      for (final cat in expectedCategories) {
+      expect(find.text('Sessions'), findsNothing);
+      for (final cat in expectedCategories.where((cat) => cat != 'Sessions')) {
         if (cat.contains('(') && cat.contains('Voices')) {
           expect(
             find.byWidgetPredicate(
@@ -126,6 +147,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
+      await pumpUiTransitions(tester);
       final instrumentTitle = find.text('Role / Instrument');
       expect(instrumentTitle, findsOneWidget);
 

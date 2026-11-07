@@ -1,5 +1,6 @@
 import '../widgets/request_management_gate.dart';
 import '../utils/catalogue_loading.dart';
+import '../utils/private_file_download.dart';
 import '../utils/membership_mutation_feedback.dart';
 import '../utils/band_membership_policy.dart';
 import 'dart:async';
@@ -10,7 +11,6 @@ import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../providers/app_state.dart';
 import '../theme/app_theme.dart';
 import '../models/band.dart';
@@ -1400,27 +1400,6 @@ class _BandRoomChatScreenState extends State<_BandRoomContent>
     );
   }
 
-  Future<void> _launchUrl(String urlString) async {
-    final uri = Uri.parse(urlString.trim());
-    try {
-      final success = await launchUrl(uri, mode: LaunchMode.externalApplication);
-      if (!success) {
-        // Fallback to default launching mode
-        await launchUrl(uri);
-      }
-    } catch (e) {
-      debugPrint('Could not launch $urlString: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error opening file: $e'),
-            backgroundColor: AppTheme.danger,
-          ),
-        );
-      }
-    }
-  }
-
   Widget _buildFilesTab() {
     final appState = Provider.of<AppState>(context, listen: false);
     final bandId = appState.activeBandId;
@@ -1595,15 +1574,27 @@ class _BandRoomChatScreenState extends State<_BandRoomContent>
                     final fileData = entry.value;
                     final fileName = fileData['FileName'] ?? 'Uploaded File';
                     final fileUrl = fileData['FileUrl'] ?? '';
+                    final currentMember = _members.firstWhere(
+                      (member) => member.userId == appState.currentUserId,
+                      orElse: () => BandMember(role: 'Member', status: 'inactive'),
+                    );
+                    final canDelete = appState.currentUserId != null &&
+                        appState.activeBandId == bandId &&
+                        BandMembershipPolicy.isValidStatus(currentMember.status) &&
+                        (fileData['UploadedBy'] == appState.currentUserId ||
+                            BandMembershipPolicy.canManageMember(currentMember));
 
                     return AnimatedTapDetector(
-                      onTap: () {
-                        if (fileUrl.isNotEmpty) {
-                          _launchUrl(fileUrl);
-                        } else {
+                      onTap: () async {
+                        try {
+                          final bytes = await appState.firebaseService.downloadBandFileAsync(fileUrl);
+                          if (!mounted || appState.activeBandId != bandId) return;
+                          await savePrivateFile(bytes, fileName);
+                        } catch (_) {
+                          if (!mounted) return;
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
-                              content: Text('This file has no download URL.'),
+                              content: Text('This file is unavailable for your current access.'),
                               backgroundColor: AppTheme.warning,
                             ),
                           );
@@ -1627,7 +1618,7 @@ class _BandRoomChatScreenState extends State<_BandRoomContent>
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
-                            IconButton(
+                            if (canDelete) IconButton(
                               icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 18),
                               padding: EdgeInsets.zero,
                               constraints: const BoxConstraints(),
@@ -1651,12 +1642,18 @@ class _BandRoomChatScreenState extends State<_BandRoomContent>
                                   ),
                                 );
                                 if (confirm == true) {
-                                  await appState.firebaseService.removeBandFileAsync(bandId, fileId);
-                                  final files = await appState.firebaseService.getBandFilesAsync(bandId);
-                                  if (mounted) {
-                                    setState(() {
-                                      _files = files;
-                                    });
+                                  try {
+                                    await appState.firebaseService.removeBandFileAsync(bandId, fileId);
+                                    final files = await appState.firebaseService.getBandFilesAsync(bandId);
+                                    if (mounted && appState.activeBandId == bandId) {
+                                      setState(() => _files = files);
+                                    }
+                                  } catch (_) {
+                                    if (mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(content: Text('File deletion is unavailable for your current access.')),
+                                      );
+                                    }
                                   }
                                 }
                               },

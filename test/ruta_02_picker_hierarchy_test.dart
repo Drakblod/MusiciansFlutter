@@ -1,3 +1,6 @@
+import 'package:musicians_flutter/models/sub_request.dart';
+import 'support/bounded_ui_pump.dart';
+import 'package:musicians_flutter/models/band.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:firebase_core/firebase_core.dart' hide FirebaseService;
@@ -15,6 +18,23 @@ import 'package:musicians_flutter/views/register_screen.dart';
 import 'package:musicians_flutter/widgets/searchable_category_multi_select_sheet.dart';
 
 class MockRuta02FirebaseService extends FirebaseService {
+  @override
+  Future<List<SubRequest>> getUserSubRequestsAsync(String uid) async => [];
+
+  @override
+  Future<Map<String, int>> getButtonClicksAsync(String userId) async => {};
+
+  @override
+  bool get isLoggedIn => true;
+  @override
+  String? get currentUserId => 'test_user_ruta_02';
+  @override
+  Future<void> initializePushNotifications() async {}
+  @override
+  Future<Map<String, String>> getUserBandsAsync(String userId) async => {'picker_band': 'Picker Band'};
+  @override
+  Future<Band?> getBandInfoAsync(String bandId) async => Band(id: bandId, name: 'Picker Band', membersBand: {'test_user_ruta_02': BandMember(userId: 'test_user_ruta_02', role: 'Leader', status: 'active')});
+
   @override
   Future<UserProfile?> getUserProfileAsync([String? userId]) async {
     return UserProfile(
@@ -813,7 +833,7 @@ void main() {
       expect(find.byType(SearchableCategoryMultiSelectSheet), findsOneWidget);
       expect(find.byKey(const ValueKey('standalone_bandleader_chip')), findsOneWidget);
       expect(find.text('Songwriters/Lyricists/Producers/Engineers...'), findsOneWidget);
-      expect(find.text('Sessions'), findsOneWidget);
+      expect(find.text('Sessions'), findsNothing);
 
       Navigator.pop(tester.element(find.byType(SearchableCategoryMultiSelectSheet)));
       await tester.pump();
@@ -848,10 +868,11 @@ void main() {
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() => tester.view.resetPhysicalSize());
 
-      await tester.pumpWidget(createRuta02TestApp(const FindSubScreen()));
+      await tester.pumpWidget(createRuta02TestApp(const FindSubScreen(bandId: 'picker_band')));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
+      await pumpUiTransitions(tester);
       final instrumentCard = find.text('Role / Instrument');
       expect(instrumentCard, findsOneWidget);
       await tester.tap(instrumentCard);

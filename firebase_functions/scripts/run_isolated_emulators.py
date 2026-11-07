@@ -42,7 +42,7 @@ def preflight():
     if git("diff", "--cached", "--name-only"):
         raise RuntimeError("Staging area must remain empty")
     config = json.loads((ROOT / "firebase.json").read_text(encoding="utf-8"))
-    expected = {"auth": 9099, "database": 9000, "functions": 5001}
+    expected = {"auth": 9099, "database": 9000, "functions": 5001, "storage": 9199}
     for name, port in expected.items():
         if config["emulators"][name]["port"] != port:
             raise RuntimeError(f"Unexpected {name} emulator port")
@@ -87,6 +87,7 @@ def isolated_env(temp):
         "FIREBASE_DATABASE_EMULATOR_HOST": "127.0.0.1:9000",
         "FIREBASE_AUTH_EMULATOR_HOST": "127.0.0.1:9099",
         "FUNCTIONS_EMULATOR_HOST": "127.0.0.1:5001",
+        "FIREBASE_STORAGE_EMULATOR_HOST": "127.0.0.1:9199",
         "EMULATOR_ISOLATION_GATE": "true",
         "EMULATOR_ISOLATION_TEMP": str(temp),
         "EMULATOR_ISOLATION_ATTEMPTS": str(temp / "attempts.jsonl"),
@@ -200,7 +201,7 @@ def main():
             if not firebase_cli:
                 raise RuntimeError("Firebase CLI is unavailable")
             command = [firebase_cli, "emulators:exec", "--project", PROJECT,
-                       "--only", "auth,database,functions",
+                       "--only", "auth,database,functions,storage",
                        "npm --prefix firebase_functions run test:emulator -- "
                        "--reporter json --reporter-option output=../build/emulator-isolation-results.json"]
             print("Running isolated demo Auth, Database and Functions emulators")

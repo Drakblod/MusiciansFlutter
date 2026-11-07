@@ -1,3 +1,4 @@
+import 'support/bounded_ui_pump.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
@@ -120,7 +121,7 @@ void main() {
       ),
     );
 
-    await tester.pumpAndSettle();
+    await pumpUiTransitions(tester);
 
     // Verify "The Rockers" and "Studio Session Guitarist" are visible
     expect(find.text('The Rockers'), findsOneWidget);
@@ -163,7 +164,7 @@ void main() {
       ),
     );
 
-    await tester.pumpAndSettle();
+    await pumpUiTransitions(tester);
 
     expect(find.text('The Rockers'), findsOneWidget);
   });
@@ -203,7 +204,7 @@ void main() {
       ),
     );
 
-    await tester.pumpAndSettle();
+    await pumpUiTransitions(tester);
 
     expect(find.text('Electric Groove'), findsOneWidget);
   });
@@ -257,7 +258,7 @@ void main() {
       ),
     );
 
-    await tester.pumpAndSettle();
+    await pumpUiTransitions(tester);
 
     expect(find.text('Active Rockers'), findsOneWidget);
     expect(find.text('Cancelled Band'), findsNothing);
@@ -277,11 +278,11 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
-      expect(find.text('Substitute Requests'), findsOneWidget);
-      expect(find.text('New Member Requests'), findsOneWidget);
-      expect(find.text('Saved'), findsOneWidget);
+      expect(find.text('1. Substitute Requests'), findsOneWidget);
+      expect(find.text('2. New Member Requests'), findsOneWidget);
+      expect(find.text('4. Saved'), findsOneWidget);
       expect(find.text('Available gigs'), findsNothing);
       expect(find.text('Direct Invitations'), findsNothing);
     });
@@ -327,20 +328,20 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // On Substitute Requests tab (first tab)
       expect(find.text('Rock Band Sub'), findsOneWidget);
-      expect(find.text('Substitute Request'), findsOneWidget);
+      expect(find.text('Substitute · Electric Guitar'), findsOneWidget);
       expect(find.text('Jazz Band Member'), findsNothing);
       expect(find.text('Direct Invite'), findsOneWidget);
 
       // Switch to New Member Requests tab
-      await tester.tap(find.text('New Member Requests'));
-      await tester.pumpAndSettle();
+      await tester.tap(find.text('2. New Member Requests'));
+      await pumpUiTransitions(tester);
 
       expect(find.text('Jazz Band Member'), findsOneWidget);
-      expect(find.text('New Member Request'), findsOneWidget);
+      expect(find.textContaining('New Band Member ·'), findsOneWidget);
       expect(find.text('Rock Band Sub'), findsNothing);
       expect(find.text('Direct Invite'), findsOneWidget);
     });
@@ -400,7 +401,7 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // On Substitute Requests tab: only standard sub is present
       expect(find.text('Band Standard Sub'), findsOneWidget);
@@ -409,8 +410,8 @@ void main() {
       expect(find.text('Band Spaced NM'), findsNothing);
 
       // Switch to New Member Requests tab
-      await tester.tap(find.text('New Member Requests'));
-      await tester.pumpAndSettle();
+      await tester.tap(find.text('2. New Member Requests'));
+      await pumpUiTransitions(tester);
 
       // All 3 variations are classified under New Member Requests
       expect(find.text('Band Exact NM'), findsOneWidget);
@@ -419,7 +420,7 @@ void main() {
       expect(find.text('Band Standard Sub'), findsNothing);
 
       // Verify each shows the New Member Request label
-      expect(find.text('New Member Request'), findsNWidgets(3));
+      expect(find.textContaining('New Band Member ·'), findsNWidgets(3));
     });
 
     testWidgets('4 & 5. Single grouped request does not show 1 event · 1 position and shows Role / Instrument', (WidgetTester tester) async {
@@ -451,10 +452,10 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Single Grouped Band'), findsOneWidget);
-      expect(find.text('Tenor Sax'), findsOneWidget);
+      expect(find.text('Substitute · Tenor Sax'), findsOneWidget);
       expect(find.textContaining('1 event'), findsNothing);
       expect(find.textContaining('1 position'), findsNothing);
     });
@@ -493,16 +494,16 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       await tester.tap(find.text('Solo Event Band'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Event #1'), findsNothing);
 
       // Close bottom sheet
       await tester.tapAt(const Offset(20, 20));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Multi-event test
       mockFirebase.storedRequests = [
@@ -538,10 +539,10 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       await tester.tap(find.text('Duo Event Band'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Event #1'), findsOneWidget);
       expect(find.text('Event #2'), findsOneWidget);
@@ -588,20 +589,20 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // No Unpaid text anywhere
       expect(find.text('Unpaid'), findsNothing);
       expect(find.textContaining('Unpaid'), findsNothing);
 
       // Paid badge appears with formatted currency
-      expect(find.text('Paid · 3.500,00 SEK'), findsOneWidget);
+      expect(find.textContaining('Paid · 3,500 SEK'), findsOneWidget);
 
       // Open paid gig details
       await tester.tap(find.text('Paid Band'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
-      expect(find.text('Details'), findsOneWidget);
+      expect(find.text('Payment Details'), findsOneWidget);
       expect(find.text('Dinner and drinks provided'), findsOneWidget);
     });
 
@@ -641,7 +642,7 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(tester.takeException(), isNull);
     });
@@ -685,7 +686,7 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       final earlierOffset = tester.getTopLeft(find.text('Earlier Gig Band'));
       final laterOffset = tester.getTopLeft(find.text('Later Gig Band'));

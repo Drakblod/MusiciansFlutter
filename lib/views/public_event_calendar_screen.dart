@@ -778,7 +778,7 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
         event.createdBy != null &&
         event.createdBy!.isNotEmpty &&
         currentUserId == event.createdBy;
-    final canManage = isCreator || _canUserCreateOrManage;
+    final canManage = isCreator;
     if (!canManage) return;
 
     final result = await Navigator.push(
@@ -803,7 +803,7 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
         event.createdBy != null &&
         event.createdBy!.isNotEmpty &&
         currentUserId == event.createdBy;
-    final canManage = isCreator || _canUserCreateOrManage;
+    final canManage = isCreator;
 
     final monthShort = DateFormat('MMM').format(event.startDateTime).toUpperCase();
     final dayStr = DateFormat('dd').format(event.startDateTime);

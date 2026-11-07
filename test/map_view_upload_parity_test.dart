@@ -54,7 +54,7 @@ class MockFirebaseServiceForUploadParityTest extends FirebaseService {
   }
 
   @override
-  Future<String> uploadAudioSnippetAsync(String userId, Uint8List? bytes, String? localPath) async {
+  Future<String> uploadMapAudioAsync(String userId, Uint8List? bytes, String? localPath, {String? bandId}) async {
     uploadAudioCallCount++;
     if (shouldFailUpload) {
       throw Exception('Storage network timeout');

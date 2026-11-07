@@ -1,3 +1,4 @@
+import 'support/bounded_ui_pump.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:firebase_core/firebase_core.dart' hide FirebaseService;
@@ -22,6 +23,17 @@ import 'package:musicians_flutter/views/public_event_details_screen.dart';
 // --- Mocks for Events ---
 
 class MockFirebaseForOctSprint extends FirebaseService {
+  @override
+  Future<bool> canManageBandEventAsync(String bandId) async => bandId == 'band_1';
+  @override
+  Future<BandEvent?> getManagerBandEventOnceAsync(String bandId, String eventId) async => await subscribeToBandEvent(bandId, eventId).first;
+  @override
+  Future<List<BandEvent>> getManagerBandEventsListAsync(String bandId) => getBandEventsListAsync(bandId);
+  @override
+  Stream<BandEvent?> subscribeToManagerBandEvent(String bandId, String eventId) => subscribeToBandEvent(bandId, eventId);
+  @override
+  Future<UserProfile?> getPublicUserProfileAsync(String uid) => getUserProfileAsync(uid);
+
   final Map<String, String> userBands = {
     'band_1': 'Nordic Groove',
   };
@@ -129,7 +141,7 @@ class MockFirebaseForOctSprint extends FirebaseService {
 
   @override
   Future<List<BandMember>> getBandMembersAsync(String bandId) async {
-    return [];
+    return [BandMember(userId: 'user_creator', role: 'Leader'), BandMember(userId: 'user_2', role: 'Member')];
   }
 
   @override
@@ -225,20 +237,20 @@ void main() {
           child: const MaterialApp(home: ManageEventsScreen()),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Band name
       final bandFinder = find.text('Nordic Groove');
       expect(bandFinder, findsOneWidget);
       final bandTextWidget = tester.widget<Text>(bandFinder);
-      expect(bandTextWidget.style?.fontSize, 18);
+      expect(bandTextWidget.style?.fontSize, 19);
       expect(bandTextWidget.style?.fontWeight, FontWeight.bold);
 
       // Event title within straight quotes
-      final titleFinder = find.text('"Summer Tour"');
+      final titleFinder = find.text('”Summer Tour”');
       expect(titleFinder, findsOneWidget);
       final titleTextWidget = tester.widget<Text>(titleFinder);
-      expect(titleTextWidget.style?.fontSize, 13);
+      expect(titleTextWidget.style?.fontSize, 15);
       expect(titleTextWidget.style?.fontWeight, FontWeight.w600);
     });
 
@@ -255,7 +267,7 @@ void main() {
           child: const MaterialApp(home: ManageEventsScreen()),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // "2 Part Event" must not be displayed on the card
       expect(find.textContaining('Part Event'), findsNothing);
@@ -277,7 +289,7 @@ void main() {
           child: const MaterialApp(home: ManageEventsScreen()),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Inline RSVP controls removed from New Events
       expect(find.text('Your RSVP'), findsNothing);
@@ -305,11 +317,11 @@ void main() {
           child: const MaterialApp(home: ManageEventsScreen()),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Tap on the card
-      await tester.tap(find.text('"Summer Tour"'));
-      await tester.pumpAndSettle();
+      await tester.tap(find.text('”Summer Tour”'));
+      await pumpUiTransitions(tester);
 
       // Opened EventDetailsPage
       expect(find.byType(EventDetailsPage), findsOneWidget);
@@ -331,22 +343,27 @@ void main() {
           child: const MaterialApp(home: ManageEventsScreen()),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Navigate to Past Events
-      await tester.tap(find.text('PAST EVENTS'));
-      await tester.pumpAndSettle();
+      await tester.tap(find.text('3. PAST EVENTS'));
+      await pumpUiTransitions(tester);
 
-      expect(find.text('"Past Autumn Session"'), findsOneWidget);
+      expect(find.text('”Past Autumn Session”'), findsOneWidget);
 
       // No editable RSVP controls
       expect(find.text('Please respond'), findsNothing);
       expect(find.text('Your RSVP'), findsNothing);
       expect(find.text('Change'), findsNothing);
 
-      // Preserves attendance results breakdown for historic event
-      expect(find.text('1 Yes'), findsOneWidget);
-      expect(find.text('1 No'), findsOneWidget);
+      // The member list is sanitized; detailed results are manager-only.
+      expect(find.text('1 Yes'), findsNothing);
+      expect(find.text('1 No'), findsNothing);
+      await tester.tap(find.text('”Past Autumn Session”'));
+      await pumpUiTransitions(tester);
+      expect(find.byType(EventResultsPage), findsOneWidget);
+      expect(find.text('YES (1)'), findsOneWidget);
+      expect(find.text('NO (1)'), findsOneWidget);
     });
 
     testWidgets('10. Upcoming and Past navigation opens read-only results page', (tester) async {
@@ -362,23 +379,24 @@ void main() {
           child: const MaterialApp(home: ManageEventsScreen()),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Go to Upcoming tab
-      await tester.tap(find.text('UPCOMING (Finalized)'));
-      await tester.pumpAndSettle();
+      await tester.tap(find.text('2. UPCOMING (Finalized)'));
+      await pumpUiTransitions(tester);
 
-      expect(find.text('"Locked Festival Gig"'), findsOneWidget);
+      expect(find.text('”Locked Festival Gig”'), findsOneWidget);
 
       // Tap card
-      await tester.tap(find.text('"Locked Festival Gig"'));
-      await tester.pumpAndSettle();
+      await tester.tap(find.text('”Locked Festival Gig”'));
+      await pumpUiTransitions(tester);
 
       // Opens EventResultsPage
       expect(find.byType(EventResultsPage), findsOneWidget);
     });
 
     testWidgets('11. Events-listan fungerar vid 320 px bredd utan overflow', (tester) async {
+
       tester.view.physicalSize = const Size(320, 800);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() => tester.view.resetPhysicalSize());
@@ -391,17 +409,17 @@ void main() {
           child: const MaterialApp(home: ManageEventsScreen()),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(tester.takeException(), isNull);
       expect(find.text('EVENTS'), findsOneWidget);
-      expect(find.text('"Summer Tour"'), findsOneWidget);
+      expect(find.text('”Summer Tour”'), findsOneWidget);
 
       // Switch to Past tab at 320px
-      await tester.tap(find.text('PAST EVENTS'));
-      await tester.pumpAndSettle();
+      await tester.tap(find.text('3. PAST EVENTS'));
+      await pumpUiTransitions(tester);
       expect(tester.takeException(), isNull);
-      expect(find.text('"Past Autumn Session"'), findsOneWidget);
+      expect(find.text('”Past Autumn Session”'), findsOneWidget);
     });
   });
 
@@ -461,7 +479,7 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Neither card displays the visible event type badge (e.g. Live/Gig or Open Session)
       expect(find.text('Live/Gig'), findsNothing);
@@ -484,14 +502,15 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
-      // Image event has date "15" and "SEP"
-      expect(find.text('15'), findsWidgets);
-      expect(find.text('SEP'), findsWidgets);
-
-      // No image event has date "16"
-      expect(find.text('16'), findsWidgets);
+      // Both card styles expose their complete date and time, before the venue.
+      expect(find.text('Tue, 15 Sep · 19:30 – 22:30'), findsOneWidget);
+      expect(find.text('Wed, 16 Sep · 18:00 – 21:00'), findsOneWidget);
+      expect(tester.getTopLeft(find.text('Tue, 15 Sep · 19:30 – 22:30')).dy,
+          lessThan(tester.getTopLeft(find.text('Konserthuset, Stockholm')).dy));
+      expect(tester.getTopLeft(find.text('Wed, 16 Sep · 18:00 – 21:00')).dy,
+          lessThan(tester.getTopLeft(find.text('Kafé 44, Stockholm')).dy));
     });
 
     testWidgets('4. Eventtypen finns fortfarande kvar och visas på Event Details', (tester) async {
@@ -512,7 +531,7 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // On details screen, event type badge is clearly visible
       expect(find.text('Live/Gig'), findsOneWidget);
@@ -531,7 +550,7 @@ void main() {
           child: const MaterialApp(home: CreatePublicEventScreen()),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Helper text updated
       expect(find.text('Tap to upload from this device or use Camera'), findsOneWidget);
@@ -539,7 +558,7 @@ void main() {
 
       // Tap on the cover upload zone to open sheet
       await tester.tap(find.text('Upload Cover Photo or Poster'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Modal options
       expect(find.text('Upload from this device'), findsOneWidget);
@@ -562,7 +581,7 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Only ONE edit button found (for imageEvent, because current user is creator)
       final editButtons = find.byTooltip('Edit Event');
@@ -595,14 +614,14 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // No edit buttons in list
       expect(find.byTooltip('Edit Event'), findsNothing);
 
       // Open event details
       await tester.tap(find.text('Stockholm Sound Gala'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Details page opens
       expect(find.byType(PublicEventDetailsScreen), findsOneWidget);
@@ -629,7 +648,7 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(tester.takeException(), isNull);
       expect(find.text('EVENT CALENDAR'), findsOneWidget);

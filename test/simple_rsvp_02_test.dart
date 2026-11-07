@@ -1,3 +1,4 @@
+import 'support/bounded_ui_pump.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:firebase_core/firebase_core.dart' hide FirebaseService;
@@ -246,14 +247,14 @@ void main() {
       for (int i = 0; i < 6; i++) {
         final addBtn = find.text('+ Add Event');
         await tester.ensureVisible(addBtn);
-        await tester.pumpAndSettle();
+        await pumpUiTransitions(tester);
         await tester.tap(addBtn);
-        await tester.pumpAndSettle();
+        await pumpUiTransitions(tester);
 
         final submitBtn = find.widgetWithText(ElevatedButton, 'Add Event');
         await tester.ensureVisible(submitBtn);
         await tester.tap(submitBtn);
-        await tester.pumpAndSettle();
+        await pumpUiTransitions(tester);
       }
 
       // "+ Add Event" should now be hidden and max notice shown
@@ -350,7 +351,7 @@ void main() {
       expect(mockService.lastUpdatedStatus, 'Yes');
     });
 
-    testWidgets('4. EventDetailsPage displays all events answered confirmation banner', (tester) async {
+    testWidgets('4. EventDetailsPage displays saved responses for every answered schedule item', (tester) async {
       tester.view.physicalSize = const Size(1200, 3000);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() {
@@ -415,8 +416,10 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
       await tester.pump(const Duration(milliseconds: 300));
 
-      // Check confirmation banner
-      expect(find.text('✓ All events answered'), findsOneWidget);
+      // The approved schedule UI exposes each saved response instead of a global banner.
+      expect(find.text('YES'), findsOneWidget);
+      expect(find.text('Unanswered'), findsNothing);
+      expect(find.text('Warmup'), findsOneWidget);
     });
 
     testWidgets('5. EventResultsPage displays multi-schedule items with filter pills and primary skills', (tester) async {

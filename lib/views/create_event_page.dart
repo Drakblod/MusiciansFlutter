@@ -305,9 +305,9 @@ class _CreateEventPageState extends State<CreateEventPage> {
       return DateFormat('EEE, MMM d, yyyy').format(minDate);
     }
     if (minDate.year == maxDate.year) {
-      return '${DateFormat('EEE, MMM d').format(minDate)} â€“ ${DateFormat('EEE, MMM d, yyyy').format(maxDate)}';
+      return '${DateFormat('EEE, MMM d').format(minDate)} – ${DateFormat('EEE, MMM d, yyyy').format(maxDate)}';
     }
-    return '${DateFormat('EEE, MMM d, yyyy').format(minDate)} â€“ ${DateFormat('EEE, MMM d, yyyy').format(maxDate)}';
+    return '${DateFormat('EEE, MMM d, yyyy').format(minDate)} – ${DateFormat('EEE, MMM d, yyyy').format(maxDate)}';
   }
   Future<void> _selectDate() async {
     final picked = await showDatePicker(
@@ -1436,7 +1436,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                       style: GoogleFonts.inter(color: Colors.white),
                       decoration: const InputDecoration(
                         labelText: 'Main Event Name',
-                        hintText: 'e.g. Club gig â€“ Summer Tour',
+                        hintText: 'e.g. Club gig – Summer Tour',
                       ),
                       validator: (value) {
                         if (value == null || value.trim().isEmpty) {

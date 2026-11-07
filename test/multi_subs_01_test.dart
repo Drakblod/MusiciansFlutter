@@ -1,4 +1,7 @@
+import 'support/bounded_ui_pump.dart';
 import 'dart:async';
+import 'package:musicians_flutter/models/request_management_access.dart';
+import 'package:musicians_flutter/utils/band_membership_policy.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:firebase_core/firebase_core.dart' hide FirebaseService;
@@ -18,6 +21,38 @@ import 'package:musicians_flutter/views/find_sub_screen.dart';
 import 'package:musicians_flutter/views/event_details_page.dart';
 
 class MockMultiSubsFirebaseService extends FirebaseService {
+  @override
+  Future<Band?> getPublicBandProfileAsync(String bandId) => getBandInfoAsync(bandId);
+  @override
+  Future<UserProfile?> getPublicUserProfileAsync(String uid) => getUserProfileAsync(uid);
+
+  @override
+  Future<BandEvent?> getManagerBandEventOnceAsync(String bandId, String eventId) async => await getBandEventOnceAsync(bandId, eventId);
+  @override
+  Future<List<BandEvent>> getManagerBandEventsListAsync(String bandId) => getBandEventsListAsync(bandId);
+  @override
+  Stream<BandEvent?> subscribeToManagerBandEvent(String bandId, String eventId) => Stream.value(storedBandEvents[eventId]);
+  @override
+  Future<bool> canManageBandEventAsync(String bandId) async => BandMembershipPolicy.canStaff(await getBandInfoAsync(bandId), currentUserId);
+
+  @override
+  bool get isLoggedIn => true;
+  @override
+  Future<void> initializePushNotifications() async {}
+  @override
+  Future<Map<String, int>> getButtonClicksAsync(String userId) async => {};
+
+  @override
+  Stream<String?> get catalogueIdentityChanges => const Stream.empty();
+  @override
+  Stream<bool> watchRequestManagementAccess(RequestManagementAccess access) => Stream.value(true);
+  @override
+  Future<RequestManagementAccess> authorizeRequestManagement({String? bandId, String? requestId, String? expectedCreatorId, bool Function()? isCurrent}) async {
+    final band = bandId == null ? null : await getBandInfoAsync(bandId);
+    if (!(isCurrent?.call() ?? true) || !BandMembershipPolicy.canStaff(band, currentUserId)) throw const PrivateDataAccessException();
+    return RequestManagementAccess(userId: currentUserId!, bandId: bandId!);
+  }
+
   Map<String, String> userBands = {'band_123': 'Electric Dreamers'};
   Map<String, String> userRoles = {'band_123': 'Leader'};
   Map<String, BandEvent> storedBandEvents = {};
@@ -55,6 +90,7 @@ class MockMultiSubsFirebaseService extends FirebaseService {
       id: bandId,
       name: userBands[bandId] ?? 'Electric Dreamers',
       userRole: userRoles[bandId] ?? 'Leader',
+      membersBand: {for (final member in await getBandMembersAsync(bandId)) member.userId!: member},
       location: 'Stockholm, Sweden',
       rehearsalStartTime: '18:00',
       rehearsalEndTime: '21:00',
@@ -330,6 +366,7 @@ class MockMultiSubsFirebaseService extends FirebaseService {
   }
 
   bool failAgreementChat = false;
+  int clientAgreementCalls = 0;
 
   @override
   Future<String> createAgreementChatAsync(
@@ -339,6 +376,7 @@ class MockMultiSubsFirebaseService extends FirebaseService {
     Message message,
   ) async {
     writeOperationCount++;
+    clientAgreementCalls++;
     if (failAgreementChat) {
       throw StateError('Simulated agreement chat transient failure');
     }
@@ -347,6 +385,7 @@ class MockMultiSubsFirebaseService extends FirebaseService {
 }
 
 class MockMultiSubsAppState extends AppState {
+
   final MockMultiSubsFirebaseService mockFirebase;
 
   MockMultiSubsAppState(this.mockFirebase);
@@ -408,7 +447,7 @@ void main() {
 
       final mock = MockMultiSubsFirebaseService();
       await tester.pumpWidget(createMultiSubsTestApp(mockService: mock, child: const FindSubScreen()));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('FIND MUSICIAN/VOCALIST'), findsOneWidget);
       // Under 03B, single-slot events omit SUBSTITUTE 1
@@ -457,7 +496,7 @@ void main() {
         mockService: mock,
         child: const FindSubScreen(eventId: 'event_1', bandId: 'band_123'),
       ));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Drums'), findsWidgets);
       // Under 03B, single slot proceeds directly to slot content without slot header
@@ -491,7 +530,7 @@ void main() {
         mockService: mock,
         child: const FindSubScreen(eventId: 'event_1', bandId: 'band_123'),
       ));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(mock.writeOperationCount, equals(0));
     });
@@ -503,13 +542,13 @@ void main() {
 
       final mock = MockMultiSubsFirebaseService();
       await tester.pumpWidget(createMultiSubsTestApp(mockService: mock, child: const FindSubScreen()));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Under 03B, 1 slot hides SUBSTITUTE 1
       expect(find.text('SUBSTITUTE 1'), findsNothing);
 
       await tester.tap(find.text('+ Add Substitute'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.textContaining('SUBSTITUTE 1'), findsOneWidget);
       expect(find.textContaining('SUBSTITUTE 2'), findsOneWidget);
@@ -530,15 +569,15 @@ void main() {
       );
 
       await tester.pumpWidget(createMultiSubsTestApp(mockService: mock, child: const FindSubScreen()));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       final favoritesButtons = find.text('Favorites List');
       await tester.tap(favoritesButtons.first);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Favorite Guitarist'), findsOneWidget);
       await tester.tap(find.widgetWithText(CheckboxListTile, 'Favorite Guitarist'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Chosen Substitute'), findsOneWidget);
       expect(find.text('Favorite Guitarist'), findsOneWidget);
@@ -551,14 +590,14 @@ void main() {
 
       final mock = MockMultiSubsFirebaseService();
       await tester.pumpWidget(createMultiSubsTestApp(mockService: mock, child: const FindSubScreen()));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       await tester.tap(find.text('+ Add Substitute'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       final searchAllButtons = find.text('Search All');
       await tester.tap(searchAllButtons.last);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Search All'), findsWidgets);
     });
@@ -584,17 +623,18 @@ void main() {
         requireResponse: true,
       );
       await tester.pumpWidget(createMultiSubsTestApp(mockService: mock, child: const FindSubScreen(eventId: 'event_1', bandId: 'band_123')));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       await tester.tap(find.text('+ Add Substitute'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       final publishContainer = find.textContaining('PUBLISH SUBSTITUTE REQUESTS');
       expect(publishContainer, findsOneWidget);
 
       await tester.ensureVisible(publishContainer);
+      confirmRequestLocations(tester);
       await tester.tap(publishContainer);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(mock.batchSaveCalls, equals(1));
       expect(mock.storedSubRequests.length, equals(2));
@@ -648,7 +688,7 @@ void main() {
         mockService: mock,
         child: const FindSubScreen(eventId: 'event_1', bandId: 'band_123'),
       ));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Acoustic Guitar'), findsWidgets);
       expect(find.text('Drum Kit'), findsWidgets);
@@ -661,10 +701,10 @@ void main() {
 
       final mock = MockMultiSubsFirebaseService();
       await tester.pumpWidget(createMultiSubsTestApp(mockService: mock, child: const FindSubScreen()));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       await tester.tap(find.text('+ Add Substitute'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.textContaining('SUBSTITUTE 1'), findsOneWidget);
       expect(find.textContaining('SUBSTITUTE 2'), findsOneWidget);
@@ -713,7 +753,7 @@ void main() {
         mockService: mock,
         child: const FindSubScreen(eventId: 'event_1', bandId: 'band_123'),
       ));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Only 1 slot for user_guitar should exist (the published one, not an extra duplicate draft)
       final guitarReplaced = find.text('Bob Guitar');
@@ -728,11 +768,11 @@ void main() {
 
       final mock = MockMultiSubsFirebaseService();
       await tester.pumpWidget(createMultiSubsTestApp(mockService: mock, child: const FindSubScreen()));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       await tester.ensureVisible(find.text('+ Add Substitute'));
       await tester.tap(find.text('+ Add Substitute'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.textContaining('SUBSTITUTE 2'), findsOneWidget);
       expect(find.text('Replacing'), findsNothing);
@@ -787,7 +827,7 @@ void main() {
         mockService: mock,
         child: const FindSubScreen(eventId: 'event_1', bandId: 'band_123'),
       ));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Jimi Hendrix'), findsOneWidget);
       expect(find.text('CANDIDATES (1)'), findsOneWidget);
@@ -842,16 +882,16 @@ void main() {
         mockService: mock,
         child: const FindSubScreen(eventId: 'event_1', bandId: 'band_123'),
       ));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Assign'), findsOneWidget);
       await tester.ensureVisible(find.text('Assign'));
       await tester.tap(find.text('Assign'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Confirm Assignment'), findsOneWidget);
       await tester.tap(find.text('Assign Substitute'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(mock.assignCalls, equals(1));
       expect(find.text('Assigned: Jimi Hendrix'), findsOneWidget);
@@ -916,14 +956,14 @@ void main() {
         mockService: mock,
         child: const FindSubScreen(eventId: 'event_1', bandId: 'band_123'),
       ));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       await tester.ensureVisible(find.text('Assign'));
       await tester.tap(find.text('Assign'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       await tester.tap(find.text('Assign Substitute'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Waiting for answers'), findsOneWidget); // Slot 2 is still open
     });
@@ -971,7 +1011,7 @@ void main() {
         mockService: mock,
         child: const FindSubScreen(eventId: 'event_1', bandId: 'band_123'),
       ));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Assigned: Jimi Hendrix'), findsOneWidget);
     });
@@ -1019,7 +1059,7 @@ void main() {
         mockService: mock,
         child: const FindSubScreen(eventId: 'event_1', bandId: 'band_123'),
       ));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Assigned: Jimi Hendrix'), findsOneWidget);
     });
@@ -1222,17 +1262,17 @@ void main() {
         mockService: mock,
         child: const FindSubScreen(eventId: 'event_1', bandId: 'band_123'),
       ));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       final cancelButtons = find.byIcon(Icons.delete_outline_rounded);
       expect(cancelButtons, findsNWidgets(2));
 
       await tester.tap(cancelButtons.first);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Cancel Substitute Request?'), findsOneWidget);
       await tester.tap(find.text('Cancel Request'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(mock.deleteCalls, equals(1));
       expect(mock.storedSubRequests.length, equals(1));
@@ -1317,7 +1357,7 @@ void main() {
         mockService: mock,
         child: const FindSubScreen(eventId: 'event_1', bandId: 'band_123'),
       ));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Assigned: Jimi Hendrix'), findsOneWidget);
       expect(find.text('Waiting for answers'), findsOneWidget);
@@ -1330,7 +1370,7 @@ void main() {
         size: const Size(320, 640),
         child: const FindSubScreen(),
       ));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('FIND MUSICIAN/VOCALIST'), findsOneWidget);
       expect(tester.takeException(), isNull);
@@ -1362,19 +1402,20 @@ void main() {
         mockService: mock,
         child: const FindSubScreen(eventId: 'event_1', bandId: 'band_123'),
       ));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       final favButton = find.text('Favorites List');
       await tester.tap(favButton);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.textContaining('No favorites yet'), findsOneWidget);
 
       // Attempting to publish should display validation warning
       final publishContainer = find.textContaining('PUBLISH SUBSTITUTE REQUESTS');
       await tester.ensureVisible(publishContainer);
+      confirmRequestLocations(tester);
       await tester.tap(publishContainer);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.textContaining('Please choose a favorite substitute or switch to Search All.'), findsOneWidget);
       expect(mock.batchSaveCalls, equals(0));
@@ -1422,7 +1463,7 @@ void main() {
         mockService: mock,
         child: EventDetailsPage(bandId: 'band_123', eventId: 'event_1', initialEvent: testEvent),
       ));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('YOUR RESPONSE'), findsOneWidget);
       expect(find.text('YES'), findsOneWidget);
@@ -1456,7 +1497,7 @@ void main() {
         mockService: mock,
         child: EventDetailsPage(bandId: 'band_123', eventId: 'event_1', initialEvent: testEvent),
       ));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Finalize Event & Lock RSVPs'), findsOneWidget);
     });
@@ -1495,7 +1536,7 @@ void main() {
         mockService: mock,
         child: const FindSubScreen(eventId: 'event_1', bandId: 'band_123'),
       ));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // 1. YES (Alice) is never created as a slot
       expect(find.text('Alice Leader'), findsNothing);
@@ -1519,7 +1560,7 @@ void main() {
       final confirmButtons = find.text('CONFIRM & INCLUDE POSITION');
       expect(confirmButtons, findsNWidgets(2));
       await tester.tap(confirmButtons.first);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Now 2 draft positions are ready to publish
       expect(find.text('PUBLISH SUBSTITUTE REQUESTS (2)'), findsOneWidget);
@@ -1535,7 +1576,7 @@ void main() {
         mockService: mock,
         child: const FindSubScreen(),
       ));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Date & Time'), findsWidgets);
 
@@ -1543,25 +1584,25 @@ void main() {
       final locationField = find.widgetWithText(TextField, '');
       expect(locationField, findsWidgets);
       await tester.enterText(locationField.last, 'Gothenburg, Sweden');
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       expect(find.text('Gothenburg, Sweden'), findsOneWidget);
 
       // 2. Edit description / notes
       final notesField = find.widgetWithText(TextField, '');
       await tester.enterText(notesField.first, 'Looking for experienced rock guitarist for Friday gig.');
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       expect(find.text('Looking for experienced rock guitarist for Friday gig.'), findsOneWidget);
 
       // 3. Tap date selector opens date picker
       final dateFinder = find.byIcon(Icons.calendar_today_rounded);
       expect(dateFinder, findsOneWidget);
       await tester.tap(dateFinder);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       expect(find.byType(DatePickerDialog), findsOneWidget);
 
       // Close date picker
       await tester.tap(find.text('Cancel'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
     });
 
     testWidgets('30. Declined candidate responses (value == false) are excluded from the assignable list', (tester) async {
@@ -1598,7 +1639,7 @@ void main() {
         mockService: mock,
         child: const FindSubScreen(eventId: 'event_1', bandId: 'band_123'),
       ));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Only cand_yes is displayed in candidates list
       expect(find.text('Yes Candidate'), findsOneWidget);
@@ -1635,7 +1676,7 @@ void main() {
       expect(event1Subs.first.id, equals('sub_ev1'));
     });
 
-    testWidgets('32. Partial agreement chat failure preserves canonical assignment and displays recoverable notice', (tester) async {
+    testWidgets('32. Server-owned assignment succeeds without a duplicate client Agreement write', (tester) async {
       tester.view.physicalSize = const Size(800, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -1657,21 +1698,22 @@ void main() {
         mockService: mock,
         child: const FindSubScreen(eventId: 'event_1', bandId: 'band_123'),
       ));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       await tester.ensureVisible(find.text('Assign'));
       await tester.tap(find.text('Assign'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       await tester.tap(find.text('Assign Substitute'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Canonical assignment succeeded
       expect(mock.storedSubRequests['sub_1']!.status, equals('assigned'));
       expect(mock.storedSubRequests['sub_1']!.assignedUserId, equals('candidate_guitar'));
 
       // UI accurately reflects assigned status rather than falsely reporting total failure
-      expect(find.textContaining('assigned successfully (chat notification deferred)'), findsOneWidget);
+      expect(find.textContaining('successfully assigned as substitute!'), findsOneWidget);
+      expect(mock.clientAgreementCalls, 0, reason: 'Assignment callable owns the Agreement write');
     });
 
     // =========================================================================
@@ -1684,7 +1726,7 @@ void main() {
         mockService: mock,
         child: const FindSubScreen(),
       ));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('FIND MUSICIAN/VOCALIST'), findsOneWidget);
     });
@@ -1695,7 +1737,7 @@ void main() {
         mockService: mock,
         child: const FindSubScreen(),
       ));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Request Type'), findsOneWidget);
       expect(find.text('Substitute'), findsWidgets);
@@ -1711,7 +1753,7 @@ void main() {
         mockService: mock,
         child: const FindSubScreen(),
       ));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Under 03B, single-slot events omit SUBSTITUTE 1
       expect(find.text('SUBSTITUTE 1'), findsNothing);
@@ -1730,13 +1772,13 @@ void main() {
         mockService: mock,
         child: const FindSubScreen(),
       ));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Switch to New Member via Request Type dropdown
       await tester.tap(find.text('Substitute').last);
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('New Member').last);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
+      await tester.tap(find.text('New Band Member').last);
+      await pumpUiTransitions(tester);
 
       // Substitute slot UI elements must not be present
       expect(find.text('SUBSTITUTE 1'), findsNothing);
@@ -1744,8 +1786,8 @@ void main() {
       expect(find.textContaining('PUBLISH SUBSTITUTE REQUESTS'), findsNothing);
 
       // New Band Member UI elements must be present
-      expect(find.text('New Band Member Recruitment'), findsOneWidget);
-      expect(find.text('PUBLISH NEW MEMBER SEARCH'), findsOneWidget);
+      expect(find.text('New Band Member'), findsOneWidget);
+      expect(find.text('PUBLISH NEW BAND MEMBER SEARCH'), findsOneWidget);
     });
 
     testWidgets('37. Regression: New Band Member mode does not write externalInvitees', (tester) async {
@@ -1774,16 +1816,17 @@ void main() {
         mockService: mock,
         child: const FindSubScreen(eventId: 'event_1', bandId: 'band_123'),
       ));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Switch to Find New Band Member(s) and submit
       await tester.tap(find.text('Substitute').last);
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('New Member').last);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
+      await tester.tap(find.text('New Band Member').last);
+      await pumpUiTransitions(tester);
 
-      await tester.tap(find.text('PUBLISH NEW MEMBER SEARCH'));
-      await tester.pumpAndSettle();
+      confirmRequestLocations(tester);
+      await tester.tap(find.text('PUBLISH NEW BAND MEMBER SEARCH'));
+      await pumpUiTransitions(tester);
 
       // Event externalInvitees must remain empty
       expect(mock.storedBandEvents['event_1']!.externalInvitees.isEmpty, isTrue);
@@ -1815,16 +1858,17 @@ void main() {
         mockService: mock,
         child: const FindSubScreen(eventId: 'event_1', bandId: 'band_123'),
       ));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Switch to Find New Band Member(s)
       await tester.tap(find.text('Substitute').last);
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('New Member').last);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
+      await tester.tap(find.text('New Band Member').last);
+      await pumpUiTransitions(tester);
 
-      await tester.tap(find.text('PUBLISH NEW MEMBER SEARCH'));
-      await tester.pumpAndSettle();
+      confirmRequestLocations(tester);
+      await tester.tap(find.text('PUBLISH NEW BAND MEMBER SEARCH'));
+      await pumpUiTransitions(tester);
 
       expect(mock.storedSubRequests.isNotEmpty, isTrue);
       final published = mock.storedSubRequests.values.first;
@@ -1850,7 +1894,7 @@ void main() {
         mockService: mock,
         child: FindSubScreen(initialRequest: legacySub),
       ));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Under 03B, single-slot events omit SUBSTITUTE 1
       expect(find.text('SUBSTITUTE 1'), findsNothing);
@@ -1873,10 +1917,10 @@ void main() {
         mockService: mock,
         child: FindSubScreen(initialRequest: legacyMember),
       ));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
-      expect(find.text('New Band Member Recruitment'), findsOneWidget);
-      expect(find.text('PUBLISH NEW MEMBER SEARCH'), findsOneWidget);
+      expect(find.text('New Band Member'), findsOneWidget);
+      expect(find.text('PUBLISH NEW BAND MEMBER SEARCH'), findsOneWidget);
       expect(find.text('Bass'), findsOneWidget);
     });
 
@@ -1890,26 +1934,26 @@ void main() {
         mockService: mock,
         child: const FindSubScreen(),
       ));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Add second slot in Substitute mode
       await tester.tap(find.text('+ Add Substitute'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       expect(find.textContaining('SUBSTITUTE 2'), findsOneWidget);
 
       // Switch to New Band Member(s) mode
       await tester.tap(find.text('Substitute').last);
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('New Member').last);
-      await tester.pumpAndSettle();
-      expect(find.text('New Band Member Recruitment'), findsOneWidget);
+      await pumpUiTransitions(tester);
+      await tester.tap(find.text('New Band Member').last);
+      await pumpUiTransitions(tester);
+      expect(find.text('New Band Member'), findsOneWidget);
       expect(find.textContaining('SUBSTITUTE 2'), findsNothing);
 
       // Switch back to Substitute mode
-      await tester.tap(find.text('New Member').last);
-      await tester.pumpAndSettle();
+      await tester.tap(find.text('New Band Member').last);
+      await pumpUiTransitions(tester);
       await tester.tap(find.text('Substitute').last);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       expect(find.textContaining('SUBSTITUTE 2'), findsOneWidget);
     });
 
@@ -1940,7 +1984,7 @@ void main() {
         size: const Size(320, 640),
         child: const FindSubScreen(),
       ));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('FIND MUSICIAN/VOCALIST'), findsOneWidget);
       expect(find.text('Request Type'), findsOneWidget);
@@ -1948,10 +1992,10 @@ void main() {
 
       // Switch to New Member at 320 px
       await tester.tap(find.text('Substitute').last);
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('New Member').last);
-      await tester.pumpAndSettle();
-      expect(find.text('New Band Member Recruitment'), findsOneWidget);
+      await pumpUiTransitions(tester);
+      await tester.tap(find.text('New Band Member').last);
+      await pumpUiTransitions(tester);
+      expect(find.text('New Band Member'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 

@@ -30,35 +30,6 @@ class _PublicEventDetailsScreenState extends State<PublicEventDetailsScreen> {
   PublicCalendarEvent? _activeEvent;
   bool _hasChanges = false;
   bool _initialized = false;
-  bool _canUserCreateOrManage = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _checkPermissions();
-  }
-
-  Future<void> _checkPermissions() async {
-    final appState = Provider.of<AppState>(context, listen: false);
-    final userId = appState.currentUserId;
-    if (userId == null) return;
-    try {
-      final userBands = await appState.firebaseService.getUserBandsAsync(userId);
-      for (final bandId in userBands.keys) {
-        final role = await appState.firebaseService.getUserBandRoleAsync(bandId, userId);
-        final r = (role ?? '').trim().toLowerCase();
-        if (r == 'leader' || r == 'admin' || r == 'mod') {
-          if (mounted) {
-            setState(() {
-              _canUserCreateOrManage = true;
-            });
-          }
-          break;
-        }
-      }
-    } catch (_) {}
-  }
-
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -80,7 +51,7 @@ class _PublicEventDetailsScreenState extends State<PublicEventDetailsScreen> {
         activeEvent.createdBy != null &&
         activeEvent.createdBy!.isNotEmpty &&
         currentUserId == activeEvent.createdBy;
-    final canManage = isCreator || _canUserCreateOrManage;
+    final canManage = isCreator;
     if (!canManage) return;
 
     final result = await Navigator.push(
@@ -116,7 +87,7 @@ class _PublicEventDetailsScreenState extends State<PublicEventDetailsScreen> {
         activeEvent.createdBy != null &&
         activeEvent.createdBy!.isNotEmpty &&
         currentUserId == activeEvent.createdBy;
-    final canManage = isCreator || _canUserCreateOrManage;
+    final canManage = isCreator;
     if (!canManage) return;
 
     final confirmed = await showDialog<bool>(
@@ -262,7 +233,7 @@ class _PublicEventDetailsScreenState extends State<PublicEventDetailsScreen> {
         activeEvent.createdBy != null &&
         activeEvent.createdBy!.isNotEmpty &&
         currentUserId == activeEvent.createdBy;
-    final canManage = isCreator || _canUserCreateOrManage;
+    final canManage = isCreator;
 
     return PopScope(
       canPop: false,
@@ -346,6 +317,15 @@ class _PublicEventDetailsScreenState extends State<PublicEventDetailsScreen> {
                       fontWeight: FontWeight.bold,
                       color: Colors.white,
                       height: 1.2,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    activeEvent.eventTypeDisplayLabel,
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      color: AppTheme.primaryAccent,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                   const SizedBox(height: 8),

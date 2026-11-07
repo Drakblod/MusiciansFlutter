@@ -207,6 +207,12 @@ class FakeLocationResolver implements LocationResolver {
   final Map<String, CanonicalLocation> customLocations = {};
 
   @override
+  CanonicalLocation? findClosestKnownCity(double? lat, double? lng,
+      {double maxDistanceKm = 40.0}) =>
+      LocationService.defaultResolver.findClosestKnownCity(lat, lng,
+          maxDistanceKm: maxDistanceKm);
+
+  @override
   bool isValidCoordinate(double? lat, double? lng) {
     if (lat == null || lng == null) return false;
     if (!lat.isFinite || !lng.isFinite) return false;

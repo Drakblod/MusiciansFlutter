@@ -1,3 +1,4 @@
+import 'support/bounded_ui_pump.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -29,6 +30,9 @@ class Mock01bFirebaseService extends Fake implements FirebaseService {
 
   @override
   bool get isLoggedIn => true;
+
+  @override
+  Future<void> initializePushNotifications() async {}
 
   @override
   String? get currentUserId => 'test_user_leader';
@@ -100,6 +104,7 @@ class Mock01bFirebaseService extends Fake implements FirebaseService {
     id: bandId,
     name: 'Test Band',
     userRole: 'Leader',
+    membersBand: {for (final member in await getBandMembersAsync(bandId)) member.userId!: member},
     location: 'Stockholm, Sweden',
   );
 
@@ -153,6 +158,7 @@ class Mock01bFirebaseService extends Fake implements FirebaseService {
 }
 
 class Mock01bAppState extends AppState {
+
   final Mock01bFirebaseService mockFirebase;
 
   Mock01bAppState(this.mockFirebase);
@@ -199,7 +205,7 @@ Future<void> pumpTestApp(WidgetTester tester, {required Mock01bFirebaseService m
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.resetPhysicalSize);
   await tester.pumpWidget(createTestApp(mockService: mockService, child: child, size: size));
-  await tester.pumpAndSettle();
+  await pumpUiTransitions(tester);
 }
 
 void main() {
@@ -219,9 +225,9 @@ void main() {
 
       final eventTypeFinder = find.text('Event Type');
       final reqTypeFinder = find.text('Request Type');
-      final locationFinder = find.text('Location');
+      final locationFinder = find.text('Location / Venue');
       final dateTimeFinder = find.text('Date & Time');
-      final descFinder = find.text('Description (optional)');
+      final descFinder = find.text('Description / Details');
       final roleFinder = find.text('Role / Instrument');
 
       expect(eventTypeFinder, findsOneWidget);
@@ -238,10 +244,10 @@ void main() {
       final p5 = tester.getTopLeft(descFinder).dy;
       final p6 = tester.getTopLeft(roleFinder).dy;
 
-      expect(p1, lessThan(p2));
-      expect(p2, lessThan(p3));
-      expect(p3, lessThan(p4));
-      expect(p4, lessThan(p5));
+      expect(p2, lessThan(p1)); // Request Type now leads the approved form.
+      expect(p1, lessThan(p4));
+      expect(p4, lessThan(p3));
+      expect(p3, lessThan(p5));
       expect(p5, lessThan(p6));
     });
 
@@ -259,8 +265,8 @@ void main() {
       final mock = Mock01bFirebaseService();
       await pumpTestApp(tester, mockService: mock, child: const FindSubScreen());
 
-      await tester.tap(find.byType(DropdownButtonFormField<String>).first);
-      await tester.pumpAndSettle();
+      await tester.tap(find.byWidgetPredicate((w) => w is DropdownButton<String> && (w.items?.any((item) => item.value == 'Concert') ?? false)));
+      await pumpUiTransitions(tester);
 
       for (final type in BandEvent.standardEventTypes) {
         expect(find.text(type), findsWidgets, reason: 'Expected $type in Event Type dropdown');
@@ -274,10 +280,10 @@ void main() {
 
       // Open Request Type dropdown
       await tester.tap(find.text('Substitute').last);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Substitute'), findsWidgets);
-      expect(find.text('New Member'), findsWidgets);
+      expect(find.text('New Band Member'), findsWidgets);
       expect(find.text('Other'), findsWidgets);
     });
 
@@ -287,14 +293,15 @@ void main() {
       await pumpTestApp(tester, mockService: mock, child: const FindSubScreen());
 
       // Select Event Type
-      await tester.tap(find.byType(DropdownButtonFormField<String>).first);
-      await tester.pumpAndSettle();
+      await tester.tap(find.byWidgetPredicate((w) => w is DropdownButton<String> && (w.items?.any((item) => item.value == 'Concert') ?? false)));
+      await pumpUiTransitions(tester);
       await tester.tap(find.text('Concert').last);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Publish Substitute
+      confirmRequestLocations(tester);
       await tester.tap(find.textContaining('PUBLISH SUBSTITUTE REQUESTS'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(mock.publishCalls, equals(1));
       expect(mock.savedBatchRequests, isNotEmpty);
@@ -310,20 +317,21 @@ void main() {
       await pumpTestApp(tester, mockService: mock, child: const FindSubScreen());
 
       // Select Event Type
-      await tester.tap(find.byType(DropdownButtonFormField<String>).first);
-      await tester.pumpAndSettle();
+      await tester.tap(find.byWidgetPredicate((w) => w is DropdownButton<String> && (w.items?.any((item) => item.value == 'Concert') ?? false)));
+      await pumpUiTransitions(tester);
       await tester.tap(find.text('Rehearsal').last);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Switch to New Member
       await tester.tap(find.text('Substitute').last);
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('New Member').last);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
+      await tester.tap(find.text('New Band Member').last);
+      await pumpUiTransitions(tester);
 
       // Publish New Member
-      await tester.tap(find.text('PUBLISH NEW MEMBER SEARCH'));
-      await tester.pumpAndSettle();
+      confirmRequestLocations(tester);
+      await tester.tap(find.text('PUBLISH NEW BAND MEMBER SEARCH'));
+      await pumpUiTransitions(tester);
 
       expect(mock.publishCalls, equals(1));
       expect(mock.savedBatchRequests, isNotEmpty);
@@ -339,23 +347,24 @@ void main() {
       await pumpTestApp(tester, mockService: mock, child: const FindSubScreen());
 
       // Select Event Type
-      await tester.tap(find.byType(DropdownButtonFormField<String>).first);
-      await tester.pumpAndSettle();
+      await tester.tap(find.byWidgetPredicate((w) => w is DropdownButton<String> && (w.items?.any((item) => item.value == 'Concert') ?? false)));
+      await pumpUiTransitions(tester);
       await tester.tap(find.text('Festival').last);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Switch to Other
       await tester.tap(find.text('Substitute').last);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       await tester.tap(find.text('Other').last);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Default instrument for Other is DJ
       expect(find.text('DJ'), findsOneWidget);
 
       // Publish Other
+      confirmRequestLocations(tester);
       await tester.tap(find.text('PUBLISH REQUEST'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(mock.publishCalls, equals(1));
       expect(mock.savedBatchRequests, isNotEmpty);
@@ -379,17 +388,18 @@ void main() {
       await pumpTestApp(tester, mockService: mock, child: FindSubScreen(initialRequest: initialReq));
 
       // Select Event Type
-      await tester.tap(find.byType(DropdownButtonFormField<String>).first);
-      await tester.pumpAndSettle();
+      await tester.tap(find.byWidgetPredicate((w) => w is DropdownButton<String> && (w.items?.any((item) => item.value == 'Concert') ?? false)));
+      await pumpUiTransitions(tester);
       await tester.tap(find.text('Club Gig').last);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Verify Sound Engineer role is active
       expect(find.text('Sound Engineer'), findsOneWidget);
 
       // Publish
+      confirmRequestLocations(tester);
       await tester.tap(find.text('PUBLISH REQUEST'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(mock.publishCalls, equals(1));
       expect(mock.savedBatchRequests, isNotEmpty);
@@ -466,8 +476,8 @@ void main() {
       expect(find.text('Original Event Name'), findsNothing);
 
       // Edit location locally
-      await tester.enterText(find.widgetWithText(TextField, 'Enter location'), 'Gothenburg');
-      await tester.pumpAndSettle();
+      await tester.enterText(find.widgetWithText(TextFormField, 'Location / Venue'), 'Gothenburg');
+      await pumpUiTransitions(tester);
 
       // Original event in mockService must NOT be mutated
       expect(mock.events['event_orig_123']!.location, equals('Stockholm Konserthus'));
@@ -485,7 +495,7 @@ void main() {
         requestType: 'Substitute',
         role: 'Substitute',
         voicePart: 'Drums',
-        date: '2026-11-01T20:00:00Z',
+        date: DateTime.now().add(const Duration(days: 7)).toIso8601String(),
         location: 'Uppsala',
       );
       final memReq = SubRequest(
@@ -495,7 +505,7 @@ void main() {
         requestType: 'New Member',
         role: 'New Member',
         voicePart: 'Bass',
-        date: '2026-11-02T20:00:00Z',
+        date: DateTime.now().add(const Duration(days: 8)).toIso8601String(),
         location: 'Malmö',
       );
       final otherReq = SubRequest(
@@ -505,7 +515,7 @@ void main() {
         requestType: 'Other',
         role: 'Other',
         voicePart: 'DJ',
-        date: '2026-11-03T20:00:00Z',
+        date: DateTime.now().add(const Duration(days: 9)).toIso8601String(),
         location: 'Stockholm',
       );
       mock.allSubRequests.addAll([subReq, memReq, otherReq]);
@@ -514,17 +524,17 @@ void main() {
 
       // Tab 1: Substitute Requests (shows Substitute and Other)
       expect(find.text('Band A'), findsOneWidget);
-      expect(find.text('Substitute Request'), findsOneWidget);
+      expect(find.text('Substitute · Drums'), findsOneWidget);
       expect(find.text('Band C'), findsOneWidget);
-      expect(find.text('Other Request'), findsOneWidget);
+      expect(find.text('Other · DJ'), findsOneWidget);
       expect(find.text('Band B'), findsNothing);
 
       // Switch to Tab 2: New Member Requests
-      await tester.tap(find.text('New Member Requests'));
-      await tester.pumpAndSettle();
+      await tester.tap(find.text('2. New Member Requests'));
+      await pumpUiTransitions(tester);
 
       expect(find.text('Band B'), findsOneWidget);
-      expect(find.text('New Member Request'), findsOneWidget);
+      expect(find.text('New Band Member · Bass'), findsOneWidget);
       expect(find.text('Band A'), findsNothing);
       expect(find.text('Band C'), findsNothing);
     });
@@ -552,13 +562,13 @@ void main() {
 
       // Open details bottom sheet
       await tester.tap(find.text('Alpha Band'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       final fEventType = find.text('Event Type');
       final fReqType = find.text('Request Type');
-      final fLocation = find.text('Location');
+      final fLocation = find.text('Location / Venue');
       final fDateTime = find.text('Date & Time');
-      final fDesc = find.text('Description (optional)');
+      final fDesc = find.text('Description / Details');
       final fRole = find.text('Role / Instrument');
 
       expect(fEventType, findsOneWidget);
@@ -575,11 +585,11 @@ void main() {
       final y5 = tester.getTopLeft(fDesc).dy;
       final y6 = tester.getTopLeft(fRole).dy;
 
-      expect(y1, lessThan(y2));
-      expect(y2, lessThan(y3));
-      expect(y3, lessThan(y4));
-      expect(y4, lessThan(y5));
-      expect(y5, lessThan(y6));
+      expect(y2, lessThan(y6));
+      expect(y6, lessThan(y1));
+      expect(y1, lessThan(y4));
+      expect(y4, lessThan(y3));
+      expect(y3, lessThan(y5));
     });
 
     // 13. Details sheet never shows the event name as Event Type
@@ -602,10 +612,11 @@ void main() {
       await pumpTestApp(tester, mockService: mock, child: const FindGigsScreen());
 
       await tester.tap(find.text('Beta Band'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Event Type row must show 'Not provided', NEVER 'Secret Arena Show'
-      expect(find.text('Not provided'), findsOneWidget);
+      expect(find.text('Event Type'), findsNothing);
+      expect(find.text('Not provided'), findsNothing);
       expect(find.text('Secret Arena Show'), findsNothing);
     });
 
@@ -627,7 +638,7 @@ void main() {
       await pumpTestApp(tester, mockService: mock, child: const FindGigsScreen());
 
       await tester.tap(find.text('Acoustic Trio'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Must not fabricate '18:00 - 21:00'
       expect(find.textContaining('18:00 - 21:00'), findsNothing);
@@ -644,7 +655,7 @@ void main() {
 
       // Add second slot
       await tester.tap(find.text('+ Add Substitute'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('SUBSTITUTE 1'), findsOneWidget);
       expect(find.text('SUBSTITUTE 2'), findsOneWidget);
@@ -653,7 +664,7 @@ void main() {
       final removeButtons = find.text('Remove Substitute');
       expect(removeButtons, findsNWidgets(2));
       await tester.tap(removeButtons.last);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('SUBSTITUTE 1'), findsNothing);
     });
@@ -696,6 +707,7 @@ void main() {
         voicePart: 'Bass',
         isPaid: true,
         payAmount: 2500,
+        currency: 'SEK',
         payDetails: 'Includes dinner and hotel',
         date: '2026-11-30T20:00:00Z',
         location: 'Malmö',
@@ -716,23 +728,23 @@ void main() {
       await pumpTestApp(tester, mockService: mock, child: const FindGigsScreen());
 
       // Paid gig shows payment badge on card
-      expect(find.textContaining('2.500,00 SEK'), findsOneWidget);
+      expect(find.textContaining('2,500 SEK'), findsOneWidget);
 
       // Open paid gig details sheet
       await tester.tap(find.text('Paid Band'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Payment'), findsOneWidget);
-      expect(find.text('Details'), findsOneWidget);
+      expect(find.text('Payment Details'), findsOneWidget);
       expect(find.text('Includes dinner and hotel'), findsOneWidget);
 
       // Close bottom sheet
       await tester.tapAt(const Offset(20, 20));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Open unpaid gig details sheet
       await tester.tap(find.text('Free Band'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Payment'), findsNothing);
       expect(find.text('Includes dinner and hotel'), findsNothing);

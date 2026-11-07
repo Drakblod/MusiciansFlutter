@@ -23,6 +23,9 @@ import 'package:musicians_flutter/widgets/skill_picker.dart';
 
 class MockTaxonomyFirebaseService extends FirebaseService {
   @override
+  Future<Map<String, int>> getButtonClicksAsync(String userId) async => {};
+
+  @override
   bool get isLoggedIn => true;
   @override
   String? get currentUserId => 'test_user_taxonomy';

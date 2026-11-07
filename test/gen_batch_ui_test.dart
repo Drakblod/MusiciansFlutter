@@ -1,3 +1,4 @@
+import 'support/bounded_ui_pump.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:firebase_core/firebase_core.dart' hide FirebaseService;
@@ -87,7 +88,7 @@ void main() {
           child: const MaterialApp(home: EditProfileScreen()),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('SKILLS/TALENTS'), findsOneWidget);
       expect(find.text('GENRES/BAND TYPES'), findsOneWidget);
@@ -107,7 +108,7 @@ void main() {
           child: const MaterialApp(home: FindCollabsScreen()),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Songwriters/\nProducers'), findsOneWidget);
       expect(find.text('Studios/\nEngineers'), findsOneWidget);
@@ -126,7 +127,7 @@ void main() {
           child: const MaterialApp(home: RegisterScreen()),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Primary Skill/Talent (Select 1)'), findsOneWidget);
       expect(find.text('Primary Skill / Talent (Select 1)'), findsNothing);
@@ -143,16 +144,16 @@ void main() {
           child: const MaterialApp(home: ProfileTabScreen()),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('R&B'), findsOneWidget);
 
-      final secondaryBadge = find.text('SECONDARY SKILLS');
-      if (secondaryBadge.evaluate().isNotEmpty) {
-        await tester.tap(secondaryBadge.first);
-        await tester.pumpAndSettle();
-      }
+      final secondaryBadge = find.text('+1 skills');
+      expect(secondaryBadge, findsWidgets);
+      await tester.tap(secondaryBadge.first);
+      await pumpUiTransitions(tester);
       expect(find.text('Mix Engineer'), findsOneWidget);
+      expect(tester.takeException(), isNull);
     });
 
     testWidgets('GEN-04: Parenthetical text (if any) and (City, Country) use normal font weight while main label is bold', (tester) async {
@@ -166,7 +167,7 @@ void main() {
           child: const MaterialApp(home: CreateBandScreen()),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       bool foundIfAny = false;
       bool foundCityCountry = false;
@@ -193,7 +194,8 @@ void main() {
       }
 
       expect(foundIfAny, isTrue, reason: 'Should find (if any) label');
-      expect(foundCityCountry, isTrue, reason: 'Should find (City, Country) label');
+      expect(foundCityCountry, isFalse, reason: 'The old free-text location label is replaced by the city picker');
+      expect(find.text('City / Location'), findsOneWidget);
     });
 
     testWidgets('GEN-05: EditProfileScreen enforces relative section order Skills/Talents < Genres/Band Types < Level', (tester) async {
@@ -207,7 +209,7 @@ void main() {
           child: const MaterialApp(home: EditProfileScreen()),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       final skillsPos = tester.getTopLeft(find.text('SKILLS/TALENTS')).dy;
       final genresPos = tester.getTopLeft(find.text('GENRES/BAND TYPES')).dy;
@@ -229,7 +231,7 @@ void main() {
           child: const MaterialApp(home: ProfileTabScreen()),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       final skillsPos = tester.getTopLeft(find.text('PRIMARY SKILL/TALENT')).dy;
       final genresPos = tester.getTopLeft(find.text('Genres/Band Types')).dy;
@@ -258,7 +260,7 @@ void main() {
           child: MaterialApp(home: MusicianProfileScreen(musician: profile)),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       final skillsPos = tester.getTopLeft(find.text('PRIMARY SKILL/TALENT')).dy;
       final genresPos = tester.getTopLeft(find.text('Genres/Band Types')).dy;

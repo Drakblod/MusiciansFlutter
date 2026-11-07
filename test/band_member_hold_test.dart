@@ -1,3 +1,4 @@
+import 'support/bounded_ui_pump.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -240,13 +241,13 @@ void main() {
         ),
       );
 
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Switch to Members tab (tab index 3)
-      final membersTab = find.text('Members');
+      final membersTab = find.text('5. Members');
       expect(membersTab, findsOneWidget);
       await tester.tap(membersTab);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Verify members are listed
       expect(find.text('Dave Drummer'), findsOneWidget);
@@ -268,18 +269,18 @@ void main() {
         ),
       );
 
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Go to Members tab
-      await tester.tap(find.text('Members'));
-      await tester.pumpAndSettle();
+      await tester.tap(find.text('5. Members'));
+      await pumpUiTransitions(tester);
 
       // Find reactivate button for Dave Drummer (who is currently on_hold)
       final playIcons = find.byIcon(Icons.play_arrow_rounded);
       expect(playIcons, findsWidgets);
 
       await tester.tap(playIcons.first);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(appState.mockFirebase.lastUpdatedUserId, 'user_injured');
       expect(appState.mockFirebase.lastUpdatedStatus, 'active');
@@ -315,7 +316,7 @@ void main() {
         ),
       );
 
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Verify ON HOLD badge is present
       expect(find.text('ON HOLD'), findsOneWidget);

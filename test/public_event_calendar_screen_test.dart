@@ -1,3 +1,4 @@
+import 'support/bounded_ui_pump.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:firebase_core/firebase_core.dart' hide FirebaseService;
@@ -16,16 +17,18 @@ import 'package:musicians_flutter/widgets/event_category_picker_sheet.dart';
 
 class SpyingFirebaseService extends FirebaseService {
   int callCount = 0;
+  int profileReadCount = 0;
+  int membershipReadCount = 0;
 
   @override
   Future<UserProfile?> getUserProfileAsync([String? userId]) async {
-    callCount++;
+    callCount++; profileReadCount++;
     return UserProfile(userId: 'u1', displayName: 'Test User');
   }
 
   @override
   Future<Map<String, String>> getUserBandsAsync(String userId) async {
-    callCount++;
+    callCount++; membershipReadCount++;
     return {'b1': 'Test Band'};
   }
 
@@ -129,17 +132,17 @@ void main() {
   }
 
   group('PublicEventCalendarScreen Widget Tests', () {
-    testWidgets('1. Renders title, subtitle and DEMO EVENTS badge', (tester) async {
+    testWidgets('1. Renders title and subtitle without a production demo badge', (tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() => tester.view.resetPhysicalSize());
 
       await tester.pumpWidget(createTestWidget());
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('EVENT CALENDAR'), findsOneWidget);
       expect(find.text('Discover live music, sessions, workshops and music events.'), findsOneWidget);
-      expect(find.text('DEMO EVENTS'), findsOneWidget);
+      expect(find.text('DEMO EVENTS'), findsNothing);
     });
 
     testWidgets('2. Displays category picker with options and no duplicate chips row', (tester) async {
@@ -148,7 +151,7 @@ void main() {
       addTearDown(() => tester.view.resetPhysicalSize());
 
       await tester.pumpWidget(createTestWidget());
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Horizontal chips row is removed
       expect(find.text('All'), findsNothing);
@@ -156,7 +159,7 @@ void main() {
 
       // Tapping search field opens picker sheet with all category options
       await tester.tap(find.byType(TextField));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.byType(EventCategoryPickerSheet), findsOneWidget);
       expect(find.text('All Events'), findsOneWidget);
@@ -171,7 +174,7 @@ void main() {
       addTearDown(() => tester.view.resetPhysicalSize());
 
       await tester.pumpWidget(createTestWidget());
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Stockholm Jazz Night'), findsOneWidget);
       expect(find.text('Open Co-writing Session'), findsOneWidget);
@@ -185,12 +188,12 @@ void main() {
       addTearDown(() => tester.view.resetPhysicalSize());
 
       await tester.pumpWidget(createTestWidget());
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       final loadMoreBtn = find.text('Load More');
       expect(loadMoreBtn, findsOneWidget);
       await tester.tap(loadMoreBtn);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Stockholm Jazz Night'), findsOneWidget);
       expect(find.text('Open Co-writing Session'), findsOneWidget);
@@ -204,15 +207,15 @@ void main() {
       addTearDown(() => tester.view.resetPhysicalSize());
 
       await tester.pumpWidget(createTestWidget());
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       await tester.tap(find.byTooltip('Select Category'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       await tester.tap(find.descendant(
         of: find.byType(EventCategoryPickerSheet),
         matching: find.text('Live/Gigs'),
       ));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Stockholm Jazz Night'), findsOneWidget);
       expect(find.text('Open Co-writing Session'), findsNothing);
@@ -226,15 +229,15 @@ void main() {
       addTearDown(() => tester.view.resetPhysicalSize());
 
       await tester.pumpWidget(createTestWidget());
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       await tester.tap(find.byTooltip('Select Category'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       await tester.tap(find.descendant(
         of: find.byType(EventCategoryPickerSheet),
         matching: find.text('Sessions'),
       ));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Stockholm Jazz Night'), findsNothing);
       expect(find.text('Open Co-writing Session'), findsOneWidget);
@@ -248,15 +251,15 @@ void main() {
       addTearDown(() => tester.view.resetPhysicalSize());
 
       await tester.pumpWidget(createTestWidget());
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       await tester.tap(find.byTooltip('Select Category'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       await tester.tap(find.descendant(
         of: find.byType(EventCategoryPickerSheet),
         matching: find.text('Workshops'),
       ));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Stockholm Jazz Night'), findsNothing);
       expect(find.text('Open Co-writing Session'), findsNothing);
@@ -270,38 +273,38 @@ void main() {
       addTearDown(() => tester.view.resetPhysicalSize());
 
       await tester.pumpWidget(createTestWidget());
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Search title
       await tester.enterText(find.byType(TextField), 'jazz');
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       expect(find.text('Stockholm Jazz Night'), findsOneWidget);
       expect(find.text('Open Co-writing Session'), findsNothing);
 
       // Search organizer
       await tester.enterText(find.byType(TextField), 'songwriters');
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       expect(find.text('Open Co-writing Session'), findsOneWidget);
       expect(find.text('Stockholm Jazz Night'), findsNothing);
 
       // Search venue
       await tester.enterText(find.byType(TextField), 'nordic sound');
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       expect(find.text('Music Production Workshop'), findsOneWidget);
 
       // Search city
       await tester.enterText(find.byType(TextField), 'göteborg');
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       expect(find.text('Open Co-writing Session'), findsOneWidget);
 
       // Search genre
       await tester.enterText(find.byType(TextField), 'electronic');
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       expect(find.text('Music Production Workshop'), findsOneWidget);
 
       // Search full description keyword
       await tester.enterText(find.byType(TextField), 'spontaneous musical encounters');
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       expect(find.text('Stockholm Jazz Night'), findsOneWidget);
     });
 
@@ -311,18 +314,18 @@ void main() {
       addTearDown(() => tester.view.resetPhysicalSize());
 
       await tester.pumpWidget(createTestWidget());
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       await tester.tap(find.byTooltip('Select Category'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       await tester.tap(find.descendant(
         of: find.byType(EventCategoryPickerSheet),
         matching: find.text('Live/Gigs'),
       ));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       await tester.enterText(find.byType(TextField), 'workshop');
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('No events match your search.'), findsOneWidget);
       expect(find.text('Stockholm Jazz Night'), findsNothing);
@@ -334,17 +337,17 @@ void main() {
       addTearDown(() => tester.view.resetPhysicalSize());
 
       await tester.pumpWidget(createTestWidget());
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       await tester.enterText(find.byType(TextField), 'nonexistent query 123');
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('No events match your search.'), findsOneWidget);
       final clearBtn = find.text('Clear filters');
       expect(clearBtn, findsOneWidget);
 
       await tester.tap(clearBtn);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Stockholm Jazz Night'), findsOneWidget);
       expect(find.text('Open Co-writing Session'), findsOneWidget);
@@ -357,7 +360,7 @@ void main() {
       addTearDown(() => tester.view.resetPhysicalSize());
 
       await tester.pumpWidget(createTestWidget());
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // August 2026 for events 1 & 2
       expect(find.text('AUGUST 2026'), findsOneWidget);
@@ -365,7 +368,7 @@ void main() {
 
       // Load more to reveal event 3 in September
       await tester.tap(find.text('Load More'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('AUGUST 2026'), findsOneWidget);
       expect(find.text('SEPTEMBER 2026'), findsOneWidget);
@@ -377,7 +380,7 @@ void main() {
       addTearDown(() => tester.view.resetPhysicalSize());
 
       await tester.pumpWidget(createTestWidget(repository: EmptyPublicEventRepository()));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('No public events available yet.'), findsOneWidget);
       expect(find.text('Upcoming concerts, sessions and workshops will appear here.'), findsOneWidget);
@@ -390,16 +393,16 @@ void main() {
 
       final retryRepo = FailingThenSucceedingRepository(fixedRef);
       await tester.pumpWidget(createTestWidget(repository: retryRepo));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
-      expect(find.text('Could not load events.'), findsOneWidget);
+      expect(find.text('Could not fetch calendar events. Check connection and retry.'), findsOneWidget);
       final retryBtn = find.text('Retry');
       expect(retryBtn, findsOneWidget);
 
       await tester.tap(retryBtn);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
-      expect(find.text('Could not load events.'), findsNothing);
+      expect(find.text('Could not fetch calendar events. Check connection and retry.'), findsNothing);
       expect(find.text('Stockholm Jazz Night'), findsOneWidget);
     });
 
@@ -409,10 +412,10 @@ void main() {
       addTearDown(() => tester.view.resetPhysicalSize());
 
       await tester.pumpWidget(createTestWidget());
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       await tester.fling(find.byType(CustomScrollView), const Offset(0, 300), 1000);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Stockholm Jazz Night'), findsOneWidget);
       expect(find.text('Open Co-writing Session'), findsOneWidget);
@@ -424,10 +427,10 @@ void main() {
       addTearDown(() => tester.view.resetPhysicalSize());
 
       await tester.pumpWidget(createTestWidget());
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       await tester.tap(find.text('Stockholm Jazz Night'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('ABOUT THIS EVENT'), findsOneWidget);
       expect(find.text('Stockholm Jazz Collective'), findsOneWidget);
@@ -435,16 +438,18 @@ void main() {
       expect(find.text('150 SEK'), findsOneWidget);
     });
 
-    testWidgets('16. Zero Firebase service calls made by public calendar', (tester) async {
+    testWidgets('16. Calendar checks only membership permission and uses its supplied event repository', (tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() => tester.view.resetPhysicalSize());
 
       final spy = SpyingFirebaseService();
       await tester.pumpWidget(createTestWidget(spyService: spy));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
-      expect(spy.callCount, 0);
+      expect(spy.callCount, 1);
+      expect(spy.membershipReadCount, 1);
+      expect(spy.profileReadCount, 0);
     });
   });
 }

@@ -3477,10 +3477,11 @@ class GigMapPageState extends State<GigMapPage> with WidgetsBindingObserver, Rou
                                     } catch (_) {}
                                   }
 
-                                  audioUrl = await appState.firebaseService.uploadAudioSnippetAsync(
+                                  audioUrl = await appState.firebaseService.uploadMapAudioAsync(
                                     userId,
                                     audioBytes,
                                     audioPath,
+                                    bandId: appState.activeBandId,
                                   );
                                   if (audioUrl.isEmpty) {
                                     throw Exception('Audio upload returned an empty URL.');

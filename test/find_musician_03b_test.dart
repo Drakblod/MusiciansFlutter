@@ -1,3 +1,4 @@
+import 'support/bounded_ui_pump.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:firebase_core/firebase_core.dart' hide FirebaseService;
@@ -390,7 +391,7 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
 
       await tester.pumpWidget(createWidgetUnderTest(eventId: null));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.textContaining('EVENT 1'), findsNothing);
       expect(find.text('Name of Event'), findsNothing);
@@ -405,7 +406,7 @@ void main() {
 
       setupMultiEventOccurrences();
       await tester.pumpWidget(createWidgetUnderTest(eventId: 'event_occ_1'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.textContaining('EVENT 1'), findsWidgets);
       expect(find.textContaining('EVENT 2'), findsWidgets);
@@ -419,7 +420,7 @@ void main() {
 
       setupMultiEventOccurrences();
       await tester.pumpWidget(createWidgetUnderTest(eventId: 'event_occ_1'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('EVENT 1 - REHEARSAL: "Första rep. Sommarturné"'), findsWidgets);
       expect(find.text('EVENT 2 - REHEARSAL: "Andra rep. Sommarturné"'), findsWidgets);
@@ -433,7 +434,7 @@ void main() {
 
       setupMultiEventOccurrences();
       await tester.pumpWidget(createWidgetUnderTest(eventId: 'event_occ_1'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.textContaining('EVENT 1 ·'), findsNothing);
       expect(find.textContaining('EVENT 2 ·'), findsNothing);
@@ -446,7 +447,7 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
 
       await tester.pumpWidget(createWidgetUnderTest(eventId: null));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('SUBSTITUTE 1'), findsNothing);
       expect(find.text('Role / Instrument'), findsOneWidget);
@@ -459,13 +460,13 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
 
       await tester.pumpWidget(createWidgetUnderTest(eventId: null));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('SUBSTITUTE 1'), findsNothing);
 
       // Tap + Add Substitute
       await tester.tap(find.text('+ Add Substitute'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('SUBSTITUTE 1'), findsOneWidget);
       expect(find.text('SUBSTITUTE 2'), findsOneWidget);
@@ -478,10 +479,10 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
 
       await tester.pumpWidget(createWidgetUnderTest(eventId: null));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       await tester.tap(find.text('+ Add Substitute'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('SUBSTITUTE 1'), findsOneWidget);
       expect(find.text('SUBSTITUTE 2'), findsOneWidget);
@@ -490,7 +491,7 @@ void main() {
       final removeButtons = find.text('Remove Substitute');
       expect(removeButtons, findsNWidgets(2));
       await tester.tap(removeButtons.last);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Now only 1 slot remains: SUBSTITUTE 1 must be hidden again
       expect(find.textContaining('SUBSTITUTE 1 - "'), findsNothing);
@@ -505,14 +506,14 @@ void main() {
 
       setupMultiEventOccurrences();
       await tester.pumpWidget(createWidgetUnderTest(eventId: 'event_occ_1'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Initially Event 1 has 1 slot and Event 2 has 1 slot -> neither shows SUBSTITUTE 1
       expect(find.textContaining('SUBSTITUTE 1 - "'), findsNothing);
 
       // Tap + Add Substitute for Event 1
       await tester.tap(find.text('+ Add Substitute').first);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Now Event 1 has 2 slots (shows SUBSTITUTE 1 & SUBSTITUTE 2)
       // Event 2 has 1 slot (shows NO SUBSTITUTE number)
@@ -527,7 +528,7 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
 
       await tester.pumpWidget(createWidgetUnderTest(eventId: null));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       final favFinder = find.text('Favorites List');
       final searchAllFinder = find.text('Search All');
@@ -547,13 +548,13 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
 
       await tester.pumpWidget(createWidgetUnderTest(eventId: null));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Gurra'), findsNothing);
       expect(find.text('Alice Bass'), findsNothing);
 
       await tester.tap(find.text('Favorites List'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Gurra'), findsOneWidget);
       expect(find.text('Alice Bass'), findsOneWidget);
@@ -566,10 +567,10 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
 
       await tester.pumpWidget(createWidgetUnderTest(eventId: null));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       await tester.tap(find.text('Favorites List'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // The Favorites List panel itself contains NO search field until + Add Favorite(s) is tapped
       expect(find.widgetWithText(TextField, 'Search musicians to add as favorite...'), findsNothing);
@@ -582,10 +583,10 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
 
       await tester.pumpWidget(createWidgetUnderTest(eventId: null));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       await tester.tap(find.text('Favorites List'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Heading inside panel
       expect(find.text('Favorites List'), findsNWidgets(2)); // Button + Panel Heading
@@ -598,10 +599,10 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
 
       await tester.pumpWidget(createWidgetUnderTest(eventId: null));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       await tester.tap(find.text('Favorites List'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       final tileFinder = find.widgetWithText(CheckboxListTile, 'Gurra');
       expect(tileFinder, findsOneWidget);
@@ -619,17 +620,17 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
 
       await tester.pumpWidget(createWidgetUnderTest(eventId: null));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Open Favorites List
       await tester.tap(find.text('Favorites List'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Chosen Substitute'), findsNothing);
 
       // Tap Gurra
       await tester.tap(find.widgetWithText(CheckboxListTile, 'Gurra'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // List collapses
       expect(find.byType(CheckboxListTile), findsNothing);
@@ -651,16 +652,16 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
 
       await tester.pumpWidget(createWidgetUnderTest(eventId: null));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       await tester.tap(find.text('Favorites List'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       await tester.tap(find.widgetWithText(CheckboxListTile, 'Gurra'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Reopen Favorites List
       await tester.tap(find.text('Favorites List'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       final tile = tester.widget<CheckboxListTile>(find.widgetWithText(CheckboxListTile, 'Gurra'));
       expect(tile.value, isTrue);
@@ -676,20 +677,20 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
 
       await tester.pumpWidget(createWidgetUnderTest(eventId: null));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       await tester.tap(find.text('Favorites List'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       await tester.tap(find.widgetWithText(CheckboxListTile, 'Gurra'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Gurra'), findsOneWidget);
 
       // Reopen and select Alice
       await tester.tap(find.text('Favorites List'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       await tester.tap(find.widgetWithText(CheckboxListTile, 'Alice Bass'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Gurra replaced with Alice
       expect(find.text('Gurra'), findsNothing);
@@ -703,20 +704,20 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
 
       await tester.pumpWidget(createWidgetUnderTest(eventId: null));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       await tester.tap(find.text('Favorites List'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       await tester.tap(find.widgetWithText(CheckboxListTile, 'Gurra'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Chosen Substitute'), findsOneWidget);
 
       // Reopen and tap Gurra to uncheck
       await tester.tap(find.text('Favorites List'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       await tester.tap(find.widgetWithText(CheckboxListTile, 'Gurra'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Chosen Substitute'), findsNothing);
     });
@@ -728,26 +729,26 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
 
       await tester.pumpWidget(createWidgetUnderTest(eventId: null));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Add second slot
       await tester.tap(find.text('+ Add Substitute'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       final favButtons = find.text('Favorites List');
       expect(favButtons, findsNWidgets(2));
 
       // Choose Gurra for Slot 1
       await tester.tap(favButtons.first);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       await tester.tap(find.widgetWithText(CheckboxListTile, 'Gurra'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Choose Alice for Slot 2
       await tester.tap(find.text('Favorites List').last);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       await tester.tap(find.widgetWithText(CheckboxListTile, 'Alice Bass'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Both should be visible in their respective Chosen Substitute containers
       expect(find.text('Gurra'), findsOneWidget);
@@ -761,12 +762,12 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
 
       await tester.pumpWidget(createWidgetUnderTest(eventId: null));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       await tester.tap(find.text('Favorites List'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       await tester.tap(find.widgetWithText(CheckboxListTile, 'Gurra'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Assigned substitute'), findsNothing);
       expect(find.text('Revoke'), findsNothing);
@@ -780,10 +781,10 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
 
       await tester.pumpWidget(createWidgetUnderTest(eventId: null));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       await tester.tap(find.text('Favorites List'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('+ Add Favorite(s)'), findsOneWidget);
     });
@@ -800,14 +801,14 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
 
       await tester.pumpWidget(createWidgetUnderTest(eventId: null));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       await tester.tap(find.text('Favorites List'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Tap + Add Favorite(s)
       await tester.tap(find.text('+ Add Favorite(s)'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Search field appears
       final searchInput = find.widgetWithText(TextField, 'Search musicians to add as favorite...');
@@ -815,14 +816,14 @@ void main() {
 
       // Search for "New Global Musician"
       await tester.enterText(searchInput, 'New Global');
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('New Global Musician'), findsOneWidget);
       expect(find.text('Add'), findsOneWidget);
 
       // Tap Add
       await tester.tap(find.text('Add'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // 28. Persisted via canonical API
       expect(mockService.favoriteUserIds, contains('musician_new'));
@@ -838,7 +839,7 @@ void main() {
 
       // 31. Duplicate prevention: search again for "New Global"
       await tester.enterText(searchInput, 'New Global');
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       expect(find.text('No matching musicians to add.'), findsOneWidget);
     });
 
@@ -853,10 +854,10 @@ void main() {
       mockService.favoriteUserIds.add('musician_bob');
 
       await tester.pumpWidget(createWidgetUnderTest(eventId: null));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       await tester.tap(find.text('Favorites List'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.widgetWithText(CheckboxListTile, 'Bob Drums'), findsOneWidget);
     });
@@ -868,12 +869,12 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
 
       await tester.pumpWidget(createWidgetUnderTest(eventId: null));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       await tester.tap(find.text('Substitute').last);
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('New Member').last);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
+      await tester.tap(find.text('New Band Member').last);
+      await pumpUiTransitions(tester);
 
       final favFinder = find.text('Favorites List');
       final searchAllFinder = find.text('Search All');
@@ -894,22 +895,22 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
 
       await tester.pumpWidget(createWidgetUnderTest(eventId: null));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       await tester.tap(find.text('Substitute').last);
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('New Member').last);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
+      await tester.tap(find.text('New Band Member').last);
+      await pumpUiTransitions(tester);
 
       await tester.tap(find.text('Favorites List'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.widgetWithText(CheckboxListTile, 'Gurra'), findsOneWidget);
       expect(find.widgetWithText(CheckboxListTile, 'Alice Bass'), findsOneWidget);
 
       // Select Gurra
       await tester.tap(find.widgetWithText(CheckboxListTile, 'Gurra'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       final tileGurra = tester.widget<CheckboxListTile>(find.widgetWithText(CheckboxListTile, 'Gurra'));
       expect(tileGurra.value, isTrue);
@@ -922,26 +923,26 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
 
       await tester.pumpWidget(createWidgetUnderTest(eventId: null));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       await tester.tap(find.text('Substitute').last);
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('New Member').last);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
+      await tester.tap(find.text('New Band Member').last);
+      await pumpUiTransitions(tester);
 
       await tester.tap(find.text('Favorites List'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('+ Add Favorite(s)'), findsOneWidget);
       await tester.tap(find.text('+ Add Favorite(s)'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       final searchInput = find.widgetWithText(TextField, 'Search musicians to add as favorite...');
       await tester.enterText(searchInput, 'Bob Drums');
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       await tester.tap(find.text('Add'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(mockService.favoriteUserIds, contains('musician_bob'));
       expect(find.widgetWithText(CheckboxListTile, 'Bob Drums'), findsOneWidget);
@@ -954,25 +955,25 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
 
       await tester.pumpWidget(createWidgetUnderTest(eventId: null));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Open in Substitute mode
       await tester.tap(find.text('Favorites List'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       expect(find.byType(CheckboxListTile), findsNWidgets(2));
 
       // Switch to New Member mode
       await tester.tap(find.text('Substitute').last);
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('New Member').last);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
+      await tester.tap(find.text('New Band Member').last);
+      await pumpUiTransitions(tester);
       expect(find.byType(CheckboxListTile), findsNothing);
 
       // Switch back to Substitute mode
-      await tester.tap(find.text('New Member').last);
-      await tester.pumpAndSettle();
+      await tester.tap(find.text('New Band Member').last);
+      await pumpUiTransitions(tester);
       await tester.tap(find.text('Substitute').last);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       expect(find.byType(CheckboxListTile), findsNWidgets(2));
     });
 
@@ -983,22 +984,23 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
 
       await tester.pumpWidget(createWidgetUnderTest(eventId: null));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Select Event Type
       await tester.tap(find.text('Select Event Type'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       await tester.tap(find.text('Rehearsal').last);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Switch to New Member mode
       await tester.tap(find.text('Substitute').last);
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('New Member').last);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
+      await tester.tap(find.text('New Band Member').last);
+      await pumpUiTransitions(tester);
 
-      await tester.tap(find.text('PUBLISH NEW MEMBER SEARCH'));
-      await tester.pumpAndSettle();
+      confirmRequestLocations(tester);
+      await tester.tap(find.text('PUBLISH NEW BAND MEMBER SEARCH'));
+      await pumpUiTransitions(tester);
 
       expect(mockService.publishCalls, equals(1));
       expect(mockService.savedBatchRequests.length, equals(1));
@@ -1012,23 +1014,24 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
 
       await tester.pumpWidget(createWidgetUnderTest(eventId: null));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Select Event Type
       await tester.tap(find.text('Select Event Type'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       await tester.tap(find.text('Rehearsal').last);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Select Gurra as favorite
       await tester.tap(find.text('Favorites List'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       await tester.tap(find.widgetWithText(CheckboxListTile, 'Gurra'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Publish
+      confirmRequestLocations(tester);
       await tester.tap(find.text('PUBLISH SUBSTITUTE REQUESTS (1)'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(mockService.publishCalls, equals(1));
       expect(mockService.savedBatchRequests.length, equals(1));
@@ -1075,18 +1078,18 @@ void main() {
       mockService.eventSubRequests['event_1'] = [assignedSlot];
 
       await tester.pumpWidget(createWidgetUnderTest(eventId: 'event_1', initialRequest: assignedSlot));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Assigned substitute'), findsOneWidget);
       expect(find.text('Assigned: Gurra'), findsOneWidget);
       expect(find.text('Revoke'), findsOneWidget);
 
       await tester.tap(find.text('Revoke'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       expect(find.text('Revoke Assignment?'), findsOneWidget);
 
       await tester.tap(find.text('Revoke').last);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(mockService.revokeCalls, equals(1));
     });
@@ -1098,7 +1101,7 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
 
       await tester.pumpWidget(createWidgetUnderTest(eventId: null));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(tester.takeException(), isNull);
     });
@@ -1125,11 +1128,11 @@ void main() {
       );
 
       await tester.pumpWidget(createWidgetUnderTest(eventId: 'event_standalone'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Edit Location
-      await tester.enterText(find.widgetWithText(TextField, 'Enter location'), 'Altered Location For Sub');
-      await tester.pumpAndSettle();
+      await tester.enterText(find.widgetWithText(TextFormField, 'Location / Venue'), 'Altered Location For Sub');
+      await pumpUiTransitions(tester);
 
       // Original event in mockService must NOT be modified
       expect(mockService.events['event_standalone']!.location, equals('Stockholm'));
@@ -1144,14 +1147,14 @@ void main() {
 
       // A: 1 unpublished slot
       await tester.pumpWidget(createWidgetUnderTest(eventId: null));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Draft'), findsNothing);
       expect(find.text('[Draft]'), findsNothing);
 
       // B: 2 unpublished slots
       await tester.tap(find.text('+ Add Substitute'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Draft'), findsNothing);
       expect(find.text('[Draft]'), findsNothing);
@@ -1159,7 +1162,7 @@ void main() {
       // C: Multiple events with slots
       setupMultiEventOccurrences();
       await tester.pumpWidget(createWidgetUnderTest(eventId: 'event_occ_1'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Draft'), findsNothing);
       expect(find.text('[Draft]'), findsNothing);
@@ -1178,27 +1181,27 @@ void main() {
       );
 
       await tester.pumpWidget(createWidgetUnderTest(eventId: null));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // 1. Open Favorites List
       await tester.tap(find.text('Favorites List'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // 2. Open + Add Favorite(s)
       await tester.tap(find.text('+ Add Favorite(s)'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // 3. Find non-favorite profile
       final searchInput = find.widgetWithText(TextField, 'Search musicians to add as favorite...');
       expect(searchInput, findsOneWidget);
       await tester.enterText(searchInput, 'New Global');
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       expect(find.text('New Global Musician'), findsOneWidget);
 
       // 4. Add profile using canonical API
       // 5. Wait for write to complete
       await tester.tap(find.text('Add'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // 6. Refresh/rebuild
       // 7. Confirm new Favorite remains visible in list
@@ -1206,11 +1209,11 @@ void main() {
 
       // 8. Close and reopen panel
       await tester.tap(find.text('Favorites List').first); // Close
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       expect(find.byType(CheckboxListTile), findsNothing);
 
       await tester.tap(find.text('Favorites List').first); // Reopen
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // 9. Confirm new Favorite remains visible
       expect(find.widgetWithText(CheckboxListTile, 'New Global Musician'), findsOneWidget);
@@ -1226,18 +1229,18 @@ void main() {
 
       // 12. Confirm duplicates remain impossible
       await tester.enterText(searchInput, 'New Global');
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       expect(find.text('No matching musicians to add.'), findsOneWidget);
 
       // 13. Write failure handling: simulated network error does NOT falsely add locally
       mockService.shouldFailToggleFavorite = true;
 
       await tester.enterText(searchInput, 'Failing');
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       expect(find.text('Failing Musician'), findsOneWidget);
 
       await tester.tap(find.text('Add'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Error snackbar shown
       expect(find.textContaining('Failed to add favorite'), findsOneWidget);
@@ -1256,15 +1259,15 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
 
       await tester.pumpWidget(createWidgetUnderTest(eventId: null));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // --- SUBSTITUTE MODE ---
       await tester.tap(find.text('Favorites List'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // One Chosen Substitute per slot: selecting collapses list and displays Chosen Substitute
       await tester.tap(find.widgetWithText(CheckboxListTile, 'Gurra'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.byType(CheckboxListTile), findsNothing);
       expect(find.text('Chosen Substitute'), findsOneWidget);
@@ -1276,19 +1279,19 @@ void main() {
 
       // Reopening preserves checked state; clearing removes Chosen Substitute
       await tester.tap(find.text('Favorites List'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       final tile = tester.widget<CheckboxListTile>(find.widgetWithText(CheckboxListTile, 'Gurra'));
       expect(tile.value, isTrue);
 
       await tester.tap(find.widgetWithText(CheckboxListTile, 'Gurra'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       expect(find.text('Chosen Substitute'), findsNothing);
 
       // --- NEW MEMBER MODE ---
       await tester.tap(find.text('Substitute').last);
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('New Member').last);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
+      await tester.tap(find.text('New Band Member').last);
+      await pumpUiTransitions(tester);
 
       // Favorites List on left, Search All on right
       final favFinder = find.text('Favorites List');
@@ -1297,15 +1300,15 @@ void main() {
 
       // Opens real list with canonical favorites
       await tester.tap(favFinder);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       expect(find.widgetWithText(CheckboxListTile, 'Gurra'), findsOneWidget);
       expect(find.widgetWithText(CheckboxListTile, 'Alice Bass'), findsOneWidget);
 
       // Multi-select contracts preserved
       await tester.tap(find.widgetWithText(CheckboxListTile, 'Gurra'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       await tester.tap(find.widgetWithText(CheckboxListTile, 'Alice Bass'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(tester.widget<CheckboxListTile>(find.widgetWithText(CheckboxListTile, 'Gurra')).value, isTrue);
       expect(tester.widget<CheckboxListTile>(find.widgetWithText(CheckboxListTile, 'Alice Bass')).value, isTrue);
@@ -1318,16 +1321,16 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
 
       await tester.pumpWidget(createWidgetUnderTest(eventId: null));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Open Favorites List
       await tester.tap(find.text('Favorites List'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Tap 'Select All'
       expect(find.text('Select All'), findsOneWidget);
       await tester.tap(find.text('Select All'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Both favorites are checked
       expect(tester.widget<CheckboxListTile>(find.widgetWithText(CheckboxListTile, 'Gurra')).value, isTrue);
@@ -1341,7 +1344,7 @@ void main() {
 
       // Individual favorites remain removable: uncheck Gurra
       await tester.tap(find.widgetWithText(CheckboxListTile, 'Gurra'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Now exactly one Favorite remains -> displays 'Chosen Substitute'
       expect(tester.widget<CheckboxListTile>(find.widgetWithText(CheckboxListTile, 'Gurra')).value, isFalse);
@@ -1352,7 +1355,7 @@ void main() {
 
       // Uncheck Alice Bass -> neither displays
       await tester.tap(find.widgetWithText(CheckboxListTile, 'Alice Bass'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       expect(find.text('Chosen Substitute'), findsNothing);
       expect(find.text('Chosen Substitutes'), findsNothing);
     });
@@ -1365,30 +1368,31 @@ void main() {
 
       // A: When Paid Gig is true, Details field is visible
       await tester.pumpWidget(createWidgetUnderTest(eventId: null));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
-      expect(find.text('Details'), findsOneWidget);
+      expect(find.text('Payment Details'), findsOneWidget);
       await tester.enterText(
         find.widgetWithText(TextField, 'e.g. Travel expenses included, payment after invoice, hotel included'),
         'Travel expenses included, hotel paid',
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Select Event Type
       await tester.tap(find.text('Select Event Type'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       await tester.tap(find.text('Rehearsal').last);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Select Gurra as favorite
       await tester.tap(find.text('Favorites List'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       await tester.tap(find.widgetWithText(CheckboxListTile, 'Gurra'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Publish
+      confirmRequestLocations(tester);
       await tester.tap(find.text('PUBLISH SUBSTITUTE REQUESTS (1)'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(mockService.savedBatchRequests, isNotEmpty);
       final publishedReq = mockService.savedBatchRequests.first;
@@ -1402,9 +1406,9 @@ void main() {
 
       // Reopen with initialRequest containing payDetails
       await tester.pumpWidget(createWidgetUnderTest(eventId: null, initialRequest: fromJsonReq));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
-      expect(find.text('Details'), findsOneWidget);
+      expect(find.text('Payment Details'), findsOneWidget);
       expect(find.text('Travel expenses included, hotel paid'), findsOneWidget);
     });
 
@@ -1447,21 +1451,21 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Open bottom sheet
       await tester.tap(find.text('The Rockers'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Verifies:
       // 1. Description label, NOT About this event or About this Request
-      expect(find.text('Description (optional)'), findsOneWidget);
+      expect(find.text('Description / Details'), findsOneWidget);
       expect(find.text('About this event'), findsNothing);
       expect(find.text('About this Request'), findsNothing);
       expect(find.text('Need a shredder for weekend show'), findsOneWidget);
 
       // 2. Paid Gig Details
-      expect(find.text('Details'), findsOneWidget);
+      expect(find.text('Payment Details'), findsOneWidget);
       expect(find.text('Hotel included, invoice payment'), findsOneWidget);
     });
 
@@ -1511,10 +1515,10 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       await tester.tap(find.text('Touring Band'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Displays both occurrence event names in their respective position sections
       expect(find.text('Tour Stop Oslo'), findsOneWidget);
@@ -1546,11 +1550,11 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
 
       await tester.pumpWidget(createWidgetUnderTest(eventId: null));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Add second slot
       await tester.tap(find.text('+ Add Substitute'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('SUBSTITUTE 1'), findsOneWidget);
       expect(find.text('SUBSTITUTE 2'), findsOneWidget);
@@ -1579,7 +1583,7 @@ void main() {
       // Events section is available
       expect(find.text('+ Add Event'), findsOneWidget);
       await tester.tap(find.text('+ Add Event'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Add Event'), findsWidgets);
     });

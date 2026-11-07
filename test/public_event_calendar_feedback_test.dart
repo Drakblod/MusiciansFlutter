@@ -1,3 +1,4 @@
+import 'support/bounded_ui_pump.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:firebase_core/firebase_core.dart' hide FirebaseService;
@@ -160,7 +161,7 @@ void main() {
       addTearDown(() => tester.view.resetPhysicalSize());
 
       await tester.pumpWidget(createTestWidget());
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       final searchTextField = tester.widget<TextField>(find.byType(TextField));
       expect(searchTextField.decoration?.hintText, 'Search events...');
@@ -172,11 +173,11 @@ void main() {
       addTearDown(() => tester.view.resetPhysicalSize());
 
       await tester.pumpWidget(createTestWidget());
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Tap search field
       await tester.tap(find.byType(TextField));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Verify category picker sheet is opened
       expect(find.byType(EventCategoryPickerSheet), findsOneWidget);
@@ -189,11 +190,11 @@ void main() {
       addTearDown(() => tester.view.resetPhysicalSize());
 
       await tester.pumpWidget(createTestWidget());
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Tap to open sheet
       await tester.tap(find.byType(TextField));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Verify required options exist
       expect(find.text('Live/Gigs'), findsWidgets);
@@ -211,7 +212,7 @@ void main() {
       addTearDown(() => tester.view.resetPhysicalSize());
 
       await tester.pumpWidget(createTestWidget());
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Initially Stockholm Jazz Night and Open Co-writing Session are visible
       expect(find.text('Stockholm Jazz Night'), findsOneWidget);
@@ -219,14 +220,14 @@ void main() {
 
       // Tap search field to open category picker
       await tester.tap(find.byType(TextField));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Select 'Live/Gigs' from sheet
       await tester.tap(find.descendant(
         of: find.byType(EventCategoryPickerSheet),
         matching: find.text('Live/Gigs'),
       ));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Only Live/Gig should be visible
       expect(find.text('Stockholm Jazz Night'), findsOneWidget);
@@ -238,12 +239,12 @@ void main() {
 
       // Now filter by Workshops using the category tune button
       await tester.tap(find.byTooltip('Select Category'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       await tester.tap(find.descendant(
         of: find.byType(EventCategoryPickerSheet),
         matching: find.text('Workshops'),
       ));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Stockholm Jazz Night'), findsNothing);
       expect(find.text('Open Co-writing Session'), findsNothing);
@@ -251,12 +252,12 @@ void main() {
 
       // Now filter by Sessions using the category tune button
       await tester.tap(find.byTooltip('Select Category'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       await tester.tap(find.descendant(
         of: find.byType(EventCategoryPickerSheet),
         matching: find.text('Sessions'),
       ));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Stockholm Jazz Night'), findsNothing);
       expect(find.text('Open Co-writing Session'), findsOneWidget);
@@ -269,22 +270,22 @@ void main() {
       addTearDown(() => tester.view.resetPhysicalSize());
 
       await tester.pumpWidget(createTestWidget());
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Filter by Live/Gigs
       await tester.tap(find.byType(TextField));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       await tester.tap(find.descendant(
         of: find.byType(EventCategoryPickerSheet),
         matching: find.text('Live/Gigs'),
       ));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Open Co-writing Session'), findsNothing);
 
       // Clear filter via "Clear filter" button
       await tester.tap(find.text('Clear filter'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Events restored
       expect(find.text('Stockholm Jazz Night'), findsOneWidget);
@@ -298,11 +299,11 @@ void main() {
       addTearDown(() => tester.view.resetPhysicalSize());
 
       await tester.pumpWidget(createTestWidget());
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Enter search text directly
       await tester.enterText(find.byType(TextField), 'West Coast');
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Only Open Co-writing Session is organized by West Coast Songwriters
       expect(find.text('Open Co-writing Session'), findsOneWidget);
@@ -310,7 +311,7 @@ void main() {
 
       // Clear text
       await tester.tap(find.byTooltip('Clear search text'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Stockholm Jazz Night'), findsOneWidget);
       expect(find.text('Open Co-writing Session'), findsOneWidget);
@@ -322,7 +323,7 @@ void main() {
       addTearDown(() => tester.view.resetPhysicalSize());
 
       await tester.pumpWidget(createTestWidget());
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Check venue text color
       final venueText = tester.widget<Text>(find.text('Jazzbaren, Stockholm'));
@@ -330,16 +331,16 @@ void main() {
       expect(venueText.style?.color != AppTheme.textMuted, isTrue);
 
       // Check time text color
-      final timeText = tester.widget<Text>(find.text('20:00 – 23:00'));
-      expect(timeText.style?.color, const Color(0xFFD4CEEB));
+      final timeText = tester.widget<Text>(find.textContaining('20:00 – 23:00'));
+      expect(timeText.style?.color, AppTheme.primaryAccent);
       expect(timeText.style?.color != AppTheme.textMuted, isTrue);
 
       // Check icons colors
       final locationIcon = tester.widget<Icon>(find.byIcon(Icons.location_on_outlined).first);
       expect(locationIcon.color, const Color(0xFFA899E6));
 
-      final timeIcon = tester.widget<Icon>(find.byIcon(Icons.access_time_rounded).first);
-      expect(timeIcon.color, const Color(0xFFA899E6));
+      final timeIcon = tester.widget<Icon>(find.byIcon(Icons.calendar_today_outlined).first);
+      expect(timeIcon.color, AppTheme.primaryAccent);
     });
 
     testWidgets('8. Cards with images render with upright A4 poster proportions (portrait format) beside event text and BoxFit.cover', (tester) async {
@@ -348,7 +349,7 @@ void main() {
       addTearDown(() => tester.view.resetPhysicalSize());
 
       await tester.pumpWidget(createTestWidget());
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Mock events have demo artwork resolved on the cards
       final cardFinder = find.ancestor(
@@ -378,7 +379,7 @@ void main() {
       addTearDown(() => tester.view.resetPhysicalSize());
 
       await tester.pumpWidget(createTestWidget(repository: SingleNoImageEventRepository()));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Acoustic Solo Night'), findsOneWidget);
 
@@ -396,7 +397,7 @@ void main() {
       addTearDown(() => tester.view.resetPhysicalSize());
 
       await tester.pumpWidget(createTestWidget());
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(tester.takeException(), isNull);
       expect(find.text('EVENT CALENDAR'), findsOneWidget);
@@ -408,26 +409,26 @@ void main() {
       addTearDown(() => tester.view.resetPhysicalSize());
 
       await tester.pumpWidget(createTestWidget());
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // 1. Tap Search events...
       await tester.tap(find.byType(TextField));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       expect(find.byType(EventCategoryPickerSheet), findsOneWidget);
 
       // 2. Dismiss sheet (tap close button)
       await tester.tap(find.byTooltip('Close'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       expect(find.byType(EventCategoryPickerSheet), findsNothing);
 
       // Repeated tap on TextField must NOT open the sheet again (prevents infinite loops)
       await tester.tap(find.byType(TextField));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       expect(find.byType(EventCategoryPickerSheet), findsNothing);
 
       // 3. Enter text in the search field
       await tester.enterText(find.byType(TextField), 'jazz');
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // 4. Verify filtered results
       expect(find.text('Stockholm Jazz Night'), findsOneWidget);
@@ -436,7 +437,7 @@ void main() {
 
       // Repeated taps while text is present do NOT open sheet
       await tester.tap(find.byType(TextField));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       expect(find.byType(EventCategoryPickerSheet), findsNothing);
     });
 
@@ -446,7 +447,7 @@ void main() {
       addTearDown(() => tester.view.resetPhysicalSize());
 
       await tester.pumpWidget(createTestWidget());
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Complete category list must not appear as horizontal chips on the screen initially
       expect(find.text('All'), findsNothing);
@@ -462,7 +463,7 @@ void main() {
       addTearDown(() => tester.view.resetPhysicalSize());
 
       await tester.pumpWidget(createTestWidget());
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       final constrainedBoxFinder = find.descendant(
         of: find.byType(PublicEventCalendarScreen),
@@ -480,7 +481,7 @@ void main() {
 
       // Using SingleCreatorEventRepository where createdBy == 'test_user_1'
       await tester.pumpWidget(createTestWidget(repository: SingleCreatorEventRepository()));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       final editButton = find.byTooltip('Edit Event');
       expect(editButton, findsOneWidget);
@@ -488,7 +489,7 @@ void main() {
 
       // Tap edit pencil
       await tester.tap(editButton);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Verify CreatePublicEventScreen opened in editing mode with prefilled event details
       expect(find.text('EDIT EVENT'), findsOneWidget);
@@ -502,7 +503,7 @@ void main() {
 
       // Default mock events have no matching createdBy
       await tester.pumpWidget(createTestWidget());
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.byTooltip('Edit Event'), findsNothing);
       expect(find.byIcon(Icons.edit_outlined), findsNothing);
@@ -514,7 +515,7 @@ void main() {
       addTearDown(() => tester.view.resetPhysicalSize());
 
       await tester.pumpWidget(createTestWidget());
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Verify "Read More" button exists on the cards
       final readMoreFinder = find.text('Read More');
@@ -522,7 +523,7 @@ void main() {
 
       // Tap "Read More" on the first card
       await tester.tap(readMoreFinder.first);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Verify PublicEventDetailsScreen opened
       expect(find.byType(PublicEventDetailsScreen), findsOneWidget);
@@ -561,7 +562,7 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Verify A4 poster pill and image are displayed
       expect(find.text('A4 Poster'), findsOneWidget);
@@ -576,7 +577,7 @@ void main() {
 
       // Tap on poster to open interactive full-screen zoom modal
       await tester.tap(find.byTooltip('Tap to view / zoom poster'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       tester.takeException();
 
       // Verify InteractiveViewer is opened in the dialog
@@ -585,7 +586,7 @@ void main() {
 
       // Close the modal
       await tester.tap(find.byIcon(Icons.close_rounded));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       expect(find.byType(InteractiveViewer), findsNothing);
     });
 
@@ -603,7 +604,7 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Verify upright A4 format indicator in upload container
       expect(find.text('Standing A4 Format'), findsOneWidget);
@@ -612,7 +613,7 @@ void main() {
       // Enter an image URL to test A4 Poster Preview and Fit controls
       final imageField = find.widgetWithText(TextFormField, 'https://example.com/poster.jpg');
       await tester.enterText(imageField, 'https://example.com/gig_poster.jpg');
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Verify A4 Poster Preview indicator and Fit controls are present
       expect(find.text('A4 Poster Preview'), findsOneWidget);
@@ -621,7 +622,7 @@ void main() {
 
       // Toggle fit mode
       await tester.tap(find.text('Contain (Full Image)'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
     });
   });
 }

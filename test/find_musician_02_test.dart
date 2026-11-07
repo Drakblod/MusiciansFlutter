@@ -1,3 +1,4 @@
+import 'support/bounded_ui_pump.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:firebase_core/firebase_core.dart' hide FirebaseService;
@@ -101,6 +102,10 @@ class MockFirebaseService extends Fake implements FirebaseService {
   Future<Band?> getBandInfoAsync(String bandId) async {
     return bandInfo;
   }
+
+  @override
+  Future<Map<String, String>> getUserBandsAsync(String userId) async =>
+      bandInfo?.id == null ? {} : {bandInfo!.id!: bandInfo!.name!};
 
   @override
   Future<List<SubRequest>> getUserSubRequestFeedAsync() async {
@@ -371,6 +376,7 @@ void main() {
       appState.mockService.bandInfo = Band(
         id: 'band_mats',
         name: 'Mats Band',
+        membersBand: {'organizer_1': BandMember(userId: 'organizer_1', role: 'Leader')},
         location: 'Stockholm, Sweden',
         genres: ['Rock'],
       );
@@ -426,7 +432,7 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('FIND MUSICIAN/VOCALIST'), findsOneWidget);
       expect(find.text('Event Type'), findsWidgets);
@@ -445,7 +451,7 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Mats Band'), findsOneWidget);
       expect(find.textContaining('Staffing for Mats'), findsNothing);
@@ -463,7 +469,7 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Date & Time'), findsWidgets);
       expect(find.text('Gig/Event Details'), findsNothing);
@@ -481,7 +487,7 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.textContaining('substitute position(s) filled'), findsNothing);
       expect(find.textContaining('draft position(s) ready to publish'), findsNothing);
@@ -499,7 +505,7 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.textContaining('EVENT 1 - '), findsWidgets);
       expect(find.textContaining('EVENT 2 - '), findsWidgets);
@@ -519,7 +525,7 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Under 03B, single-slot events omit SUBSTITUTE 1
       expect(find.text('SUBSTITUTE 1'), findsNothing);
@@ -542,10 +548,10 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       await tester.tap(find.text('+ Add Substitute').first);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Event 1 now has 2 slots (shows SUBSTITUTE 1 and SUBSTITUTE 2 with event name), Event 2 still has 1 slot (no header)
       expect(find.textContaining('SUBSTITUTE 1 - "'), findsOneWidget);
@@ -564,9 +570,9 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
-      expect(find.text('Description (optional)'), findsWidgets);
+      expect(find.text('Description / Details'), findsWidgets);
       expect(find.textContaining('Describe what the substitute will do...'), findsNothing);
     });
 
@@ -582,7 +588,7 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Paid Gig'), findsOneWidget);
       expect(find.text('Amount'), findsOneWidget);
@@ -601,7 +607,7 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('PUBLISH MULTIPLE REQUEST'), findsOneWidget);
     });
@@ -622,10 +628,11 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
+      confirmRequestLocations(tester);
       await tester.tap(find.text('PUBLISH MULTIPLE REQUEST'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(appState.mockService.savedBatchRequests.length, 2);
       final req1 = appState.mockService.savedBatchRequests[0];
@@ -650,6 +657,7 @@ void main() {
       appState = MockAppStateForFindMusicianTest();
       appState.testCurrentUserId = 'organizer_1';
       appState.testActiveBandId = 'band_1';
+      appState.mockService.bandInfo = Band(id: 'band_1', name: 'Favorites Band', membersBand: {'organizer_1': BandMember(userId: 'organizer_1', role: 'Leader')});
 
       final fav1 = UserProfile(
         userId: 'fav_guitarist',
@@ -681,10 +689,10 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       await tester.tap(find.text('Favorites List').first);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Favorites List'), findsWidgets);
       expect(find.text('+ Add Favorite(s)'), findsOneWidget);
@@ -705,17 +713,17 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       await tester.tap(find.text('Favorites List').first);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Chosen Substitute'), findsNothing);
 
       // Select first favorite
       final firstTile = find.byType(CheckboxListTile).first;
       await tester.tap(firstTile);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // List collapsed and Chosen Substitute displayed
       expect(find.byType(CheckboxListTile), findsNothing);
@@ -723,9 +731,9 @@ void main() {
 
       // Reopen and uncheck
       await tester.tap(find.text('Favorites List').first);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       await tester.tap(find.byType(CheckboxListTile).first);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Chosen Substitute'), findsNothing);
     });
@@ -743,25 +751,25 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       await tester.tap(find.text('Favorites List').first);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       await tester.tap(find.text('+ Add Favorite(s)'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       final searchInput = find.widgetWithText(TextField, 'Search musicians to add as favorite...');
       expect(searchInput, findsOneWidget);
 
       await tester.enterText(searchInput, 'Bob');
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Bob Rocker'), findsOneWidget);
       expect(find.text('Add'), findsOneWidget);
 
       await tester.tap(find.text('Add'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(appState.mockService.favoriteUserIds.contains('candidate_guitarist'), isTrue);
       expect(find.widgetWithText(CheckboxListTile, 'Bob Rocker'), findsOneWidget);
@@ -826,10 +834,10 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Nordic Stars'), findsOneWidget);
-      expect(find.text('Paid · 1.500,00 SEK'), findsOneWidget);
+      expect(find.textContaining('Paid · 1,500 SEK'), findsOneWidget);
       expect(find.text('2 events · 2 positions'), findsOneWidget);
     });
 
@@ -842,17 +850,17 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       await tester.tap(find.text('Nordic Stars'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Role / Instrument'), findsOneWidget);
       expect(find.text('Event #1'), findsOneWidget);
       expect(find.text('Event #2'), findsOneWidget);
       expect(find.text('Electric Guitar'), findsOneWidget);
       expect(find.text('Bass'), findsOneWidget);
-      expect(find.text('Apply'), findsNWidgets(2));
+      expect(find.descendant(of: find.byType(BottomSheet), matching: find.text('Apply')), findsNWidgets(2));
     });
 
     testWidgets('26. Exact integer minor unit monetary serialization, rejection/fallback of malformed or missing pay amount', (tester) async {
@@ -900,6 +908,10 @@ void main() {
     });
 
     testWidgets('27. Resolves same occurrences in correct order when opened from parent event, event 1, or event 2', (tester) async {
+      appState.testCurrentUserId = 'organizer_1';
+      appState.testActiveBandId = 'band_tour_1';
+      appState.mockService.bandInfo = Band(id: 'band_tour_1', name: 'Tour Band', membersBand: {'organizer_1': BandMember(userId: 'organizer_1', role: 'Leader')});
+
       final parentEv = BandEvent(
         id: 'ev_tour_parent',
         title: 'Summer Tour',
@@ -1056,7 +1068,7 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Group Band'), findsOneWidget);
     });
@@ -1097,7 +1109,7 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Solo Jazz Trio'), findsOneWidget);
       expect(find.text('Multiple Request'), findsNothing);
@@ -1107,6 +1119,10 @@ void main() {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() => tester.view.resetPhysicalSize());
+
+      appState.testCurrentUserId = 'organizer_1';
+      appState.testActiveBandId = 'band_clean_tour';
+      appState.mockService.bandInfo = Band(id: 'band_clean_tour', name: 'Tour Band', membersBand: {'organizer_1': BandMember(userId: 'organizer_1', role: 'Leader')});
 
       final parentEvent = BandEvent(
         id: 'ev_clean_parent',
@@ -1171,13 +1187,14 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       final publishBtn = find.text('PUBLISH MULTIPLE REQUEST');
       expect(publishBtn, findsOneWidget);
       await tester.ensureVisible(publishBtn);
+      confirmRequestLocations(tester);
       await tester.tap(publishBtn);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(appState.mockService.savedBatchRequests.isNotEmpty, isTrue);
       final derivedGroupId = appState.mockService.savedBatchRequests.first.requestGroupId;
@@ -1188,6 +1205,10 @@ void main() {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() => tester.view.resetPhysicalSize());
+
+      appState.testCurrentUserId = 'organizer_1';
+      appState.testActiveBandId = 'band_nordic';
+      appState.mockService.bandInfo = Band(id: 'band_nordic', name: 'Tour Band', membersBand: {'organizer_1': BandMember(userId: 'organizer_1', role: 'Leader')});
 
       final parentEvent = BandEvent(
         id: 'ev_header_only_parent',
@@ -1250,7 +1271,7 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Should render child events as Event 1, Event 2 without dot separators
       expect(find.textContaining('EVENT 1 - '), findsWidgets);

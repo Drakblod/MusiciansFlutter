@@ -1,3 +1,4 @@
+import 'support/bounded_ui_pump.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:firebase_core/firebase_core.dart' hide FirebaseService;
@@ -15,6 +16,18 @@ import 'package:musicians_flutter/models/band_event.dart';
 import 'package:provider/provider.dart';
 
 class MockFirebaseService extends FirebaseService {
+  @override
+  Future<List<SubRequest>> getUserSubRequestsAsync(String uid) async => [];
+
+  @override
+  bool get isLoggedIn => true;
+  @override
+  String? get currentUserId => 'test_user';
+  @override
+  Future<void> initializePushNotifications() async {}
+  @override
+  Future<Map<String, int>> getButtonClicksAsync(String uid) async => {};
+
   @override
   Future<List<String>> getFavoriteUserIdsAsync() async {
     return ['fav1'];
@@ -46,7 +59,7 @@ class MockFirebaseService extends FirebaseService {
 
   @override
   Future<Map<String, String>> getUserBandsAsync(String userId) async {
-    return {};
+    return {'instrument_band':'Instrument Band'};
   }
 
   @override
@@ -66,7 +79,7 @@ class MockFirebaseService extends FirebaseService {
 
   @override
   Future<Band?> getBandInfoAsync(String bandId) async {
-    return null;
+    return Band(id: bandId, name: 'Instrument Band', membersBand: {'test_user': BandMember(userId: 'test_user', role: 'Leader', status: 'active')});
   }
 
   @override
@@ -123,12 +136,12 @@ void main() {
             child: const MaterialApp(home: CollabsLandingScreen()),
           ),
         );
-        await tester.pumpAndSettle();
+        await pumpUiTransitions(tester);
 
         final favListButton = find.text('FAVORITES LIST');
         expect(favListButton, findsOneWidget);
         await tester.tap(favListButton);
-        await tester.pumpAndSettle();
+        await pumpUiTransitions(tester);
 
         final tiles = tester.widgetList<CheckboxListTile>(
           find.byType(CheckboxListTile),
@@ -149,7 +162,7 @@ void main() {
           child: const MaterialApp(home: CollabsLandingScreen()),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       final textFinder = find.text('Tap to add area of collaboration...');
       expect(textFinder, findsOneWidget);
@@ -190,7 +203,7 @@ void main() {
           child: const MaterialApp(home: RegisterScreen()),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(
         find.text(
@@ -209,11 +222,11 @@ void main() {
             child: const MaterialApp(home: FindGigsScreen()),
           ),
         );
-        await tester.pumpAndSettle();
+        await pumpUiTransitions(tester);
 
-        expect(find.text('Substitute Requests'), findsOneWidget);
-        expect(find.text('New Member Requests'), findsOneWidget);
-        expect(find.text('Saved'), findsOneWidget);
+        expect(find.text('1. Substitute Requests'), findsOneWidget);
+        expect(find.text('2. New Member Requests'), findsOneWidget);
+        expect(find.text('4. Saved'), findsOneWidget);
         expect(find.text('Upcoming'), findsNothing);
         expect(find.text('Upcoming (booked)'), findsNothing);
       },

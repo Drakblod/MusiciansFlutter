@@ -21,6 +21,7 @@ class LocationPickerField extends StatefulWidget {
   final String? hintText;
   final bool cityOnly;
   final bool cityPrecisionOnly;
+  final bool wrapCitySuggestion;
   final CanonicalLocation? initialLocation;
   final ValueChanged<CanonicalLocation>? onLocationChanged;
   final FormFieldValidator<String>? validator;
@@ -34,6 +35,7 @@ class LocationPickerField extends StatefulWidget {
     this.hintText,
     this.cityOnly = false,
     this.cityPrecisionOnly = false,
+    this.wrapCitySuggestion = false,
     this.initialLocation,
     this.onLocationChanged,
     this.validator,
@@ -422,12 +424,15 @@ class LocationPickerFieldState extends State<LocationPickerField> {
                 children: [
                   const Icon(Icons.check_circle_outline, size: 12, color: AppTheme.secondaryAccent),
                   const SizedBox(width: 4),
-                  Text(
+                  Flexible(
+                    flex: widget.wrapCitySuggestion ? 1 : 0,
+                    child: Text(
                     'Use approximate ${knownCity.locationLabel} centroid (${knownCity.latitude!.toStringAsFixed(2)}, ${knownCity.longitude!.toStringAsFixed(2)})',
                     style: GoogleFonts.inter(
                       fontSize: 11,
                       color: AppTheme.secondaryAccent,
                       decoration: TextDecoration.underline,
+                    ),
                     ),
                   ),
                 ],

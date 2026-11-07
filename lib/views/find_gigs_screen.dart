@@ -734,7 +734,7 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                       ),
                       const SizedBox(height: 10),
 
-                      ...group.requests.map((req) {
+                      ...group.requests.expand((req) {
                         final reqId = req.subRequestId ?? req.id ?? '';
                         final isReqCreator = isCreatorOfSubRequest(req, currentUserId);
                         final bandAdminStatus = (req.bandId != null)
@@ -748,7 +748,11 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                             (req.responses.containsKey(currentUserId) || _appliedGigIds.contains(reqId));
                         final isAssigned = req.status == 'assigned' || (req.assignedUserId != null && req.assignedUserId!.trim().isNotEmpty);
 
-                        return Container(
+                        final occurrenceKey = req.eventId ?? req.date ?? '';
+                        final occurrences = group.requests.map((r) => r.eventId ?? r.date ?? '').toSet().toList();
+                        final firstInOccurrence = identical(req, group.requests.firstWhere(
+                          (r) => (r.eventId ?? r.date ?? '') == occurrenceKey));
+                        final positionCard = Container(
                           margin: const EdgeInsets.only(bottom: 10),
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
@@ -934,6 +938,20 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                             ],
                           ),
                         );
+                        return <Widget>[
+                          if (group.eventCount > 1 && firstInOccurrence) ...[
+                            Text('Event #${occurrences.indexOf(occurrenceKey) + 1}',
+                              style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+                            if (req.eventTitle?.trim().isNotEmpty == true) ...[
+                              Text('Event name', style: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 12)),
+                              Text(req.eventTitle!.trim(), style: GoogleFonts.inter(color: Colors.white, fontSize: 14)),
+                            ],
+                            if (formatSubRequestDateTime(date: req.date, startTime: req.startTime, endTime: req.endTime) case final String dateTime)
+                              Text(dateTime, style: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 12)),
+                            const SizedBox(height: 8),
+                          ],
+                          positionCard,
+                        ];
                       }),
                       const SizedBox(height: 16),
 
@@ -1331,6 +1349,12 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                   ),
                   const SizedBox(height: 4),
 
+                  if (group.isMultiple) ...[
+                    Text('${group.eventCount} events · ${group.totalPositions} positions',
+                      style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary)),
+                    const SizedBox(height: 4),
+                  ],
+
                   // 2. Request Type + Role / Instrument
                   Text(
                     '${presentation.requestType} · ${presentation.roleInstrument}',
@@ -1399,7 +1423,9 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                   const SizedBox(height: 12),
 
                   // 6. Contextual Action
-                  Row(
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
                     children: [
                       if (isCreator || isAdmin)
                         RequestManagementGate(hideWhenDenied:true,requestId:primaryReqId,bandId:group.requests.first.bandId,expectedCreatorId:group.requests.first.creatorUserId ?? group.requests.first.userId,builder:(_) => ElevatedButton(
@@ -1504,7 +1530,6 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                           ),
                         ),
                       if (hasDirectInvite) ...[
-                        const SizedBox(width: 8),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                           decoration: BoxDecoration(

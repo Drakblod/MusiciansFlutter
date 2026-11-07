@@ -1,3 +1,4 @@
+import 'support/bounded_ui_pump.dart';
 // ignore_for_file: depend_on_referenced_packages
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -544,7 +545,7 @@ void main() {
       ]);
 
       await tester.pumpWidget(buildTestApp(appState));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(appState.hasUnreadActivity('find_gigs'), isTrue);
       expect(appState.hasUnreadActivity('collabs'), isTrue);
@@ -553,7 +554,7 @@ void main() {
       final findGigsCard = find.text('Find Gigs');
       expect(findGigsCard, findsOneWidget);
       await tester.tap(findGigsCard);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Successfully reached Find Gigs Screen
       expect(find.text('Find Gigs Screen'), findsOneWidget);
@@ -561,7 +562,7 @@ void main() {
       // Navigate back to Home
       final navigator = tester.state<NavigatorState>(find.byType(Navigator));
       navigator.pop();
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Find Gigs dot is cleared immediately; collabs remains unread
       expect(appState.hasUnreadActivity('find_gigs'), isFalse);
@@ -595,7 +596,7 @@ void main() {
       ]);
 
       await tester.pumpWidget(buildTestApp(appState));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(appState.hasUnreadActivity('collabs'), isTrue);
       expect(appState.hasUnreadActivity('find_musicians'), isTrue);
@@ -604,7 +605,7 @@ void main() {
       final collabsCard = find.text('Collabs');
       expect(collabsCard, findsOneWidget);
       await tester.tap(collabsCard);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Successfully reached Collabs Screen
       expect(find.text('Collabs Screen'), findsOneWidget);
@@ -612,7 +613,7 @@ void main() {
       // Navigate back
       final navigator = tester.state<NavigatorState>(find.byType(Navigator));
       navigator.pop();
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Collabs dot is cleared; find_musicians dot remains
       expect(appState.hasUnreadActivity('collabs'), isFalse);
@@ -646,7 +647,7 @@ void main() {
       ]);
 
       await tester.pumpWidget(buildTestApp(appState));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(appState.hasUnreadActivity('find_musicians'), isTrue);
       expect(appState.hasUnreadActivity('band_room'), isTrue);
@@ -655,7 +656,7 @@ void main() {
       final findMusiciansCard = find.byIcon(Icons.people_outline_rounded);
       expect(findMusiciansCard, findsOneWidget);
       await tester.tap(findMusiciansCard);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Successfully reached Find Sub Screen
       expect(find.text('Find Sub Screen'), findsOneWidget);
@@ -663,7 +664,7 @@ void main() {
       // Navigate back
       final navigator = tester.state<NavigatorState>(find.byType(Navigator));
       navigator.pop();
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // find_musicians dot is cleared; band_room dot remains
       expect(appState.hasUnreadActivity('find_musicians'), isFalse);
@@ -697,7 +698,7 @@ void main() {
       ]);
 
       await tester.pumpWidget(buildTestApp(appState));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(appState.hasUnreadActivity('band_room'), isTrue);
       expect(appState.hasUnreadActivity('find_gigs'), isTrue);
@@ -706,7 +707,7 @@ void main() {
       final bandRoomCard = find.text('Band Room');
       expect(bandRoomCard, findsOneWidget);
       await tester.tap(bandRoomCard);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Successfully reached Band Room Screen
       expect(find.text('Band Room Screen'), findsOneWidget);
@@ -714,7 +715,7 @@ void main() {
       // Navigate back
       final navigator = tester.state<NavigatorState>(find.byType(Navigator));
       navigator.pop();
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // band_room dot is cleared; find_gigs dot remains
       expect(appState.hasUnreadActivity('band_room'), isFalse);
@@ -742,14 +743,14 @@ void main() {
       ]);
 
       await tester.pumpWidget(buildTestApp(appState));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(appState.hasUnreadActivity('band_room'), isTrue);
 
       // Tap Band Room
       final bandRoomCard = find.text('Band Room');
       await tester.tap(bandRoomCard);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Did NOT navigate to Band Room Screen
       expect(find.text('Band Room Screen'), findsNothing);
@@ -784,14 +785,14 @@ void main() {
       ]);
 
       await tester.pumpWidget(buildTestApp(appState));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(appState.hasUnreadActivity('band_room'), isTrue);
 
       // Tap Band Room
       final bandRoomCard = find.text('Band Room');
       await tester.tap(bandRoomCard);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Band selector sheet is shown
       expect(find.text('SELECT A BAND'), findsOneWidget);
@@ -799,7 +800,7 @@ void main() {
       // Dismiss the bottom sheet without selecting
       final navigator = tester.state<NavigatorState>(find.byType(Navigator));
       navigator.pop();
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Did NOT navigate to Band Room Screen
       expect(find.text('Band Room Screen'), findsNothing);

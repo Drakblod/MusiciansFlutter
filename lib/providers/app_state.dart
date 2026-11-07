@@ -621,7 +621,9 @@ class AppState extends ChangeNotifier {
     if (uid == null || uid.isEmpty) return const {};
     final Map<String, String> bands;
     try {
-      bands = await firebaseService.getUserBandsAsync(uid);
+      // Convert synchronous service failures into Future errors so listeners
+      // are never notified while a membership gate is mounting.
+      bands = await Future.sync(() => firebaseService.getUserBandsAsync(uid));
     } catch (_) {
       if (currentUserId == uid && generation == _bandReadGeneration) {
         _authorizedBands = {};

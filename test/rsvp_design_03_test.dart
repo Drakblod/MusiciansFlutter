@@ -1,3 +1,4 @@
+import 'support/bounded_ui_pump.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:firebase_core/firebase_core.dart' hide FirebaseService;
@@ -20,6 +21,28 @@ import 'package:musicians_flutter/views/manage_events_screen.dart';
 import 'package:musicians_flutter/utils/date_parser.dart';
 
 class MockRsvpDesignFirebaseService extends FirebaseService {
+  @override
+  Future<Band?> getPublicBandProfileAsync(String bandId) => getBandInfoAsync(bandId);
+  @override
+  Future<UserProfile?> getPublicUserProfileAsync(String uid) => getUserProfileAsync(uid);
+
+  @override
+  bool get isLoggedIn => true;
+  String authUid = 'creator_user_1';
+  @override
+  String? get currentUserId => authUid;
+  @override
+  Future<void> initializePushNotifications() async {}
+  @override
+  Future<Map<String, int>> getButtonClicksAsync(String userId) async => {};
+
+  @override
+  Future<BandEvent?> getManagerBandEventOnceAsync(String bandId, String eventId) async => await subscribeToBandEvent(bandId, eventId).first;
+  @override
+  Future<List<BandEvent>> getManagerBandEventsListAsync(String bandId) => getBandEventsListAsync(bandId);
+  @override
+  Stream<BandEvent?> subscribeToManagerBandEvent(String bandId, String eventId) => subscribeToBandEvent(bandId, eventId);
+
   BandEvent? mockEvent;
   bool mockCanManage = true;
   List<BandMember> mockMembers = [];
@@ -40,7 +63,7 @@ class MockRsvpDesignFirebaseService extends FirebaseService {
 
   @override
   Future<String?> getUserBandRoleAsync(String bandId, String userId) async {
-    return 'Leader';
+    return mockCanManage ? 'Leader' : 'Member';
   }
 
   @override
@@ -52,6 +75,7 @@ class MockRsvpDesignFirebaseService extends FirebaseService {
       id: bandId,
       name: 'Test Band',
       userRole: 'Leader',
+      membersBand: {for (final member in mockMembers) member.userId!: member, authUid: BandMember(userId: authUid, role: mockCanManage ? 'Leader' : 'Member')},
     );
   }
 
@@ -156,7 +180,9 @@ class MockRsvpDesignAppState extends AppState {
   final String _testUserId;
 
   MockRsvpDesignAppState(this.mockFirebase, {String testUserId = 'creator_user_1'})
-      : _testUserId = testUserId;
+      : _testUserId = testUserId {
+    mockFirebase.authUid = testUserId;
+  }
 
   @override
   FirebaseService get firebaseService => mockFirebase;
@@ -260,12 +286,12 @@ void main() {
         expect(addBtn, findsOneWidget);
         await tester.ensureVisible(addBtn);
         await tester.tap(addBtn);
-        await tester.pumpAndSettle();
+        await pumpUiTransitions(tester);
 
         final submitBtn = find.widgetWithText(ElevatedButton, 'Add Event');
         await tester.ensureVisible(submitBtn);
         await tester.tap(submitBtn);
-        await tester.pumpAndSettle();
+        await pumpUiTransitions(tester);
       }
 
       // First attached item is EVENT 1 (not EVENT 2)
@@ -444,25 +470,25 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
 
       // Switch to Events tab
-      await tester.tap(find.text('Events'));
-      await tester.pumpAndSettle();
+      await tester.tap(find.text('3. Events'));
+      await pumpUiTransitions(tester);
 
       // 8. Verify exact tabs in ManageEventsScreen
-      expect(find.text('NEW EVENTS (Needs RSVP)'), findsOneWidget);
-      expect(find.text('UPCOMING (Finalized)'), findsOneWidget);
-      expect(find.text('PAST EVENTS'), findsOneWidget);
+      expect(find.text('1. NEW EVENTS (Needs RSVP)'), findsOneWidget);
+      expect(find.text('2. UPCOMING (Finalized)'), findsOneWidget);
+      expect(find.text('3. PAST EVENTS'), findsOneWidget);
 
       // Verify unfinalized event on new events tab
-      expect(find.text('"New Unfinalized Event"'), findsOneWidget);
+      expect(find.text('”New Unfinalized Event”'), findsOneWidget);
 
       // Switch to Upcoming tab
-      await tester.tap(find.text('UPCOMING (Finalized)'));
-      await tester.pumpAndSettle();
+      await tester.tap(find.text('2. UPCOMING (Finalized)'));
+      await pumpUiTransitions(tester);
 
       // 9. Tap on Finalized event card -> navigates to EventResultsPage
-      expect(find.text('"Finalized Upcoming Event"'), findsOneWidget);
-      await tester.tap(find.text('"Finalized Upcoming Event"'));
-      await tester.pumpAndSettle();
+      expect(find.text('”Finalized Upcoming Event”'), findsOneWidget);
+      await tester.tap(find.text('”Finalized Upcoming Event”'));
+      await pumpUiTransitions(tester);
       expect(find.byType(EventResultsPage), findsOneWidget);
     });
 
@@ -541,7 +567,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
 
       // Top overview card shows title & date
-      expect(find.text('"Autumn Gala"'), findsOneWidget);
+      expect(find.text('”Autumn Gala”'), findsOneWidget);
       expect(find.text('Finalized'), findsOneWidget);
 
       // 10. Horizontal pills: YES (1), NO (1), UNCERTAIN (1), NO ANSWER (1), SUBSTITUTES (1)
@@ -557,7 +583,7 @@ void main() {
 
       // Tap YES (1) pill -> Alice expands
       await tester.tap(find.text('YES (1)'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       expect(find.text('Alice Vocal'), findsOneWidget);
       // 12. Only primary skill displayed (Vocals), secondary skills (Guitar, Piano) NOT shown
       expect(find.text('Vocals'), findsOneWidget);
@@ -566,19 +592,19 @@ void main() {
 
       // Tap YES (1) pill again -> collapses
       await tester.tap(find.text('YES (1)'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       expect(find.text('Alice Vocal'), findsNothing);
 
       // Tap SUBSTITUTES (1) -> Sam Sub expands with replacement
       await tester.tap(find.text('SUBSTITUTES (1)'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       expect(find.text('Sam Sub'), findsOneWidget);
       expect(find.text('Bass'), findsOneWidget);
       expect(find.text('Replacing Bob Original'), findsOneWidget);
 
       // Tap UNCERTAIN (1) -> Charlie Drum expands with reason
       await tester.tap(find.text('UNCERTAIN (1)'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       expect(find.text('Charlie Drum'), findsOneWidget);
       expect(find.text('"Waiting for childcare"'), findsOneWidget);
     });
@@ -644,7 +670,7 @@ void main() {
 
       // No assertion errors or overflow errors thrown
       expect(tester.takeException(), isNull);
-      expect(find.text('"Narrow Screen Gala"'), findsOneWidget);
+      expect(find.text('”Narrow Screen Gala”'), findsOneWidget);
       expect(find.textContaining('EVENT 1'), findsOneWidget);
     });
 
@@ -676,7 +702,7 @@ void main() {
       expect(formatMainEventDateRange(diffYearsStart, diffYearsEnd).contains(RegExp(r'(Mon|Tue|Wed|Thu|Fri|Sat|Sun|:\d\d)')), isFalse);
     });
 
-    testWidgets('16. EventResultsPage standalone Event Description card directly below Main Event Name, with empty fallback', (tester) async {
+    testWidgets('16. EventResultsPage standalone Event Description card directly below Main Event Name, and safely omits empty descriptions', (tester) async {
       tester.view.physicalSize = const Size(1200, 3000);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() {
@@ -722,10 +748,11 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
+      await pumpUiTransitions(tester);
       expect(find.text('Event Description'), findsOneWidget);
       expect(find.text('Complete festival details and soundcheck guidelines.'), findsOneWidget);
 
-      // Case B: Without description (empty) -> shows fallback
+      // Case B: Empty description is omitted without losing the event or results.
       final eventNoDesc = BandEvent(
         id: 'ev_no_desc',
         title: 'Festival Deluxe No Desc',
@@ -742,7 +769,6 @@ void main() {
         isLocked: true,
       );
       mockService.mockEvent = eventNoDesc;
-
       await tester.pumpWidget(
         ChangeNotifierProvider<AppState>.value(
           value: appState,
@@ -759,11 +785,14 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
-      expect(find.text('Event Description'), findsOneWidget);
-      expect(find.text('No event description provided.'), findsOneWidget);
+      await pumpUiTransitions(tester);
+      expect(find.text('Event Description'), findsNothing);
+      expect(find.text('No event description provided.'), findsNothing);
+      expect(find.text('”Festival Deluxe No Desc”'), findsOneWidget);
+      expect(find.text('ATTENDANCE RESPONSES'), findsOneWidget);
     });
 
-    testWidgets('17. ManageEventsScreen displays upper Part Event badge and restricts edit action to Event Creator', (tester) async {
+    testWidgets('17. ManageEventsScreen displays upper Part Event badge and restricts edit action to current Leader/Admin authority', (tester) async {
       tester.view.physicalSize = const Size(1200, 3000);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() {
@@ -801,7 +830,8 @@ void main() {
         BandMember(userId: 'actual_creator_456', role: 'Member'),
       ];
 
-      // Non-creator view
+      // Non-manager view, independent of creator identity.
+      mockService.mockCanManage = false;
       final appStateNonCreator = MockRsvpDesignAppState(mockService, testUserId: 'non_creator_admin');
       await tester.pumpWidget(
         ChangeNotifierProvider<AppState>.value(
@@ -822,16 +852,11 @@ void main() {
 
       // Popup menu for non-creator should NOT have 'Edit Event'
       final popupBtn = find.byIcon(Icons.more_vert);
-      expect(popupBtn, findsOneWidget);
-      await tester.tap(popupBtn);
-      await tester.pumpAndSettle();
+      expect(popupBtn, findsNothing);
       expect(find.text('Edit Event'), findsNothing);
 
-      // Dismiss popup
-      await tester.tapAt(const Offset(10, 10));
-      await tester.pumpAndSettle();
-
-      // Creator view
+      // Current manager view.
+      mockService.mockCanManage = true;
       final appStateCreator = MockRsvpDesignAppState(mockService, testUserId: 'actual_creator_456');
       await tester.pumpWidget(
         ChangeNotifierProvider<AppState>.value(
@@ -848,7 +873,7 @@ void main() {
       final popupBtnCreator = find.byIcon(Icons.more_vert);
       expect(popupBtnCreator, findsOneWidget);
       await tester.tap(popupBtnCreator);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       expect(find.text('Edit Event'), findsOneWidget);
     });
   });

@@ -175,7 +175,7 @@ class FirebasePublicEventRepository implements PublicEventRepository {
 
   FirebasePublicEventRepository({
     required this.firebaseService,
-    this.includeMock = true,
+    this.includeMock = kDebugMode,
     this.referenceNow,
   });
 
@@ -192,7 +192,7 @@ class FirebasePublicEventRepository implements PublicEventRepository {
     }
 
     // 2. Fetch mock events if enabled
-    if (includeMock) {
+    if (kDebugMode && includeMock) {
       try {
         final mockRepo = MockPublicEventRepository(referenceNow: referenceNow);
         final mockEvents = await mockRepo.getUpcomingEvents();

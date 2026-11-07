@@ -60,17 +60,19 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> with SingleTick
     if (identical(_observedAppState, appState)) {
       return;
     }
+    final replacedState = _observedAppState != null;
     _observedAppState?.removeListener(_onSessionChanged);
     _observedAppState = appState;
     _observedUid = appState.currentUserId;
     _observedBandId = appState.activeBandId;
     appState.addListener(_onSessionChanged);
+    if (replacedState) _onSessionChanged(force: true);
   }
 
-  void _onSessionChanged() {
+  void _onSessionChanged({bool force = false}) {
     final appState = _observedAppState;
     if (appState == null ||
-        (appState.currentUserId == _observedUid &&
+        (!force && appState.currentUserId == _observedUid &&
             appState.activeBandId == _observedBandId)) {
       return;
     }
@@ -855,8 +857,10 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> with SingleTick
               // Bottom Action Bar: Only RSVPs and Event Details buttons
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
+                child: Wrap(
+                  alignment: WrapAlignment.end,
+                  spacing: 8,
+                  runSpacing: 8,
                   children: [
                     if (isAuthorized) TextButton.icon(
                       style: TextButton.styleFrom(
@@ -885,7 +889,6 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> with SingleTick
                         }
                       },
                     ),
-                    const SizedBox(width: 8),
                     ElevatedButton(
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppTheme.primaryAccent,

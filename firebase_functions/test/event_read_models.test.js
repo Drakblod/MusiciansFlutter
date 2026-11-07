@@ -11,11 +11,16 @@ describe('SANITIZED-EVENT-READ-MODEL-01 explicit projection policy',()=>{
     const declaration=source.match(/const databaseTriggerRegion = ([\s\S]*?);/);
     assert(declaration,'missing Database trigger region declaration');
     const region=env=>vm.runInNewContext(`${declaration[0]} databaseTriggerRegion;`,
-      {process:{env}});
+      {process:{env},require: name => {
+        assert.equal(name,'./deployment_region');
+        return {databaseRegion:()=>require('../deployment_region').databaseRegion(env)};
+      }});
     assert.equal(region({}),'europe-west1');
     assert.equal(region({FIREBASE_DATABASE_EMULATOR_HOST:'127.0.0.1:9000',
       FIREBASE_EMULATOR_HUB:'127.0.0.1:4400'}),'europe-west1');
-    assert.equal(region({FUNCTIONS_EMULATOR:'true'}),'us-central1');
+    assert.equal(region({FUNCTIONS_EMULATOR:'true'}),'europe-west1');
+    assert.equal(region({GCLOUD_PROJECT:'demo-musicians-test',FUNCTIONS_EMULATOR:'true',
+      FIREBASE_EMULATOR_HUB:'127.0.0.1:4400'}),'us-central1');
     assert.match(source,/exports\.mutateBandEvent = onCall\(\{region:'europe-west1'\}/);
     for(const name of ['onBandEventReadModelWritten','onLegacyBandCalendarEventWritten']){
       assert.equal(source.split(`exports.${name} =`).length-1,1,`duplicate ${name} export`);

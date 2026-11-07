@@ -1,3 +1,5 @@
+import 'package:musicians_flutter/models/band.dart';
+import 'package:musicians_flutter/models/band_event.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -17,6 +19,21 @@ import 'package:musicians_flutter/widgets/animated_tap_detector.dart';
 import 'package:musicians_flutter/controllers/global_create_event_launcher.dart';
 
 class MockGlobalEventFirebaseService extends FirebaseService {
+  @override
+  bool get isLoggedIn => true;
+  @override
+  String? get currentUserId => 'user_123';
+  @override
+  Future<void> initializePushNotifications() async {}
+  @override
+  Future<Map<String, int>> getButtonClicksAsync(String uid) async => {};
+
+  @override
+  Future<UserProfile?> getUserProfileAsync([String? uid]) async => UserProfile(userId: uid, displayName: 'Test Musician');
+  @override
+  Future<Band?> getBandInfoAsync(String id) async => bandsToReturn.containsKey(id) ? Band(id:id, name:bandsToReturn[id], membersBand: {'user_123': BandMember(userId:'user_123',role:rolesToReturn[id])}) : null;
+  @override
+  Stream<List<BandEvent>> subscribeToBandEvents(String id) => Stream.value([]);
   Map<String, String> bandsToReturn = {};
   Map<String, String> rolesToReturn = {};
   bool throwOnBands = false;
@@ -149,6 +166,10 @@ void main() {
       await tester.pumpWidget(createTestApp(appState: appState));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
+
+      // Measure the launch action separately from authenticated AppState bootstrap.
+      appState.mockFirebase.getUserBandsCalls = 0;
+      appState.mockFirebase.getUserBandRoleCalls = 0;
 
       unawaited(GlobalCreateEventLauncher.showLauncherSheet(
         tester.element(find.byType(HomeScreen)),
@@ -304,6 +325,8 @@ void main() {
       addTearDown(() => tester.view.resetPhysicalSize());
 
       final appState = MockAppStateForGlobalEventTest();
+      appState.mockFirebase.bandsToReturn = {'b1': 'Test Band'};
+      await appState.refreshBandMemberships();
       appState.selectBand('b1', 'Test Band');
       appState.mockFirebase.rolesToReturn = {'b1': 'Leader'};
 

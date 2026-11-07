@@ -1,8 +1,19 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    match /{allPaths=**} {
-      allow read, write: if request.auth != null;
+    // UID ownership is immutable in the path. These media are public by design.
+    match /publicMedia/{kind}/{uid}/{path=**} {
+      allow read: if kind in ['profilePictures', 'profileAudio', 'marketplaceImages', 'publicEventImages'];
+      allow write: if request.auth != null && request.auth.uid == uid
+        && kind in ['profilePictures', 'profileAudio', 'marketplaceImages', 'publicEventImages'];
     }
+    // Legacy published images remain readable, but their paths cannot prove
+    // ownership. No client may change or delete them.
+    match /profilePictures/{path=**} { allow read: if true; }
+    match /marketplaceImages/{path=**} { allow read: if true; }
+    match /publicEventImages/{path=**} { allow read: if true; }
+    // Band files, private Map drafts and old mixed-use audio are server-only.
+    // The authenticated media endpoint checks current canonical membership.
+    match /{path=**} { allow read, write: if false; }
   }
 }

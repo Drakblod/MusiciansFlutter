@@ -1,3 +1,4 @@
+import 'support/bounded_ui_pump.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -105,6 +106,8 @@ class MockSettingsAppState extends AppState {
 
   @override
   String? get activeBandId => _mockActiveBandId;
+  @override
+  void selectBand(String bandId, String bandName) { _mockActiveBandId = bandId; notifyListeners(); }
 
   @override
   UserProfile? get currentUserProfile => _mockUserProfile;
@@ -114,6 +117,7 @@ class MockSettingsAppState extends AppState {
 }
 
 Widget createSettingsTestWidget(Widget child, MockSettingsAppState appState) {
+  if (child is EditBandInfoScreen) appState.selectBand(child.band.id!, child.band.name!);
   return ChangeNotifierProvider<AppState>.value(
     value: appState,
     child: MaterialApp(
@@ -158,9 +162,9 @@ void main() {
       expect(band.canUserEdit(null), isFalse);
     });
 
-    test('canUserEdit respects band userRole fallback', () {
+    test('canUserEdit rejects a role cache without canonical membership', () {
       final leaderBand = Band(id: 'b1', name: 'Rockers', userRole: 'Leader');
-      expect(leaderBand.canUserEdit('any_id'), isTrue);
+      expect(leaderBand.canUserEdit('any_id'), isFalse);
 
       final memberBand = Band(id: 'b1', name: 'Rockers', userRole: 'Member');
       expect(memberBand.canUserEdit('any_id'), isFalse);
@@ -181,6 +185,7 @@ void main() {
       mockService.bandToReturn = Band(
         id: 'band_1',
         name: 'The Rockers',
+        membersBand: {'user_leader': BandMember(userId: 'user_leader', role: 'Leader')},
         userRole: 'Leader',
       );
       final appState = MockSettingsAppState(mockService, currentUserId: 'user_leader');
@@ -192,11 +197,11 @@ void main() {
         ),
         appState,
       ));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Tap settings gear icon to open menu
       await tester.tap(find.byIcon(Icons.settings_outlined));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       final editProfileFinder = find.text('Edit Profile');
       final editBandFinder = find.text('Edit Band');
@@ -214,7 +219,7 @@ void main() {
 
       // Tap Edit Band to prompt band selection
       await tester.tap(editBandFinder);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Verify prompt appears
       expect(find.text('SELECT BAND TO EDIT'), findsOneWidget);
@@ -223,7 +228,7 @@ void main() {
 
       // Select 'The Rockers'
       await tester.tap(find.text('The Rockers'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Verify EditBandInfoScreen opened
       expect(find.byType(EditBandInfoScreen), findsOneWidget);
@@ -251,10 +256,10 @@ void main() {
         ),
         appState,
       ));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       await tester.tap(find.text('Go to Edit Band'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.byType(EditBandInfoScreen), findsOneWidget);
       expect(find.text('Direct Route Band'), findsWidgets);
@@ -304,14 +309,14 @@ void main() {
         ),
         appState,
       ));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       await tester.tap(find.text('Open Dialog'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Tap on the user's name text in the row
       await tester.tap(find.text('Alice Bassist'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(mockService.addedMembers.length, 1);
       expect(mockService.addedMembers.first['userId'], 'u_candidate');
@@ -362,14 +367,14 @@ void main() {
         ),
         appState,
       ));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       await tester.tap(find.text('Open Dialog'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Tap on the + icon directly
       await tester.tap(find.byIcon(Icons.add_circle));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(mockService.addedMembers.length, 1);
       expect(mockService.addedMembers.first['userId'], 'u_drummer');
@@ -416,10 +421,10 @@ void main() {
         ),
         appState,
       ));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       await tester.tap(find.text('Open Dialog'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Double tap rapidly before completer finishes
       await tester.tap(find.text('Gary Guitar'));
@@ -428,7 +433,7 @@ void main() {
 
       // Complete async addition
       mockService.addMemberCompleter!.complete();
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(mockService.addedMembers.length, 1, reason: 'Member must not be added multiple times on rapid taps');
     });
@@ -447,7 +452,7 @@ void main() {
       final appState = MockSettingsAppState(mockService);
 
       await tester.pumpWidget(createSettingsTestWidget(const CreateBandScreen(), appState));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       final labelFinder = find.textContaining('Map View Location');
       final helperFinder = find.textContaining(expectedHelperText);
@@ -466,11 +471,11 @@ void main() {
 
       // Tap helper box to open dialog and verify context-specific copy is displayed
       await tester.tap(helperFinder);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       expect(find.text('Got it'), findsOneWidget);
       expect(find.textContaining(expectedHelperText), findsWidgets);
       await tester.tap(find.text('Got it'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
     });
 
     testWidgets('Map View explanatory text appears in EditBandInfoScreen directly beneath correct field', (tester) async {
@@ -483,7 +488,7 @@ void main() {
       final band = Band(id: 'b1', name: 'Test Band');
 
       await tester.pumpWidget(createSettingsTestWidget(EditBandInfoScreen(band: band), appState));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       final labelFinder = find.textContaining('Map View Location');
       final helperFinder = find.textContaining(expectedHelperText);
@@ -502,11 +507,11 @@ void main() {
 
       // Tap helper box to open dialog and verify context-specific copy is displayed
       await tester.tap(helperFinder);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       expect(find.text('Got it'), findsOneWidget);
       expect(find.textContaining(expectedHelperText), findsWidgets);
       await tester.tap(find.text('Got it'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
     });
   });
 
@@ -537,7 +542,7 @@ void main() {
       );
 
       await tester.pumpWidget(createSettingsTestWidget(EditBandInfoScreen(band: band), appState));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('BAND MEMBERS'), findsOneWidget);
       expect(find.text('Boss Leader'), findsOneWidget);
@@ -564,18 +569,19 @@ void main() {
       final band = Band(
         id: 'band_edit_1',
         name: 'The Rockers',
+        membersBand: {'user_leader': BandMember(userId: 'user_leader', role: 'Leader')},
         userRole: 'Leader',
       );
 
       await tester.pumpWidget(createSettingsTestWidget(EditBandInfoScreen(band: band), appState));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Find the remove member icon for Gary Guitar
       final removeIconFinder = find.byIcon(Icons.person_remove_outlined);
       expect(removeIconFinder, findsOneWidget);
 
       await tester.tap(removeIconFinder);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Verify confirmation dialog
       expect(find.text('Remove Member'), findsOneWidget);
@@ -583,7 +589,7 @@ void main() {
 
       // Confirm removal
       await tester.tap(find.widgetWithText(ElevatedButton, 'Remove'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Verify API was called
       expect(mockService.removedMembers.length, 1);
@@ -614,15 +620,16 @@ void main() {
       final band = Band(
         id: 'band_edit_1',
         name: 'The Rockers',
+        membersBand: {'user_leader': BandMember(userId: 'user_leader', role: 'Leader')},
         userRole: 'Leader',
       );
 
       await tester.pumpWidget(createSettingsTestWidget(EditBandInfoScreen(band: band), appState));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Tap 'Add Band Member'
       await tester.tap(find.text('Add Band Member').first);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Verify dialog is open
       expect(find.text('Add Band Member'), findsNWidgets(2));
@@ -630,7 +637,7 @@ void main() {
 
       // Tap Dan Drummer to add
       await tester.tap(find.text('Dan Drummer'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Verify member addition
       expect(mockService.addedMembers.length, 1);

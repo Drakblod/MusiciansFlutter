@@ -1,3 +1,4 @@
+import 'support/bounded_ui_pump.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:firebase_core/firebase_core.dart' hide FirebaseService;
@@ -85,7 +86,7 @@ void main() {
 
       final appState = MockRegisterAppState();
       await tester.pumpWidget(createRegisterTestApp(appState: appState));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       final primarySkillFinder = find.text('Primary Skill/Talent (Select 1)');
       final genresFinder = find.text('Genres/Band Types');
@@ -111,18 +112,18 @@ void main() {
 
       final appState = MockRegisterAppState();
       await tester.pumpWidget(createRegisterTestApp(appState: appState));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Tap anywhere on the Genres/Band Types field container
       await tester.tap(find.text('Genres/Band Types'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.byType(SearchableCategoryMultiSelectSheet), findsOneWidget);
       expect(find.text('Genres/Band Types'), findsAtLeastNWidgets(1));
 
       // Close the picker
       await tester.tap(find.byIcon(Icons.close_rounded));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       expect(find.byType(SearchableCategoryMultiSelectSheet), findsNothing);
     });
 
@@ -134,23 +135,23 @@ void main() {
 
       final appState = MockRegisterAppState();
       await tester.pumpWidget(createRegisterTestApp(appState: appState));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Open picker
       await tester.tap(find.text('Genres/Band Types'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Expand first category and select Rock and Pop
       await tester.tap(find.textContaining('Rock, Pop'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       await tester.tap(find.text('Rock'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       await tester.tap(find.text('Pop'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       await tester.tap(find.textContaining('Done'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Field now displays the selected chips and badge count 2
       expect(find.text('2'), findsOneWidget);
@@ -185,33 +186,33 @@ void main() {
 
       final appState = MockRegisterAppState();
       await tester.pumpWidget(createRegisterTestApp(appState: appState));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Fill in text fields
       final textFields = find.byType(TextFormField);
       await tester.enterText(textFields.at(0), 'JimmyPage'); // Profile Name
       await tester.enterText(textFields.at(1), 'jimmy@ledzep.com'); // Email
       await tester.enterText(textFields.at(2), 'password123'); // Password
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Select genres
       await tester.tap(find.text('Genres/Band Types'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       await tester.tap(find.textContaining('Rock, Pop'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       await tester.tap(find.text('Rock'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       await tester.tap(find.text('Pop'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       await tester.tap(find.textContaining('Done'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Tap Sign Up
       await tester.tap(find.text('Sign Up'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(appState.registeredNickname, equals('JimmyPage'));
       expect(appState.registeredEmail, equals('jimmy@ledzep.com'));
@@ -245,7 +246,7 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Rock'), findsAtLeastNWidgets(1));
       expect(find.text('Pop'), findsAtLeastNWidgets(1));
@@ -259,17 +260,17 @@ void main() {
 
       final appState = MockRegisterAppState();
       await tester.pumpWidget(createRegisterTestApp(appState: appState));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       final textFields = find.byType(TextFormField);
       await tester.enterText(textFields.at(0), 'JohnPaulJones');
       await tester.enterText(textFields.at(1), 'jpj@ledzep.com');
       await tester.enterText(textFields.at(2), 'password123');
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Do NOT select genres -> field remains empty/optional
       await tester.tap(find.text('Sign Up'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(appState.registeredNickname, equals('JohnPaulJones'));
       expect(appState.registeredGenres, isEmpty);
@@ -285,11 +286,11 @@ void main() {
 
       final appState = MockRegisterAppState();
       await tester.pumpWidget(createRegisterTestApp(appState: appState));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Empty submission triggers standard validation errors
       await tester.tap(find.text('Sign Up'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Please enter a profile name'), findsOneWidget);
       expect(find.text('Please enter your email'), findsOneWidget);

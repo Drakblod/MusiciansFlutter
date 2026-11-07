@@ -1,8 +1,10 @@
+import 'support/bounded_ui_pump.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:firebase_core_platform_interface/test.dart';
 import 'package:firebase_core/firebase_core.dart' hide FirebaseService;
 import 'package:musicians_flutter/models/band_event.dart';
+import 'package:musicians_flutter/models/band.dart';
 import 'package:musicians_flutter/models/sub_request.dart';
 import 'package:musicians_flutter/models/user_profile.dart';
 import 'package:musicians_flutter/providers/app_state.dart';
@@ -76,6 +78,13 @@ void main() {
     setUp(() {
       appState = MockAppState03b();
       appState.testCurrentUserId = 'organizer_1';
+      appState.mockService.bandInfo = Band(
+        id: 'band_test_1',
+        name: 'Test Band',
+        membersBand: {
+          'organizer_1': BandMember(userId: 'organizer_1', role: 'Leader'),
+        },
+      );
       appState.testUserProfile = UserProfile(
         userId: 'organizer_1',
         displayName: 'Organizer User',
@@ -120,10 +129,10 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
 
       await tester.pumpWidget(createWidgetUnderTest());
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       await tester.tap(find.text('Favorites List'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Add all favorites'), findsNothing);
       expect(find.text('Add All Favorites'), findsNothing);
@@ -136,10 +145,10 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
 
       await tester.pumpWidget(createWidgetUnderTest());
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       await tester.tap(find.text('Favorites List'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       final selectAllFinder = find.text('Select All');
       expect(selectAllFinder, findsOneWidget);
@@ -161,10 +170,10 @@ void main() {
       appState.mockService.favoriteUserIds.clear();
 
       await tester.pumpWidget(createWidgetUnderTest());
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       await tester.tap(find.text('Favorites List'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Select All'), findsNothing);
       expect(find.textContaining('No favorites yet.'), findsOneWidget);
@@ -176,13 +185,13 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
 
       await tester.pumpWidget(createWidgetUnderTest());
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       await tester.tap(find.text('Favorites List'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       await tester.tap(find.text('Select All'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Checkboxes are checked
       expect(tester.widget<CheckboxListTile>(find.widgetWithText(CheckboxListTile, 'Gurra Guitar')).value, isTrue);
@@ -202,10 +211,10 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
 
       await tester.pumpWidget(createWidgetUnderTest());
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       await tester.tap(find.text('Favorites List'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       final addFavsFinder = find.text('+ Add Favorite(s)');
       expect(addFavsFinder, findsOneWidget);
@@ -224,7 +233,7 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
 
       await tester.pumpWidget(createWidgetUnderTest());
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Button is present with text '+ Add Substitute'
       final addSubFinder = find.widgetWithText(OutlinedButton, '+ Add Substitute');
@@ -245,18 +254,18 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
 
       await tester.pumpWidget(createWidgetUnderTest());
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Add second slot
       await tester.tap(find.widgetWithText(OutlinedButton, '+ Add Substitute'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Remove Substitute'), findsNWidgets(2));
       expect(find.text('Remove Slot'), findsNothing);
 
       // Tapping Remove Substitute removes the slot
       await tester.tap(find.text('Remove Substitute').last);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Remove Substitute'), findsOneWidget);
     });
@@ -293,7 +302,7 @@ void main() {
       appState.mockService.events['event_pub_1'] = bandEv;
 
       await tester.pumpWidget(createWidgetUnderTest(eventId: 'event_pub_1'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Cancel Slot Request'), findsOneWidget);
       expect(find.text('Remove Substitute'), findsNothing);
@@ -305,7 +314,7 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
 
       await tester.pumpWidget(createWidgetUnderTest());
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Default is Paid Gig = true with 1.500
       expect(find.text('Paid Gig'), findsOneWidget);
@@ -320,12 +329,12 @@ void main() {
 
       // Enter 25000
       await tester.enterText(amountField, '25000');
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       expect(tester.widget<TextField>(amountField).controller!.text, equals('25.000'));
 
       // Enter 1000000
       await tester.enterText(amountField, '1000000');
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       expect(tester.widget<TextField>(amountField).controller!.text, equals('1.000.000'));
     });
 
@@ -352,13 +361,14 @@ void main() {
       appState.mockService.bandEvents['band_test_1'] = [bandEv];
 
       await tester.pumpWidget(createWidgetUnderTest(eventId: 'event_test_pay'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Publish with default Paid Gig (1.500)
       final publishBtn = find.textContaining('PUBLISH');
       await tester.ensureVisible(publishBtn);
+      confirmRequestLocations(tester);
       await tester.tap(publishBtn);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(appState.mockService.savedBatchRequests.isNotEmpty, isTrue);
       final savedSub = appState.mockService.savedBatchRequests.first;
@@ -374,18 +384,18 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
 
       await tester.pumpWidget(createWidgetUnderTest());
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Switch to New Band Member
       final reqTypeFinder = find.widgetWithText(DropdownButtonFormField<String>, 'Substitute');
       await tester.ensureVisible(reqTypeFinder);
       await tester.tap(reqTypeFinder);
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('New Member').last);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
+      await tester.tap(find.text('New Band Member').last);
+      await pumpUiTransitions(tester);
 
       await tester.tap(find.text('Favorites List'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Select All'), findsOneWidget);
       expect(find.text('+ Add Favorite(s)'), findsOneWidget);
@@ -398,23 +408,23 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
 
       await tester.pumpWidget(createWidgetUnderTest());
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Open Favorites List
       await tester.tap(find.text('Favorites List'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Enable Paid Gig
       final switchFinder = find.byType(Switch).first;
       await tester.ensureVisible(switchFinder);
       await tester.tap(switchFinder);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Add another substitute
       final addSubBtn = find.widgetWithText(OutlinedButton, '+ Add Substitute');
       await tester.ensureVisible(addSubBtn);
       await tester.tap(addSubBtn);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Verify no flutter errors or overflow exceptions thrown
       final ex = tester.takeException();
@@ -427,11 +437,11 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
 
       await tester.pumpWidget(createWidgetUnderTest());
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Open Favorites List for slot 1 (Electric Guitar)
       await tester.tap(find.text('Favorites List'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Electric Guitar players (Gurra Guitar, Alice Bass) should be visible
       expect(find.text('Gurra Guitar'), findsOneWidget);
@@ -447,24 +457,24 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
 
       await tester.pumpWidget(createWidgetUnderTest());
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Change instrument of Slot 1 from Electric Guitar to Bass
       final instrumentPicker = find.widgetWithText(InkWell, 'Role / Instrument');
       await tester.tap(instrumentPicker);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       final searchField = find.byType(TextField).last;
       await tester.enterText(searchField, 'Bass');
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       final bassChip = find.widgetWithText(ChoiceChip, 'Bass');
       await tester.tap(bassChip);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Open Favorites List
       await tester.tap(find.text('Favorites List'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Bass players: only Alice Bass
       expect(find.text('Alice Bass'), findsOneWidget);
@@ -478,24 +488,24 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
 
       await tester.pumpWidget(createWidgetUnderTest());
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Change instrument of Slot 1 to Drums
       final instrumentPicker = find.widgetWithText(InkWell, 'Role / Instrument');
       await tester.tap(instrumentPicker);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       final searchField = find.byType(TextField).last;
       await tester.enterText(searchField, 'Drums');
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       final drumsChip = find.widgetWithText(ChoiceChip, 'Drums');
       await tester.tap(drumsChip);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Open Favorites List
       await tester.tap(find.text('Favorites List'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Empty state specifically for Drums
       expect(find.textContaining('No favorites saved for "Drums"'), findsOneWidget);
@@ -511,14 +521,14 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
 
       await tester.pumpWidget(createWidgetUnderTest());
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Open Favorites List for slot 1 (Electric Guitar) and select all
       await tester.tap(find.text('Favorites List'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       await tester.tap(find.text('Select All'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Chosen Substitutes summary should show Gurra Guitar and Alice Bass
       expect(find.textContaining('Gurra Guitar, Alice Bass'), findsOneWidget);
@@ -526,15 +536,15 @@ void main() {
       // Now change instrument to Bass (which Gurra Guitar does not play)
       final instrumentPicker = find.widgetWithText(InkWell, 'Role / Instrument');
       await tester.tap(instrumentPicker);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       final searchField = find.byType(TextField).last;
       await tester.enterText(searchField, 'Bass');
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       final bassChip = find.widgetWithText(ChoiceChip, 'Bass');
       await tester.tap(bassChip);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Chosen Substitute summary should now only include Alice Bass (singular Chosen Substitute)
       expect(find.text('Chosen Substitute'), findsOneWidget);

@@ -1,3 +1,4 @@
+import 'support/bounded_ui_pump.dart';
 // ignore_for_file: depend_on_referenced_packages
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -94,12 +95,12 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       final spotifyFinder = find.text('Spotify');
       expect(spotifyFinder, findsOneWidget);
       await tester.ensureVisible(spotifyFinder);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       await tester.tap(spotifyFinder);
       await tester.pump();
       expect(mockUrlLauncher.lastLaunchedUrl,
@@ -108,7 +109,7 @@ void main() {
       final youtubeFinder = find.text('YouTube');
       expect(youtubeFinder, findsOneWidget);
       await tester.ensureVisible(youtubeFinder);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       await tester.tap(youtubeFinder);
       await tester.pump();
       expect(mockUrlLauncher.lastLaunchedUrl, 'https://youtube.com/@rockstar');
@@ -140,12 +141,12 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       final spotifyFinder = find.text('Spotify');
       expect(spotifyFinder, findsOneWidget);
       await tester.ensureVisible(spotifyFinder);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       await tester.tap(spotifyFinder);
       await tester.pump();
       expect(mockUrlLauncher.lastLaunchedUrl,
@@ -154,7 +155,7 @@ void main() {
       final youtubeFinder = find.text('YouTube');
       expect(youtubeFinder, findsOneWidget);
       await tester.ensureVisible(youtubeFinder);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       await tester.tap(youtubeFinder);
       await tester.pump();
       expect(mockUrlLauncher.lastLaunchedUrl, 'https://youtube.com/@mychannel');

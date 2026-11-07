@@ -1252,49 +1252,46 @@ describe('Real Cloud Functions Emulator Integration Tests (JS Client SDK + Emula
       assert.strictEqual(matching.length, 1, 'Duplicate response write must not duplicate notification');
     });
 
-    it('6. onBandFileUploaded trigger notifies band members and excludes uploader', async () => {
+    it('6. onBandFileUploaded trigger notifies current members exactly once and excludes uploader', async () => {
       const bandId = 'band_file_test';
-      const uploaderUid = 'user_a';
-      const memberUid = 'user_b';
-
-      await adminDb.ref(`Bands/${bandId}`).set({
-        Name: 'Emulator Band Files',
-        Members_band: {
-          [uploaderUid]: true,
-          [memberUid]: true,
-        },
-      });
-
-      const fileId = 'file_test_123';
-      await adminDb.ref(`files/${bandId}/${fileId}`).set({
-        FileName: 'Chart_A.pdf',
-        FileUrl: 'https://storage/Chart_A.pdf',
-        UploadedBy: uploaderUid,
-        UploadedAt: Date.now(),
-        Category: 'charts',
-      });
-
-      // Member should receive notification
-      const memberNotifRef = adminDb.ref(`userNotifications/${memberUid}/notif_file_${bandId}_${fileId}_${memberUid}`);
-      let notifiedMember = false;
-      for (let i = 0; i < 50; i++) {
-        const snap = await memberNotifRef.get();
-        if (snap.exists() && snap.val()) {
-          notifiedMember = true;
-          assert.strictEqual(snap.val().type, 'band_file_uploaded');
-          assert.strictEqual(snap.val().featureId, 'band_room');
-          assert.strictEqual(snap.val().data.bandId, bandId);
-          assert.strictEqual(snap.val().data.fileId, fileId);
-          break;
-        }
-        await new Promise(r => setTimeout(r, 200));
+      const uploaderUid = 'user_a', memberUid = 'user_b', removedUid = 'file_removed_user';
+      await adminDb.ref(`Bands/${bandId}`).set({Name:'Emulator Band Files', Members_band:{
+        [uploaderUid]:{Role:'Leader',Status:'active'},[memberUid]:{Role:'Member',Status:'active'},
+        [removedUid]:{Role:'Member',Status:'removed'}}});
+      // Listen for the condition before triggering it; no polling interval or
+      // assumed trigger latency. The existing suite timeout remains the bound.
+      for(let run=0;run<5;run++) {
+        const fileId=`file_test_${run}`;
+        const path=`userNotifications/${memberUid}/notif_file_${bandId}_${fileId}_${memberUid}`;
+        const notification=adminDb.ref(path);
+        let listener;
+        const arrived=new Promise((resolve,reject)=>{
+          listener=notification.on('value',snap=>{if(snap.exists())resolve(snap.val());},reject);
+        });
+        const data={FileName:'Chart_A.pdf',FileUrl:`secure-media:local-test-${run}`,
+          UploadedBy:uploaderUid,UploadedAt:Date.now(),Category:'charts'};
+        let value;
+        try {
+          await adminDb.ref(`files/${bandId}/${fileId}`).set(data);
+          value=await arrived;
+        } finally { notification.off('value',listener); }
+        assert.strictEqual(value.type,'band_file_uploaded');
+        assert.strictEqual(value.featureId,'band_room');
+        assert.strictEqual(value.data.bandId,bandId);
+        assert.strictEqual(value.data.fileId,fileId);
+        await notification.update({isRead:true,readAt:12345});
+        const trigger=require('../index').onBandFileUploaded;
+        const snapshot=await adminDb.ref(`files/${bandId}/${fileId}`).get();
+        await trigger.run(snapshot,{params:{bandId,fileId}});
+        await trigger.run(snapshot,{params:{bandId,fileId}});
+        const all=(await adminDb.ref(`userNotifications/${memberUid}`).get()).val();
+        const matching=Object.values(all||{}).filter(n=>n.data?.bandId===bandId&&n.data?.fileId===fileId);
+        assert.strictEqual(matching.length,1,'Trigger retry must not duplicate notifications');
+        assert.strictEqual(matching[0].isRead,true,'Retry must preserve acknowledgement');
+        assert.strictEqual(matching[0].readAt,12345);
+        for(const excluded of [uploaderUid,removedUid])
+          assert.strictEqual((await adminDb.ref(`userNotifications/${excluded}/notif_file_${bandId}_${fileId}_${excluded}`).get()).exists(),false);
       }
-      assert.strictEqual(notifiedMember, true, 'Band member must receive file upload notification');
-
-      // Uploader must NOT receive notification
-      const uploaderNotifRef = adminDb.ref(`userNotifications/${uploaderUid}/notif_file_${bandId}_${fileId}_${uploaderUid}`);
-      const uploaderSnap = await uploaderNotifRef.get();
-      assert.strictEqual(uploaderSnap.exists(), false, 'Uploader must not receive own file notification');
     });
 
     describe('MAP-VIEW-FEEDBACK-03: Server-owned createMapPin Callable Tests', () => {

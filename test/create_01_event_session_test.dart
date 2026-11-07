@@ -1,3 +1,5 @@
+import 'package:musicians_flutter/widgets/location_picker_field.dart';
+import 'support/bounded_ui_pump.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -21,6 +23,15 @@ import 'package:musicians_flutter/views/band_room_chat_screen.dart';
 import 'package:musicians_flutter/controllers/global_create_event_launcher.dart';
 
 class MockCreate01FirebaseService extends FirebaseService {
+  @override
+  bool get isLoggedIn => true;
+  @override
+  String? get currentUserId => 'user_create01';
+  @override
+  Future<void> initializePushNotifications() async {}
+  @override
+  Future<Map<String, int>> getButtonClicksAsync(String uid) async => {};
+
   Map<String, String> userBands = {'band_1': 'Rock Band'};
   Map<String, String> userRoles = {'band_1': 'Leader'};
   List<BandEvent> savedBandEvents = [];
@@ -45,6 +56,7 @@ class MockCreate01FirebaseService extends FirebaseService {
       id: bandId,
       name: userBands[bandId] ?? 'Test Band',
       userRole: userRoles[bandId] ?? 'Leader',
+      membersBand: {for (final m in await getBandMembersAsync(bandId)) m.userId!: m},
     );
   }
 
@@ -478,7 +490,7 @@ void main() {
 
       // Enter basic event info
       await tester.enterText(find.widgetWithText(TextFormField, 'Main Event Name'), 'Test Rehearsal');
-      await tester.enterText(find.widgetWithText(TextFormField, 'Location (City, Country)'), 'Berlin');
+      await tester.enterText(find.descendant(of: find.byType(LocationPickerField), matching: find.byType(TextFormField)), 'Berlin');
 
       // Switch to custom mode "Set your own"
       await tester.tap(find.byType(DropdownButtonFormField<int>));
@@ -537,7 +549,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
 
       await tester.enterText(find.widgetWithText(TextFormField, 'Main Event Name'), 'Preset 48 Event');
-      await tester.enterText(find.widgetWithText(TextFormField, 'Location (City, Country)'), 'Paris');
+      await tester.enterText(find.descendant(of: find.byType(LocationPickerField), matching: find.byType(TextFormField)), 'Paris');
 
       // Select predefined 48 hours
       await tester.tap(find.byType(DropdownButtonFormField<int>));
@@ -573,7 +585,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
 
       await tester.enterText(find.widgetWithText(TextFormField, 'Main Event Name'), 'No Reminder Event');
-      await tester.enterText(find.widgetWithText(TextFormField, 'Location (City, Country)'), 'Rome');
+      await tester.enterText(find.descendant(of: find.byType(LocationPickerField), matching: find.byType(TextFormField)), 'Rome');
 
       // Select No automatic Reminders
       await tester.tap(find.byType(DropdownButtonFormField<int>));
@@ -889,11 +901,11 @@ void main() {
         appState: appState,
         child: const BandRoomChatScreen(),
       ));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Switch to Events tab
-      await tester.tap(find.text('Events'));
-      await tester.pumpAndSettle();
+      await tester.tap(find.text('3. Events'));
+      await pumpUiTransitions(tester);
 
       expect(find.text('Create Event'), findsWidgets);
       expect(find.text('Create New Event'), findsNothing);
@@ -915,7 +927,7 @@ void main() {
       final nameField = find.widgetWithText(TextFormField, 'Main Event Name');
       await tester.enterText(nameField, 'Club gig – Summer Tour');
 
-      final locField = find.widgetWithText(TextFormField, 'Location (City, Country)');
+      final locField = find.descendant(of: find.byType(LocationPickerField), matching: find.byType(TextFormField));
       await tester.enterText(locField, 'Globen, Stockholm');
 
       final descField = find.widgetWithText(TextFormField, 'Event Description (Describe ALL parts of Main Event here)');
@@ -923,25 +935,25 @@ void main() {
 
       // Add Session 1
       await tester.tap(find.text('+ Add Event'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       await tester.enterText(find.widgetWithText(TextFormField, 'Location (City, Country)').last, 'Studio A');
       await tester.enterText(find.widgetWithText(TextFormField, 'Description (Optional)'), 'Sectional rehearsal');
       await tester.tap(find.widgetWithText(ElevatedButton, 'Add Event'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Add Session 2
       await tester.tap(find.text('+ Add Event'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
       await tester.enterText(find.widgetWithText(TextFormField, 'Location (City, Country)').last, 'Studio B');
       await tester.enterText(find.widgetWithText(TextFormField, 'Description (Optional)'), 'Dress rehearsal');
       await tester.tap(find.widgetWithText(ElevatedButton, 'Add Event'));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Tap Publish Event
       final publishBtn = find.text('Publish Event');
       await tester.ensureVisible(publishBtn);
       await tester.tap(publishBtn);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       // Exactly ONE BandEvent saved
       expect(appState.mockFirebase.saveBandEventCalls, equals(1));
@@ -996,7 +1008,7 @@ void main() {
           existingEvent: existingEvent,
         ),
       ));
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(find.text('Headline Show'), findsWidgets);
       expect(find.text('Madison Square Garden'), findsOneWidget);
@@ -1007,7 +1019,7 @@ void main() {
       final publishBtn = find.text('Publish Event');
       await tester.ensureVisible(publishBtn);
       await tester.tap(publishBtn);
-      await tester.pumpAndSettle();
+      await pumpUiTransitions(tester);
 
       expect(appState.mockFirebase.saveBandEventCalls, equals(1));
       final saved = appState.mockFirebase.savedBandEvents.first;
@@ -1044,7 +1056,7 @@ void main() {
           200,
           scrollable: find.byType(Scrollable).first,
         );
-        await tester.pumpAndSettle();
+        await pumpUiTransitions(tester);
       } finally {
         FlutterError.onError = oldHandler;
       }
