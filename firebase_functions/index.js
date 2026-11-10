@@ -79,38 +79,65 @@ exports.resolveCatalogueCity = onCall({region:'europe-west1',secrets:[cityPlaces
       'City selection is temporarily unavailable.');
   } finally {await cityGate.releaseRate(db,lease);}
 });
+const profileTextFields = new Set(['DisplayName','Level','About','Contact','History','Projects',
+  'ProfilePictureUrl','SpotifyUrl','YoutubeUrl','AudioSnippetUrl','CollabBio','MainInstrument',
+  'UserType','Nickname']);
+const profileListFields = new Set(['Instruments','Styles','Genres','CollabRoles']);
+const profileMirrors = new Set(['DisplayName','UserType','Nickname']);
+function profileEdits(profile) {
+  if (profile === undefined) return [];
+  if (!profile || typeof profile !== 'object' || Array.isArray(profile) ||
+      JSON.stringify(profile).length > 65536) {
+    throw new HttpsError('invalid-argument','Invalid profile fields.');
+  }
+  const entries = Object.entries(profile);
+  const valid = (key, value) => {
+    if (profileTextFields.has(key)) return value === null || typeof value === 'string';
+    if (profileListFields.has(key)) return value === null ||
+      (Array.isArray(value) && value.every(item => typeof item === 'string'));
+    return key === 'CollabRemote' && (value === null || typeof value === 'boolean');
+  };
+  if (!entries.every(([key,value]) => valid(key,value))) {
+    throw new HttpsError('invalid-argument','Invalid profile fields.');
+  }
+  return entries;
+}
 exports.commitUserCity = onCall({region:'europe-west1'},async request=>{
   if(!request.auth)throw new HttpsError('unauthenticated','Sign in first.');
-  const data=request.data||{},uid=request.auth.uid,db=admin.database();
-  const infoRef=db.ref(`users/${uid}/info`);
-  if(data.clear===true&&cityBody(data,['clear'])) {
-    const clearedAt=Date.now();
-    const clearOperation=`clear_${crypto.randomBytes(12).toString('hex')}`;
-    await infoRef.transaction(current=>{
-      current ||= {};
-      delete current.Location;delete current.PublicLocation;
-      Object.assign(current,{LocationCleared:true,CityOperationId:clearOperation,
-        CityUpdatedAt:clearedAt});
-      return current;
-    },undefined,false);
-    return {success:true};
+  const {profile,targetId,...data}=request.data||{},uid=request.auth.uid,db=admin.database();
+  if((profile!==undefined||targetId!==undefined)&&targetId!==uid) {
+    throw new HttpsError('permission-denied','You can only save your own profile.');
   }
-  if(!cityBody(data,['nonce','operationId','location'])||typeof data.location!=='object')
+  const clear=data.clear===true&&cityBody(data,['clear']);
+  if(!clear&&(!cityBody(data,['nonce','operationId','location'])||typeof data.location!=='object')) {
     throw new HttpsError('invalid-argument','Invalid city confirmation.');
-  const result=await cityGate.consumeGrant(db,uid,'profile',uid,data.nonce,data.operationId,data.location);
-  let superseded=false;
-  const committed=await infoRef.transaction(current=>{
-    superseded=false;current ||= {};
-    if((current.CityUpdatedAt||0)>result.consumedAt&&current.CityOperationId!==data.operationId){
-      superseded=true;return;
+  }
+  const edits=profileEdits(profile);
+  const receipt=clear?null:await cityGate.consumeGrant(db,uid,'profile',uid,
+    data.nonce,data.operationId,data.location);
+  const operationId=clear?`clear_${crypto.randomBytes(12).toString('hex')}`:data.operationId;
+  const startedAt=receipt?.consumedAt??Date.now();
+  // Keep profile fields, compatibility mirrors and the verified city in one write.
+  const committed=await db.ref(`users/${uid}`).transaction(current=>{
+    if(current!=null&&(typeof current!=='object'||Array.isArray(current)))return;
+    current ||= {};
+    if(current.info!=null&&(typeof current.info!=='object'||Array.isArray(current.info)))return;
+    const info=current.info ||= {};
+    if(info.CityOperationId===operationId)return current;
+    if((info.CityUpdatedAt||0)>startedAt)return;
+    for(const [key,value] of edits) {
+      info[key]=value;
+      if(profileMirrors.has(key))current[key]=value;
     }
-    Object.assign(current,{Location:`${result.location.city}, ${result.location.country}`,
-      PublicLocation:result.location,LocationCleared:false,
-      CityOperationId:data.operationId,CityUpdatedAt:Date.now()});
+    Object.assign(info,{
+      Location:clear?null:`${receipt.location.city}, ${receipt.location.country}`,
+      PublicLocation:receipt?.location??null,
+      LocationCleared:clear,CityOperationId:operationId,CityUpdatedAt:Date.now(),
+    });
     return current;
   },undefined,false);
-  if(!committed.committed||superseded)
-    throw new HttpsError('failed-precondition','A newer city selection exists.');
+  if(!committed.committed)
+    throw new HttpsError('failed-precondition','Profile could not be saved.');
   return {success:true};
 });
 exports.cleanupCityVerificationState = onSchedule({schedule:'every 30 minutes',

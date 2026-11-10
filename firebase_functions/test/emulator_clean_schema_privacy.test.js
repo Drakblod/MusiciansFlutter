@@ -6,7 +6,7 @@ const admin=require('firebase-admin');
 const {initializeTestEnvironment,assertFails,assertSucceeds}=require('@firebase/rules-unit-testing');
 const {initializeApp,deleteApp}=require('firebase/app');
 const {getAuth,connectAuthEmulator,createUserWithEmailAndPassword,signOut,signInWithEmailAndPassword}=require('firebase/auth');
-const {getDatabase,connectDatabaseEmulator,ref,get}=require('firebase/database');
+const {getDatabase,connectDatabaseEmulator,ref,get,update}=require('firebase/database');
 const {getFunctions,connectFunctionsEmulator,httpsCallable}=require('firebase/functions');
 
 for(const ruleFile of ['database.rules.json','database.transitional.rules.json']){
@@ -38,12 +38,14 @@ for(const ruleFile of ['database.rules.json','database.transitional.rules.json']
 
   it('bootstraps new accounts, sole Leader, member, Event, response, assignment and Agreement without legacy copies',async()=>{
     assert.equal((await db.ref(`Bands/${band}`).get()).exists(),false);
-    for(const uid of Object.values(ids)){
+    for(const [role,uid] of Object.entries(ids)){
       assert.equal((await db.ref(`users/${uid}`).get()).exists(),false);
-      await assertSucceeds(client(uid).ref(`users/${uid}/info`).set({DisplayName:'New musician',Email:'private@example.test',MainInstrument:'Guitar'}));
+      const {database,email}=clients[role];
+      await assertSucceeds(update(ref(database,`users/${uid}/info`),
+        {DisplayName:'New musician',Email:email,MainInstrument:'Guitar'}));
       await waitFor(`publicUserProfiles/${uid}`,v=>v?.DisplayName==='New musician');
       const profile=(await client(ids.outsider).ref(`publicUserProfiles/${uid}`).get()).val();
-      assert(!JSON.stringify(profile).includes('private@example.test'));
+      assert(!JSON.stringify(profile).includes(email));
     }
     await call('leader','mutateBandMembership',{action:'create',bandId:band,operationId:'create',metadata:{Name:'New Band'}});
     let members=(await db.ref(`Bands/${band}/Members_band`).get()).val();

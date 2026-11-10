@@ -76,8 +76,103 @@
           }
         },
         "info": {
-          ".write": "auth != null && auth.uid == $userId && newData.child('Location').val() == data.child('Location').val() && newData.child('PublicLocation').val() == data.child('PublicLocation').val() && newData.child('LocationCleared').val() == data.child('LocationCleared').val() && newData.child('CityOperationId').val() == data.child('CityOperationId').val() && newData.child('CityUpdatedAt').val() == data.child('CityUpdatedAt').val()",
-          ".read": "auth != null && auth.uid == $userId"
+          ".read": "auth != null && auth.uid == $userId",
+          "DisplayName": {
+            ".write": "auth != null && auth.uid == $userId",
+            ".validate": "newData.isString()"
+          },
+          "Level": {
+            ".write": "auth != null && auth.uid == $userId",
+            ".validate": "newData.isString()"
+          },
+          "About": {
+            ".write": "auth != null && auth.uid == $userId",
+            ".validate": "newData.isString()"
+          },
+          "Contact": {
+            ".write": "auth != null && auth.uid == $userId",
+            ".validate": "newData.isString()"
+          },
+          "History": {
+            ".write": "auth != null && auth.uid == $userId",
+            ".validate": "newData.isString()"
+          },
+          "Projects": {
+            ".write": "auth != null && auth.uid == $userId",
+            ".validate": "newData.isString()"
+          },
+          "ProfilePictureUrl": {
+            ".write": "auth != null && auth.uid == $userId",
+            ".validate": "newData.isString()"
+          },
+          "SpotifyUrl": {
+            ".write": "auth != null && auth.uid == $userId",
+            ".validate": "newData.isString()"
+          },
+          "YoutubeUrl": {
+            ".write": "auth != null && auth.uid == $userId",
+            ".validate": "newData.isString()"
+          },
+          "AudioSnippetUrl": {
+            ".write": "auth != null && auth.uid == $userId",
+            ".validate": "newData.isString()"
+          },
+          "CollabBio": {
+            ".write": "auth != null && auth.uid == $userId",
+            ".validate": "newData.isString()"
+          },
+          "MainInstrument": {
+            ".write": "auth != null && auth.uid == $userId",
+            ".validate": "newData.isString()"
+          },
+          "UserType": {
+            ".write": "auth != null && auth.uid == $userId",
+            ".validate": "newData.isString()"
+          },
+          "Nickname": {
+            ".write": "auth != null && auth.uid == $userId",
+            ".validate": "newData.isString()"
+          },
+          "Instruments": {
+            ".write": "auth != null && auth.uid == $userId",
+            ".validate": "newData.hasChildren()",
+            "$index": {
+              ".validate": "$index.matches(/^(0|[1-9][0-9]*)$/) && newData.isString()"
+            }
+          },
+          "Styles": {
+            ".write": "auth != null && auth.uid == $userId",
+            ".validate": "newData.hasChildren()",
+            "$index": {
+              ".validate": "$index.matches(/^(0|[1-9][0-9]*)$/) && newData.isString()"
+            }
+          },
+          "Genres": {
+            ".write": "auth != null && auth.uid == $userId",
+            ".validate": "newData.hasChildren()",
+            "$index": {
+              ".validate": "$index.matches(/^(0|[1-9][0-9]*)$/) && newData.isString()"
+            }
+          },
+          "CollabRoles": {
+            ".write": "auth != null && auth.uid == $userId",
+            ".validate": "newData.hasChildren()",
+            "$index": {
+              ".validate": "$index.matches(/^(0|[1-9][0-9]*)$/) && newData.isString()"
+            }
+          },
+          "CollabRemote": {
+            ".write": "auth != null && auth.uid == $userId",
+            ".validate": "newData.isBoolean()"
+          },
+          "Email": {
+            ".write": "auth != null && auth.uid == $userId && auth.token.email != null && newData.val() == auth.token.email",
+            ".validate": "newData.isString()"
+          },
+          "PushToken": {
+            ".write": "auth != null && auth.uid == $userId",
+            ".validate": "newData.isString()"
+          }
         },
         "UserType": {
           ".write": "auth != null && auth.uid == $userId",

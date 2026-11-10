@@ -108,7 +108,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _editingUserId = user?.userId;
     if (user != null) {
       _nameController.text = user.displayName ?? '';
-      _emailController.text = user.email ?? appState.firebaseService.currentUser?.email ?? '';
+      _emailController.text = appState.firebaseService.currentUser?.email ?? user.email ?? '';
       _cityLocation = user.publicLocation;
       if (_cityLocation == null) _legacyLocation = user.location;
       _aboutController.text = user.about ?? '';
@@ -403,7 +403,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           userId: user.userId,
           nickname: user.nickname,
           displayName: _nameController.text.trim(),
-          email: _emailController.text.trim().isEmpty ? null : _emailController.text.trim(),
           userType: _primarySkills.first,
           location: _cityLocation?.label,
           publicLocation: _cityLocation,
@@ -440,11 +439,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           Navigator.pop(context);
         }
       }
-    } catch (e) {
+    } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to save profile: $e'),
+          const SnackBar(
+            content: Text('Failed to save profile: Please try again.'),
             backgroundColor: AppTheme.danger,
           ),
         );
@@ -692,19 +691,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               const SizedBox(height: 8),
               TextFormField(
                 controller: _emailController,
-                keyboardType: TextInputType.emailAddress,
+                readOnly: true,
                 style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
                 decoration: const InputDecoration(
                   hintText: 'alex.hill@example.com',
                 ),
-                validator: (value) {
-                  if (value != null && value.trim().isNotEmpty) {
-                    if (!value.contains('@') || !value.contains('.')) {
-                      return 'Please enter a valid email address';
-                    }
-                  }
-                  return null;
-                },
               ),
               const SizedBox(height: 20),
 

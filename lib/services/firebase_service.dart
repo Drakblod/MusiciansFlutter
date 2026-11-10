@@ -180,7 +180,7 @@ class FirebaseService {
         userType: userType,
         nickname: trimmedNickname,
         displayName: trimmedNickname,
-        email: trimmedEmail,
+        email: newAuthUser?.email ?? trimmedEmail,
         location: null,
         level: level ?? 'C = INTERMEDIATE',
         about: 'Hey! I am a musician ready to play.',
@@ -242,7 +242,6 @@ class FirebaseService {
       'DisplayName',
       'Email',
       'Level',
-      'Location',
       'About',
       'Instruments',
       'Styles',
@@ -281,10 +280,12 @@ class FirebaseService {
     if (trimmedUid.isEmpty) {
       throw ArgumentError('userId cannot be empty when saving user profile.');
     }
+    if (trimmedUid != currentUserId) {
+      throw StateError('You can only update your own profile.');
+    }
 
     final fields = <String, dynamic>{
       'DisplayName': profile.displayName,
-      'Email': profile.email,
       'Level': profile.level,
       'About': profile.about,
       'Instruments': SecondarySkillsUtils.buildInstrumentsList(
@@ -314,11 +315,19 @@ class FirebaseService {
         // retry on the same one-use operation.
         'operationId': city.confirmationNonce,
         'location': city.toJson(),
+        'targetId': trimmedUid,
+        'profile': fields,
       });
     } else if (profile.clearPublicLocation) {
-      await _functions.httpsCallable('commitUserCity').call({'clear': true});
+      await _functions.httpsCallable('commitUserCity').call({
+        'clear': true,
+        'targetId': trimmedUid,
+        'profile': fields,
+      });
+    } else {
+      if (profile.email != null) fields['Email'] = profile.email;
+      await updateUserProfileFields(trimmedUid, fields);
     }
-    await updateUserProfileFields(trimmedUid, fields);
   }
 
   Stream<String?> get catalogueIdentityChanges => _auth.authStateChanges().map((user) => user?.uid);

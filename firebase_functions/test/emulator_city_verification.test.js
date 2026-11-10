@@ -72,6 +72,74 @@ describe(`INTERNATIONAL-CITY-PICKER-01 server grants and rules: ${rules}`,functi
     });
   });
 
+  it('saves Ljusdal with profile edits, permits ordinary edits afterward and preserves protected data',async()=>{
+    await cityClient('profile_save',async(uid,sessionToken,call)=>{
+      const user=`users/${uid}`,info=`${user}/info`;
+      const owner=env.authenticatedContext(uid,{email:'owner@example.test'}).database();
+      const unrelated=env.authenticatedContext(bob).database();
+      await assertSucceeds(owner.ref(info).update({DisplayName:'Before',Email:'owner@example.test'}));
+      await db.ref(`${info}/PushToken`).set('existing-device-token');
+      const {candidates:[selected]}=await call('searchCatalogueCities',{query:'Ljusdal',sessionToken});
+      const receipt=await call('resolveCatalogueCity',{placeId:selected.placeId,sessionToken,
+        purpose:'profile',targetId:uid,city:selected.city,country:selected.country});
+      const profile={DisplayName:'After',UserType:'Guitar',MainInstrument:'Guitar',Nickname:'Musician',
+        Instruments:['Guitar','Piano'],Genres:['Rock'],CollabRoles:['Musician'],CollabRemote:true,
+        ProfilePictureUrl:'https://example.test/photo.jpg',SpotifyUrl:'https://example.test/link'};
+      const save={nonce:receipt.nonce,operationId:'profile_save',location:receipt.location,targetId:uid,profile};
+      const before=(await db.ref(user).get()).val();
+      await assert.rejects(()=>call('commitUserCity',{...save,targetId:bob}),
+        error=>error.code==='functions/permission-denied');
+      for(const key of ['Email','PushToken','Role','Bands','PublicLocation','CityOperationId']) {
+        await assert.rejects(()=>call('commitUserCity',{...save,profile:{...profile,[key]:'forged'}}),
+          error=>error.code==='functions/invalid-argument');
+        assert.deepStrictEqual((await db.ref(user).get()).val(),before);
+      }
+      await assert.rejects(()=>call('commitUserCity',{...save,location:{...receipt.location,city:'Stockholm'}}),
+        error=>error.code==='functions/failed-precondition');
+      assert.deepStrictEqual((await db.ref(user).get()).val(),before);
+      await db.ref(`${info}/CityUpdatedAt`).set(Date.now()+60000);
+      const newer=(await db.ref(user).get()).val();
+      await assert.rejects(()=>call('commitUserCity',save),
+        error=>error.code==='functions/failed-precondition');
+      assert.deepStrictEqual((await db.ref(user).get()).val(),newer);
+      await db.ref(`${info}/CityUpdatedAt`).remove();
+      await call('commitUserCity',save);
+      const saved=(await owner.ref(info).get()).val();
+      assert.deepStrictEqual(saved.PublicLocation,receipt.location);
+      for(const [key,value] of Object.entries(profile))assert.deepStrictEqual(saved[key],value);
+      assert.strictEqual(saved.Email,before.info.Email);
+      assert.strictEqual(saved.PushToken,before.info.PushToken);
+      assert.strictEqual((await owner.ref(`${user}/DisplayName`).get()).val(),'After');
+
+      await assertSucceeds(owner.ref().update({[`${info}/About`]:'Ordinary edit',
+        [`${info}/DisplayName`]:'Latest',[`${user}/DisplayName`]:'Latest',[`${info}/Genres`]:['Jazz']}));
+      await assertFails(owner.ref(info).update({About:'partial',Email:'forged@example.test'}));
+      await assertFails(owner.ref(info).update({About:'partial',Role:'Admin'}));
+      await assertFails(owner.ref(info).update({About:'partial',PublicLocation:null}));
+      await assertFails(owner.ref(info).set({DisplayName:'Parent replacement'}));
+      await assertFails(owner.ref(`publicUserProfiles/${uid}`).set({DisplayName:'Forged'}));
+      await assertFails(unrelated.ref(`${info}/DisplayName`).set('Outsider'));
+      await assertFails(unrelated.ref(`${info}/PushToken`).set('Outsider'));
+      await assertFails(unrelated.ref(info).get());
+      await call('commitUserCity',save); // An acknowledged retry must preserve newer ordinary edits.
+      const edited=(await owner.ref(info).get()).val();
+      assert.strictEqual(edited.About,'Ordinary edit');
+      assert.strictEqual(edited.DisplayName,'Latest');
+      assert.deepStrictEqual(edited.Genres,['Jazz']);
+      assert.deepStrictEqual(edited.PublicLocation,receipt.location);
+
+      await assert.rejects(()=>call('commitUserCity',{clear:true,targetId:bob,profile:{About:'Wrong account'}}),
+        error=>error.code==='functions/permission-denied');
+      await call('commitUserCity',{clear:true,targetId:uid,profile:{About:'Cleared'}});
+      const cleared=(await owner.ref(info).get()).val();
+      assert.strictEqual(cleared.About,'Cleared');
+      assert.strictEqual(cleared.LocationCleared,true);
+      assert(!('PublicLocation' in cleared));
+      assert(!('Location' in cleared));
+      assert.strictEqual(cleared.PushToken,before.info.PushToken);
+    });
+  });
+
   it('one signed session supports multiple queries, one selection and no cross-user or expired reuse',async()=>{
     const now=Date.now(),token=gate.createToken(alice,'local-test-secret',now);
     assert(gate.validateToken(token,alice,'local-test-secret',now));

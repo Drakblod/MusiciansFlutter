@@ -1,12 +1,17 @@
+// ignore_for_file: depend_on_referenced_packages
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:firebase_auth/firebase_auth.dart' show User;
 import 'package:firebase_core/firebase_core.dart' hide FirebaseService;
 import 'package:firebase_core_platform_interface/test.dart';
+import 'package:firebase_database_platform_interface/src/pigeon/messages.pigeon.dart';
 import 'package:provider/provider.dart';
 import 'package:musicians_flutter/models/band.dart';
 import 'package:musicians_flutter/models/city_location.dart';
 import 'package:musicians_flutter/models/user_profile.dart';
 import 'package:musicians_flutter/providers/app_state.dart';
+import 'package:musicians_flutter/services/city_search_service.dart';
 import 'package:musicians_flutter/services/firebase_service.dart';
 import 'package:musicians_flutter/views/edit_profile_screen.dart';
 import 'package:musicians_flutter/views/create_band_screen.dart';
@@ -19,8 +24,12 @@ class FormService extends FirebaseService {
   Stream<bool> subscribeToBandProfileAccess(String bandId) => Stream.value(true);
 
   UserProfile? saved;
+  Object? saveError;
   Band? created,updated;
-  @override Future<void> saveUserProfileAsync(String id,UserProfile profile) async { saved=profile; }
+  @override Future<void> saveUserProfileAsync(String id,UserProfile profile) async {
+    if (saveError case final error?) throw error;
+    saved=profile;
+  }
   @override Future<void> createBandAsync(String id,Band band) async { created=band; }
   @override Future<void> updateBandAsync(String id,Band band) async { updated=band; }
   @override Future<List<BandMember>> getBandMembersAsync(String id) async =>
@@ -39,19 +48,37 @@ class FormState extends AppState {
   @override void selectBand(String id,String name) {}
 }
 
-Future<void> mountForm(WidgetTester tester,Widget form,FormState state,picker.FakeCities provider) async {
+class ProfilePersistenceService extends FirebaseService {
+  @override String get currentUserId => 'profile-owner';
+  @override User? get currentUser => null;
+  @override bool get isLoggedIn => false;
+  @override Stream<String?> get catalogueIdentityChanges => const Stream.empty();
+}
+
+class ProfilePersistenceState extends AppState {
+  ProfilePersistenceState():super(firebaseService:ProfilePersistenceService());
+  UserProfile? profile;
+  @override UserProfile? get currentUserProfile => profile;
+  @override Future<void> refreshProfile() async {
+    profile=await firebaseService.getUserProfileAsync();
+  }
+}
+
+Future<void> mountForm(WidgetTester tester,Widget form,AppState state,CitySearchProvider? provider) async {
   tester.view.physicalSize=const Size(800,3000);tester.view.devicePixelRatio=1;
   addTearDown(() {tester.view.resetPhysicalSize();tester.view.resetDevicePixelRatio();});
-  await tester.pumpWidget(CitySearchProviderScope(provider:provider,
-    child:ChangeNotifierProvider<AppState>.value(value:state,
-      child:MaterialApp(home:form))));
+  final app=ChangeNotifierProvider<AppState>.value(value:state,child:MaterialApp(home:form));
+  await tester.pumpWidget(provider==null?app:CitySearchProviderScope(provider:provider,child:app));
   await tester.pump();
 }
 Future<void> chooseBerlin(WidgetTester tester) async {
+  await chooseCity(tester,'Ber','Berlin');
+}
+Future<void> chooseCity(WidgetTester tester,String query,String city) async {
   final field=find.descendant(of:find.byType(CityLocationPickerField),matching:find.byType(TextFormField));
-  await tester.ensureVisible(field);await tester.enterText(field,'Ber');
+  await tester.ensureVisible(field);await tester.enterText(field,query);
   await tester.pump(const Duration(milliseconds:350));await tester.pump();
-  await tester.ensureVisible(find.text('Berlin'));await tester.tap(find.text('Berlin'));
+  await tester.ensureVisible(find.text(city));await tester.tap(find.text(city));
   await tester.pump();
   await tester.tap(find.text('Confirm city'));await tester.pump();
 }
@@ -63,6 +90,103 @@ Future<void> save(WidgetTester tester,String text) async {
 void main(){
  TestWidgetsFlutterBinding.ensureInitialized();
  setUpAll(() async {setupFirebaseCoreMocks();await Firebase.initializeApp();});
+ testWidgets('confirmed Ljusdal saves in one callable and reloads before an ordinary edit', (tester) async {
+  const functions=BasicMessageChannel<Object?>(
+    'dev.flutter.pigeon.cloud_functions_platform_interface.CloudFunctionsHostApi.call',StandardMessageCodec());
+  const dbApi='dev.flutter.pigeon.firebase_database_platform_interface.FirebaseDatabaseHostApi';
+  const query=BasicMessageChannel<Object?>('$dbApi.queryGet',FirebaseDatabaseHostApi.pigeonChannelCodec);
+  const update=BasicMessageChannel<Object?>('$dbApi.databaseReferenceUpdate',FirebaseDatabaseHostApi.pigeonChannelCodec);
+  const owner='users/profile-owner/';
+  const location={'version':1,'precision':'city','confirmed':true,'city':'Ljusdal','country':'Sweden'};
+  final info=<String,Object?>{'DisplayName':'Musician','Email':'account@example.test',
+    'UserType':'Guitar','MainInstrument':'Guitar','Instruments':['Guitar','Piano'],'Genres':['Rock']};
+  final mirror=<String,Object?>{};
+  final messenger=tester.binding.defaultBinaryMessenger;
+  var citySaves=0,clientWrites=0;
+  messenger.setMockDecodedMessageHandler<Object?>(functions,(message) async {
+    final request=(message as List).single as Map;
+    final payload=Map<String,Object?>.from(request['parameters'] as Map);
+    expect(request['region'],'europe-west1');
+    switch(request['functionName']) {
+      case 'startCatalogueCitySession': return [{'sessionToken':'test-session'}];
+      case 'searchCatalogueCities': return [{'candidates':[{'placeId':'test-place','city':'Ljusdal','country':'Sweden'}]}];
+      case 'resolveCatalogueCity': return [{'location':location,'nonce':'test-receipt'}];
+      case 'commitUserCity':
+        citySaves++;
+        expect(payload['nonce'],'test-receipt');
+        expect(payload['operationId'],'test-receipt');
+        expect(payload['targetId'],'profile-owner');
+        expect(payload['location'],location);
+        final fields=Map<String,Object?>.from(payload['profile'] as Map);
+        expect(fields['DisplayName'],'Updated musician');
+        expect(fields['Instruments'],['Guitar','Piano']);
+        expect(fields['Genres'],['Rock']);
+        expect(fields.keys.toSet().intersection({'Email','PushToken','PublicLocation','Location'}),isEmpty);
+        info.addAll({...fields,'PublicLocation':location,'Location':'Ljusdal, Sweden'});
+        mirror['DisplayName']=fields['DisplayName'];
+        return [{'success':true}];
+      default: fail('Unexpected profile callable');
+    }
+  });
+  messenger.setMockDecodedMessageHandler<Object?>(query,(message) async {
+    final request=(message as List)[1] as QueryRequest;
+    expect(request.path,startsWith(owner));
+    final field=request.path.substring(owner.length);
+    return [{'snapshot':{'key':field,'value':field=='info'?info:mirror[field]}}];
+  });
+  messenger.setMockDecodedMessageHandler<Object?>(update,(message) async {
+    clientWrites++;
+    final request=(message as List)[1] as UpdateRequest;
+    expect(request.path,'/');
+    expect(request.value['${owner}info/DisplayName'],'Ordinary edit');
+    expect(request.value['${owner}DisplayName'],'Ordinary edit');
+    expect(request.value.keys, everyElement(isNot(contains('Location'))));
+    expect(request.value.keys, everyElement(isNot(contains('Email'))));
+    info['DisplayName']=request.value['${owner}info/DisplayName'];
+    return [null];
+  });
+  addTearDown(() {
+    for(final channel in [functions,query,update]) {
+      messenger.setMockDecodedMessageHandler<Object?>(channel,null);
+    }
+  });
+  final state=ProfilePersistenceState();
+  await tester.runAsync(state.refreshProfile);
+  await mountForm(tester,const EditProfileScreen(),state,null);
+  await tester.enterText(find.widgetWithText(TextFormField,'Musician'),'Updated musician');
+  await chooseCity(tester,'Lju','Ljusdal');
+  await save(tester,'Save Profile');
+  await tester.pump(const Duration(milliseconds:350));
+  expect(citySaves,1);
+  expect(clientWrites,0);
+  expect(info['PublicLocation'],location);
+  await tester.runAsync(state.refreshProfile);
+  expect(state.profile?.publicLocation?.label,'Ljusdal, Sweden');
+  expect(state.profile?.publicLocation?.confirmationNonce,isNull);
+  expect(state.profile?.email,'account@example.test');
+
+  await tester.pumpWidget(const SizedBox.shrink());
+  await mountForm(tester,const EditProfileScreen(),state,null);
+  expect(find.text('Confirmed: Ljusdal, Sweden'),findsOneWidget);
+  await tester.enterText(find.widgetWithText(TextFormField,'Updated musician'),'Ordinary edit');
+  await save(tester,'Save Profile');
+  await tester.pump(const Duration(milliseconds:350));
+  expect(citySaves,1);
+  expect(clientWrites,1);
+  await tester.runAsync(state.refreshProfile);
+  expect(state.profile?.displayName,'Ordinary edit');
+  expect(state.profile?.publicLocation?.label,'Ljusdal, Sweden');
+ });
+ testWidgets('save denial displays safe feedback and retains the form', (tester) async {
+  final state=FormState(UserProfile(userId:'test_uid_123',displayName:'Musician',userType:'Guitar'));
+  state.service.saveError=FirebaseException(plugin:'firebase_database',code:'permission-denied',
+    message:'raw permission diagnostics');
+  await mountForm(tester,const EditProfileScreen(),state,picker.FakeCities());
+  await save(tester,'Save Profile');
+  expect(find.text('Failed to save profile: Please try again.'),findsOneWidget);
+  expect(find.textContaining('raw permission diagnostics'),findsNothing);
+  expect(find.byType(EditProfileScreen),findsOneWidget);
+ });
  testWidgets('Edit Profile restores structured city and saves replacement', (tester) async {
   final old=CityLocation.confirmed(city:'Oslo',country:'Norway')!;
   final state=FormState(UserProfile(userId:'test_uid_123',displayName:'Musician',email:'a@example.test',

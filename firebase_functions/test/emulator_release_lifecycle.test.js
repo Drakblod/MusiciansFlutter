@@ -6,7 +6,7 @@ const admin=require('firebase-admin');
 const {initializeTestEnvironment,assertFails,assertSucceeds}=require('@firebase/rules-unit-testing');
 const {initializeApp,deleteApp}=require('firebase/app');
 const {getAuth,connectAuthEmulator,createUserWithEmailAndPassword,signInWithEmailAndPassword,signOut}=require('firebase/auth');
-const {getDatabase,connectDatabaseEmulator,ref,get,set}=require('firebase/database');
+const {getDatabase,connectDatabaseEmulator,ref,get,set,update}=require('firebase/database');
 const {getFunctions,connectFunctionsEmulator,httpsCallable}=require('firebase/functions');
 const {getStorage,connectStorageEmulator,ref:storageRef,uploadBytes,deleteObject}=require('firebase/storage');
 
@@ -59,7 +59,8 @@ for(const rules of ['database.rules.json','database.transitional.rules.json']) {
     it('registers, discovers, staffs two isolated positions, assigns/revokes and deletes through real server contracts',async()=>{
       const a=await client('a');assert.equal(a.auth.currentUser,null);
       await createUserWithEmailAndPassword(a.auth,a.email,'local-test-password');const uidA=a.auth.currentUser.uid;
-      await assertSucceeds(write(a,`users/${uidA}/info`,{DisplayName:'Release A',Email:a.email,MainInstrument:'Guitar'}));
+      await assertSucceeds(update(ref(a.db,`users/${uidA}/info`),
+        {DisplayName:'Release A',Email:a.email,MainInstrument:'Guitar'}));
       const publicA=await until(`publicUserProfiles/${uidA}`,v=>v?.DisplayName==='Release A');assert(!('Email' in publicA));
       await signOut(a.auth);
       await assert.rejects(signInWithEmailAndPassword(a.auth,a.email,'wrong-password'),e=>e.code.startsWith('auth/'));
@@ -72,7 +73,8 @@ for(const rules of ['database.rules.json','database.transitional.rules.json']) {
       assert.deepEqual(Object.keys(roster),[uidA]);assert.equal(roster[uidA].Role,'Leader');assert.equal(roster[uidA].Status,'active');
       await until(`publicBandProfiles/${band}`,v=>v?.Name==='Release Band');
       const b=await client('b');await createUserWithEmailAndPassword(b.auth,b.email,'local-test-password');const uidB=b.auth.currentUser.uid;
-      await write(b,`users/${uidB}/info`,{DisplayName:'Release B',MainInstrument:'Guitar',Instruments:['Guitar','Bass']});
+      await update(ref(b.db,`users/${uidB}/info`),
+        {DisplayName:'Release B',MainInstrument:'Guitar',Instruments:['Guitar','Bass']});
       await until(`publicUserProfiles/${uidB}`,v=>v?.DisplayName==='Release B');
       await call(a,'mutateBandMembership',{action:'add',bandId:band,userId:uidB,role:'Member',operationId:'add'});
       await until(`userBandMembershipIndex/${uidB}/${band}`,v=>v===true);
