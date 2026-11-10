@@ -1,5 +1,8 @@
 'use strict';
 
+const {createHash} = require('node:crypto');
+const logger = require('firebase-functions/logger');
+
 const CITY_TYPES = new Set(['locality', 'postal_town']);
 const DENIED = new Set(['street_address', 'route', 'street_number', 'premise',
   'subpremise', 'establishment', 'point_of_interest', 'neighborhood',
@@ -10,6 +13,9 @@ const clean = value => typeof value === 'string' && value.trim().length > 0 &&
 const token = value => typeof value === 'string' &&
   (/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)||
    /^[A-Za-z0-9_-]{62}$/.test(value));
+// Keep the signed app token for authorization. Places accepts at most 36 ASCII characters.
+const providerToken = value => value.length <= 36 ? value :
+  createHash('sha256').update('catalogue-city-places:').update(value).digest('base64url').slice(0, 36);
 const placeId = value => typeof value === 'string' && /^[A-Za-z0-9_-]{5,200}$/.test(value);
 const cityType = types => Array.isArray(types) &&
   types.some(type => CITY_TYPES.has(type)) && !types.some(type => DENIED.has(type));
@@ -88,6 +94,7 @@ async function requestJson(url, options, fetcher) {
     }
     const error=new Error('City provider unavailable');
     error.code=quota?'quota':'provider';
+    logger.warn('City provider request failed', {status: response.status, category: error.code});
     throw error;
   }
   return boundedJson(response);
@@ -99,7 +106,7 @@ async function search(query, sessionToken, apiKey, fetcher=fetch) {
     method:'POST', headers:{'Content-Type':'application/json','X-Goog-Api-Key':apiKey,
       'X-Goog-FieldMask':'suggestions.placePrediction.placeId,suggestions.placePrediction.structuredFormat,suggestions.placePrediction.types'},
     body:JSON.stringify({input:query.trim(),includedPrimaryTypes:['(cities)'],
-      includeQueryPredictions:false,sessionToken}),
+      includeQueryPredictions:false,sessionToken:providerToken(sessionToken)}),
   },fetcher);
   const seen = new Set(), result = [];
   for (const item of data.suggestions || []) {
@@ -112,7 +119,7 @@ async function search(query, sessionToken, apiKey, fetcher=fetch) {
 
 async function resolve(id, sessionToken, apiKey, fetcher=fetch) {
   if (!placeId(id) || !token(sessionToken) || !apiKey) throw new Error('Invalid city request');
-  const url = `https://places.googleapis.com/v1/places/${encodeURIComponent(id)}?sessionToken=${encodeURIComponent(sessionToken)}`;
+  const url = `https://places.googleapis.com/v1/places/${encodeURIComponent(id)}?sessionToken=${providerToken(sessionToken)}`;
   const data = await requestJson(url,{headers:{'X-Goog-Api-Key':apiKey,
     'X-Goog-FieldMask':'primaryType,types,addressComponents,attributions'}},fetcher);
   return confirmed(data);

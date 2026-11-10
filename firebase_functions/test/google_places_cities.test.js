@@ -1,5 +1,6 @@
 'use strict';
 const assert=require('assert');
+const {createToken}=require('../city_verification');
 const places=require('../google_places_cities');
 const TOKEN='12345678-1234-4234-8234-123456789abc';
 const prediction=(id='City123',types=['locality','political'])=>({placeId:id,types,
@@ -23,6 +24,41 @@ describe('Google Places city-only provider boundary',()=>{
   assert.strictEqual(body.sessionToken,TOKEN);assert.strictEqual(body.includeQueryPredictions,false);
   assert(!headers['X-Goog-FieldMask'].includes('location'));
  });
+ for (const city of ['Ljusdal', 'Stockholm', 'Lidingö']) {
+  it(`searches and resolves ${city} with a Places-compatible signed session`, async () => {
+   const id = 'SwedishCity123';
+   const signedToken = createToken('test-user', 'fake-test-key');
+   const providerTokens = [];
+   const fetcher = async (url, options) => {
+    const search = options.method === 'POST';
+    const body = search ? JSON.parse(options.body) : null;
+    const sessionToken = search ? body.sessionToken : new URL(url).searchParams.get('sessionToken');
+    if (typeof sessionToken !== 'string' || !/^[A-Za-z0-9_-]{1,36}$/.test(sessionToken)) {
+     return {ok: false, status: 400};
+    }
+    providerTokens.push(sessionToken);
+    if (search) {
+     assert.strictEqual(body.input, city);
+     return {ok: true, json: async () => ({suggestions: [{placePrediction: {
+      placeId: id, types: ['locality', 'political'],
+      structuredFormat: {mainText: {text: city}, secondaryText: {text: 'Sweden'}},
+     }}]})};
+    }
+    assert.strictEqual(new URL(url).pathname, `/v1/places/${id}`);
+    return {ok: true, json: async () => ({primaryType: 'locality', types: ['locality'],
+     addressComponents: [{types: ['locality'], longText: city},
+      {types: ['country'], longText: 'Sweden', shortText: 'SE'}]})};
+   };
+   assert.deepStrictEqual(await places.search(city, signedToken, 'fake-test-key', fetcher),
+    [{placeId: id, city, country: 'Sweden'}]);
+   assert.strictEqual((await places.resolve(id, signedToken, 'fake-test-key', fetcher)).city, city);
+   await places.search(city, createToken('test-user', 'fake-test-key'), 'fake-test-key', fetcher);
+   assert.strictEqual(providerTokens.length, 3);
+   assert(providerTokens[0] === providerTokens[1], 'search and details must share a provider token');
+   assert(providerTokens[0] !== providerTokens[2], 'separate sessions must have separate provider tokens');
+   assert(providerTokens[0] !== signedToken, 'only the derived token may reach Places');
+  });
+ }
  it('resolved international locality returns only safe structured fields',()=>{
   assert.deepStrictEqual(places.confirmed(details()),{version:1,precision:'city',confirmed:true,
     city:'Berlin',region:'Berlin',country:'Germany',countryCode:'DE'});
