@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_core_platform_interface/test.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -33,6 +35,12 @@ class FakeCities implements CitySearchProvider {
 }
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  setUpAll(() async {
+    setupFirebaseCoreMocks();
+    await Firebase.initializeApp();
+  });
+
   test('structured international city round-trips with Unicode, region and normalized code', () {
     for (final city in ['Berlin','Oslo','Växjö','Łódź','New York']) {
       final c = CityLocation.confirmed(city:city,region:'New York',country:'United States',countryCode:'us')!;
@@ -45,7 +53,7 @@ void main() {
     expect(CityLocation.confirmed(city:'Berlin',country:'Germany')!.label,'Berlin, Germany');
   });
 
-  Future<void> mount(WidgetTester tester, FakeCities provider, GlobalKey<FormState> key,
+  Future<void> mount(WidgetTester tester, CitySearchProvider? provider, GlobalKey<FormState> key,
       ValueChanged<CityLocation?> onChanged, {CityLocation? initial}) async {
     await tester.pumpWidget(MaterialApp(home:Scaffold(body:Form(key:key,
       child:SingleChildScrollView(child:CityLocationPickerField(
@@ -55,10 +63,73 @@ void main() {
 
   Future<void> confirmCity(WidgetTester tester) async {
     await tester.pump();
-    await tester.enterText(find.widgetWithText(TextField,'City'),'Berlin');
-    await tester.enterText(find.widgetWithText(TextField,'Country'),'Germany');
     await tester.tap(find.text('Confirm city'));
     await tester.pump();
+  }
+
+  for (final city in ['Ljusdal', 'Stockholm', 'Lidingö']) {
+    testWidgets('$city confirms the selected callable result without retyping', (tester) async {
+      const channel = BasicMessageChannel<Object?>(
+        'dev.flutter.pigeon.cloud_functions_platform_interface.CloudFunctionsHostApi.call',
+        StandardMessageCodec(),
+      );
+      const session = 'test-signed-app-session';
+      const placeId = 'test-selected-place';
+      const nonce = 'test-confirmation-receipt';
+      final calls = <String>[];
+      final query = city.substring(0, 3);
+      final messenger = tester.binding.defaultBinaryMessenger;
+      messenger.setMockDecodedMessageHandler<Object?>(channel, (message) async {
+        final request = (message as List).single as Map;
+        final name = request['functionName'] as String;
+        calls.add(name);
+        expect(request['region'], 'europe-west1');
+        switch (name) {
+          case 'startCatalogueCitySession':
+            expect(request['parameters'], isEmpty);
+            return [{'sessionToken': session}];
+          case 'searchCatalogueCities':
+            expect(request['parameters'], {'query': query, 'sessionToken': session});
+            return [{'candidates': [{'placeId': placeId, 'city': city, 'country': 'Sweden'}]}];
+          case 'resolveCatalogueCity':
+            expect(request['parameters'], {
+              'placeId': placeId,
+              'sessionToken': session,
+              'purpose': 'profile',
+              'targetId': 'test_uid',
+              'city': city,
+              'country': 'Sweden',
+            });
+            return [{
+              'location': {'version': 1, 'precision': 'city', 'confirmed': true,
+                'city': city, 'country': 'Sweden'},
+              'nonce': nonce,
+            }];
+          default:
+            fail('Unexpected city callable: $name');
+        }
+      });
+      addTearDown(() => messenger.setMockDecodedMessageHandler<Object?>(channel, null));
+
+      CityLocation? selected;
+      final form = GlobalKey<FormState>();
+      await mount(tester, null, form, (location) => selected = location);
+      await tester.enterText(find.byType(TextFormField), query);
+      await tester.pump(const Duration(milliseconds: 350));
+      await tester.pump();
+      expect(form.currentState!.validate(), isFalse);
+      await tester.tap(find.text(city));
+      await tester.pumpAndSettle();
+      expect(selected, isNull);
+      expect(tester.widget<TextField>(find.widgetWithText(TextField, 'City')).controller!.text, city);
+      expect(tester.widget<TextField>(find.widgetWithText(TextField, 'Country')).controller!.text, 'Sweden');
+      await tester.tap(find.text('Confirm city'));
+      await tester.pumpAndSettle();
+      expect(calls, ['startCatalogueCitySession', 'searchCatalogueCities', 'resolveCatalogueCity']);
+      expect(find.text('Confirmed: $city, Sweden'), findsOneWidget);
+      expect(selected?.confirmationNonce, nonce);
+      expect(form.currentState!.validate(), isTrue);
+    });
   }
 
   testWidgets('typed text cannot submit; suggestion shows city/country; selection confirms; clear invalidates', (tester) async {

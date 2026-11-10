@@ -65,8 +65,12 @@ exports.resolveCatalogueCity = onCall({region:'europe-west1',secrets:[cityPlaces
   try {
     await cityGate.closeSessionForDetails(db,uid,sessionToken,placeId);
     const provider=await cityPlaces.resolve(placeId,sessionToken,cityPlacesKey.value());
-    if(!provider||!cityGate.same(provider.city,names.city)||!cityGate.same(provider.country,names.country))
+    if(!provider||!cityGate.same(provider.city,names.city)||!cityGate.same(provider.country,names.country)) {
+      logger.warn('City confirmation rejected', {
+        category:provider?'city-country-mismatch':'unverifiable-place-details',
+      });
       throw new HttpsError('failed-precondition','City and country must match the selected place.');
+    }
     const grant=await cityGate.issueGrant(db,uid,purpose,targetId,placeId,names.city,names.country);
     return {...grant,attributions:provider.attributions||[]};
   } catch(error) {

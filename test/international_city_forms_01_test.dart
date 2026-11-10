@@ -53,8 +53,6 @@ Future<void> chooseBerlin(WidgetTester tester) async {
   await tester.pump(const Duration(milliseconds:350));await tester.pump();
   await tester.ensureVisible(find.text('Berlin'));await tester.tap(find.text('Berlin'));
   await tester.pump();
-  await tester.enterText(find.widgetWithText(TextField,'City'),'Berlin');
-  await tester.enterText(find.widgetWithText(TextField,'Country'),'Germany');
   await tester.tap(find.text('Confirm city'));await tester.pump();
 }
 Future<void> save(WidgetTester tester,String text) async {

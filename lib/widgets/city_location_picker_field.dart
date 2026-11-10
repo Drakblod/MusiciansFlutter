@@ -167,7 +167,7 @@ class CityLocationPickerFieldState extends State<CityLocationPickerField> {
   }
 
   Future<Map<String,String>?> _askForAuthoredCity(CityCandidate candidate) async {
-    var city='',country='',missing=false;
+    var city=candidate.city,country=candidate.country,missing=false;
     return showDialog<Map<String,String>>(
       context:context,
       builder:(dialogContext)=>StatefulBuilder(builder:(context,refresh){
@@ -182,10 +182,10 @@ class CityLocationPickerFieldState extends State<CityLocationPickerField> {
                 color:Theme.of(context).brightness==Brightness.dark
                     ? Colors.white : const Color(0xFF1F1F1F))),
               const SizedBox(height:12),
-              const Text('Type your city and country to add them to your public location.'),
-              TextField(decoration:const InputDecoration(labelText:'City'),
+              const Text('Confirm the city and country for your public location.'),
+              TextFormField(initialValue:candidate.city,decoration:const InputDecoration(labelText:'City'),
                 onChanged:(value)=>city=value),
-              TextField(decoration:const InputDecoration(labelText:'Country'),
+              TextFormField(initialValue:candidate.country,decoration:const InputDecoration(labelText:'Country'),
                 onChanged:(value)=>country=value),
               if(missing)const Text('Enter both city and country.'),
             ],

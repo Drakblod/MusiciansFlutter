@@ -2,6 +2,9 @@
 const assert=require('assert'),fs=require('fs'),path=require('path');
 const admin=require('firebase-admin');
 const {initializeTestEnvironment,assertFails,assertSucceeds}=require('@firebase/rules-unit-testing');
+const {initializeApp,deleteApp}=require('firebase/app');
+const {getAuth,connectAuthEmulator,signInAnonymously}=require('firebase/auth');
+const {getFunctions,connectFunctionsEmulator,httpsCallable}=require('firebase/functions');
 const gate=require('../city_verification');
 const authority=require('../membership_authority');
 
@@ -19,6 +22,55 @@ describe(`INTERNATIONAL-CITY-PICKER-01 server grants and rules: ${rules}`,functi
       rules:fs.readFileSync(path.join(__dirname,'../..',rules),'utf8')}});
   });
   after(async()=>{await env.cleanup();await app.delete();});
+
+  async function cityClient(name, test) {
+    assert.strictEqual(globalThis.__EMULATOR_ISOLATION_GUARD_ACTIVE__,true);
+    assert.strictEqual(process.env.GCLOUD_PROJECT,project);
+    const client=initializeApp({projectId:project,apiKey:'emulator-only'},`city_${suffix}_${name}`);
+    try {
+      const auth=getAuth(client);
+      connectAuthEmulator(auth,'http://127.0.0.1:9099',{disableWarnings:true});
+      const {user}=await signInAnonymously(auth);
+      const functions=getFunctions(client,'europe-west1');
+      connectFunctionsEmulator(functions,'127.0.0.1',5001);
+      const call=async (name,data)=>(await httpsCallable(functions,name)(data)).data;
+      const {sessionToken}=await call('startCatalogueCitySession',{});
+      await test(user.uid,sessionToken,call);
+    } finally {await deleteApp(client);}
+  }
+
+  for (const city of ['Ljusdal','Stockholm','Lidingö']) {
+    it(`resolves the selected ${city} prediction through real callables and commits its receipt`,async()=>{
+      await cityClient(city,async(uid,sessionToken,call)=>{
+        const {candidates}=await call('searchCatalogueCities',{query:city,sessionToken});
+        assert.strictEqual(candidates.length,1);
+        const [selected]=candidates;
+        assert.strictEqual(selected.city,city);
+        assert.strictEqual(selected.country,'Sweden');
+        const request={placeId:selected.placeId,sessionToken,purpose:'profile',targetId:uid,
+          city:`  ${selected.city.normalize('NFD')}  `,country:selected.country};
+        const receipt=await call('resolveCatalogueCity',request);
+        const location={version:1,precision:'city',confirmed:true,city,country:'Sweden'};
+        assert.deepStrictEqual(receipt.location,location);
+        assert.strictEqual(typeof receipt.nonce,'string');
+        assert.strictEqual((await db.ref(`users/${uid}/info/PublicLocation`).get()).exists(),false);
+        await assert.rejects(()=>call('resolveCatalogueCity',request),
+          error=>error.code==='functions/failed-precondition');
+        await call('commitUserCity',{nonce:receipt.nonce,operationId:'confirm_city',location});
+        assert.deepStrictEqual((await db.ref(`users/${uid}/info/PublicLocation`).get()).val(),location);
+      });
+    });
+  }
+
+  it('rejects an edited city name that does not match Details and issues no receipt',async()=>{
+    await cityClient('mismatch',async(uid,sessionToken,call)=>{
+      const {candidates:[selected]}=await call('searchCatalogueCities',{query:'Ljusdal',sessionToken});
+      await assert.rejects(()=>call('resolveCatalogueCity',{placeId:selected.placeId,sessionToken,
+        purpose:'profile',targetId:uid,city:'Stockholm',country:selected.country}),
+      error=>error.code==='functions/failed-precondition' && /must match/.test(error.message));
+      assert.strictEqual((await db.ref(`cityVerificationGrants/${uid}`).get()).exists(),false);
+    });
+  });
 
   it('one signed session supports multiple queries, one selection and no cross-user or expired reuse',async()=>{
     const now=Date.now(),token=gate.createToken(alice,'local-test-secret',now);

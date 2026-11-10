@@ -4,6 +4,8 @@ const {createHash} = require('node:crypto');
 const logger = require('firebase-functions/logger');
 
 const CITY_TYPES = new Set(['locality', 'postal_town']);
+const CITY_DETAIL_TAGS = new Set([...CITY_TYPES, 'political', 'geocode']);
+const PLACES_LANGUAGE = 'en-US';
 const DENIED = new Set(['street_address', 'route', 'street_number', 'premise',
   'subpremise', 'establishment', 'point_of_interest', 'neighborhood',
   'sublocality', 'postal_code']);
@@ -34,7 +36,11 @@ function candidate(prediction) {
 }
 
 function confirmed(details) {
-  if (!details || !CITY_TYPES.has(details.primaryType) || !cityType(details.types)) return null;
+  if (!details || !cityType(details.types)) return null;
+  const {primaryType,types} = details;
+  // Google may omit primaryType. Require unambiguous geographic tags in that case.
+  if (primaryType == null ? types.some(type => !CITY_DETAIL_TAGS.has(type)) :
+      !CITY_TYPES.has(primaryType) || !types.includes(primaryType)) return null;
   const components = Array.isArray(details.addressComponents) ? details.addressComponents : [];
   const component = type => components.find(c => Array.isArray(c?.types) && c.types.includes(type));
   const city = clean((component('locality') || component('postal_town'))?.longText);
@@ -105,7 +111,7 @@ async function search(query, sessionToken, apiKey, fetcher=fetch) {
   const data = await requestJson('https://places.googleapis.com/v1/places:autocomplete',{
     method:'POST', headers:{'Content-Type':'application/json','X-Goog-Api-Key':apiKey,
       'X-Goog-FieldMask':'suggestions.placePrediction.placeId,suggestions.placePrediction.structuredFormat,suggestions.placePrediction.types'},
-    body:JSON.stringify({input:query.trim(),includedPrimaryTypes:['(cities)'],
+    body:JSON.stringify({input:query.trim(),languageCode:PLACES_LANGUAGE,includedPrimaryTypes:['(cities)'],
       includeQueryPredictions:false,sessionToken:providerToken(sessionToken)}),
   },fetcher);
   const seen = new Set(), result = [];
@@ -119,7 +125,8 @@ async function search(query, sessionToken, apiKey, fetcher=fetch) {
 
 async function resolve(id, sessionToken, apiKey, fetcher=fetch) {
   if (!placeId(id) || !token(sessionToken) || !apiKey) throw new Error('Invalid city request');
-  const url = `https://places.googleapis.com/v1/places/${encodeURIComponent(id)}?sessionToken=${providerToken(sessionToken)}`;
+  const params = new URLSearchParams({sessionToken:providerToken(sessionToken),languageCode:PLACES_LANGUAGE});
+  const url = `https://places.googleapis.com/v1/places/${encodeURIComponent(id)}?${params}`;
   const data = await requestJson(url,{headers:{'X-Goog-Api-Key':apiKey,
     'X-Goog-FieldMask':'primaryType,types,addressComponents,attributions'}},fetcher);
   return confirmed(data);

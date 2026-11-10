@@ -14,6 +14,7 @@ const https = require('node:https');
 const dns = require('node:dns');
 const path = require('node:path');
 const os = require('node:os');
+const {createHash} = require('node:crypto');
 
 const project = 'demo-musicians-test';
 const fakeKey = 'EMULATOR_ONLY_FAKE_KEY_DO_NOT_USE';
@@ -102,6 +103,18 @@ for (const name of ['resolve','resolve4','resolve6','resolveAny','resolveCname',
   };
 }
 
+const swedishCities = new Map([
+  ['Ljusdal', {id:'TestPlaceLjusdal',type:'locality'}],
+  ['Stockholm', {id:'TestPlaceStockholm',type:'locality',primaryType:'locality'}],
+  ['Lidingö', {id:'TestPlaceLidingo',type:'postal_town'}],
+]);
+const response = (data,status=200) => new Response(JSON.stringify(data),
+  {status,headers:{'Content-Type':'application/json'}});
+// Workers for the two callables can differ. Record a digest in the runner's
+// temporary directory so Details accepts only the ID/token pair from Autocomplete.
+const predictionMarker = (token,id) => path.join(process.env.EMULATOR_ISOLATION_TEMP,
+  'places-'+createHash('sha256').update(`${token}:${id}`).digest('hex'));
+
 const realFetch = globalThis.fetch;
 globalThis.fetch = async function(input,options={}) {
   const url = new URL(typeof input === 'string' || input instanceof URL ? input : input.url);
@@ -113,10 +126,30 @@ globalThis.fetch = async function(input,options={}) {
       if (typeof body.input !== 'string' || !body.sessionToken ||
           JSON.stringify(body.includedPrimaryTypes) !== '["(cities)"]')
         deny(url.hostname,'places-unmocked');
+      const city = swedishCities.get(body.input);
+      if (city) {
+        if (typeof body.sessionToken !== 'string' || !/^[A-Za-z0-9_-]{36}$/.test(body.sessionToken) ||
+            body.languageCode !== 'en-US') return response({error:{status:'INVALID_ARGUMENT'}},400);
+        fs.writeFileSync(predictionMarker(body.sessionToken,city.id),'1');
+        return response({suggestions:[{placePrediction:{placeId:city.id,
+          types:[city.type,'political'],structuredFormat:{mainText:{text:body.input},
+            secondaryText:{text:'Sweden'}}}}]});
+      }
       return new Response(JSON.stringify({suggestions:[{placePrediction:{
         placeId:'PlaceBerlin123',types:['locality','political'],
         structuredFormat:{mainText:{text:'Berlin'},secondaryText:{text:'Germany'}}
       }}]}),{status:200,headers:{'Content-Type':'application/json'}});
+    }
+    for (const [city,place] of swedishCities) {
+      if (url.pathname !== `/v1/places/${place.id}`) continue;
+      const marker = predictionMarker(url.searchParams.get('sessionToken'),place.id);
+      if (!fs.existsSync(marker) || url.searchParams.get('languageCode') !== 'en-US' ||
+          options.headers?.['X-Goog-FieldMask'] !== 'primaryType,types,addressComponents,attributions')
+        return response({error:{status:'INVALID_ARGUMENT'}},400);
+      fs.unlinkSync(marker);
+      return response({...(place.primaryType ? {primaryType:place.primaryType} : {}),
+        types:[place.type,'political'],addressComponents:[{types:[place.type],longText:city},
+          {types:['country'],longText:'Sweden',shortText:'SE'}]});
     }
     if (url.pathname === '/v1/places/PlaceBerlin123' &&
         url.searchParams.has('sessionToken')) {

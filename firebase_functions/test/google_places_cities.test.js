@@ -27,6 +27,7 @@ describe('Google Places city-only provider boundary',()=>{
  for (const city of ['Ljusdal', 'Stockholm', 'Lidingö']) {
   it(`searches and resolves ${city} with a Places-compatible signed session`, async () => {
    const id = 'SwedishCity123';
+   const type = city === 'Lidingö' ? 'postal_town' : 'locality';
    const signedToken = createToken('test-user', 'fake-test-key');
    const providerTokens = [];
    const fetcher = async (url, options) => {
@@ -40,13 +41,15 @@ describe('Google Places city-only provider boundary',()=>{
     if (search) {
      assert.strictEqual(body.input, city);
      return {ok: true, json: async () => ({suggestions: [{placePrediction: {
-      placeId: id, types: ['locality', 'political'],
+      placeId: id, types: [type, 'political'],
       structuredFormat: {mainText: {text: city}, secondaryText: {text: 'Sweden'}},
      }}]})};
     }
     assert.strictEqual(new URL(url).pathname, `/v1/places/${id}`);
-    return {ok: true, json: async () => ({primaryType: 'locality', types: ['locality'],
-     addressComponents: [{types: ['locality'], longText: city},
+    if (sessionToken !== providerTokens[0]) return {ok: false, status: 400};
+    return {ok: true, json: async () => ({
+     ...(city === 'Stockholm' ? {primaryType: type} : {}), types: [type, 'political'],
+     addressComponents: [{types: [type], longText: city},
       {types: ['country'], longText: 'Sweden', shortText: 'SE'}]})};
    };
    assert.deepStrictEqual(await places.search(city, signedToken, 'fake-test-key', fetcher),
@@ -73,6 +76,12 @@ describe('Google Places city-only provider boundary',()=>{
  });
  for(const type of ['street_address','premise','establishment','point_of_interest','administrative_area_level_1'])
   it(`rejects resolved ${type}`,()=>assert.strictEqual(places.confirmed({...details(),primaryType:type}),null));
+ it('rejects address and venue types without a primary type even when locality is present',()=>{
+  for(const type of ['street_address','premise','point_of_interest','restaurant']) {
+   assert.strictEqual(places.confirmed({...details(['locality',type]),primaryType:undefined}),null);
+  }
+  assert.strictEqual(places.confirmed({...details(['political']),primaryType:undefined}),null);
+ });
  it('rejects details without city or country',()=>{
   assert.strictEqual(places.confirmed({...details(),addressComponents:details().addressComponents.slice(1)}),null);
   assert.strictEqual(places.confirmed({...details(),addressComponents:details().addressComponents.slice(0,2)}),null);
