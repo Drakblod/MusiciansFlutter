@@ -1,3 +1,6 @@
+const notificationDelivery = require('./notification_delivery');
+const notificationAccess = require('./notification_access');
+const { currentMember: notificationMember } = notificationAccess;
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const { onValueCreated, onValueWritten } = require('firebase-functions/v2/database');
@@ -246,78 +249,88 @@ function resolveNotificationFeatureId(notif) {
   }
 }
 
-/**
- * Helper to record a single user notification in /userNotifications/{recipientUserId}/{notificationId}
- */
-async function recordUserNotification(recipientUserId, notificationData) {
-  if (!recipientUserId) return;
-  try {
-    const now = Date.now();
-    const notificationId = notificationData.id || `notif_${now}_${recipientUserId}_${Math.random().toString(36).substring(2, 8)}`;
-    const featId = notificationData.featureId || notificationData.data?.featureId || resolveNotificationFeatureId(notificationData) || null;
-    const payload = {
-      id: notificationId,
-      type: notificationData.type || 'system',
-      featureId: featId,
-      category: notificationData.category || 'system',
-      title: notificationData.title || '',
-      body: notificationData.body || '',
-      createdAt: notificationData.createdAt || now,
-      isRead: false,
-      readAt: null,
-      data: {
-        ...(notificationData.data || {}),
-        ...(featId ? { featureId: featId } : {}),
-      },
-    };
-    await admin.database().ref(`/userNotifications/${recipientUserId}/${notificationId}`).set(payload);
-  } catch (err) {
-    console.error(`Error recording user notification for ${recipientUserId}:`, err);
-  }
+const notificationPlatforms = {
+  event_invite: ['reminder_rsvp', 'rsvp_reminder_channel'],
+  sub_request_invite: ['gig_rquest', 'gig_request_channel'],
+  grouped_sub_request: ['gig_rquest', 'gig_request_channel'],
+  sub_request_response: ['gig_rquest_response', 'gig_response_channel'],
+  gig_finalized: ['finalized_gig', 'finalized_gig_channel'],
+  event_threshold: ['reminder_rsvp', 'rsvp_reminder_channel'],
+  event_reminder: ['reminder_rsvp', 'rsvp_reminder_channel'],
+  session_application: ['gig_rquest_response', 'gig_response_channel'],
+  session_application_status: ['gig_rquest_response', 'gig_response_channel'],
+  band_section_chat: ['default', 'chat_notifications', 'default'],
+};
+
+function notificationUid(request) {
+  if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'Sign in to view notifications.');
+  return request.auth.uid;
 }
 
-/**
- * Helper to record multiple user notifications in batch
- */
-async function recordUserNotificationsBatch(recipientUserIds, notificationDataBuilder, {createOnly = false} = {}) {
-  if (!recipientUserIds || recipientUserIds.length === 0) return;
-  try {
-    const updates = {};
-    const now = Date.now();
-    for (const recipientId of recipientUserIds) {
-      if (!recipientId) continue;
-      const notif = typeof notificationDataBuilder === 'function'
-        ? notificationDataBuilder(recipientId)
-        : notificationDataBuilder;
-      const notificationId = notif.id || `notif_${now}_${recipientId}_${Math.random().toString(36).substring(2, 8)}`;
-      const featId = notif.featureId || notif.data?.featureId || resolveNotificationFeatureId(notif) || null;
-      updates[`/userNotifications/${recipientId}/${notificationId}`] = {
-        id: notificationId,
-        type: notif.type || 'system',
-        featureId: featId,
-        category: notif.category || 'system',
-        title: notif.title || '',
-        body: notif.body || '',
-        createdAt: notif.createdAt || now,
-        isRead: false,
-        readAt: null,
-        data: {
-          ...(notif.data || {}),
-          ...(featId ? { featureId: featId } : {}),
-        },
-      };
-    }
-    if (Object.keys(updates).length > 0) {
-      if (createOnly) {
-        await Promise.all(Object.entries(updates).map(([path, value]) =>
-          admin.database().ref(path).transaction(current => current || value)));
-      } else {
-        await admin.database().ref().update(updates);
-      }
-    }
-  } catch (err) {
-    console.error('Error batch recording user notifications:', err);
+exports.registerNotificationInstallation = onCall({ region: 'europe-west1' }, request =>
+  notificationDelivery.changeBinding(admin.database(), notificationUid(request), request.data));
+exports.unregisterNotificationInstallation = onCall({ region: 'europe-west1' }, request =>
+  notificationDelivery.changeBinding(admin.database(), notificationUid(request), request.data, true));
+
+const notificationOptions = {
+  buildRequest: buildSanitizedFeedItem,
+  format: formatDateTimeLabel,
+  isPrivate: request => ['direct_invitation', 'favorites_only'].includes(classifySubRequest(request)),
+};
+
+exports.listNotificationFeed = onCall({ region: 'europe-west1' }, request =>
+  notificationAccess.list(admin.database(), notificationUid(request), notificationOptions));
+exports.resolveNotification = onCall({ region: 'europe-west1' }, request =>
+  notificationAccess.resolve(admin.database(), notificationUid(request), request.data?.notificationId,
+    request.data?.slotId, notificationOptions, request.data?.preview === true));
+
+function publishNotification(uid, type, key, route, deliveryOptions) {
+  const config = notificationPlatforms[type];
+  let platform;
+  if (config) {
+    const [sound, channelId, apnsSound = sound + '.wav'] = config;
+    platform = {
+      android: { notification: { sound, channelId } },
+      apns: { payload: { aps: { sound: apnsSound } } },
+    };
   }
+  return notificationDelivery.publish(admin.database(), admin.messaging(), uid, type, key, route,
+    platform, deliveryOptions);
+}
+
+async function notifyRequestResponse(subRequestId, responderId) {
+  const db = admin.database();
+  const request = (await db.ref('SubRequests/' + subRequestId).get()).val();
+  if (!notificationAccess.activeRequest(request) || !(request.Responses ?? request.responses)?.[responderId]) return;
+  const uid = request.CreatorUserId || request.creatorUserId || request.UserId || request.userId;
+  if (!notificationDelivery.safeKey(uid) || uid === responderId) return;
+  try {
+    await membershipAuthority.authorizeRequest(db, uid, request);
+  } catch (error) {
+    if (error.code === 'permission-denied' || error.code === 'failed-precondition') return;
+    throw error;
+  }
+  // A retry of a pre-cutover application may have a historical delivery.
+  // Keep that record private and avoid sending another alert for it.
+  const legacyId = 'notif_sub_resp_' + subRequestId + '_' + responderId;
+  const legacy = await db.ref('userNotifications/' + uid + '/' + legacyId).get();
+  return publishNotification(uid, 'sub_request_response', [subRequestId, responderId],
+    { subRequestId, responderId }, { suppressPush: legacy.exists() });
+}
+
+function registeredRecipients(uids) {
+  return notificationDelivery.recipients(admin.database(), uids);
+}
+
+function dispatchRegistered(recipient, message) {
+  return notificationDelivery.dispatchRegistered(admin.database(), admin.messaging(), recipient, message);
+}
+
+async function dispatchRegisteredBatch(recipients, messages) {
+  const responses = await Promise.all(recipients.map((recipient, index) =>
+    dispatchRegistered(recipient, messages[index])));
+  const successCount = responses.filter(response => response.success).length;
+  return { responses, successCount, failureCount: responses.length - successCount };
 }
 
 /**
@@ -389,119 +402,10 @@ exports.onBandEventCreated = functions.region(databaseTriggerRegion).database
         return null;
       }
 
-      // Fetch band name
-      let bandName = 'Band';
-      try {
-        const bandSnap = await admin.database().ref(`/Bands/${bandId}/Name`).once('value');
-        if (bandSnap.exists() && bandSnap.val()) {
-          bandName = String(bandSnap.val()).trim();
-        }
-      } catch (_) {}
-
-      const memberIds = Object.keys(members);
-      const otherMemberIds = memberIds.filter(userId => userId !== creatorId);
-
-      // 1. Format Date/Time, Event Type, and Notification content safely
-      const rawEventType = eventData.eventType || eventData.EventType;
-      const eventType = (typeof rawEventType === 'string' && rawEventType.trim().length > 0)
-        ? rawEventType.trim()
-        : 'Event';
-
-      const dateTimeStr = formatDateTimeLabel(
-        eventData.startDateTime || eventData.date || eventData.Date,
-        eventData.startTime || eventData.StartTime,
-        eventData.endTime || eventData.EndTime
-      );
-
-      const notificationTitle = 'Event Request';
-      const notificationBody = `${bandName}\n${eventType}\n${dateTimeStr}`;
-
-      // Record Notification Center entries for all other band members independently of push tokens
-      await recordUserNotificationsBatch(otherMemberIds, (uid) => ({
-        id: `notif_evt_inv_${bandId}_${eventId}_${uid}`,
-        type: 'event_invite',
-        category: 'events',
-        title: notificationTitle,
-        body: notificationBody,
-        createdAt: Date.now(),
-        data: {
-          bandId,
-          eventId,
-          type: 'event_invite',
-          bandName,
-          eventType,
-          dateTime: dateTimeStr,
-        },
-      }));
-
-      const recipients = []; // Array of { userId, token }
-
-      // 2. Fetch the FCM push token for each member in parallel (excluding creator)
-      const tokenPromises = otherMemberIds
-        .map(async (userId) => {
-          const tokenSnapshot = await admin.database().ref(`/users/${userId}/info/PushToken`).once('value');
-          const token = tokenSnapshot.val();
-          if (token && token.trim().length > 0) {
-            recipients.push({ userId, token });
-          }
-        });
-
-      await Promise.all(tokenPromises);
-
-      if (recipients.length === 0) {
-        console.log('No registered push tokens found for other band members.');
-        return null;
-      }
-
-      // 3. Construct push notification messages for each token using FCM v1
-      const messages = recipients.map(r => ({
-        token: r.token,
-        notification: {
-          title: notificationTitle,
-          body: notificationBody,
-        },
-        data: {
-          click_action: 'FLUTTER_NOTIFICATION_CLICK',
-          bandId: bandId,
-          eventId: eventId,
-          type: 'event_invite',
-        },
-        android: {
-          notification: {
-            sound: 'reminder_rsvp',
-            channelId: 'rsvp_reminder_channel',
-          },
-        },
-        apns: {
-          payload: {
-            aps: {
-              sound: 'reminder_rsvp.wav',
-            },
-          },
-        },
-      }));
-
-      // 5. Dispatch notifications
-      const response = await admin.messaging().sendEach(messages);
-      console.log(`Successfully sent event push notifications: ${response.successCount} succeeded, ${response.failureCount} failed.`);
-      
-      // Clean up invalid/stale tokens
-      response.responses.forEach((res, index) => {
-        if (!res.success && res.error) {
-          const error = res.error;
-          const recipient = recipients[index];
-          if (recipient) {
-            console.error(`Failure sending notification to user ${recipient.userId} with token ${recipient.token}:`, error);
-            if (error.code === 'messaging/invalid-registration-token' ||
-                error.code === 'messaging/registration-token-not-registered') {
-              // Remove bad token from database
-              admin.database().ref(`/users/${recipient.userId}/info/PushToken`).remove();
-              console.log(`Removed invalid token for user ${recipient.userId}`);
-            }
-          }
-        }
-      });
-
+      const recipients = Object.keys(members).filter(uid =>
+        uid !== creatorId && notificationMember(members[uid]));
+      await Promise.all(recipients.map(uid => publishNotification(uid, 'event_invite',
+        [bandId, eventId], { bandId, eventId })));
       return null;
     } catch (error) {
       console.error('Error sending event push notification:', error);
@@ -635,13 +539,12 @@ exports.sendSubRequestNotification = onValueCreated({
     return null;
   }
   const voicePart = rawVoicePart.trim();
-  const creatorUserId = subRequestData.CreatorUserId || subRequestData.UserId;
-  const location = subRequestData.Location || 'TBD';
-  const bandName = subRequestData.BandName || 'Freelance Gig';
-  const targetUserIds = subRequestData.TargetUserIds; // Array of user IDs
+  const creatorUserId = subRequestData.CreatorUserId || subRequestData.creatorUserId ||
+    subRequestData.UserId || subRequestData.userId;
+  const targetUserIds = subRequestData.TargetUserIds || subRequestData.targetUserIds;
 
   try {
-    // 1. Fetch all users to resolve target profiles/tokens
+    // Resolve eligible profiles. Tokens are read only during delivery.
     const usersRef = admin.database().ref('/users');
     const usersSnapshot = await usersRef.once('value');
     const users = usersSnapshot.val();
@@ -651,9 +554,11 @@ exports.sendSubRequestNotification = onValueCreated({
     }
 
     const matchingUserIds = [];
-    const recipients = [];
 
-    // 2. Identify target recipients and their tokens
+    const privateRequest = notificationOptions.isPrivate(subRequestData);
+    const previousAudience = privateRequest
+      ? (await admin.database().ref('subRequestAudience/' + subRequestId).get()).val() || {}
+      : {};
     Object.keys(users).forEach((userId) => {
       // Exclude creator
       if (userId === creatorUserId) return;
@@ -665,6 +570,8 @@ exports.sendSubRequestNotification = onValueCreated({
       if (targetUserIds && Array.isArray(targetUserIds) && targetUserIds.length > 0) {
         // Targeted mode: only selected user IDs
         shouldNotify = targetUserIds.includes(userId);
+      } else if (privateRequest) {
+        shouldNotify = previousAudience[userId] === true;
       } else {
         // Default mode: matches the requested instrument/voice part
         const userType = userInfo.UserType || userInfo.userType || '';
@@ -677,100 +584,15 @@ exports.sendSubRequestNotification = onValueCreated({
         shouldNotify = hasMatchingInstrument;
       }
 
-      if (shouldNotify) {
-        matchingUserIds.push(userId);
-        const token = userInfo.PushToken;
-        if (token && token.trim().length > 0) {
-          recipients.push({ userId, token: token.trim() });
-        }
-      }
+      if (shouldNotify) matchingUserIds.push(userId);
     });
-
-    const rawEventType = subRequestData.eventType || subRequestData.EventType || subRequestData.role || subRequestData.Role || 'Gig';
-    const gigEventType = (typeof rawEventType === 'string' && rawEventType.trim().length > 0)
-      ? rawEventType.trim()
-      : 'Gig';
-
-    const gigDateTimeStr = formatDateTimeLabel(
-      subRequestData.date || subRequestData.Date || subRequestData.startDateTime,
-      subRequestData.startTime || subRequestData.StartTime,
-      subRequestData.endTime || subRequestData.EndTime
-    );
-
-    const notificationTitle = 'Gig Request';
-    const notificationBody = `${bandName}\n${gigEventType}\n${gigDateTimeStr}`;
-
-    // Record Notification Center entries for all matching users
-    await recordUserNotificationsBatch(matchingUserIds, (uid) => ({
-      id: `notif_sub_${subRequestId}_${uid}`,
-      type: 'sub_request_invite',
-      category: 'requests',
-      title: notificationTitle,
-      body: notificationBody,
-      createdAt: Date.now(),
-      data: {
-        subRequestId: subRequestId,
-        type: 'sub_request_invite',
-        bandId: subRequestData.bandId || subRequestData.BandId || '',
-        eventId: subRequestData.eventId || subRequestData.EventId || '',
-        bandName,
-        eventType: gigEventType,
-        dateTime: gigDateTimeStr,
-      },
-    }));
-
-    if (recipients.length === 0) {
-      console.log('No matching recipients with push tokens found.');
-      return null;
+    if (matchingUserIds.length) {
+      const audience = Object.fromEntries(matchingUserIds.map(uid =>
+        ['subRequestAudience/' + subRequestId + '/' + uid, true]));
+      await admin.database().ref().update(audience);
     }
-
-    // 3. Construct messages for FCM v1
-    const messages = recipients.map(r => ({
-      token: r.token,
-      notification: {
-        title: notificationTitle,
-        body: notificationBody,
-      },
-      data: {
-        click_action: 'FLUTTER_NOTIFICATION_CLICK',
-        subRequestId: subRequestId,
-        type: 'sub_request_invite',
-      },
-      android: {
-        notification: {
-          sound: 'gig_rquest',
-          channelId: 'gig_request_channel',
-        },
-      },
-      apns: {
-        payload: {
-          aps: {
-            sound: 'gig_rquest.wav',
-          },
-        },
-      },
-    }));
-
-    // 4. Send notifications
-    const response = await admin.messaging().sendEach(messages);
-    console.log(`Successfully sent sub request notifications: ${response.successCount} succeeded, ${response.failureCount} failed.`);
-
-    // Clean up invalid/stale tokens
-    response.responses.forEach((res, index) => {
-      if (!res.success && res.error) {
-        const error = res.error;
-        const recipient = recipients[index];
-        if (recipient) {
-          console.error(`Failure sending notification to user ${recipient.userId} with token ${recipient.token}:`, error);
-          if (error.code === 'messaging/invalid-registration-token' ||
-              error.code === 'messaging/registration-token-not-registered') {
-            // Remove bad token from database
-            admin.database().ref(`/users/${recipient.userId}/info/PushToken`).remove();
-            console.log(`Removed invalid token for user ${recipient.userId}`);
-          }
-        }
-      }
-    });
+    await Promise.all(matchingUserIds.map(uid => publishNotification(uid, 'sub_request_invite',
+      subRequestId, { subRequestId })));
 
     return null;
   } catch (error) {
@@ -779,10 +601,6 @@ exports.sendSubRequestNotification = onValueCreated({
   }
 });
 
-/**
- * Triggered when a grouped substitute request publication manifest is created under /subRequestPublications/{publicationId}.
- * Sends exactly one combined push notification per recipient for all matching/targeted slots in the publication.
- */
 /**
  * Compute stable publication operation ID from group ID and sorted slot IDs.
  */
@@ -794,228 +612,45 @@ function computeStablePublicationId(groupId, slotIds) {
 exports.computeStablePublicationId = computeStablePublicationId;
 
 /**
- * Triggered when a grouped substitute request publication manifest is created under /subRequestPublications/{publicationId}.
- * Maintains server-authorized audience and feed indexes and sends exactly one combined push notification per recipient.
+ * The publisher commits the manifest and exact audience together. This trigger
+ * consumes that audience without replacing the request or its feed entries.
  */
 exports.onSubRequestGroupPublished = onValueCreated({
   ref: '/subRequestPublications/{publicationId}',
-  region: databaseTriggerRegion
-}, async (event) => {
-  const pubData = event.data.val();
-  if (!pubData) return null;
-
+  region: databaseTriggerRegion,
+}, async event => {
+  const publication = event.data.val();
+  if (!publication) return null;
   const publicationId = event.params.publicationId;
-  const requestGroupId = pubData.requestGroupId || publicationId;
-  const creatorUserId = pubData.creatorUserId;
-  const bandName = pubData.bandName || 'Freelance Gig';
-  const slots = pubData.slots || [];
-
-  if (!slots.length) return null;
-
+  const slotIds = [...new Set(Object.values(publication.slots || {})
+    .map(slot => slot.subRequestId || slot.slotId).filter(notificationDelivery.safeKey))];
+  const db = admin.database();
   try {
-    const db = admin.database();
-    const auditRef = db.ref(`/subRequestNotificationAudit/${publicationId}`);
-    const auditRecipientsSnap = await auditRef.child('recipients').once('value');
-    const existingNotifiedRecipients = auditRecipientsSnap.val() || {};
-
-    const usersRef = db.ref('/users');
-    const usersSnapshot = await usersRef.once('value');
-    const users = usersSnapshot.val();
-    if (!users) return null;
-
-    const recipientMap = new Map(); // userId -> { token, matchingSlots: [] }
-    const indexUpdates = {};
-
-    // Creator management index
-    if (creatorUserId) {
-      indexUpdates[`/creatorSubRequestGroups/${creatorUserId}/${requestGroupId}`] = true;
-    }
-
-    Object.keys(users).forEach((userId) => {
-      const userInfo = users[userId].info;
-      const token = userInfo ? userInfo.PushToken : null;
-      const userType = (userInfo ? (userInfo.UserType || userInfo.userType || '') : '').toLowerCase();
-      const instruments = (userInfo ? (userInfo.Instruments || userInfo.instruments || []) : []).map(i => (i || '').toLowerCase());
-
-      const userMatchingSlots = [];
-
-      slots.forEach((slot) => {
-        const slotKey = slot.subRequestId || slot.slotId;
-        const voicePart = (slot.voicePart || '').toLowerCase();
-        const searchSource = slot.searchSource || 'search_all';
-        const targetUserIds = slot.targetUserIds || [];
-
-        let isEligible = false;
-        if (Array.isArray(targetUserIds) && targetUserIds.length > 0) {
-          isEligible = targetUserIds.includes(userId);
-        } else if (searchSource === 'favorites') {
-          isEligible = false;
-        } else {
-          isEligible = userType === voicePart || instruments.includes(voicePart);
-        }
-
-        if (isEligible) {
-          userMatchingSlots.push(slot);
-          if (slotKey) {
-            indexUpdates[`/subRequestAudience/${slotKey}/${userId}`] = true;
-            indexUpdates[`/userSubRequestFeed/${userId}/${slotKey}`] = {
-              slotId: slot.slotId || slotKey,
-              requestGroupId: requestGroupId,
-              bandName: bandName,
-              voicePart: slot.voicePart || '',
-              date: slot.date || '',
-              searchSource: searchSource,
-              publishedAt: pubData.publishedAt || Date.now(),
-            };
-          }
-        }
-      });
-
-      // Eligible non-creator users with matching slots
-      if (userId !== creatorUserId && userMatchingSlots.length > 0) {
-        if (token && token.trim() && !existingNotifiedRecipients[userId]) {
-          recipientMap.set(userId, { token, matchingSlots: userMatchingSlots });
-        }
-        // Record Notification Center entry
-        const matchCount = userMatchingSlots.length;
-        const firstSlot = userMatchingSlots[0];
-        const groupEventType = firstSlot.eventType || firstSlot.EventType || firstSlot.role || firstSlot.Role || 'Gig';
-        const groupDateTimeStr = formatDateTimeLabel(
-          firstSlot.date || firstSlot.Date || firstSlot.startDateTime,
-          firstSlot.startTime || firstSlot.StartTime,
-          firstSlot.endTime || firstSlot.EndTime
-        );
-        const title = 'Gig Request';
-        const body = `${bandName}\n${groupEventType}\n${groupDateTimeStr}`;
-        indexUpdates[`/userNotifications/${userId}/notif_sub_grp_${publicationId}_${userId}`] = {
-          id: `notif_sub_grp_${publicationId}_${userId}`,
-          type: 'grouped_sub_request',
-          category: 'requests',
-          title,
-          body,
-          createdAt: pubData.publishedAt || Date.now(),
-          isRead: false,
-          readAt: null,
-          data: {
-            requestGroupId,
-            publicationId,
-            type: 'grouped_sub_request',
-            bandName,
-            eventType: groupEventType,
-            dateTime: groupDateTimeStr,
-          },
-        };
-      }
+    const audiences = await Promise.all(slotIds.map(id =>
+      db.ref('subRequestAudience/' + id).get()));
+    const recipients = new Set(audiences.flatMap(snapshot => Object.entries(snapshot.val() || {})
+      .filter(([uid, matched]) => matched === true && uid !== publication.creatorUserId)
+      .map(([uid]) => uid)));
+    const results = await Promise.all([...recipients].map(async uid => {
+      const result = await publishNotification(uid, 'grouped_sub_request', publicationId, { publicationId });
+      return [uid, result];
+    }));
+    const sent = results.filter(([, result]) => result?.results?.some(response => response.success));
+    const auditRef = db.ref('subRequestNotificationAudit/' + publicationId);
+    const audit = Object.fromEntries(sent.map(([uid]) =>
+      ['recipients/' + uid, { notifiedAt: Date.now(), status: 'sent' }]));
+    const previous = (await auditRef.child('recipients').get()).val() || {};
+    await auditRef.update({
+      ...audit,
+      processedAt: Date.now(),
+      requestGroupId: publication.requestGroupId || publicationId,
+      notifiedCount: new Set([...Object.keys(previous), ...sent.map(([uid]) => uid)]).size,
     });
-
-    // Write server-maintained audience, feed, and notification indexes in bulk
-    if (Object.keys(indexUpdates).length > 0) {
-      await db.ref().update(indexUpdates);
-    }
-
-    // Atomic per-recipient transaction claim to protect from concurrent trigger executions
-    const claimedRecipients = [];
-    for (const [userId, entry] of recipientMap.entries()) {
-      const recipientAuditRef = auditRef.child('recipients').child(userId);
-      const claimTx = await recipientAuditRef.transaction((current) => {
-        if (current && (current.status === 'sent' || (current.status === 'claimed' && Date.now() - current.claimedAt < 60000))) {
-          return; // Abort: already sent or claimed by an active invocation
-        }
-        return { status: 'claimed', claimedAt: Date.now() };
-      });
-
-      if (claimTx.committed && claimTx.snapshot.val() && claimTx.snapshot.val().status === 'claimed') {
-        claimedRecipients.push({ userId, entry });
-      }
-    }
-
-    if (claimedRecipients.length === 0) {
-      await auditRef.update({
-        processedAt: Date.now(),
-        requestGroupId,
-        notifiedCount: Object.keys(existingNotifiedRecipients).length,
-      });
-      return null;
-    }
-
-    const messages = [];
-    const messageRecipients = [];
-
-    claimedRecipients.forEach(({ userId, entry }) => {
-      const matchCount = entry.matchingSlots.length;
-      const firstSlot = entry.matchingSlots[0];
-      const groupEventType = firstSlot.eventType || firstSlot.EventType || firstSlot.role || firstSlot.Role || 'Gig';
-      const groupDateTimeStr = formatDateTimeLabel(
-        firstSlot.date || firstSlot.Date || firstSlot.startDateTime,
-        firstSlot.startTime || firstSlot.StartTime,
-        firstSlot.endTime || firstSlot.EndTime
-      );
-      const title = 'Gig Request';
-      const body = `${bandName}\n${groupEventType}\n${groupDateTimeStr}`;
-
-      messages.push({
-        token: entry.token,
-        notification: {
-          title,
-          body,
-        },
-        data: {
-          click_action: 'FLUTTER_NOTIFICATION_CLICK',
-          requestGroupId: requestGroupId,
-          publicationId: publicationId,
-          type: 'grouped_sub_request',
-        },
-        android: {
-          notification: {
-            sound: 'gig_rquest',
-            channelId: 'gig_request_channel',
-          },
-        },
-        apns: {
-          payload: {
-            aps: {
-              sound: 'gig_rquest.wav',
-            },
-          },
-        },
-      });
-      messageRecipients.push(userId);
-    });
-
-    const response = await admin.messaging().sendEach(messages);
-    console.log(`Sent grouped sub request notifications for ${publicationId}: ${response.successCount} succeeded, ${response.failureCount} failed.`);
-
-    // Per-recipient delivery audit state for partial recovery
-    const perRecipientAuditUpdates = {};
-    messageRecipients.forEach((uid, idx) => {
-      if (response.responses[idx] && response.responses[idx].success) {
-        perRecipientAuditUpdates[`/subRequestNotificationAudit/${publicationId}/recipients/${uid}`] = {
-          notifiedAt: Date.now(),
-          status: 'sent',
-        };
-      } else {
-        perRecipientAuditUpdates[`/subRequestNotificationAudit/${publicationId}/recipients/${uid}`] = {
-          failedAt: Date.now(),
-          status: 'failed',
-          error: response.responses[idx]?.error?.message || 'Unknown send error',
-        };
-      }
-    });
-
-    perRecipientAuditUpdates[`/subRequestNotificationAudit/${publicationId}/processedAt`] = Date.now();
-    perRecipientAuditUpdates[`/subRequestNotificationAudit/${publicationId}/requestGroupId`] = requestGroupId;
-    perRecipientAuditUpdates[`/subRequestNotificationAudit/${publicationId}/notifiedCount`] =
-      Object.keys(existingNotifiedRecipients).length + response.successCount;
-
-    await db.ref().update(perRecipientAuditUpdates);
-
-    return null;
   } catch (error) {
-    console.error('Error in onSubRequestGroupPublished:', error);
-    return null;
+    console.error('Grouped notification unavailable:', error?.code || 'unknown');
   }
+  return null;
 });
-
 
 /**
  * Taxonomy of SubRequest categories for least-privilege feed distribution.
@@ -1787,107 +1422,18 @@ exports.respondToSubRequest = onCall({ region: 'europe-west1' }, async (request)
     idempotentUpdates[`users/${userId}/AppliedSubRequests/${subRequestId}`] = true;
     idempotentUpdates[`subRequestAudience/${subRequestId}/${userId}`] = true;
     await db.ref().update(idempotentUpdates);
+    await notifyRequestResponse(subRequestId, userId).catch(error =>
+      console.warn('Request response notification unavailable:', error?.code || 'unknown'));
     return { success: true, alreadyApplied: true, subRequestId };
   }
 
-  const now = Date.now();
   const updates = {};
   updates[`SubRequests/${subRequestId}/Responses/${userId}`] = true;
   updates[`subRequestAudience/${subRequestId}/${userId}`] = true;
   updates[`users/${userId}/AppliedSubRequests/${subRequestId}`] = true;
-
-  if (creatorId) {
-
-    let applicantName = 'A musician';
-    try {
-      const userSnap = await db.ref(`users/${userId}`).get();
-      if (userSnap.exists()) {
-        const uVal = userSnap.val() || {};
-        applicantName = uVal.displayName || uVal.nickname || uVal.DisplayName || 'A musician';
-      }
-    } catch (_) {}
-
-    const rawEventType = val.eventType || val.EventType || val.Role || val.role || 'Gig';
-    const gigEventType = (typeof rawEventType === 'string' && rawEventType.trim().length > 0)
-      ? rawEventType.trim()
-      : 'Gig';
-
-    const gigDateTimeStr = formatDateTimeLabel(
-      val.date || val.Date || val.startDateTime,
-      val.startTime || val.StartTime,
-      val.endTime || val.EndTime
-    );
-
-    const bandName = val.BandName || val.bandName || 'Band';
-    const role = val.VoicePart || val.voicePart || val.Role || val.role || 'Substitute';
-    const notifId = `notif_sub_resp_${subRequestId}_${userId}`;
-    const notificationTitle = 'Gig Request Response';
-    const notificationBody = `${bandName}\n${gigEventType}\n${gigDateTimeStr}`;
-
-    const notifData = {
-      id: notifId,
-      type: 'sub_request_response',
-      featureId: 'find_musicians',
-      category: 'requests',
-      title: notificationTitle,
-      body: notificationBody,
-      createdAt: now,
-      isRead: false,
-      readAt: null,
-      data: {
-        subRequestId: subRequestId,
-        applicantId: userId,
-        applicantName: applicantName,
-        bandId: val.BandId || val.bandId || '',
-        eventId: val.EventId || val.eventId || '',
-        voicePart: role,
-        bandName: bandName,
-        eventType: gigEventType,
-        dateTime: gigDateTimeStr,
-        featureId: 'find_musicians',
-      },
-    };
-
-    updates[`userNotifications/${creatorId}/${notifId}`] = notifData;
-
-    // Dispatch push notification to creator
-    try {
-      const creatorTokenSnap = await db.ref(`/users/${creatorId}/info/PushToken`).once('value');
-      const creatorToken = creatorTokenSnap.val();
-      if (creatorToken && typeof creatorToken === 'string' && creatorToken.trim()) {
-        await admin.messaging().send({
-          token: creatorToken.trim(),
-          notification: {
-            title: notificationTitle,
-            body: notificationBody,
-          },
-          data: {
-            click_action: 'FLUTTER_NOTIFICATION_CLICK',
-            subRequestId: subRequestId,
-            type: 'sub_request_response',
-          },
-          android: {
-            notification: {
-              sound: 'gig_rquest_response',
-              channelId: 'gig_response_channel',
-            },
-          },
-          apns: {
-            payload: {
-              aps: {
-                sound: 'gig_rquest_response.wav',
-              },
-            },
-          },
-        });
-        console.log(`Sent gig request response push notification to creator ${creatorId}`);
-      }
-    } catch (pushErr) {
-      console.warn(`Failed to send gig request response push to creator: ${pushErr.message}`);
-    }
-  }
-
   await db.ref().update(updates);
+  await notifyRequestResponse(subRequestId, userId).catch(error =>
+    console.warn('Request response notification unavailable:', error?.code || 'unknown'));
   return { success: true, alreadyApplied: false, subRequestId };
 });
 
@@ -2304,58 +1850,19 @@ exports.assignSubstitute = onCall({ region: 'europe-west1' }, async (request) =>
     await db.ref().update(updates);
   }
 
-  // Record Notification Center entry for candidate
-  const gigTitle = subReqData.VoicePart ? `Gig Confirmed: ${subReqData.VoicePart}` : 'Gig Confirmed!';
-  const bandDesc = targetBandId ? `You have been assigned to play with ${subReqData.BandName || 'the band'}!` : 'You have been confirmed for the gig!';
-  await recordUserNotification(candidateUserId, {
-    id: `notif_gig_fin_${subRequestId}_${candidateUserId}`,
-    type: 'gig_finalized',
-    category: 'requests',
-    title: `🎉 ${gigTitle}`,
-    body: bandDesc,
-    createdAt: now,
-    data: {
-      subRequestId: subRequestId,
-      bandId: targetBandId || '',
-      eventId: targetEventId || '',
-      type: 'gig_finalized',
-    },
-  });
-
-  // Dispatch finalized gig push notification to candidate
   try {
-    const candidateTokenSnap = await db.ref(`/users/${candidateUserId}/info/PushToken`).once('value');
-    const candidateToken = candidateTokenSnap.val();
-    if (candidateToken && typeof candidateToken === 'string' && candidateToken.trim()) {
-      await admin.messaging().send({
-        token: candidateToken.trim(),
-        notification: {
-          title: `🎉 ${gigTitle}`,
-          body: bandDesc,
-        },
-        data: {
-          click_action: 'FLUTTER_NOTIFICATION_CLICK',
-          subRequestId: subRequestId,
-          type: 'gig_finalized',
-        },
-        android: {
-          notification: {
-            sound: 'finalized_gig',
-            channelId: 'finalized_gig_channel',
-          },
-        },
-        apns: {
-          payload: {
-            aps: {
-              sound: 'finalized_gig.wav',
-            },
-          },
-        },
+    const assignment = (await subReqRef.get()).val();
+    const assignedAt = assignment?.AssignedAt ?? assignment?.assignedAt;
+    if ((assignment?.AssignedUserId ?? assignment?.assignedUserId) === candidateUserId &&
+        Number.isSafeInteger(assignedAt)) {
+      await publishNotification(candidateUserId, 'gig_finalized', [subRequestId, assignedAt], {
+        subRequestId, assignedAt,
+        ...(targetBandId ? { bandId: targetBandId } : {}),
+        ...(targetEventId ? { eventId: targetEventId } : {}),
       });
-      console.log(`Sent gig finalized push notification to candidate ${candidateUserId}`);
     }
-  } catch (pushErr) {
-    console.warn(`Failed to send gig finalized push notification to candidate: ${pushErr.message}`);
+  } catch (error) {
+    console.warn('Assignment notification unavailable:', error?.code || 'unknown');
   }
 
   return {
@@ -2628,55 +2135,11 @@ exports.onEventResponseChanged = functions.region(databaseTriggerRegion).databas
           return null;
         }
 
-        // Record Notification Center entry for creator
-        await recordUserNotification(creatorId, {
-          id: `notif_evt_thresh_${bandId}_${eventId}_${creatorId}`,
-          type: 'event_threshold',
-          category: 'events',
-          title: `📈 Event RSVP Milestone!`,
-          body: `70% or more of invited members have responded to your event: "${eventData.title || 'Band Event'}"`,
-          createdAt: Date.now(),
-          data: {
-            bandId: bandId,
-            eventId: eventId,
-            type: 'event_threshold',
-          },
-        });
-
-        // Fetch creator push token
-        const tokenSnapshot = await admin.database().ref(`/users/${creatorId}/info/PushToken`).once('value');
-        const token = tokenSnapshot.val();
-
-        if (token && token.trim().length > 0) {
-          const message = {
-            token: token,
-            notification: {
-              title: `📈 Event RSVP Milestone!`,
-              body: `70% or more of invited members have responded to your event: "${eventData.title}"`,
-            },
-            data: {
-              click_action: 'FLUTTER_NOTIFICATION_CLICK',
-              bandId: bandId,
-              eventId: eventId,
-              type: 'event_threshold',
-            },
-            android: {
-              notification: {
-                sound: 'reminder_rsvp',
-                channelId: 'rsvp_reminder_channel',
-              },
-            },
-            apns: {
-              payload: {
-                aps: {
-                  sound: 'reminder_rsvp.wav',
-                },
-              },
-            },
-          };
-
-          await admin.messaging().send(message);
-          console.log(`Sent threshold push notification to creator ${creatorId}`);
+        try {
+          await notificationAccess.authorizedEvent(admin.database(), creatorId, bandId, eventId);
+          await publishNotification(creatorId, 'event_threshold', [bandId, eventId], { bandId, eventId });
+        } catch (error) {
+          if (error.code !== 'not-found') throw error;
         }
 
         // Update database to prevent repeated notifications
@@ -2762,71 +2225,11 @@ exports.checkEventReminders = functions.region('europe-west1').pubsub
             const membersRef = admin.database().ref(`/Bands/${bandId}/Members_band`);
             const membersSnapshot = await membersRef.once('value');
             const members = membersSnapshot.val() || {};
-            const memberIds = Object.keys(members);
-
-            // Get users who have NOT responded yet (not present in Responses)
             const responses = event.Responses || {};
-            const nonRespondedMemberIds = memberIds.filter(userId => !responses[userId]);
-
-            if (nonRespondedMemberIds.length > 0) {
-              const reminderHours = send84 ? '84h' : (send72 ? '72h' : (send48 ? '48h' : 'rem'));
-              await recordUserNotificationsBatch(nonRespondedMemberIds, (uid) => ({
-                id: `notif_evt_rem_${bandId}_${eventId}_${uid}_${reminderHours}`,
-                type: 'event_reminder',
-                category: 'events',
-                title: `⏰ RSVP Reminder: ${event.title || 'Band Event'}`,
-                body: `Please RSVP to the upcoming ${(event.eventType || 'event').toLowerCase()}! Let the band know if you can make it.`,
-                createdAt: Date.now(),
-                data: {
-                  bandId,
-                  eventId,
-                  type: 'event_reminder',
-                },
-              }));
-
-              const recipients = [];
-              const tokenPromises = nonRespondedMemberIds.map(async (userId) => {
-                const tokenSnapshot = await admin.database().ref(`/users/${userId}/info/PushToken`).once('value');
-                const token = tokenSnapshot.val();
-                if (token && token.trim().length > 0) {
-                  recipients.push({ userId, token });
-                }
-              });
-
-              await Promise.all(tokenPromises);
-
-              if (recipients.length > 0) {
-                const messages = recipients.map(r => ({
-                  token: r.token,
-                  notification: {
-                    title: `⏰ RSVP Reminder: ${event.title}`,
-                    body: `Please RSVP to the upcoming ${event.eventType.toLowerCase()}! Let the band know if you can make it.`,
-                  },
-                  data: {
-                    click_action: 'FLUTTER_NOTIFICATION_CLICK',
-                    bandId: bandId,
-                    eventId: eventId,
-                    type: 'event_reminder',
-                  },
-                  android: {
-                    notification: {
-                      sound: 'reminder_rsvp',
-                      channelId: 'rsvp_reminder_channel',
-                    },
-                  },
-                  apns: {
-                    payload: {
-                      aps: {
-                        sound: 'reminder_rsvp.wav',
-                      },
-                    },
-                  },
-                }));
-
-                const dispatchRes = await admin.messaging().sendEach(messages);
-                console.log(`Dispatched ${dispatchRes.successCount} reminders for event ${eventId}`);
-              }
-            }
+            const recipients = Object.keys(members).filter(uid => notificationMember(members[uid]) && !responses[uid]);
+            const reminderHours = send84 ? '84h' : send72 ? '72h' : '48h';
+            await Promise.all(recipients.map(uid => publishNotification(uid, 'event_reminder',
+              [bandId, eventId, reminderHours], { bandId, eventId })));
 
             // Update database flags using the exact model names
             const updateObj = {};
@@ -2861,133 +2264,26 @@ exports.onCollabSessionApplicationChanged = onValueWritten({
     const sessionId = event.params.sessionId;
     const applicantId = event.params.applicantId;
 
+    const db = admin.database();
+    const session = (await db.ref('Collabs/Sessions/' + sessionId).get()).val();
+    if (!session) return null;
     if (!beforeData) {
-      const creatorId = afterData.CreatorId || afterData.creatorId;
-      if (!creatorId) {
-        console.log('No CreatorId specified for the session application.');
-        return null;
-      }
-
-      const sessionSnapshot = await admin.database().ref(`/Collabs/Sessions/${sessionId}/Title`).once('value');
-      const sessionTitle = sessionSnapshot.val() || 'Collab Session';
-
-      // Record Notification Center entry for session creator
-      await recordUserNotification(creatorId, {
-        id: `notif_collab_app_${sessionId}_${applicantId}`,
-        type: 'session_application',
-        category: 'requests',
-        title: 'New Session Application',
-        body: `A user has requested to join your session: "${sessionTitle}"`,
-        createdAt: Date.now(),
-        data: {
-          sessionId: sessionId,
-          applicantId: applicantId,
-          type: 'session_application',
-        },
-      });
-
-      const tokenSnapshot = await admin.database().ref(`/users/${creatorId}/info/PushToken`).once('value');
-      const token = tokenSnapshot.val();
-
-      if (!token) {
-        console.log(`No registered push token found for session creator ${creatorId}`);
-        return null;
-      }
-
-      const message = {
-        token: token,
-        notification: {
-          title: 'New Session Application',
-          body: `A user has requested to join your session: "${sessionTitle}"`,
-        },
-        data: {
-          type: 'session_application',
-          sessionId: sessionId,
-          applicantId: applicantId,
-        },
-        android: {
-          notification: {
-            sound: 'gig_rquest_response',
-            channelId: 'gig_response_channel',
-          },
-        },
-        apns: {
-          payload: {
-            aps: {
-              sound: 'gig_rquest_response.wav',
-            },
-          },
-        },
-      };
-
-      await admin.messaging().send(message);
-      console.log(`Sent new application notification to session creator ${creatorId}`);
-      return null;
-    }
-
-    const beforeStatus = beforeData.Status || beforeData.status;
-    const afterStatus = afterData.Status || afterData.status;
-
-    if (beforeStatus !== afterStatus) {
-      if (afterStatus === 'accepted' || afterStatus === 'declined') {
-        const sessionSnapshot = await admin.database().ref(`/Collabs/Sessions/${sessionId}/Title`).once('value');
-        const sessionTitle = sessionSnapshot.val() || 'Collab Session';
-
-        // Record Notification Center entry for applicant
-        await recordUserNotification(applicantId, {
-          id: `notif_collab_status_${sessionId}_${applicantId}_${afterStatus}`,
-          type: 'session_application_status',
-          category: 'requests',
-          title: `Session Request ${afterStatus.toUpperCase()}`,
-          body: `Your request to join "${sessionTitle}" has been ${afterStatus}.`,
-          createdAt: Date.now(),
-          data: {
-            sessionId: sessionId,
-            status: afterStatus,
-            type: 'session_application_status',
-          },
+      const creatorId = session.CreatorId ?? session.creatorId;
+      if (notificationDelivery.safeKey(creatorId)) {
+        await publishNotification(creatorId, 'session_application', [sessionId, event.id], {
+          sessionId, applicantId,
         });
-
-        const tokenSnapshot = await admin.database().ref(`/users/${applicantId}/info/PushToken`).once('value');
-        const token = tokenSnapshot.val();
-
-        if (!token) {
-          console.log(`No registered push token found for applicant ${applicantId}`);
-          return null;
-        }
-
-        const message = {
-          token: token,
-          notification: {
-            title: `Session Request ${afterStatus.toUpperCase()}`,
-            body: `Your request to join "${sessionTitle}" has been ${afterStatus}.`,
-          },
-          data: {
-            type: 'session_application_status',
-            sessionId: sessionId,
-            status: afterStatus,
-          },
-          android: {
-            notification: {
-              sound: 'gig_rquest_response',
-              channelId: 'gig_response_channel',
-            },
-          },
-          apns: {
-            payload: {
-              aps: {
-                sound: 'gig_rquest_response.wav',
-              },
-            },
-          },
-        };
-
-        await admin.messaging().send(message);
-        console.log(`Sent application status ${afterStatus} notification to applicant ${applicantId}`);
       }
       return null;
     }
 
+    const beforeStatus = beforeData.Status ?? beforeData.status;
+    const decision = afterData.Status ?? afterData.status;
+    if (beforeStatus !== decision && ['accepted', 'declined'].includes(decision)) {
+      await publishNotification(applicantId, 'session_application_status', [sessionId, event.id], {
+        sessionId, decision,
+      });
+    }
     return null;
   } catch (err) {
     console.error('Error in onCollabSessionApplicationChanged trigger:', err);
@@ -3424,54 +2720,18 @@ exports.sendDirectMessage = onCall({ region: 'europe-west1' }, async (request) =
 
   await admin.database().ref().update(updates);
 
-  // Record user notifications in Notification Center
   try {
-    let senderName = 'Musician';
-    const senderSnap = await admin.database().ref(`/users/${senderUid}/info`).once('value');
-    if (senderSnap.exists()) {
-      const info = senderSnap.val();
-      senderName = info.DisplayName || info.displayName || info.Nickname || info.nickname || 'Musician';
-    }
-
     if (isSessionChat) {
-      const sessionTitle = convVal.sessionTitle || 'Session Chat';
-      const participantList = (pMap && typeof pMap === 'object')
-        ? Object.keys(pMap).filter(id => isParticipantMember(pMap, id))
-        : (Array.isArray(pMap) ? pMap.map(String) : [senderUid]);
-      const otherParticipants = participantList.filter(pUid => pUid !== senderUid);
-      if (otherParticipants.length > 0) {
-        await recordUserNotificationsBatch(otherParticipants, (uid) => ({
-          id: `notif_sess_${conversationId}_${msgId}_${uid}`,
-          type: 'session_message',
-          category: 'messages',
-          title: `💬 ${sessionTitle}`,
-          body: `${senderName}: ${text.trim().length > 100 ? `${text.trim().substring(0, 97)}...` : text.trim()}`,
-          createdAt: Date.now(),
-          data: {
-            conversationId: conversationId,
-            sessionId: convVal.sessionId || '',
-            senderId: senderUid,
-            type: 'session_message',
-          },
-        }));
-      }
+      const participants = Array.isArray(pMap) ? pMap : Object.keys(pMap || {});
+      const otherParticipants = participants.filter(uid =>
+        uid !== senderUid && isParticipantMember(pMap, uid));
+      await Promise.all(otherParticipants.map(uid =>
+        publishNotification(uid, 'session_message', [conversationId, msgId], { conversationId })));
     } else if (receiverUid) {
-      await recordUserNotification(receiverUid, {
-        id: `notif_dm_${conversationId}_${msgId}`,
-        type: 'direct_message',
-        category: 'messages',
-        title: `Message from ${senderName}`,
-        body: text.trim().length > 100 ? `${text.trim().substring(0, 97)}...` : text.trim(),
-        createdAt: Date.now(),
-        data: {
-          conversationId: conversationId,
-          senderId: senderUid,
-          type: 'direct_message',
-        },
-      });
+      await publishNotification(receiverUid, 'direct_message', [conversationId, msgId], { conversationId });
     }
-  } catch (notifErr) {
-    console.error('Error recording direct/session message notification:', notifErr);
+  } catch (error) {
+    console.warn('Message notification unavailable:', error?.code || 'unknown');
   }
 
   return { messageId: msgId };
@@ -3689,30 +2949,7 @@ exports.triggerEventReminder = onCall({ region: 'europe-west1' }, async (request
     };
   }
 
-  const recipientsWithTokens = [];
-  const tokenPromises = memberIds.map(async (uid) => {
-    let token = null;
-    const tokenPaths = [
-      `/users/${uid}/info/PushToken`,
-      `/users/${uid}/PushToken`,
-      `/users/${uid}/info/pushToken`,
-      `/users/${uid}/pushToken`,
-      `/users/${uid}/fcmToken`,
-      `/users/${uid}/info/fcmToken`,
-    ];
-    for (const path of tokenPaths) {
-      if (token) break;
-      const snap = await admin.database().ref(path).once('value');
-      if (snap.exists() && typeof snap.val() === 'string' && snap.val().trim().length > 15) {
-        token = snap.val().trim();
-      }
-    }
-    if (token) {
-      recipientsWithTokens.push({ userId: uid, token: token });
-    }
-  });
-
-  await Promise.all(tokenPromises);
+  const recipientsWithTokens = await registeredRecipients(memberIds);
 
   if (recipientsWithTokens.length === 0) {
     await auditRef.update({
@@ -3771,14 +3008,8 @@ exports.triggerEventReminder = onCall({ region: 'europe-west1' }, async (request
     },
   }));
 
-  let fcmResponse;
-  if (process.env.FUNCTIONS_EMULATOR === 'true' || process.env.IS_EMULATOR_TEST === 'true') {
-    fcmResponse = {
-      responses: messages.map(() => ({ success: true, messageId: 'emulator_mock_fcm_id' })),
-    };
-  } else {
-    fcmResponse = await admin.messaging().sendEach(messages);
-  }
+  const fcmResponse = await dispatchRegisteredBatch(recipientsWithTokens, messages);
+  const missingTokensCount = memberIds.length - new Set(recipientsWithTokens.map(row => row.userId)).size;
 
   let batchSuccess = 0;
   let batchFailure = 0;
@@ -3793,9 +3024,9 @@ exports.triggerEventReminder = onCall({ region: 'europe-west1' }, async (request
       recipientUpdates[`recipients/${recipient.userId}`] = { status: 'sent', sentAt: new Date().toISOString() };
     } else {
       batchFailure++;
-      recipientUpdates[`recipients/${recipient.userId}`] = { status: 'failed', error: res.error ? res.error.message : 'Unknown FCM error' };
-      if (res.error && (res.error.code === 'messaging/invalid-registration-token' || res.error.code === 'messaging/registration-token-not-registered')) {
-        admin.database().ref(`/users/${recipient.userId}/info/PushToken`).remove();
+      const path = `recipients/${recipient.userId}`;
+      if (recipientUpdates[path]?.status !== 'sent') {
+        recipientUpdates[path] = { status: 'failed', error: res.error?.code || 'undelivered' };
       }
     }
   });
@@ -3810,7 +3041,7 @@ exports.triggerEventReminder = onCall({ region: 'europe-west1' }, async (request
     failureCount: batchFailure,
     totalMembersCount: memberIds.length,
     tokensFoundCount: recipientsWithTokens.length,
-    missingTokensCount: memberIds.length - recipientsWithTokens.length,
+    missingTokensCount,
     completedAt: new Date().toISOString(),
     triggeredBy: callerUid,
   };
@@ -3828,7 +3059,7 @@ exports.triggerEventReminder = onCall({ region: 'europe-west1' }, async (request
     attemptedCount: recipientsWithTokens.length,
     totalMembersCount: memberIds.length,
     tokensFoundCount: recipientsWithTokens.length,
-    missingTokensCount: memberIds.length - recipientsWithTokens.length,
+    missingTokensCount,
   };
 });
 
@@ -4035,88 +3266,15 @@ exports.sendBandSectionMessage = onCall({ region: 'europe-west1' }, async (reque
 
   await admin.database().ref().update(updates);
 
-  // Push notifications and notification center entries to all other current participants
-  const otherParticipants = participantsList.filter(uid => uid !== senderUid);
-  if (otherParticipants.length > 0) {
-    try {
-      const groupName = convVal.groupName || 'Section Chat';
-
-      // Record Notification Center feed entry for all other participants
-      await recordUserNotificationsBatch(otherParticipants, (uid) => ({
-        id: `notif_sec_${bandId}_${conversationId}_${msgId}_${uid}`,
-        type: 'band_section_chat',
-        category: 'messages',
-        title: `💬 ${groupName}`,
-        body: `${senderName}: ${text.trim().length > 100 ? `${text.trim().substring(0, 97)}...` : text.trim()}`,
-        createdAt: Date.now(),
-        data: {
-          conversationId: conversationId,
-          bandId: bandId,
-          senderId: senderUid,
-          type: 'band_section_chat',
-        },
-      }));
-
-      const tokenPromises = otherParticipants.map(async (uid) => {
-        const tokenSnap = await admin.database().ref(`/users/${uid}/info/PushToken`).once('value');
-        const token = tokenSnap.val();
-        if (token && typeof token === 'string' && token.trim().length > 0) {
-          return { userId: uid, token: token.trim() };
-        }
-        return null;
-      });
-
-      const recipientsWithTokens = (await Promise.all(tokenPromises)).filter(Boolean);
-
-      if (recipientsWithTokens.length > 0) {
-        const messages = recipientsWithTokens.map(r => ({
-          token: r.token,
-          notification: {
-            title: `💬 ${groupName}`,
-            body: `${senderName}: ${text.trim()}`,
-          },
-          data: {
-            click_action: 'FLUTTER_NOTIFICATION_CLICK',
-            conversationId: conversationId,
-            bandId: bandId,
-            type: 'band_section_chat',
-          },
-          android: {
-            notification: {
-              sound: 'default',
-              channelId: 'chat_notifications',
-            },
-          },
-          apns: {
-            payload: {
-              aps: {
-                sound: 'default',
-              },
-            },
-          },
-        }));
-
-        let fcmResponse;
-        if (process.env.FUNCTIONS_EMULATOR === 'true' || process.env.IS_EMULATOR_TEST === 'true') {
-          fcmResponse = {
-            responses: messages.map(() => ({ success: true, messageId: 'emulator_mock_fcm_id' })),
-          };
-        } else {
-          fcmResponse = await admin.messaging().sendEach(messages);
-        }
-
-        fcmResponse.responses.forEach((res, index) => {
-          if (!res.success && res.error) {
-            const recipient = recipientsWithTokens[index];
-            if (recipient && (res.error.code === 'messaging/invalid-registration-token' || res.error.code === 'messaging/registration-token-not-registered')) {
-              admin.database().ref(`/users/${recipient.userId}/info/PushToken`).remove();
-            }
-          }
-        });
+  try {
+    await Promise.all(participantsList.filter(uid => uid !== senderUid).map(async uid => {
+      const member = (await admin.database().ref('Bands/' + bandId + '/Members_band/' + uid).get()).val();
+      if (notificationMember(member)) {
+        await publishNotification(uid, 'band_section_chat', [conversationId, msgId], { bandId, conversationId });
       }
-    } catch (pushErr) {
-      console.error('Error dispatching band section push notifications:', pushErr);
-    }
+    }));
+  } catch (error) {
+    console.warn('Section message notification unavailable:', error?.code || 'unknown');
   }
 
   return { messageId: msgId };
@@ -4617,6 +3775,7 @@ exports.updateSessionApplicationStatus = onCall({ region: 'europe-west1' }, asyn
  */
 exports.sendTestPushNotification = onCall({ region: 'europe-west1' }, async (request) => {
   const callerId = request.auth?.uid;
+  notificationUid(request);
   const { soundType, customToken, broadcastToAll } = request.data || {};
 
   if (!soundType) {
@@ -4696,29 +3855,8 @@ exports.sendTestPushNotification = onCall({ region: 'europe-west1' }, async (req
 
   // If broadcastToAll is requested, deliver to all registered push tokens in RTDB
   if (broadcastToAll === true) {
-    const usersSnap = await admin.database().ref('/users').once('value');
-    const users = usersSnap.val() || {};
-    const recipientTokens = [];
-    const seenTokens = new Set();
-
-    for (const [uid, u] of Object.entries(users)) {
-      if (!u || typeof u !== 'object') continue;
-      const candidates = [
-        u.info?.PushToken,
-        u.PushToken,
-        u.info?.pushToken,
-        u.pushToken,
-        u.info?.fcmToken,
-        u.fcmToken,
-      ];
-      for (const t of candidates) {
-        if (t && typeof t === 'string' && t.trim().length > 15 && !seenTokens.has(t.trim())) {
-          seenTokens.add(t.trim());
-          recipientTokens.push({ uid, token: t.trim() });
-          break;
-        }
-      }
-    }
+    if (request.auth.token?.admin !== true) throw new HttpsError('permission-denied', 'Administrator access is required.');
+    const recipientTokens = await registeredRecipients();
 
     if (recipientTokens.length === 0) {
       return {
@@ -4755,7 +3893,7 @@ exports.sendTestPushNotification = onCall({ region: 'europe-west1' }, async (req
     }));
 
     try {
-      const response = await admin.messaging().sendEach(messages);
+      const response = await dispatchRegisteredBatch(recipientTokens, messages);
       console.log(`Broadcasted test push ${soundType}: ${response.successCount} succeeded, ${response.failureCount} failed.`);
       return {
         success: true,
@@ -4776,21 +3914,13 @@ exports.sendTestPushNotification = onCall({ region: 'europe-west1' }, async (req
   }
 
   // Single device push
-  let token = (typeof customToken === 'string' && customToken.trim().length > 10) ? customToken.trim() : null;
-  if (!token && callerId) {
-    const tokenSnap = await admin.database().ref(`/users/${callerId}/info/PushToken`).once('value');
-    token = tokenSnap.val();
-  }
-
-  if (!token || typeof token !== 'string' || !token.trim() || token.trim().length < 15) {
-    return {
-      success: false,
-      error: 'No valid device push token provided. Please run on a mobile device or paste a valid FCM token.',
-    };
+  const destinations = await registeredRecipients([callerId]);
+  const recipient = customToken ? destinations.find(row => row.token === customToken) : destinations[0];
+  if (!recipient) {
+    return { success: false, error: 'No registered device for this account.' };
   }
 
   const message = {
-    token: token.trim(),
     notification: {
       title: config.title,
       body: config.body,
@@ -4817,11 +3947,11 @@ exports.sendTestPushNotification = onCall({ region: 'europe-west1' }, async (req
   };
 
   try {
-    const messageId = await admin.messaging().send(message);
+    const delivery = await dispatchRegistered(recipient, message);
     return {
-      success: true,
+      success: delivery.success,
       broadcast: false,
-      messageId,
+      messageId: delivery.messageId || null,
       soundType,
       channelId: config.channelId,
     };
@@ -4847,49 +3977,15 @@ exports.onBandRoomMessageCreated = functions.region(databaseTriggerRegion).datab
     const bandId = context.params.bandId;
     const messageId = context.params.messageId;
     const senderId = msgData.senderId || msgData.SenderId;
-    const senderName = msgData.senderName || msgData.SenderName || 'Musician';
-    const text = msgData.text || msgData.Text || '';
 
     try {
-      // 1. Fetch band name and members
-      const bandRef = admin.database().ref(`/Bands/${bandId}`);
-      const bandSnap = await bandRef.once('value');
-      const bandVal = bandSnap.val() || {};
-      const bandName = bandVal.Name || bandVal.name || bandId;
-
-      let memberIds = [];
-      if (bandVal.Members_band) {
-        memberIds = Object.keys(bandVal.Members_band);
-      } else if (bandVal.Members) {
-        memberIds = Object.keys(bandVal.Members);
-      }
-
-      // Also check /bandconversations/{bandId}/members if band node didn't have members
-      if (memberIds.length === 0) {
-        const convMembersSnap = await admin.database().ref(`/bandconversations/${bandId}/members`).once('value');
-        if (convMembersSnap.exists() && convMembersSnap.val()) {
-          memberIds = Object.keys(convMembersSnap.val());
-        }
-      }
-
-      const recipients = memberIds.filter(uid => uid && uid !== senderId);
-      if (recipients.length === 0) return null;
-
-      // 2. Record persistent notifications in Notification Center
-      await recordUserNotificationsBatch(recipients, (uid) => ({
-        id: `notif_br_${bandId}_${messageId}_${uid}`,
-        type: 'band_room_message',
-        category: 'messages',
-        title: `🎵 ${bandName}`,
-        body: `${senderName}: ${text.length > 100 ? `${text.substring(0, 97)}...` : text}`,
-        createdAt: Date.now(),
-        data: {
-          bandId: bandId,
-          messageId: messageId,
-          senderId: senderId || '',
-          type: 'band_room_message',
-        },
-      }));
+      const db = admin.database();
+      const bandMembers = await db.ref('Bands/' + bandId + '/Members_band').get();
+      const recipients = Object.entries(bandMembers.val() || {})
+        .filter(([uid, member]) => uid !== senderId && notificationMember(member))
+        .map(([uid]) => uid);
+      await Promise.all(recipients.map(uid => publishNotification(uid, 'band_room_message',
+        [bandId, messageId], { bandId, messageId })));
 
       return null;
     } catch (err) {
@@ -4898,112 +3994,25 @@ exports.onBandRoomMessageCreated = functions.region(databaseTriggerRegion).datab
     }
   });
 
-/**
- * Marks a single notification as read in the caller's /userNotifications/{callerUid}/{notificationId} feed.
- */
-exports.markNotificationRead = onCall({ region: 'europe-west1' }, async (request) => {
-  const callerUid = request.auth?.uid;
-  if (!callerUid) {
-    throw new HttpsError('unauthenticated', 'User must be authenticated.');
+exports.markNotificationRead = onCall({ region: 'europe-west1' }, async request => {
+  const uid = notificationUid(request);
+  const id = request.data?.notificationId;
+  if (typeof id !== 'string' || !/^[a-f0-9]{64}$/.test(id)) {
+    throw new HttpsError('invalid-argument', 'Invalid notification ID.');
   }
-
-  const notificationId = request.data?.notificationId;
-  if (!notificationId || typeof notificationId !== 'string' || notificationId.trim().length === 0) {
-    throw new HttpsError('invalid-argument', 'notificationId is required.');
-  }
-
-  const notifRef = admin.database().ref(`/userNotifications/${callerUid}/${notificationId.trim()}`);
-  const notifSnap = await notifRef.once('value');
-  if (!notifSnap.exists()) {
-    throw new HttpsError('not-found', 'Notification not found.');
-  }
-
-  await notifRef.update({
-    isRead: true,
-    readAt: Date.now(),
-  });
-
-  return { success: true };
+  return notificationAccess.markRead(admin.database(), uid, () => true, id);
 });
 
-/**
- * Marks all unread notifications as read in the caller's /userNotifications/{callerUid} feed.
- */
-exports.markAllNotificationsRead = onCall({ region: 'europe-west1' }, async (request) => {
-  const callerUid = request.auth?.uid;
-  if (!callerUid) {
-    throw new HttpsError('unauthenticated', 'User must be authenticated.');
-  }
+exports.markAllNotificationsRead = onCall({ region: 'europe-west1' }, request =>
+  notificationAccess.markRead(admin.database(), notificationUid(request), () => true));
 
-  const feedRef = admin.database().ref(`/userNotifications/${callerUid}`);
-  const feedSnap = await feedRef.once('value');
-
-  if (!feedSnap.exists() || !feedSnap.val()) {
-    return { success: true, updatedCount: 0 };
-  }
-
-  const notifs = feedSnap.val();
-  const updates = {};
-  const now = Date.now();
-  let updatedCount = 0;
-
-  Object.keys(notifs).forEach((nId) => {
-    const n = notifs[nId];
-    if (n && !n.isRead) {
-      updates[`/userNotifications/${callerUid}/${nId}/isRead`] = true;
-      updates[`/userNotifications/${callerUid}/${nId}/readAt`] = now;
-      updatedCount++;
-    }
-  });
-
-  if (updatedCount > 0) {
-    await admin.database().ref().update(updates);
-  }
-
-  return { success: true, updatedCount };
-});
-
-/**
- * Marks all unread notifications belonging to a specific feature as read in the caller's /userNotifications/{callerUid} feed.
- */
-exports.markFeatureNotificationsRead = onCall({ region: 'europe-west1' }, async (request) => {
-  const callerUid = request.auth?.uid;
-  if (!callerUid) {
-    throw new HttpsError('unauthenticated', 'User must be authenticated.');
-  }
-
-  const featureId = request.data?.featureId;
-  if (!featureId || typeof featureId !== 'string' || !KNOWN_FEATURE_IDS.includes(featureId.trim())) {
-    throw new HttpsError('invalid-argument', 'A valid featureId is required.');
-  }
-
-  const targetFeature = featureId.trim();
-  const feedRef = admin.database().ref(`/userNotifications/${callerUid}`);
-  const feedSnap = await feedRef.once('value');
-
-  if (!feedSnap.exists() || !feedSnap.val()) {
-    return { success: true, updatedCount: 0 };
-  }
-
-  const notifs = feedSnap.val();
-  const updates = {};
-  const now = Date.now();
-  let updatedCount = 0;
-
-  Object.keys(notifs).forEach((nId) => {
-    const n = notifs[nId];
-    if (n && !n.isRead && resolveNotificationFeatureId(n) === targetFeature) {
-      updates[`/userNotifications/${callerUid}/${nId}/isRead`] = true;
-      updates[`/userNotifications/${callerUid}/${nId}/readAt`] = now;
-      updatedCount++;
-    }
-  });
-
-  if (updatedCount > 0) {
-    await admin.database().ref().update(updates);
-  }
-
-  return { success: true, updatedCount };
+exports.markFeatureNotificationsRead = onCall({ region: 'europe-west1' }, request => {
+  const uid = notificationUid(request);
+  const rawFeature = request.data?.featureId;
+  const feature = typeof rawFeature === 'string' ? rawFeature.trim() : null;
+  if (!KNOWN_FEATURE_IDS.includes(feature)) throw new HttpsError('invalid-argument', 'A valid featureId is required.');
+  return notificationAccess.markRead(admin.database(), uid, row =>
+    resolveNotificationFeatureId(row) === feature);
 });
 
 /**
@@ -5017,76 +4026,9 @@ exports.onSubRequestResponseCreated = functions.region(databaseTriggerRegion).da
     const applicantId = context.params.applicantId;
     if (!subRequestId || !applicantId) return null;
 
-    try {
-      const db = admin.database();
-      const subSnap = await db.ref(`/SubRequests/${subRequestId}`).once('value');
-      if (!subSnap.exists()) return null;
-
-      const val = subSnap.val() || {};
-      const creatorId = val.CreatorUserId || val.creatorUserId || val.UserId || val.userId;
-      if (!creatorId || creatorId === applicantId) return null;
-
-      const notifId = `notif_sub_resp_${subRequestId}_${applicantId}`;
-      const existingSnap = await db.ref(`/userNotifications/${creatorId}/${notifId}`).once('value');
-      if (existingSnap.exists()) {
-        return null; // Already recorded by callable
-      }
-
-      let applicantName = 'A musician';
-      try {
-        const userSnap = await db.ref(`/users/${applicantId}`).once('value');
-        if (userSnap.exists()) {
-          const uVal = userSnap.val() || {};
-          applicantName = uVal.displayName || uVal.nickname || uVal.DisplayName || 'A musician';
-        }
-      } catch (_) {}
-
-      const rawEventType = val.eventType || val.EventType || val.Role || val.role || 'Gig';
-      const gigEventType = (typeof rawEventType === 'string' && rawEventType.trim().length > 0)
-        ? rawEventType.trim()
-        : 'Gig';
-
-      const gigDateTimeStr = formatDateTimeLabel(
-        val.date || val.Date || val.startDateTime,
-        val.startTime || val.StartTime,
-        val.endTime || val.EndTime
-      );
-
-      const bandName = val.BandName || val.bandName || 'Band';
-      const role = val.VoicePart || val.voicePart || val.Role || val.role || 'Substitute';
-      const notificationTitle = 'Gig Request Response';
-      const notificationBody = `${bandName}\n${gigEventType}\n${gigDateTimeStr}`;
-
-      const notifData = {
-        id: notifId,
-        type: 'sub_request_response',
-        featureId: 'find_musicians',
-        category: 'requests',
-        title: notificationTitle,
-        body: notificationBody,
-        createdAt: Date.now(),
-        isRead: false,
-        readAt: null,
-        data: {
-          subRequestId: subRequestId,
-          applicantId: applicantId,
-          applicantName: applicantName,
-          bandId: val.BandId || val.bandId || '',
-          eventId: val.EventId || val.eventId || '',
-          voicePart: role,
-          bandName: bandName,
-          eventType: gigEventType,
-          dateTime: gigDateTimeStr,
-          featureId: 'find_musicians',
-        },
-      };
-
-      await recordUserNotification(creatorId, notifData);
-      return null;
-    } catch (err) {
-      console.error('Error in onSubRequestResponseCreated trigger:', err);
-      return null;
-    }
+    await notifyRequestResponse(subRequestId, applicantId).catch(error =>
+      console.warn('Request response notification unavailable:', error?.code || 'unknown'));
+    return null;
   });
 
 /**
@@ -5102,42 +4044,16 @@ exports.onBandFileUploaded = functions.region(databaseTriggerRegion).database
     const bandId = context.params.bandId;
     const fileId = context.params.fileId;
     const uploaderId = fileData.UploadedBy || fileData.uploadedBy || fileData.uploaderId || fileData.userId || fileData.UserId;
-    const fileName = fileData.FileName || fileData.fileName || fileData.Name || fileData.name || 'A file';
 
     try {
-      const db = admin.database();
-      const bandRef = db.ref(`/Bands/${bandId}`);
-      const bandSnap = await bandRef.once('value');
-      const bandVal = bandSnap.val() || {};
-      const bandName = bandVal.Name || bandVal.name || bandId;
+      const members = (await admin.database().ref('Bands/' + bandId + '/Members_band').get()).val() || {};
 
       // File names are private band data too. Legacy mirrors and stale roles
       // must never expand the current canonical audience.
-      const memberIds = Object.entries(bandVal.Members_band || {}).filter(([, member]) =>
-        require('./band_membership_index').validMember(member) &&
-        !(member.Status != null && member.status != null &&
-          String(member.Status).trim().toLowerCase() !== String(member.status).trim().toLowerCase()))
-        .map(([uid]) => uid);
-
-      const recipients = memberIds.filter(uid => uid && uid !== uploaderId);
-      if (recipients.length === 0) return null;
-
-      await recordUserNotificationsBatch(recipients, (uid) => ({
-        id: `notif_file_${bandId}_${fileId}_${uid}`,
-        type: 'band_file_uploaded',
-        featureId: 'band_room',
-        category: 'band',
-        title: `📁 ${bandName}`,
-        body: `New file uploaded: ${fileName}`,
-        createdAt: Date.now(),
-        data: {
-          bandId: bandId,
-          fileId: fileId,
-          fileName: fileName,
-          uploadedBy: uploaderId || '',
-          featureId: 'band_room',
-        },
-      }), {createOnly:true});
+      const recipients = Object.keys(members).filter(uid =>
+        uid !== uploaderId && notificationMember(members[uid]));
+      await Promise.all(recipients.map(uid => publishNotification(uid, 'band_file_uploaded',
+        [bandId, fileId], { bandId, fileId })));
 
       return null;
     } catch (err) {
@@ -5236,7 +4152,9 @@ exports.deleteUserAccount = onCall({ region: 'europe-west1' }, async (request) =
     const rootUpdates = {};
     rootUpdates[`/users/${callerUid}`] = null;
     rootUpdates[`/userBandMembershipIndex/${callerUid}`] = null;
-    rootUpdates[`/userNotifications/${callerUid}`] = null;
+    for (const path of [notificationDelivery.feedPath, notificationDelivery.routesPath, notificationDelivery.signalPath]) {
+      rootUpdates['/' + path + '/' + callerUid] = null;
+    }
     rootUpdates[`/userSubRequestFeed/${callerUid}`] = null;
     rootUpdates[`/creatorSubRequestGroups/${callerUid}`] = null;
     rootUpdates[`/userConversations/${callerUid}`] = null;

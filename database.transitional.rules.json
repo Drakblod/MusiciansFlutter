@@ -76,64 +76,79 @@
           }
         },
         "info": {
-          ".read": "auth != null && auth.uid == $userId",
+          ".read": false,
           "DisplayName": {
+            ".read": "auth != null && auth.uid == $userId",
             ".write": "auth != null && auth.uid == $userId",
             ".validate": "newData.isString()"
           },
           "Level": {
+            ".read": "auth != null && auth.uid == $userId",
             ".write": "auth != null && auth.uid == $userId",
             ".validate": "newData.isString()"
           },
           "About": {
+            ".read": "auth != null && auth.uid == $userId",
             ".write": "auth != null && auth.uid == $userId",
             ".validate": "newData.isString()"
           },
           "Contact": {
+            ".read": "auth != null && auth.uid == $userId",
             ".write": "auth != null && auth.uid == $userId",
             ".validate": "newData.isString()"
           },
           "History": {
+            ".read": "auth != null && auth.uid == $userId",
             ".write": "auth != null && auth.uid == $userId",
             ".validate": "newData.isString()"
           },
           "Projects": {
+            ".read": "auth != null && auth.uid == $userId",
             ".write": "auth != null && auth.uid == $userId",
             ".validate": "newData.isString()"
           },
           "ProfilePictureUrl": {
+            ".read": "auth != null && auth.uid == $userId",
             ".write": "auth != null && auth.uid == $userId",
             ".validate": "newData.isString()"
           },
           "SpotifyUrl": {
+            ".read": "auth != null && auth.uid == $userId",
             ".write": "auth != null && auth.uid == $userId",
             ".validate": "newData.isString()"
           },
           "YoutubeUrl": {
+            ".read": "auth != null && auth.uid == $userId",
             ".write": "auth != null && auth.uid == $userId",
             ".validate": "newData.isString()"
           },
           "AudioSnippetUrl": {
+            ".read": "auth != null && auth.uid == $userId",
             ".write": "auth != null && auth.uid == $userId",
             ".validate": "newData.isString()"
           },
           "CollabBio": {
+            ".read": "auth != null && auth.uid == $userId",
             ".write": "auth != null && auth.uid == $userId",
             ".validate": "newData.isString()"
           },
           "MainInstrument": {
+            ".read": "auth != null && auth.uid == $userId",
             ".write": "auth != null && auth.uid == $userId",
             ".validate": "newData.isString()"
           },
           "UserType": {
+            ".read": "auth != null && auth.uid == $userId",
             ".write": "auth != null && auth.uid == $userId",
             ".validate": "newData.isString()"
           },
           "Nickname": {
+            ".read": "auth != null && auth.uid == $userId",
             ".write": "auth != null && auth.uid == $userId",
             ".validate": "newData.isString()"
           },
           "Instruments": {
+            ".read": "auth != null && auth.uid == $userId",
             ".write": "auth != null && auth.uid == $userId",
             ".validate": "newData.hasChildren()",
             "$index": {
@@ -141,6 +156,7 @@
             }
           },
           "Styles": {
+            ".read": "auth != null && auth.uid == $userId",
             ".write": "auth != null && auth.uid == $userId",
             ".validate": "newData.hasChildren()",
             "$index": {
@@ -148,6 +164,7 @@
             }
           },
           "Genres": {
+            ".read": "auth != null && auth.uid == $userId",
             ".write": "auth != null && auth.uid == $userId",
             ".validate": "newData.hasChildren()",
             "$index": {
@@ -155,6 +172,7 @@
             }
           },
           "CollabRoles": {
+            ".read": "auth != null && auth.uid == $userId",
             ".write": "auth != null && auth.uid == $userId",
             ".validate": "newData.hasChildren()",
             "$index": {
@@ -162,16 +180,21 @@
             }
           },
           "CollabRemote": {
+            ".read": "auth != null && auth.uid == $userId",
             ".write": "auth != null && auth.uid == $userId",
             ".validate": "newData.isBoolean()"
           },
           "Email": {
+            ".read": "auth != null && auth.uid == $userId",
             ".write": "auth != null && auth.uid == $userId && auth.token.email != null && newData.val() == auth.token.email",
             ".validate": "newData.isString()"
           },
+          "$legacyProfileField": {
+            ".read": "auth != null && auth.uid == $userId && $legacyProfileField.matches(/^(displayName|level|about|contact|history|projects|profilePictureUrl|spotifyUrl|youtubeUrl|audioSnippetUrl|collabBio|mainInstrument|userType|nickname|instruments|styles|genres|collabRoles|collabRemote|email|location|Location|PublicLocation)$/)"
+          },
           "PushToken": {
-            ".write": "auth != null && auth.uid == $userId",
-            ".validate": "newData.isString()"
+            ".read": false,
+            ".write": false
           }
         },
         "UserType": {
@@ -507,15 +530,27 @@
       ".read": false,
       ".write": false
     },
+    "notificationTokenRegistry": {
+      ".read": false,
+      ".write": false
+    },
+    "notificationRoutesV2": {
+      ".read": false,
+      ".write": false
+    },
+    "notificationFeedV2": {
+      ".read": false,
+      ".write": false,
+      "$uid": { ".indexOn": "createdAt" }
+    },
+    "notificationFeedSignals": {
+      ".write": false,
+      "$uid": { ".read": "auth != null && auth.uid == $uid" }
+    },
     "userNotifications": {
-      "$userId": {
-        ".read": "auth != null && auth.uid == $userId",
-        ".write": false,
-        ".indexOn": [
-          "createdAt",
-          "isRead"
-        ]
-      }
+      ".read": false,
+      ".write": false,
+      "$userId": { ".indexOn": "createdAt" }
     },
     "subRequestPublications": {
       ".read": false,

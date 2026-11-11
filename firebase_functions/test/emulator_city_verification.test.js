@@ -77,6 +77,8 @@ describe(`INTERNATIONAL-CITY-PICKER-01 server grants and rules: ${rules}`,functi
       const user=`users/${uid}`,info=`${user}/info`;
       const owner=env.authenticatedContext(uid,{email:'owner@example.test'}).database();
       const unrelated=env.authenticatedContext(bob).database();
+      const readProfileFields=async keys=>Object.fromEntries(await Promise.all(keys.map(async key=>
+        [key,(await owner.ref(`${info}/${key}`).get()).val()])));
       await assertSucceeds(owner.ref(info).update({DisplayName:'Before',Email:'owner@example.test'}));
       await db.ref(`${info}/PushToken`).set('existing-device-token');
       const {candidates:[selected]}=await call('searchCatalogueCities',{query:'Ljusdal',sessionToken});
@@ -104,11 +106,13 @@ describe(`INTERNATIONAL-CITY-PICKER-01 server grants and rules: ${rules}`,functi
       assert.deepStrictEqual((await db.ref(user).get()).val(),newer);
       await db.ref(`${info}/CityUpdatedAt`).remove();
       await call('commitUserCity',save);
-      const saved=(await owner.ref(info).get()).val();
+      const saved=await readProfileFields(['PublicLocation','Email',...Object.keys(profile)]);
       assert.deepStrictEqual(saved.PublicLocation,receipt.location);
       for(const [key,value] of Object.entries(profile))assert.deepStrictEqual(saved[key],value);
       assert.strictEqual(saved.Email,before.info.Email);
-      assert.strictEqual(saved.PushToken,before.info.PushToken);
+      await assertFails(owner.ref(info).get());
+      await assertFails(owner.ref(`${info}/PushToken`).get());
+      assert.strictEqual((await db.ref(`${info}/PushToken`).get()).val(),before.info.PushToken);
       assert.strictEqual((await owner.ref(`${user}/DisplayName`).get()).val(),'After');
 
       await assertSucceeds(owner.ref().update({[`${info}/About`]:'Ordinary edit',
@@ -122,7 +126,7 @@ describe(`INTERNATIONAL-CITY-PICKER-01 server grants and rules: ${rules}`,functi
       await assertFails(unrelated.ref(`${info}/PushToken`).set('Outsider'));
       await assertFails(unrelated.ref(info).get());
       await call('commitUserCity',save); // An acknowledged retry must preserve newer ordinary edits.
-      const edited=(await owner.ref(info).get()).val();
+      const edited=await readProfileFields(['About','DisplayName','Genres','PublicLocation']);
       assert.strictEqual(edited.About,'Ordinary edit');
       assert.strictEqual(edited.DisplayName,'Latest');
       assert.deepStrictEqual(edited.Genres,['Jazz']);
@@ -131,7 +135,9 @@ describe(`INTERNATIONAL-CITY-PICKER-01 server grants and rules: ${rules}`,functi
       await assert.rejects(()=>call('commitUserCity',{clear:true,targetId:bob,profile:{About:'Wrong account'}}),
         error=>error.code==='functions/permission-denied');
       await call('commitUserCity',{clear:true,targetId:uid,profile:{About:'Cleared'}});
-      const cleared=(await owner.ref(info).get()).val();
+      const cleared=(await db.ref(info).get()).val();
+      assert.deepStrictEqual(await readProfileFields(['About','PublicLocation','Location']),
+        {About:'Cleared',PublicLocation:null,Location:null});
       assert.strictEqual(cleared.About,'Cleared');
       assert.strictEqual(cleared.LocationCleared,true);
       assert(!('PublicLocation' in cleared));

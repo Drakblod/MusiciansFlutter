@@ -1023,8 +1023,8 @@ describe('Real Cloud Functions Emulator Integration Tests (JS Client SDK + Emula
 
   it('30. markNotificationRead marks notification read in caller feed and prevents cross-user modification', async () => {
     // Seed notifications for user_a and user_b
-    await adminDb.ref('userNotifications/user_a/notif_test_a1').set({
-      id: 'notif_test_a1',
+    await adminDb.ref('notificationFeedV2/user_a/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa').set({
+      id: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       type: 'event_invite',
       category: 'events',
       title: 'Event Invite A',
@@ -1033,8 +1033,8 @@ describe('Real Cloud Functions Emulator Integration Tests (JS Client SDK + Emula
       isRead: false,
       readAt: null,
     });
-    await adminDb.ref('userNotifications/user_b/notif_test_b1').set({
-      id: 'notif_test_b1',
+    await adminDb.ref('notificationFeedV2/user_b/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb').set({
+      id: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
       type: 'direct_message',
       category: 'messages',
       title: 'DM for B',
@@ -1047,33 +1047,33 @@ describe('Real Cloud Functions Emulator Integration Tests (JS Client SDK + Emula
     // Unauthenticated call should fail
     const unauthFn = httpsCallable(functionsUnauth, 'markNotificationRead');
     await assert.rejects(
-      unauthFn({ notificationId: 'notif_test_a1' }),
+      unauthFn({ notificationId: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' }),
       (err) => isAuthError(err)
     );
 
     // User A marking own notification should succeed
     const markReadFnA = httpsCallable(functionsUserA, 'markNotificationRead');
-    const resA = await markReadFnA({ notificationId: 'notif_test_a1' });
+    const resA = await markReadFnA({ notificationId: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' });
     assert.strictEqual(resA.data.success, true);
 
-    const snapA = await adminDb.ref('userNotifications/user_a/notif_test_a1').get();
+    const snapA = await adminDb.ref('notificationFeedV2/user_a/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa').get();
     assert.strictEqual(snapA.val().isRead, true);
     assert(snapA.val().readAt !== null);
 
     // User A trying to mark User B's notification should fail with not-found
     await assert.rejects(
-      markReadFnA({ notificationId: 'notif_test_b1' }),
+      markReadFnA({ notificationId: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' }),
       (err) => err && (err.code === 'functions/not-found' || err.code === 'not-found' || err.message.includes('not found'))
     );
 
     // Verify User B's notification remains unread
-    const snapB = await adminDb.ref('userNotifications/user_b/notif_test_b1').get();
+    const snapB = await adminDb.ref('notificationFeedV2/user_b/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb').get();
     assert.strictEqual(snapB.val().isRead, false);
   });
 
   it('31. markAllNotificationsRead marks all notifications read for caller and returns count', async () => {
     // Seed 2 unread notifications for user_a and 1 for user_b
-    await adminDb.ref('userNotifications/user_a/notif_a_batch1').set({
+    await adminDb.ref('notificationFeedV2/user_a/notif_a_batch1').set({
       id: 'notif_a_batch1',
       type: 'event_reminder',
       category: 'events',
@@ -1081,7 +1081,7 @@ describe('Real Cloud Functions Emulator Integration Tests (JS Client SDK + Emula
       createdAt: Date.now(),
       isRead: false,
     });
-    await adminDb.ref('userNotifications/user_a/notif_a_batch2').set({
+    await adminDb.ref('notificationFeedV2/user_a/notif_a_batch2').set({
       id: 'notif_a_batch2',
       type: 'gig_finalized',
       category: 'requests',
@@ -1089,7 +1089,7 @@ describe('Real Cloud Functions Emulator Integration Tests (JS Client SDK + Emula
       createdAt: Date.now(),
       isRead: false,
     });
-    await adminDb.ref('userNotifications/user_b/notif_b_batch1').set({
+    await adminDb.ref('notificationFeedV2/user_b/notif_b_batch1').set({
       id: 'notif_b_batch1',
       type: 'event_reminder',
       category: 'events',
@@ -1103,13 +1103,13 @@ describe('Real Cloud Functions Emulator Integration Tests (JS Client SDK + Emula
     assert.strictEqual(resA.data.success, true);
     assert(resA.data.updatedCount >= 2);
 
-    const snapA1 = await adminDb.ref('userNotifications/user_a/notif_a_batch1').get();
-    const snapA2 = await adminDb.ref('userNotifications/user_a/notif_a_batch2').get();
+    const snapA1 = await adminDb.ref('notificationFeedV2/user_a/notif_a_batch1').get();
+    const snapA2 = await adminDb.ref('notificationFeedV2/user_a/notif_a_batch2').get();
     assert.strictEqual(snapA1.val().isRead, true);
     assert.strictEqual(snapA2.val().isRead, true);
 
     // User B's notification must still be unread
-    const snapB1 = await adminDb.ref('userNotifications/user_b/notif_b_batch1').get();
+    const snapB1 = await adminDb.ref('notificationFeedV2/user_b/notif_b_batch1').get();
     assert.strictEqual(snapB1.val().isRead, false);
   });
 
@@ -1139,20 +1139,20 @@ describe('Real Cloud Functions Emulator Integration Tests (JS Client SDK + Emula
     it('3. markFeatureNotificationsRead clears caller notifications and sets server timestamp, leaving others intact', async () => {
       const now = Date.now();
       // user_a notifications
-      await adminDb.ref('userNotifications/user_a/n_gig_explicit').set({
+      await adminDb.ref('notificationFeedV2/user_a/n_gig_explicit').set({
         id: 'n_gig_explicit',
         type: 'sub_request_invite',
         featureId: 'find_gigs',
         isRead: false,
         readAt: null,
       });
-      await adminDb.ref('userNotifications/user_a/n_gig_legacy').set({
-        id: 'n_gig_legacy',
-        type: 'grouped_sub_request', // legacy fallback -> find_gigs
+      await adminDb.ref('notificationFeedV2/user_a/n_gig_type').set({
+        id: 'n_gig_type',
+        type: 'grouped_sub_request', // Type maps to find_gigs
         isRead: false,
         readAt: null,
       });
-      await adminDb.ref('userNotifications/user_a/n_band').set({
+      await adminDb.ref('notificationFeedV2/user_a/n_band').set({
         id: 'n_band',
         type: 'band_room_message',
         featureId: 'band_room',
@@ -1161,7 +1161,7 @@ describe('Real Cloud Functions Emulator Integration Tests (JS Client SDK + Emula
       });
 
       // user_b notification (must not be affected)
-      await adminDb.ref('userNotifications/user_b/n_user_b').set({
+      await adminDb.ref('notificationFeedV2/user_b/n_user_b').set({
         id: 'n_user_b',
         type: 'sub_request_invite',
         featureId: 'find_gigs',
@@ -1174,10 +1174,10 @@ describe('Real Cloud Functions Emulator Integration Tests (JS Client SDK + Emula
       assert.strictEqual(res.data.success, true);
       assert.strictEqual(res.data.updatedCount, 2);
 
-      const snapGig1 = await adminDb.ref('userNotifications/user_a/n_gig_explicit').get();
-      const snapGig2 = await adminDb.ref('userNotifications/user_a/n_gig_legacy').get();
-      const snapBand = await adminDb.ref('userNotifications/user_a/n_band').get();
-      const snapUserB = await adminDb.ref('userNotifications/user_b/n_user_b').get();
+      const snapGig1 = await adminDb.ref('notificationFeedV2/user_a/n_gig_explicit').get();
+      const snapGig2 = await adminDb.ref('notificationFeedV2/user_a/n_gig_type').get();
+      const snapBand = await adminDb.ref('notificationFeedV2/user_a/n_band').get();
+      const snapUserB = await adminDb.ref('notificationFeedV2/user_b/n_user_b').get();
 
       assert.strictEqual(snapGig1.val().isRead, true);
       assert(snapGig1.val().readAt >= now);
@@ -1192,7 +1192,7 @@ describe('Real Cloud Functions Emulator Integration Tests (JS Client SDK + Emula
     });
 
     it('4. User B cannot clear User A notifications', async () => {
-      await adminDb.ref('userNotifications/user_a/n_victim').set({
+      await adminDb.ref('notificationFeedV2/user_a/n_victim').set({
         id: 'n_victim',
         type: 'sub_request_invite',
         featureId: 'find_gigs',
@@ -1203,7 +1203,7 @@ describe('Real Cloud Functions Emulator Integration Tests (JS Client SDK + Emula
       const fnB = httpsCallable(functionsUserB, 'markFeatureNotificationsRead');
       await fnB({ featureId: 'find_gigs' });
 
-      const snap = await adminDb.ref('userNotifications/user_a/n_victim').get();
+      const snap = await adminDb.ref('notificationFeedV2/user_a/n_victim').get();
       assert.strictEqual(snap.val().isRead, false);
     });
 
@@ -1214,42 +1214,40 @@ describe('Real Cloud Functions Emulator Integration Tests (JS Client SDK + Emula
 
       await adminDb.ref(`SubRequests/${subReqId}`).set({
         CreatorUserId: creatorUid,
+        BandId: 'freelance',
         BandName: 'The Emulator Band',
         eventType: 'Gig',
         Role: 'Bassist',
+        Status: 'published',
       });
-      await adminDb.ref(`users/${applicantUid}/info`).set({
-        displayName: 'Applicant Bob',
+      const stableId = require('node:crypto').createHash('sha256')
+        .update(JSON.stringify([creatorUid, 'sub_request_response', [subReqId, applicantUid]])).digest('hex');
+      const notifRef = adminDb.ref(`notificationFeedV2/${creatorUid}/${stableId}`);
+      let listener;
+      const arrived = new Promise((resolve, reject) => {
+        listener = notifRef.on('value', snap => { if (snap.exists()) resolve(snap.val()); }, reject);
       });
-
-      // Write applicant response
-      await adminDb.ref(`SubRequests/${subReqId}/Responses/${applicantUid}`).set(true);
-
-      // Wait for trigger to write notification
-      const notifRef = adminDb.ref(`userNotifications/${creatorUid}/notif_sub_resp_${subReqId}_${applicantUid}`);
-      let created = false;
-      for (let i = 0; i < 50; i++) {
-        const snap = await notifRef.get();
-        if (snap.exists() && snap.val()) {
-          created = true;
-          assert.strictEqual(snap.val().type, 'sub_request_response');
-          assert.strictEqual(snap.val().featureId, 'find_musicians');
-          assert.strictEqual(snap.val().data.subRequestId, subReqId);
-          assert.strictEqual(snap.val().data.applicantId, applicantUid);
-          break;
-        }
-        await new Promise(r => setTimeout(r, 200));
+      const responseRef = adminDb.ref(`SubRequests/${subReqId}/Responses/${applicantUid}`);
+      try {
+        await responseRef.set(true);
+        const row = await arrived;
+        assert.strictEqual(row.type, 'sub_request_response');
+        assert.deepStrictEqual(Object.keys(row).sort(), ['createdAt', 'isRead', 'type']);
+      } finally {
+        notifRef.off('value', listener);
       }
-      assert.strictEqual(created, true, 'Notification should be created by trigger');
 
-      // Test idempotency: rewrite response
-      await adminDb.ref(`SubRequests/${subReqId}/Responses/${applicantUid}`).set(true);
-      await new Promise(r => setTimeout(r, 400));
-
-      const notifsSnap = await adminDb.ref(`userNotifications/${creatorUid}`).get();
-      const notifs = notifsSnap.val() || {};
-      const matching = Object.values(notifs).filter(n => n.data && n.data.subRequestId === subReqId);
-      assert.strictEqual(matching.length, 1, 'Duplicate response write must not duplicate notification');
+      const routeRef = adminDb.ref(`notificationRoutesV2/${creatorUid}/${stableId}`);
+      const route = (await routeRef.get()).val();
+      assert.strictEqual(route.subRequestId, subReqId);
+      assert.strictEqual(route.responderId, applicantUid);
+      assert.strictEqual('applicantName' in route, false);
+      const trigger = require('../index').onSubRequestResponseCreated;
+      const params = { subRequestId: subReqId, applicantId: applicantUid };
+      await trigger.run(await responseRef.get(), { params });
+      const routes = (await adminDb.ref(`notificationRoutesV2/${creatorUid}`).get()).val() || {};
+      assert.strictEqual(Object.values(routes).filter(row => row.subRequestId === subReqId).length, 1);
+      assert.strictEqual((await adminDb.ref(`userNotifications/${creatorUid}/notif_sub_resp_${subReqId}_${applicantUid}`).get()).exists(), false);
     });
 
     it('6. onBandFileUploaded trigger notifies current members exactly once and excludes uploader', async () => {
@@ -1262,7 +1260,10 @@ describe('Real Cloud Functions Emulator Integration Tests (JS Client SDK + Emula
       // assumed trigger latency. The existing suite timeout remains the bound.
       for(let run=0;run<5;run++) {
         const fileId=`file_test_${run}`;
-        const path=`userNotifications/${memberUid}/notif_file_${bandId}_${fileId}_${memberUid}`;
+        const idFor = uid => require('node:crypto').createHash('sha256')
+          .update(JSON.stringify([uid, 'band_file_uploaded', [bandId, fileId]])).digest('hex');
+        const id = idFor(memberUid);
+        const path = 'notificationFeedV2/' + memberUid + '/' + id;
         const notification=adminDb.ref(path);
         let listener;
         const arrived=new Promise((resolve,reject)=>{
@@ -1276,21 +1277,24 @@ describe('Real Cloud Functions Emulator Integration Tests (JS Client SDK + Emula
           value=await arrived;
         } finally { notification.off('value',listener); }
         assert.strictEqual(value.type,'band_file_uploaded');
-        assert.strictEqual(value.featureId,'band_room');
-        assert.strictEqual(value.data.bandId,bandId);
-        assert.strictEqual(value.data.fileId,fileId);
+        assert.deepStrictEqual(Object.keys(value).sort(), ['createdAt','isRead','type']);
+        const route = (await adminDb.ref('notificationRoutesV2/' + memberUid + '/' + id).get()).val();
+        assert.strictEqual(route.bandId,bandId);
+        assert.strictEqual(route.fileId,fileId);
+        assert.strictEqual('fileName' in route,false);
         await notification.update({isRead:true,readAt:12345});
         const trigger=require('../index').onBandFileUploaded;
         const snapshot=await adminDb.ref(`files/${bandId}/${fileId}`).get();
         await trigger.run(snapshot,{params:{bandId,fileId}});
         await trigger.run(snapshot,{params:{bandId,fileId}});
-        const all=(await adminDb.ref(`userNotifications/${memberUid}`).get()).val();
-        const matching=Object.values(all||{}).filter(n=>n.data?.bandId===bandId&&n.data?.fileId===fileId);
-        assert.strictEqual(matching.length,1,'Trigger retry must not duplicate notifications');
-        assert.strictEqual(matching[0].isRead,true,'Retry must preserve acknowledgement');
-        assert.strictEqual(matching[0].readAt,12345);
-        for(const excluded of [uploaderUid,removedUid])
-          assert.strictEqual((await adminDb.ref(`userNotifications/${excluded}/notif_file_${bandId}_${fileId}_${excluded}`).get()).exists(),false);
+        const persisted = (await notification.get()).val();
+        assert.strictEqual(persisted.isRead,true,'Retry must preserve acknowledgement');
+        assert.strictEqual(persisted.readAt,12345);
+        const routes = (await adminDb.ref('notificationRoutesV2/' + memberUid).get()).val() || {};
+        assert.strictEqual(Object.values(routes).filter(row => row.bandId === bandId && row.fileId === fileId).length, 1);
+        for (const excluded of [uploaderUid,removedUid]) {
+          assert.strictEqual((await adminDb.ref('notificationFeedV2/' + excluded + '/' + idFor(excluded)).get()).exists(),false);
+        }
       }
     });
 
@@ -1410,7 +1414,8 @@ describe('Real Cloud Functions Emulator Integration Tests (JS Client SDK + Emula
         await new Promise(r => setTimeout(r, 1000));
 
         const notifSnapB = await adminDb.ref('userNotifications/user_b').get();
-        assert.strictEqual(notifSnapB.exists(), false, 'Candidates must receive zero notifications for ordinary map_pin');
+        assert.strictEqual(notifSnapB.exists(), false, 'Candidates must receive zero legacy notifications for ordinary map_pin');
+        assert.strictEqual((await adminDb.ref('notificationFeedV2/user_b').get()).exists(), false, 'Candidates must receive zero v2 notifications for ordinary map_pin');
       });
 
       it('36. Invalid coordinates (< -90, > 90, non-numeric, NaN) rejected', async () => {
@@ -1540,16 +1545,20 @@ describe('Real Cloud Functions Emulator Integration Tests (JS Client SDK + Emula
           CreatedAt: Date.now(),
         });
 
-        let receivedNotif = false;
-        for (let i = 0; i < 50; i++) {
-          const notifSnapB = await adminDb.ref('userNotifications/user_b').get();
-          if (notifSnapB.exists() && notifSnapB.val()) {
-            receivedNotif = true;
-            break;
-          }
-          await new Promise(r => setTimeout(r, 200));
+        const routeId = require('node:crypto').createHash('sha256')
+          .update(JSON.stringify(['user_b', 'sub_request_invite', 'staffing_req_1'])).digest('hex');
+        const notification = adminDb.ref(`notificationFeedV2/user_b/${routeId}`);
+        let listener;
+        const arrived = new Promise((resolve, reject) => {
+          listener = notification.on('value', snap => { if (snap.exists()) resolve(snap.val()); }, reject);
+        });
+        try {
+          assert.strictEqual((await arrived).type, 'sub_request_invite');
+          const result = await httpsCallable(functionsUserB, 'resolveNotification')({ notificationId: routeId });
+          assert.strictEqual(result.data.request.id, 'staffing_req_1');
+        } finally {
+          notification.off('value', listener);
         }
-        assert.strictEqual(receivedNotif, true, 'Genuine staffing request MUST notify eligible candidates');
       });
 
       it('41. updateMapPin updates canonical /SubRequests/{id} and leaves mirrors byte-for-byte unchanged', async () => {

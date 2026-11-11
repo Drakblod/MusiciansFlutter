@@ -346,15 +346,35 @@ void main() {
       final code = File(
         'lib/services/firebase_service.dart',
       ).readAsStringSync();
+      final start = code.indexOf('Future<UserProfile?> getUserProfileAsync(');
+      final end = code.indexOf('// Compatibility entry points', start);
+      final method = code.substring(start, end);
       expect(
-        code,
+        method,
         contains(
           'if (targetId != currentUserId) return getPublicUserProfileAsync(targetId);',
         ),
       );
-      expect(code, isNot(contains("_dbRef('users/\$targetId').get()")));
-      expect(code, contains("const fields = ['info', 'UserType', 'Nickname', 'DisplayName'];"));
-      expect(code, contains("_dbRef('users/\$targetId/\$field').get()"));
+      expect('getPublicUserProfileAsync'.allMatches(method), hasLength(1));
+      expect(method, isNot(contains("_dbRef('users/\$targetId')")));
+      expect(method, isNot(contains("_dbRef('users/\$targetId/info')")));
+      expect(method, contains("const rootFields = ['UserType', 'Nickname', 'DisplayName'];"));
+      expect(method, contains("_dbRef('users/\$targetId/\$field').get()"));
+      expect(method, contains("_dbRef('users/\$targetId/info/\$field').get()"));
+      expect(method, contains("_dbRef('users/\$targetId/info/\$legacyKey').get()"));
+      expect(method, contains("_dbRef('users/\$targetId/info/PublicLocation').get()"));
+      expect(method, contains('if (targetId != currentUserId) throw const PrivateDataAccessException();'));
+      expect(method, contains("return data.isEmpty ? null : UserProfile.fromJson(data, targetId);"));
+      final leaves = RegExp(r"'([^']+)'")
+          .allMatches(RegExp(r'const infoFields = \[([\s\S]*?)\];').firstMatch(method)!.group(1)!)
+          .map((match) => match.group(1))
+          .toSet();
+      expect(leaves, {
+        'DisplayName', 'Level', 'About', 'Contact', 'History', 'Projects',
+        'ProfilePictureUrl', 'SpotifyUrl', 'YoutubeUrl', 'AudioSnippetUrl',
+        'CollabBio', 'MainInstrument', 'UserType', 'Nickname', 'Instruments',
+        'Styles', 'Genres', 'CollabRoles', 'CollabRemote', 'Email', 'Location',
+      });
     },
   );
   test(

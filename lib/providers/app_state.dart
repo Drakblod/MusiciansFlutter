@@ -8,9 +8,7 @@ import '../models/band.dart';
 import '../utils/band_membership_policy.dart';
 import '../models/app_notification.dart';
 import '../main.dart';
-import '../models/sub_request.dart';
-import '../views/event_details_page.dart';
-import '../views/sub_request_details_screen.dart';
+import '../utils/notification_router.dart';
 
 class AppState extends ChangeNotifier {
   final FirebaseService firebaseService;
@@ -33,8 +31,14 @@ class AppState extends ChangeNotifier {
   bool _isLoading = true;
   int _currentTab = 0;
   Map<String, int> _buttonClicks = {};
-  Map<String, dynamic>? _pendingNotificationPayload;
-  StreamSubscription? _unreadNotificationsSubscription;
+  late final NotificationRouter notificationRouter = NotificationRouter(
+    firebaseService,
+    () => MyApp.navigatorKey.currentState,
+    selectBand: (id) => selectBand(id, _authorizedBands[id] ?? 'Band Room'),
+    isReady: () => _currentUserProfile != null && !_isLoading,
+  );
+  StreamSubscription<Map<String, dynamic>>? _notificationOpens;
+  StreamSubscription<Map<String, dynamic>>? _foregroundNotifications;
   StreamSubscription? _userNotificationsSubscription;
 
   static const List<String> validBubbleIds = [
@@ -79,6 +83,10 @@ class AppState extends ChangeNotifier {
     _listenToNotifications();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initializeAuthListener();
+      if (!kIsWeb) {
+        unawaited(Future<void>.sync(this.firebaseService.listenForNativeNotifications)
+            .catchError((Object _) {}));
+      }
       loadSelectedBubbles();
       loadMapThemePref();
     });
@@ -168,82 +176,16 @@ class AppState extends ChangeNotifier {
   }
 
   void _listenToNotifications() {
-    FirebaseService.notificationClickStream.listen((data) {
-      if (firebaseService.isLoggedIn && _currentUserProfile != null) {
-        _navigateToNotification(data);
-      } else {
-        _pendingNotificationPayload = data;
-      }
-    });
+    _notificationOpens = FirebaseService.notificationClickStream
+        .listen(notificationRouter.receiveNativeOpen);
+    _foregroundNotifications = FirebaseService.foregroundNotifications
+        .listen(notificationRouter.receiveForeground);
   }
 
   void handlePendingNotification() {
-    if (_pendingNotificationPayload != null &&
-        firebaseService.isLoggedIn &&
-        _currentUserProfile != null) {
-      final payload = _pendingNotificationPayload!;
-      _pendingNotificationPayload = null;
-      Future.delayed(const Duration(milliseconds: 500), () {
-        _navigateToNotification(payload);
-      });
-    }
-  }
-
-  void _navigateToNotification(Map<String, dynamic> data) async {
-    final type = data['type']?.toString();
-    if (MyApp.navigatorKey.currentState == null) return;
-
-    if (type == 'event_invite' ||
-        type == 'event_reminder' ||
-        type == 'event_threshold') {
-      final bandId = data['bandId']?.toString();
-      final eventId = data['eventId']?.toString();
-      if (bandId != null && eventId != null) {
-        final event = await firebaseService.getBandEventOnceAsync(
-          bandId,
-          eventId,
-        );
-        if (event != null && MyApp.navigatorKey.currentState != null) {
-          MyApp.navigatorKey.currentState!.push(
-            MaterialPageRoute(
-              builder: (context) => EventDetailsPage(
-                bandId: bandId,
-                eventId: eventId,
-                initialEvent: event,
-              ),
-            ),
-          );
-        }
-      }
-    } else if (type == 'sub_request_invite') {
-      final subRequestId = data['subRequestId']?.toString();
-      if (subRequestId != null) {
-        final list = await firebaseService.getAllSubRequestsAsync();
-        final subRequest = list.firstWhere(
-          (r) => (r.subRequestId ?? r.id) == subRequestId,
-          orElse: () => SubRequest(id: subRequestId),
-        );
-        if (MyApp.navigatorKey.currentState != null) {
-          MyApp.navigatorKey.currentState!.push(
-            MaterialPageRoute(
-              builder: (context) =>
-                  SubRequestDetailsScreen(subRequest: subRequest),
-            ),
-          );
-        }
-      }
-    } else if (type == 'band_section_chat') {
-      final conversationId = data['conversationId']?.toString();
-      if (conversationId != null && conversationId.isNotEmpty) {
-        MyApp.navigatorKey.currentState?.pushNamed(
-          '/band-section-chat',
-          arguments: {
-            'conversationId': conversationId,
-            'bandId': data['bandId']?.toString() ?? '',
-          },
-        );
-      }
-    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      notificationRouter.resumeNativeOpen();
+    });
   }
 
   UserProfile? get currentUserProfile => _currentUserProfile;
@@ -358,8 +300,6 @@ class AppState extends ChangeNotifier {
     _sessionAppliedSubRequestIds.clear();
     _unreadSubscription?.cancel();
     _unreadSubscription = null;
-    _unreadNotificationsSubscription?.cancel();
-    _unreadNotificationsSubscription = null;
     _userNotificationsSubscription?.cancel();
     _userNotificationsSubscription = null;
   }
@@ -422,23 +362,6 @@ class AppState extends ChangeNotifier {
           );
     } catch (e) {
       debugPrint("Error subscribing to unread notifications: $e");
-    }
-
-    try {
-      _unreadNotificationsSubscription?.cancel();
-      _unreadNotificationsSubscription = firebaseService
-          .subscribeToUnreadNotificationCount()
-          .listen(
-            (count) {
-              _unreadNotificationCount = count;
-              notifyListeners();
-            },
-            onError: (err) {
-              debugPrint("Error in unread notifications stream: $err");
-            },
-          );
-    } catch (e) {
-      debugPrint("Error subscribing to unread notification count: $e");
     }
 
     try {
@@ -509,6 +432,7 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> logout() async {
+    notificationRouter.clearForeground();
     _bandSessionEnding = true;
     _isLoading = true;
     _clearProfileState();
@@ -533,7 +457,7 @@ class AppState extends ChangeNotifier {
     notifyListeners();
     try {
       _unreadSubscription?.cancel();
-      _unreadNotificationsSubscription?.cancel();
+      _userNotificationsSubscription?.cancel();
       await firebaseService.deleteUserAccountAsync();
       if (currentUserId != uid || _membershipMutationEpoch != epoch) {
         throw StateError('Your session changed. Please try again.');
@@ -709,6 +633,9 @@ class AppState extends ChangeNotifier {
 
   @override
   void dispose() {
+    notificationRouter.clearForeground();
+    unawaited(_notificationOpens?.cancel());
+    unawaited(_foregroundNotifications?.cancel());
     _unreadSubscription?.cancel();
     super.dispose();
   }

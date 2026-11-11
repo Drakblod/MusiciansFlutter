@@ -132,7 +132,10 @@ void main(){
     final request=(message as List)[1] as QueryRequest;
     expect(request.path,startsWith(owner));
     final field=request.path.substring(owner.length);
-    return [{'snapshot':{'key':field,'value':field=='info'?info:mirror[field]}}];
+    expect(field,isNot('info'),reason:'Owner profile loading must not read the legacy token parent.');
+    expect(field.toLowerCase(),isNot(contains('pushtoken')));
+    final value=field.startsWith('info/')?info[field.substring('info/'.length)]:mirror[field];
+    return [{'snapshot':{'key':field.split('/').last,'value':value}}];
   });
   messenger.setMockDecodedMessageHandler<Object?>(update,(message) async {
     clientWrites++;

@@ -1026,7 +1026,7 @@ describe('Real RTDB Emulator Rules Tests', function () {
       await assertFails(leader.database().ref('SubRequests/sub_rules_test/notificationMode').set('grouped'));
     });
 
-    it('62. userNotifications rules in transitional and final rules: read own, reject other user, reject client writes', async () => {
+    it('62. legacy notification records and writes are denied even to their former owner', async () => {
       // Seed data with security rules disabled in final env
       await testEnvFinal.withSecurityRulesDisabled(async (context) => {
         const db = context.database();
@@ -1041,10 +1041,10 @@ describe('Real RTDB Emulator Rules Tests', function () {
         });
       });
 
-      // User A reading User A feed -> succeeds
+      // Even the former owner cannot read the legacy feed or its descendants.
       const userAFinal = testEnvFinal.authenticatedContext('user_a');
-      await assertSucceeds(userAFinal.database().ref('userNotifications/user_a').get());
-      await assertSucceeds(userAFinal.database().ref('userNotifications/user_a/notif_1').get());
+      await assertFails(userAFinal.database().ref('userNotifications/user_a').get());
+      await assertFails(userAFinal.database().ref('userNotifications/user_a/notif_1').get());
 
       // User B reading User A feed -> fails
       const userBFinal = testEnvFinal.authenticatedContext('user_b');

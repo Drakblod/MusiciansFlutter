@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-/// Represents a single notification record stored in `userNotifications/{userId}/{notificationId}`.
+/// A recipient-authorized view of a server-owned V2 notification.
 class AppNotification {
   final String id;
   final String type;

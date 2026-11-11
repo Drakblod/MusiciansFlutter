@@ -27,6 +27,7 @@ for (const ruleFile of ['database.rules.json','database.transitional.rules.json'
   let env, adminApp, db;
   const clients = {};
   const namespace = 'demo-musicians-test';
+  const rulesVariant = ruleFile.includes('transitional') ? 't' : 'f';
   const uid = { leader:'ma_leader',admin:'ma_admin',member:'ma_member',other:'ma_other',target:'ma_target' };
   let seq = 0, band;
   async function call(who, name, data) {
@@ -41,7 +42,7 @@ for (const ruleFile of ['database.rules.json','database.transitional.rules.json'
   async function members() { return (await db.ref(`Bands/${band}/Members_band`).get()).val(); }
   function leaderCount(value) { return Object.values(value || {}).filter(m => String(m.Role ?? m.role).trim().toLowerCase()==='leader').length; }
   async function request(overrides={}) {
-    const id=`req_${++seq}`;
+    const id=`req_${rulesVariant}_${++seq}`;
     await db.ref(`SubRequests/${id}`).set({CreatorUserId:uid.leader,BandId:band,EventId:'event',Status:'published',Role:'Substitute',Responses:{[uid.target]:true},...overrides});
     return id;
   }
@@ -65,7 +66,7 @@ for (const ruleFile of ['database.rules.json','database.transitional.rules.json'
     }
   });
   beforeEach(async () => {
-    band=`authority_band_${ruleFile.includes('transitional')?'t':'f'}_${++seq}`;
+    band=`authority_band_${rulesVariant}_${++seq}`;
     await db.ref(`Bands/${band}`).set({Name:'Authority band',Members_band:{
       [uid.leader]:{Role:'Leader',Status:'active'},[uid.admin]:{Role:'Admin',Status:'active'},
       [uid.member]:{Role:'Member',Status:'active'}},Events:{event:{createdBy:uid.leader,title:'Event'}}});
@@ -201,19 +202,22 @@ for (const ruleFile of ['database.rules.json','database.transitional.rules.json'
     const id=await request({CreatorUserId:uid.member,BandId:'freelance',EventId:null});
     const payload={subRequestId:id,candidateUserId:uid.target};
     await call('member','assignSubstitute',payload);
-    const beforeRetry = (await db.ref(`userNotifications/${uid.target}`).get()).val() || {};
-    const beforeIds = Object.keys(beforeRetry).filter(k=>beforeRetry[k].data?.subRequestId===id).sort();
+    async function assignmentNotifications() {
+      const routes = (await db.ref('notificationRoutesV2/' + uid.target).get()).val() || {};
+      return Object.keys(routes).filter(key =>
+        routes[key].type === 'gig_finalized' && routes[key].subRequestId === id).sort();
+    }
+    const beforeIds = await assignmentNotifications();
+    assert.strictEqual(beforeIds.length, 1);
     await call('member','assignSubstitute',payload);
-    const afterRetry = (await db.ref(`userNotifications/${uid.target}`).get()).val() || {};
-    assert.deepStrictEqual(Object.keys(afterRetry).filter(k=>afterRetry[k].data?.subRequestId===id).sort(),beforeIds);
+    assert.deepStrictEqual(await assignmentNotifications(), beforeIds);
+    const feed = (await db.ref('notificationFeedV2/' + uid.target + '/' + beforeIds[0]).get()).val();
+    assert.strictEqual(feed.type, 'gig_finalized');
     const a=await call('member','createAgreementConversation',{subRequestId:id,applicantId:uid.target});
     const b=await call('member','createAgreementConversation',{subRequestId:id,applicantId:uid.target});
     assert.strictEqual(a.conversationId,b.conversationId);
     const conversations=(await db.ref('conversations').get()).val()||{};
     assert.strictEqual(Object.values(conversations).filter(c=>(c.Agreement?.SubRequestId ?? c.Agreement?.subRequestId)===id).length,1);
-    const notifications=(await db.ref(`userNotifications/${uid.target}`).get()).val()||{};
-    const matching=Object.values(notifications).filter(n=>n.data?.subRequestId===id);
-    const ids=matching.map(n=>n.id);assert.strictEqual(new Set(ids).size,ids.length);
     await call('member','revokeSubstituteAssignment',{subRequestId:id});
     await call('member','revokeSubstituteAssignment',{subRequestId:id});
     assert.strictEqual((await db.ref(`SubRequests/${id}/Status`).get()).val(),'published');
@@ -284,7 +288,7 @@ for (const ruleFile of ['database.rules.json','database.transitional.rules.json'
       await assertSucceeds(client.ref().update(updates));
       await assertFails(client.ref(`users/${id}/info/Location`).set('Stockholm'));
       await assertSucceeds(client.ref().update({[`users/${id}/info/MainInstrument`]:'Piano',[`users/${id}/info/Instruments`]:['Piano','Guitar','Vocals'],[`users/${id}/info/Genres`]:['Jazz']}));
-      await assertSucceeds(client.ref(`users/${id}/info/PushToken`).set('local-test-token'));
+      await assertFails(client.ref(`users/${id}/info/PushToken`).set('local-test-token'));
       for(const [p,v] of [['Favorites/target',true],['metrics/buttonClicks/profile',2],['PublicEvents/event',{Title:'Public event'}]]) await assertSucceeds(client.ref(`users/${id}/${p}`).set(v));
       await assertFails(client.ref(`users/${id}/Bands/forged`).set({Role:'Leader'}));
       await assertFails(client.ref().update({[`users/${id}/info/DisplayName`]:'Atomic forbidden',[`users/${id}/Bands/forged`]:true}));
@@ -294,8 +298,13 @@ for (const ruleFile of ['database.rules.json','database.transitional.rules.json'
       await signOut(auth);await signInWithEmailAndPassword(auth,email,password);
       assert.strictEqual(auth.currentUser.uid,id);
       await assertFails(client.ref(`users/${id}`).get());
-      const profile={info:(await client.ref(`users/${id}/info`).get()).val()};
-      assert.strictEqual(profile.info.MainInstrument,'Piano');assert.deepStrictEqual(profile.info.Instruments,['Piano','Guitar','Vocals']);assert.deepStrictEqual(profile.info.Genres,['Jazz']);assert.strictEqual(profile.info.PushToken,'local-test-token');
+      await assertFails(client.ref(`users/${id}/info`).get());
+      await assertFails(client.ref(`users/${id}/info/PushToken`).get());
+      const [instrument,instruments,genres]=await Promise.all(
+        ['MainInstrument','Instruments','Genres'].map(key=>client.ref(`users/${id}/info/${key}`).get()));
+      assert.strictEqual(instrument.val(),'Piano');
+      assert.deepStrictEqual(instruments.val(),['Piano','Guitar','Vocals']);
+      assert.deepStrictEqual(genres.val(),['Jazz']);
     } finally { await deleteApp(app); }
   });
   it('account deletion end-to-end owns auth identity, safely retries interrupted RTDB work and removes Auth',async()=>{
@@ -311,7 +320,7 @@ for (const ruleFile of ['database.rules.json','database.transitional.rules.json'
       assert((await adminApp.auth().getUser(uid.member)).uid===uid.member);
       const owned=`deletion_${band}`;
       await db.ref(`Bands/${owned}`).set({Name:'Deletion',Members_band:{[id]:{Role:'Leader',Status:'active'},[uid.admin]:{Role:'Admin',Status:'active'}}});
-      await db.ref().update({[`userBandMembershipIndex/${id}/${owned}`]:true,[`users/${id}/Bands/${owned}`]:{Name:'Deletion'},[`users/${id}/info`]:{DisplayName:'Delete me'},[`bandconversations/${owned}/members/${id}`]:true,[`userNotifications/${id}/n`]:{text:'Notice'},[`userSubRequestFeed/${id}/r`]:true,[`creatorSubRequestGroups/${id}/g`]:true,[`userConversations/${id}/c`]:true});
+      await db.ref().update({[`userBandMembershipIndex/${id}/${owned}`]:true,[`users/${id}/Bands/${owned}`]:{Name:'Deletion'},[`users/${id}/info`]:{DisplayName:'Delete me'},[`bandconversations/${owned}/members/${id}`]:true,[`userNotifications/${id}/n`]:{text:'Historical notice'},[`notificationFeedV2/${id}/n`]:{type:'direct_message'},[`notificationRoutesV2/${id}/n`]:{type:'direct_message'},[`notificationFeedSignals/${id}`]:'signal',[`userSubRequestFeed/${id}/r`]:true,[`creatorSubRequestGroups/${id}/g`]:true,[`userConversations/${id}/c`]:true});
       await db.ref(`SubRequests/retained_${owned}`).set({CreatorUserId:id,BandId:owned,Status:'published'});
       await db.ref(`SubRequests/freelance_${owned}`).set({CreatorUserId:id,BandId:'freelance',Status:'published'});
       // Simulate interruption after the canonical departure succeeded but before account deletion.
@@ -320,7 +329,8 @@ for (const ruleFile of ['database.rules.json','database.transitional.rules.json'
       await db.ref().update({[`userBandMembershipIndex/${id}/${owned}`]:true,[`users/${id}/Bands/${owned}`]:{Name:'Interrupted projection'},[`bandconversations/${owned}/members/${id}`]:true});
       await invoke({});
       assert.strictEqual((await db.ref(`Bands/${owned}/Members_band/${id}`).get()).val(),null);
-      for(const p of [`users/${id}`,`userBandMembershipIndex/${id}`,`bandconversations/${owned}/members/${id}`,`userNotifications/${id}`,`userSubRequestFeed/${id}`,`creatorSubRequestGroups/${id}`,`userConversations/${id}`]) assert.strictEqual((await db.ref(p).get()).val(),null);
+      for(const p of [`users/${id}`,`userBandMembershipIndex/${id}`,`bandconversations/${owned}/members/${id}`,`notificationFeedV2/${id}`,`notificationRoutesV2/${id}`,`notificationFeedSignals/${id}`,`userSubRequestFeed/${id}`,`creatorSubRequestGroups/${id}`,`userConversations/${id}`]) assert.strictEqual((await db.ref(p).get()).val(),null);
+      assert.deepStrictEqual((await db.ref(`userNotifications/${id}/n`).get()).val(),{text:'Historical notice'});
       assert.strictEqual((await db.ref(`SubRequests/retained_${owned}/Status`).get()).val(),'published');
       assert.strictEqual((await db.ref(`SubRequests/freelance_${owned}`).get()).val(),null);
       await assert.rejects(adminApp.auth().getUser(id),e=>e.code==='auth/user-not-found');

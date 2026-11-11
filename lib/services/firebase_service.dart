@@ -9,6 +9,8 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:flutter/services.dart' show MethodChannel;
+import 'package:shared_preferences/shared_preferences.dart';
 import '../config/feature_toggles.dart';
 import '../models/user_profile.dart';
 import '../models/band.dart';
@@ -215,6 +217,17 @@ class FirebaseService {
   bool get isLoggedIn => _auth.currentUser != null;
 
   Future<void> logoutAsync() async {
+    final uid = currentUserId;
+    if (!kIsWeb && uid != null) {
+      _pushSessionEnding = true;
+      try {
+        await _queueInstallationUpdate(uid, unregister: true)
+            .timeout(const Duration(seconds: 3));
+      } catch (_) {
+        // The next account's registration supersedes this binding.
+      }
+      await _clearNativeNotificationAlerts();
+    }
     await _auth.signOut();
   }
 
@@ -361,14 +374,34 @@ class FirebaseService {
     final targetId = userId ?? currentUserId;
     if (targetId == null) return null;
     if (targetId != currentUserId) return getPublicUserProfileAsync(targetId);
-    const fields = ['info', 'UserType', 'Nickname', 'DisplayName'];
-    final snapshots = await Future.wait(fields.map((field) =>
-        _dbRef('users/$targetId/$field').get()));
-    if (targetId != currentUserId) throw StateError('Your session changed.');
+    const rootFields = ['UserType', 'Nickname', 'DisplayName'];
+    const infoFields = [
+      'DisplayName', 'Level', 'About', 'Contact', 'History', 'Projects',
+      'ProfilePictureUrl', 'SpotifyUrl', 'YoutubeUrl', 'AudioSnippetUrl',
+      'CollabBio', 'MainInstrument', 'UserType', 'Nickname', 'Instruments',
+      'Styles', 'Genres', 'CollabRoles', 'CollabRemote', 'Email', 'Location',
+    ];
     final data = <String, dynamic>{};
-    for (var i = 0; i < fields.length; i++) {
-      if (snapshots[i].exists) data[fields[i]] = snapshots[i].value;
-    }
+    final info = <String, dynamic>{};
+    await Future.wait([
+      for (final field in rootFields)
+        _dbRef('users/$targetId/$field').get().then((snapshot) {
+          if (snapshot.exists) data[field] = snapshot.value;
+        }),
+      for (final field in infoFields)
+        () async {
+          final canonical = await _dbRef('users/$targetId/info/$field').get();
+          final legacyKey = field[0].toLowerCase() + field.substring(1);
+          final value = canonical.value ??
+              (await _dbRef('users/$targetId/info/$legacyKey').get()).value;
+          if (value != null) info[field] = value;
+        }(),
+      _dbRef('users/$targetId/info/PublicLocation').get().then((snapshot) {
+        if (snapshot.exists) info['PublicLocation'] = snapshot.value;
+      }),
+    ]);
+    if (targetId != currentUserId) throw const PrivateDataAccessException();
+    if (info.isNotEmpty) data['info'] = info;
     return data.isEmpty ? null : UserProfile.fromJson(data, targetId);
   });
 
@@ -1798,16 +1831,21 @@ class FirebaseService {
   Stream<List<AppNotification>> subscribeToUserNotifications([String? userId]) {
     final uid = userId ?? currentUserId;
     if (uid == null || uid != currentUserId) return Stream.value([]);
-    return _sessionStream(_dbRef('userNotifications/$uid').onValue.map((event) {
-      if (uid != currentUserId) return <AppNotification>[];
-      final value = event.snapshot.value;
-      if (value is! Map) return <AppNotification>[];
-      final result = <AppNotification>[];
-      value.forEach((key, item) {
-        if (item is Map) result.add(AppNotification.fromJson(item, key.toString()));
-      });
-      return result;
-    }), <AppNotification>[]);
+    return _sessionStream(
+      _dbRef('notificationFeedSignals/$uid').onValue.asyncMap((_) =>
+        _forCurrentSession(() async {
+          if (uid != currentUserId) return <AppNotification>[];
+          try {
+            final result = await _functions.httpsCallable('listNotificationFeed').call();
+            final rows = result.data;
+            if (rows is! List) return <AppNotification>[];
+            return rows.map((row) => AppNotification.fromJson(row)).toList();
+          } on FirebaseFunctionsException {
+            return <AppNotification>[];
+          }
+        })),
+      <AppNotification>[],
+    );
   }
 
   Stream<int> subscribeToUnreadNotificationCount([String? userId]) {
@@ -2212,114 +2250,155 @@ class FirebaseService {
     });
   }
 
-  Future<void> savePushTokenAsync(String token) async {
+  static const _notificationPlatform = MethodChannel('musicians/notifications');
+  static bool _pushListenersInstalled = false;
+  static final _foregroundNotifications =
+      StreamController<Map<String, dynamic>>.broadcast();
+  static Stream<Map<String, dynamic>> get foregroundNotifications =>
+      _foregroundNotifications.stream;
+  Future<void> _installationUpdates = Future.value();
+  String? _pushUid;
+  bool _pushSessionEnding = false;
+
+  Future<void> _clearNativeNotificationAlerts() async {
     try {
-      final userId = currentUserId;
-      if (userId == null) return;
-      await _dbRef('users/$userId/info/PushToken').set(token);
-      print("[FirebaseService] Push Token saved for user $userId");
-    } catch (e) { _rethrowAccessDenied(e);
-      print("[FirebaseService] Error saving push token: $e");
+      await _notificationPlatform.invokeMethod<void>('clearDelivered')
+          .timeout(const Duration(seconds: 2));
+    } catch (_) {
+      // Delayed or uncleared OS alerts are account-neutral.
     }
   }
+
+  static String _randomHex(int bytes) {
+    final random = Random.secure();
+    return List.generate(bytes, (_) => random.nextInt(256)
+        .toRadixString(16).padLeft(2, '0')).join();
+  }
+
+  Future<void> _queueInstallationUpdate(String uid, {
+    String? token,
+    bool unregister = false,
+  }) {
+    final next = _installationUpdates.then((_) async {
+      if (currentUserId != uid || (!unregister && _pushSessionEnding)) return;
+      final prefs = await SharedPreferences.getInstance();
+      const installationKey = 'notification_installation_v2';
+      const proofKey = 'notification_installation_proof_v2';
+      const sequenceKey = 'notification_installation_sequence_v2';
+      final installation = prefs.getString(installationKey) ?? _randomHex(16);
+      final proof = prefs.getString(proofKey) ?? _randomHex(32);
+      final sequence = (prefs.getInt(sequenceKey) ?? 0) + 1;
+      if (!await prefs.setString(installationKey, installation) ||
+          !await prefs.setString(proofKey, proof) ||
+          !await prefs.setInt(sequenceKey, sequence)) {
+        throw StateError('Notification installation storage is unavailable.');
+      }
+      if (currentUserId != uid || (!unregister && _pushSessionEnding)) return;
+      await _functions.httpsCallable(
+        unregister ? 'unregisterNotificationInstallation' : 'registerNotificationInstallation',
+        options: HttpsCallableOptions(timeout: const Duration(seconds: 8)),
+      ).call({
+        'accountUid': uid,
+        'installation': installation,
+        'proof': proof,
+        'sequence': sequence,
+        if (!unregister) 'token': token,
+      });
+    });
+    _installationUpdates = next.then<void>((_) {}, onError: (Object _) {});
+    return next;
+  }
+
+  Future<void> savePushTokenAsync(String token) async {
+    final uid = currentUserId;
+    if (kIsWeb || uid == null) return;
+    await _queueInstallationUpdate(uid, token: token);
+  }
+
+  // Register the open listeners before authentication so a cold-start tap
+  // can be held by the router until the authenticated session is ready.
+  Future<void> listenForNativeNotifications() async {
+    if (kIsWeb || _pushListenersInstalled) return;
+    _pushListenersInstalled = true;
+    FirebaseMessaging.onMessageOpenedApp.listen((message) {
+      _notificationClickStreamController.add(message.data);
+    });
+    FirebaseMessaging.onMessage.listen((message) {
+      _foregroundNotifications.add(message.data);
+    });
+    final message = await FirebaseMessaging.instance.getInitialMessage();
+    if (message != null) _notificationClickStreamController.add(message.data);
+  }
+
+  StreamSubscription<String>? _pushTokenRefresh;
 
   Future<void> initializePushNotifications() async {
-    if (kIsWeb) return;
+    final uid = currentUserId;
+    if (kIsWeb || uid == null) return;
+    if (_pushUid != uid || _pushSessionEnding) {
+      final switched = _pushUid != null && _pushUid != uid;
+      _pushUid = uid;
+      _pushSessionEnding = false;
+      if (switched) await _clearNativeNotificationAlerts();
+    }
     try {
-      print("PUSH: Initializing Push Notification Service...");
       final messaging = FirebaseMessaging.instance;
-
-      // Request permissions
-      final settings = await messaging.requestPermission(
-        alert: true,
-        announcement: false,
-        badge: true,
-        carPlay: false,
-        criticalAlert: false,
-        provisional: false,
-        sound: true,
-      );
-
-      // On iOS, present alert banner, badge, and sound even when app is in foreground
+      final settings = await messaging.requestPermission();
+      if (settings.authorizationStatus != AuthorizationStatus.authorized &&
+          settings.authorizationStatus != AuthorizationStatus.provisional) {
+        return;
+      }
       await messaging.setForegroundNotificationPresentationOptions(
-        alert: true,
-        badge: true,
-        sound: true,
+        alert: false, badge: true, sound: true,
       );
-
-      if (settings.authorizationStatus == AuthorizationStatus.authorized ||
-          settings.authorizationStatus == AuthorizationStatus.provisional) {
-        print("PUSH: Permission Granted (${settings.authorizationStatus.name})");
-      } else {
-        print("PUSH: Permission Not Authorized (${settings.authorizationStatus.name})");
-      }
-
-      // Handle token refreshes
-      messaging.onTokenRefresh.listen((token) async {
-        print("PUSH: TOKEN REFRESHED: $token");
-        await savePushTokenAsync(token);
+      _pushTokenRefresh ??= messaging.onTokenRefresh.listen((token) {
+        unawaited(savePushTokenAsync(token).catchError((Object _) {}));
       });
-
-      // On iOS, wait for APNs device token before calling getToken()
       if (defaultTargetPlatform == TargetPlatform.iOS) {
-        String? apnsToken = await messaging.getAPNSToken();
-        int attempts = 0;
-        while (apnsToken == null && attempts < 20) {
-          await Future.delayed(const Duration(milliseconds: 500));
-          apnsToken = await messaging.getAPNSToken();
-          attempts++;
-        }
-        print("PUSH: iOS APNs Token received: ${apnsToken != null} (attempts: $attempts)");
-        if (apnsToken == null) {
-          print("PUSH: [WARNING] APNs token is null from iOS. Device may be missing Push Notifications capability or running with free developer team.");
+        for (var attempt = 0; attempt < 20; attempt++) {
+          if (currentUserId != uid || _pushSessionEnding) return;
+          if (await messaging.getAPNSToken() != null) break;
+          if (attempt == 19) return;
+          await Future<void>.delayed(const Duration(milliseconds: 500));
         }
       }
-
-      // Get current token with retry logic for iOS readiness
-      String? currentToken;
-      try {
-        currentToken = await messaging.getToken();
-      } catch (e) { _rethrowAccessDenied(e);
-        print("PUSH: First getToken attempt failed: $e, retrying in 2 seconds...");
-        await Future.delayed(const Duration(seconds: 2));
-        try {
-          currentToken = await messaging.getToken();
-        } catch (e2) { _rethrowAccessDenied(e2);
-          print("PUSH: Second getToken attempt failed: $e2");
-        }
+      final token = await messaging.getToken();
+      if (token != null && uid == currentUserId && !_pushSessionEnding) {
+        await _queueInstallationUpdate(uid, token: token);
       }
-
-      if (currentToken != null && currentToken.isNotEmpty) {
-        print("PUSH: Token obtained: $currentToken");
-        await savePushTokenAsync(currentToken);
-      }
-
-      // Foreground message listener
-      FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-        print("PUSH: NOTIFICATION RECEIVED: ${message.data}");
-      });
-
-      // Opened from background listener
-      FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-        print("PUSH: NOTIFICATION OPENED: ${message.data}");
-        _notificationClickStreamController.add(message.data);
-      });
-
-      // Handle terminated app launch from notification
-      FirebaseMessaging.instance.getInitialMessage().then((
-        RemoteMessage? message,
-      ) {
-        if (message != null) {
-          print(
-            "PUSH: TERMINATED APP LAUNCH FROM NOTIFICATION: ${message.data}",
-          );
-          _notificationClickStreamController.add(message.data);
-        }
-      });
-    } catch (e) { _rethrowAccessDenied(e);
-      print("PUSH: ERROR Initializing: $e");
+    } catch (_) {
+      debugPrint('Notification registration is unavailable.');
     }
   }
+
+  Future<Map<String, dynamic>> resolveNotificationAsync(
+    String notificationId, {String? slotId, bool preview = false}
+  ) => _forCurrentSession(() async {
+    final result = await _functions.httpsCallable('resolveNotification').call({
+      'notificationId': notificationId,
+      if (slotId != null) 'slotId': slotId,
+      if (preview) 'preview': true,
+    });
+    return Map<String, dynamic>.from(result.data as Map);
+  });
+
+  Future<CollabSession?> getNotificationSessionAsync(String sessionId) =>
+    _forCurrentSession(() async {
+      final value = (await _dbRef('Collabs/Sessions/$sessionId').get()).value;
+      return value is Map ? CollabSession.fromJson(value, sessionId) : null;
+    });
+
+  Future<BandEvent?> getNotificationEventAsync(
+    String bandId, String eventId, {required bool memberAccess}
+  ) => _forCurrentSession(() async {
+    final uid = currentUserId;
+    if (uid == null) return null;
+    final path = memberAccess
+        ? 'bandMemberEvents/$bandId/$eventId'
+        : 'userEventReadModels/$uid/$bandId/$eventId';
+    final value = (await _dbRef(path).get()).value;
+    return value is Map ? BandEvent.fromJson(value, eventId) : null;
+  });
 
   Future<Map<String, dynamic>> sendTestPushNotificationAsync({
     required String soundType,

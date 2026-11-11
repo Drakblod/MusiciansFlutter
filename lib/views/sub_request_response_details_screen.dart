@@ -15,14 +15,19 @@ import '../utils/sub_request_card_helper.dart';
 import '../widgets/request_management_gate.dart';
 
 class SubRequestResponseDetailsScreen extends StatelessWidget {
-  const SubRequestResponseDetailsScreen({super.key,required this.subRequest});
+  const SubRequestResponseDetailsScreen({
+    super.key, required this.subRequest, this.initialResponderId,
+  });
   final SubRequest subRequest;
+  final String? initialResponderId;
   @override
   Widget build(BuildContext context) => RequestManagementGate(
     requestId:subRequest.subRequestId ?? subRequest.id ?? '',
     bandId:subRequest.bandId,
     expectedCreatorId:subRequest.creatorUserId ?? subRequest.userId,
-    builder:(access) => _AuthorizedSubRequestResponseDetailsScreen(subRequest:access.request!,access:access),
+    builder:(access) => _AuthorizedSubRequestResponseDetailsScreen(
+      subRequest:access.request!, access:access, initialResponderId:initialResponderId,
+    ),
   );
 }
 
@@ -30,7 +35,10 @@ class _AuthorizedSubRequestResponseDetailsScreen extends StatefulWidget {
   final SubRequest subRequest;
 
   final RequestManagementAccess access;
-  const _AuthorizedSubRequestResponseDetailsScreen({required this.subRequest,required this.access});
+  final String? initialResponderId;
+  const _AuthorizedSubRequestResponseDetailsScreen({
+    required this.subRequest, required this.access, this.initialResponderId,
+  });
 
   @override
   State<_AuthorizedSubRequestResponseDetailsScreen> createState() =>
@@ -43,6 +51,7 @@ class __AuthorizedSubRequestResponseDetailsScreenState
   List<ResponderItem> _responders = [];
   String? _selectedUserId;
   bool _isLoading = true;
+  bool _responderUnavailable = false;
 
   @override
   void initState() {
@@ -63,6 +72,16 @@ class __AuthorizedSubRequestResponseDetailsScreenState
       // The outer destination guard supplied the canonical authorized request.
       final responses = await appState.firebaseService.getSubRequestResponsesAsync(reqId);
       if (!mounted || !_current) return;
+      if (widget.initialResponderId case final String responder) {
+        if (!responses.containsKey(responder)) {
+          setState(() {
+            _responders = [];
+            _selectedUserId = null;
+            _responderUnavailable = true;
+          });
+          return;
+        }
+      }
 
       final responderIds = responses.keys.toList();
       final List<ResponderItem> items = [];
@@ -106,7 +125,9 @@ class __AuthorizedSubRequestResponseDetailsScreenState
       if (mounted && _current) {
         setState(() {
           _responders = items;
-          if (items.length == 1) {
+          if (widget.initialResponderId != null) {
+            _selectedUserId = widget.initialResponderId;
+          } else if (items.length == 1) {
             _selectedUserId = items.first.userId;
           }
         });
@@ -528,6 +549,12 @@ class __AuthorizedSubRequestResponseDetailsScreenState
 
   @override
   Widget build(BuildContext context) {
+    if (_responderUnavailable) {
+      return const GradientScaffold(
+        appBar: CustomTopBar(title: 'Responses', showBack: true),
+        body: Center(child: Text('This notification is unavailable.')),
+      );
+    }
     return GradientScaffold(
       appBar: const CustomTopBar(title: 'Responses', showBack: true),
       body: SafeArea(
