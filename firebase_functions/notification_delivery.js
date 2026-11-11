@@ -1,6 +1,8 @@
 'use strict';
 
-const { createHash, timingSafeEqual } = require('node:crypto');
+const { createHash, randomUUID, timingSafeEqual } = require('node:crypto');
+const { initializeApp, deleteApp } = require('firebase-admin/app');
+const { getDatabase } = require('firebase-admin/database');
 const { HttpsError } = require('firebase-functions/v2/https');
 
 const digest = value => createHash('sha256').update(value).digest('hex');
@@ -83,6 +85,7 @@ async function changeBinding(db, uid, input, unregister = false) {
     throw new HttpsError('invalid-argument', 'Invalid notification registration.');
   }
   const proofHash = digest(proof);
+  const ownerKey = digest(uid);
   const tokenHash = unregister ? null : digest(token);
   const soundProfile = soundProfiles.has(input?.soundProfile) ? input.soundProfile : null;
   const ref = db.ref(registryPath);
@@ -90,6 +93,7 @@ async function changeBinding(db, uid, input, unregister = false) {
   await ref.child('installations').child(installation).get();
   const tx = await ref.transaction(current => {
     const state = current || {};
+    if (state.revokedOwners?.[ownerKey]) return;
     state.installations ||= {};
     state.tokens ||= {};
     state.owners ||= {};
@@ -110,7 +114,12 @@ async function changeBinding(db, uid, input, unregister = false) {
     }
     return state;
   });
-  const binding = tx.snapshot.val()?.installations?.[installation];
+  const state = tx.snapshot.val();
+  if (state?.revokedOwners?.[ownerKey]) {
+    if (unregister) return { success: false };
+    throw new HttpsError('failed-precondition', 'Notification registration is unavailable.');
+  }
+  const binding = state?.installations?.[installation];
   // Identical retries succeed without replacing a newer binding.
   const replay = binding?.proofHash === proofHash && binding.sequence === sequence &&
     (unregister ? !binding.uid : binding.uid === uid && binding.tokenHash === tokenHash &&
@@ -122,9 +131,56 @@ async function changeBinding(db, uid, input, unregister = false) {
 }
 
 function removeAssociation(state, installation, binding) {
-  if (binding?.tokenHash) delete state.tokens[binding.tokenHash];
+  if (binding?.tokenHash && state.tokens?.[binding.tokenHash] === installation) {
+    delete state.tokens[binding.tokenHash];
+  }
   const owner = state.owners?.[binding?.uid];
   if (owner) delete owner[installation];
+}
+
+async function revokeAccount(db, uid) {
+  const registry = db.ref(registryPath);
+  const ownerKey = digest(uid);
+  await registry.transaction(current => {
+    const state = current || {};
+    (state.revokedOwners ||= {})[ownerKey] = true;
+    for (const [installation, binding] of Object.entries(state.installations || {})) {
+      if (binding.uid !== uid) continue;
+      removeAssociation(state, installation, binding);
+      // Retain the proof and last generation so the next owner can reuse
+      // this installation without accepting stale requests.
+      state.installations[installation] = {
+        proofHash: binding.proofHash, sequence: binding.sequence,
+      };
+    }
+    if (state.owners) delete state.owners[uid];
+    return state;
+  });
+}
+
+async function isAccountRevoked(db, uid) {
+  return (await db.ref(`${registryPath}/revokedOwners/${digest(uid)}`).get()).exists();
+}
+
+// Use the same service identity with a restricted Database auth override.
+// RTDB checks revocation at commit, including writes from an interrupted sender.
+async function withNotificationWriter(db, uid, write) {
+  if (await isAccountRevoked(db, uid)) return undefined;
+  const app = initializeApp({
+    ...db.app.options,
+    databaseAuthVariableOverride: {
+      uid, token: { notificationV2Writer: true, ownerKey: digest(uid) },
+    },
+  }, 'notification-writer-' + randomUUID());
+  try {
+    return await write(getDatabase(app));
+  } catch (error) {
+    if (/^permission[_ -]denied$/i.test(error.code || error.message || '') &&
+        await isAccountRevoked(db, uid)) return undefined;
+    throw error;
+  } finally {
+    await deleteApp(app);
+  }
 }
 
 async function recipients(db, uids) {
@@ -209,7 +265,12 @@ async function dispatchRegistered(db, messaging, recipient, message) {
   const { type, ...route } = routingData(message.data);
   const id = notificationId(recipient.userId, type, route);
   if (Object.keys(route).length) {
-    await db.ref(`${routesPath}/${recipient.userId}/${id}`).set({ type, ...route });
+    if (!(await stillCurrent(db, recipient))) return { success: false, superseded: true };
+    const written = await withNotificationWriter(db, recipient.userId, async writer => {
+      await writer.ref(`${routesPath}/${recipient.userId}/${id}`).set({ type, ...route });
+      return true;
+    });
+    if (!written) return { success: false, superseded: true };
   }
   return deliver(db, messaging, recipient, id, type, message.data?.soundType);
 }
@@ -225,38 +286,43 @@ function routingData(data) {
 
 // The private route doubles as the permanent delivery claim. No retry can
 // redispatch after an ambiguous provider result or an interrupted invocation.
-async function publish(db, messaging, uid, type, key, route, { suppressPush = false } = {}) {
+async function publish(db, messaging, uid, type, key, route, {
+  suppressPush = false, writeAsRecipient = withNotificationWriter,
+} = {}) {
   const id = notificationId(uid, type, key);
-  const claimRef = db.ref(`${routesPath}/${uid}/${id}`);
-  const claim = await claimRef.transaction(current =>
-    current ? undefined : { type, ...route, createdAt: Date.now(), dispatchState: 'claimed' });
-  const createdAt = claim.snapshot.val()?.createdAt;
-  if (!createdAt) return null;
-  const feed = await db.ref(`${feedPath}/${uid}/${id}`).transaction(current =>
-    current ? undefined : { type, createdAt, isRead: false });
-  if (feed.committed || claim.committed) await db.ref(`${signalPath}/${uid}`).set(id);
-  if (!claim.committed) return { id, duplicate: true };
-  if (suppressPush) {
-    await claimRef.child('dispatchState').set('legacy-delivery');
-    return { id, results: [] };
-  }
-  if (!notificationSounds.has(type)) {
-    await claimRef.child('dispatchState').set('feed-only');
-    return { id, results: [] };
-  }
-  const destinations = await recipients(db, [uid]);
-  const results = await Promise.all(destinations.map(recipient =>
-    deliver(db, messaging, recipient, id, type)));
-  const dispatchState = results.some(result => result.success) ? 'sent' :
-    results.some(result => result.error) ? 'undelivered-or-unknown' :
-    results.some(result => result.noCompatibleSound) ? 'no-compatible-sound' : 'no-current-installation';
-  await claimRef.child('dispatchState').set(dispatchState);
-  return { id, results };
+  const result = await writeAsRecipient(db, uid, async writer => {
+    const claimRef = writer.ref(`${routesPath}/${uid}/${id}`);
+    const claim = await claimRef.transaction(current =>
+      current ? undefined : { type, ...route, createdAt: Date.now(), dispatchState: 'claimed' });
+    const createdAt = claim.snapshot.val()?.createdAt;
+    if (!createdAt) return null;
+    const feed = await writer.ref(`${feedPath}/${uid}/${id}`).transaction(current =>
+      current ? undefined : { type, createdAt, isRead: false });
+    if (feed.committed || claim.committed) await writer.ref(`${signalPath}/${uid}`).set(id);
+    if (!claim.committed) return { id, duplicate: true };
+    if (suppressPush) {
+      await claimRef.child('dispatchState').set('legacy-delivery');
+      return { id, results: [] };
+    }
+    if (!notificationSounds.has(type)) {
+      await claimRef.child('dispatchState').set('feed-only');
+      return { id, results: [] };
+    }
+    const destinations = await recipients(db, [uid]);
+    const results = await Promise.all(destinations.map(recipient =>
+      deliver(db, messaging, recipient, id, type)));
+    const dispatchState = results.some(result => result.success) ? 'sent' :
+      results.some(result => result.error) ? 'undelivered-or-unknown' :
+      results.some(result => result.noCompatibleSound) ? 'no-compatible-sound' : 'no-current-installation';
+    await claimRef.child('dispatchState').set(dispatchState);
+    return { id, results };
+  });
+  return result ?? null;
 }
 
 module.exports = {
   changeBinding, recipients, stillCurrent, removeInvalid, messageFor, deliver, publish,
-  dispatchRegistered, routingData,
+  dispatchRegistered, routingData, revokeAccount, isAccountRevoked, withNotificationWriter,
   testSoundPlatform,
   safeKey, feedPath, routesPath, signalPath,
 };

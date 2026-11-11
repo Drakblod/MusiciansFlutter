@@ -536,16 +536,27 @@
     },
     "notificationRoutesV2": {
       ".read": false,
-      ".write": false
+      ".write": false,
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid && auth.token.notificationV2Writer == true && auth.token.ownerKey.matches(/^[a-f0-9]{64}$/)",
+        ".write": "auth != null && auth.uid == $uid && auth.token.notificationV2Writer == true && auth.token.ownerKey.matches(/^[a-f0-9]{64}$/) && !root.child('notificationTokenRegistry').child('revokedOwners').child(auth.token.ownerKey).exists()"
+      }
     },
     "notificationFeedV2": {
       ".read": false,
       ".write": false,
-      "$uid": { ".indexOn": "createdAt" }
+      "$uid": {
+        ".indexOn": "createdAt",
+        ".read": "auth != null && auth.uid == $uid && auth.token.notificationV2Writer == true && auth.token.ownerKey.matches(/^[a-f0-9]{64}$/)",
+        ".write": "auth != null && auth.uid == $uid && auth.token.notificationV2Writer == true && auth.token.ownerKey.matches(/^[a-f0-9]{64}$/) && !root.child('notificationTokenRegistry').child('revokedOwners').child(auth.token.ownerKey).exists()"
+      }
     },
     "notificationFeedSignals": {
       ".write": false,
-      "$uid": { ".read": "auth != null && auth.uid == $uid" }
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        ".write": "auth != null && auth.uid == $uid && auth.token.notificationV2Writer == true && auth.token.ownerKey.matches(/^[a-f0-9]{64}$/) && !root.child('notificationTokenRegistry').child('revokedOwners').child(auth.token.ownerKey).exists()"
+      }
     },
     "userNotifications": {
       ".read": false,

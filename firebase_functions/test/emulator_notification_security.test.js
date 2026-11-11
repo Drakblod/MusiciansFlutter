@@ -185,6 +185,109 @@ for (const rules of ['database.rules.json', 'database.transitional.rules.json'])
       assert.deepEqual(await delivery.recipients(db, [b.uid]), []);
     });
 
+    it('revokes account bindings and feed on deletion without invalidating transferred generations', async () => {
+      const subject = await client();
+      const successor = await client();
+      const binding = () => ({
+        installation: randomBytes(16).toString('hex'),
+        proof: randomBytes(32).toString('hex'),
+        token: randomBytes(32).toString('base64url'),
+        sequence: 1,
+      });
+      const [sameInstallation, newInstallation, transferred] = Array.from({ length: 3 }, binding);
+      for (const row of [sameInstallation, newInstallation, transferred]) {
+        await subject.call('registerNotificationInstallation', row);
+      }
+      await successor.call('registerNotificationInstallation', { ...transferred, sequence: 2 });
+      const oldRecipients = await delivery.recipients(db, [subject.uid]);
+      assert.equal(oldRecipients.length, 2);
+      const registry = 'notificationTokenRegistry';
+      const tokenKey = token => createHash('sha256').update(token).digest('hex');
+      const legacy = `userNotifications/${subject.uid}/historical`;
+      const feedPaths = ['notificationFeedV2', 'notificationRoutesV2', 'notificationFeedSignals'];
+      await db.ref().update({
+        [`${feedPaths[0]}/${subject.uid}/row`]: { type: 'event_invite' },
+        [`${feedPaths[1]}/${subject.uid}/row`]: { type: 'event_invite' },
+        [`${feedPaths[2]}/${subject.uid}`]: 'row',
+        [legacy]: { type: 'event_invite' },
+      });
+      let sendStarted, finishSend;
+      const started = new Promise(resolve => { sendStarted = resolve; });
+      const hold = new Promise(resolve => { finishSend = resolve; });
+      const inFlight = delivery.publish(db, {
+        send: async () => {
+          sendStarted();
+          await hold;
+          return 'accepted-before-revocation';
+        },
+      }, subject.uid, 'event_invite', 'in-flight-deletion', {});
+      try {
+        await Promise.race([started, inFlight.then(() => assert.fail('delivery did not reach provider'))]);
+        // Hold an actual restricted writer across deletion. Each late write
+        // must fail at the emulator, even if the sender never cleans up.
+        await delivery.withNotificationWriter(db, subject.uid, async writer => {
+          const signal = writer.ref(`${feedPaths[2]}/${subject.uid}`);
+          assert.equal((await signal.get()).exists(), true);
+          assert.deepEqual(await subject.call('deleteUserAccount'), { success: true });
+          for (const path of feedPaths) {
+            const late = writer.ref(`${path}/${subject.uid}`);
+            await assert.rejects(late.set('late'), /permission.denied/i);
+          }
+          const claim = writer.ref(`${feedPaths[1]}/${subject.uid}/late`);
+          await assert.rejects(claim.transaction(() => ({ type: 'event_invite' })), /permission.denied/i);
+        });
+      } finally {
+        finishSend();
+        await inFlight;
+      }
+      await assert.rejects(adminApp.auth().getUser(subject.uid), e => e.code === 'auth/user-not-found');
+      for (const tree of feedPaths) assert.equal(await get(db, `${tree}/${subject.uid}`), null);
+      assert.deepEqual(await get(db, legacy), { type: 'event_invite' });
+      assert.equal(await get(db, `${registry}/owners/${subject.uid}`), null);
+      for (const row of [sameInstallation, newInstallation]) {
+        const fence = await get(db, `${registry}/installations/${row.installation}`);
+        assert.deepEqual(fence, { proofHash: tokenKey(row.proof), sequence: 1 });
+        assert.equal(await get(db, `${registry}/tokens/${tokenKey(row.token)}`), null);
+      }
+      // Broadcast uses this same enumeration. No provider call should be
+      // attempted even by a sender that had already obtained the old binding.
+      assert.ok((await delivery.recipients(db)).every(row => row.userId !== subject.uid));
+      for (const old of oldRecipients) {
+        const messaging = { send: () => assert.fail('stale installation was sent a notification') };
+        assert.deepEqual(await delivery.deliver(db, messaging, old, 'stale', 'event_invite'),
+          { success: false, superseded: true });
+      }
+      await assert.rejects(successor.call('registerNotificationInstallation', sameInstallation),
+        e => e.code === 'functions/failed-precondition');
+      const adopted = { ...binding(), token: newInstallation.token };
+      await successor.call('registerNotificationInstallation', { ...sameInstallation, sequence: 2 });
+      await successor.call('registerNotificationInstallation', adopted);
+      // Exercise a retry at the registry boundary after Auth is already gone,
+      // and stale in-flight requests that had authenticated before deletion.
+      await delivery.revokeAccount(db, subject.uid);
+      for (const row of [sameInstallation, newInstallation, transferred, binding()]) {
+        const stale = { ...row, accountUid: subject.uid, sequence: 99 };
+        await assert.rejects(delivery.changeBinding(db, subject.uid, stale),
+          e => e.code === 'failed-precondition');
+        assert.deepEqual(await delivery.changeBinding(db, subject.uid, stale, true), { success: false });
+      }
+      for (const old of oldRecipients) {
+        await delivery.removeInvalid(db, old, { code: 'messaging/registration-token-not-registered' });
+      }
+      const broadcast = await delivery.recipients(db);
+      for (const row of [sameInstallation, adopted, transferred]) {
+        assert.ok(broadcast.some(dest => dest.userId === successor.uid &&
+          dest.installation === row.installation && dest.token === row.token));
+        assert.equal(await get(db, `${registry}/tokens/${tokenKey(row.token)}`), row.installation);
+      }
+      assert.deepEqual(await delivery.recipients(db, [subject.uid]), []);
+      assert.equal(await delivery.publish(db, {}, subject.uid, 'event_invite', 'after-deletion', {}), null);
+      for (const tree of feedPaths) assert.equal(await get(db, `${tree}/${subject.uid}`), null);
+      for (const row of [sameInstallation, adopted, transferred]) {
+        await successor.call('unregisterNotificationInstallation', { ...row, sequence: 3 });
+      }
+    });
+
     it('selects allowlisted sounds per registered installation and keeps legacy chat feed-only', async () => {
       const recipient = await client();
       const soundProfiles = ['android-v2', 'ios-v2', 'arbitrary-sound.wav'];

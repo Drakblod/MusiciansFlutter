@@ -4,7 +4,9 @@ const { HttpsError } = require('firebase-functions/v2/https');
 const { randomUUID } = require('node:crypto');
 const { validMember } = require('./band_membership_index');
 const { authorizeRequest, normalize } = require('./membership_authority');
-const { safeKey, feedPath, routesPath, signalPath } = require('./notification_delivery');
+const {
+  safeKey, feedPath, routesPath, signalPath, isAccountRevoked, withNotificationWriter,
+} = require('./notification_delivery');
 
 const unavailable = () => new HttpsError('not-found', 'This notification is unavailable.');
 const at = async (db, path) => (await db.ref(path).get()).val();
@@ -223,6 +225,7 @@ async function resolveRoute(db, uid, route, options, { preview = false, slotId }
 }
 
 async function list(db, uid, options) {
+  if (await isAccountRevoked(db, uid)) return [];
   const rows = await at(db, `${feedPath}/${uid}`) || {};
   const views = await Promise.all(Object.entries(rows).map(async ([id, row]) => {
     try {
@@ -243,6 +246,7 @@ async function list(db, uid, options) {
 
 async function resolve(db, uid, id, slotId, options, preview = false) {
   if (!safeKey(id) || (slotId != null && !safeKey(slotId))) throw unavailable();
+  if (await isAccountRevoked(db, uid)) throw unavailable();
   const route = await at(db, `${routesPath}/${uid}/${id}`);
   if (!route) throw unavailable();
   try {
@@ -253,23 +257,27 @@ async function resolve(db, uid, id, slotId, options, preview = false) {
   }
 }
 
-async function markRead(db, uid, accepts, id) {
-  const feed = db.ref(`${feedPath}/${uid}`);
-  const rows = id ? { [id]: (await feed.child(id).get()).val() } : (await feed.get()).val() || {};
-  if (id && !rows[id]) throw unavailable();
-  const now = Date.now();
-  const results = await Promise.all(Object.entries(rows)
-    .filter(([, row]) => row && !row.isRead && accepts(row))
-    .map(([key]) => feed.child(key).transaction(row => {
-      // Returning null on a cold local cache lets RTDB retry with server data.
-      // An actual deletion stays deleted and does not count as an update.
-      if (!row) return null;
-      if (row.isRead || !accepts(row)) return;
-      return { ...row, isRead: true, readAt: now };
-    })));
-  const updatedCount = results.filter(result => result.committed && result.snapshot.val()?.isRead).length;
-  if (updatedCount) await db.ref(`${signalPath}/${uid}`).set(randomUUID());
-  return { success: true, updatedCount };
+async function markRead(db, uid, accepts, id, writeAsRecipient = withNotificationWriter) {
+  const result = await writeAsRecipient(db, uid, async writer => {
+    const feed = writer.ref(`${feedPath}/${uid}`);
+    const rows = id ? { [id]: (await feed.child(id).get()).val() } : (await feed.get()).val() || {};
+    if (id && !rows[id]) throw unavailable();
+    const now = Date.now();
+    const results = await Promise.all(Object.entries(rows)
+      .filter(([, row]) => row && !row.isRead && accepts(row))
+      .map(([key]) => feed.child(key).transaction(row => {
+        // Returning null on a cold local cache lets RTDB retry with server data.
+        // An actual deletion stays deleted and does not count as an update.
+        if (!row) return null;
+        if (row.isRead || !accepts(row)) return;
+        return { ...row, isRead: true, readAt: now };
+      })));
+    const updatedCount = results.filter(result => result.committed && result.snapshot.val()?.isRead).length;
+    if (updatedCount) await writer.ref(`${signalPath}/${uid}`).set(randomUUID());
+    return { success: true, updatedCount };
+  });
+  if (!result) throw unavailable();
+  return result;
 }
 
 module.exports = { activeRequest, list, resolve, markRead, authorizedEvent, currentMember };

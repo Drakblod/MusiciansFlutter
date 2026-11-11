@@ -1,0 +1,102 @@
+{
+  "region": "europe-west1",
+  "baselineDescriptorSha256": "156acf9b93007c0c542b5d17ed46bd4bda6894f50cfd62ba3b1a2de60acfd333",
+  "descriptorSha256": "1be4c35f0ccf4a8db0fc834b99646f6540ca874890753d6649438960d4523003",
+  "endpoints": [
+    "assignSubstitute",
+    "checkEventReminders",
+    "cleanupCityVerificationState",
+    "commitUserCity",
+    "createAgreementConversation",
+    "createBandSectionConversation",
+    "createMapPin",
+    "createSessionConversation",
+    "deleteBand",
+    "deleteMapPin",
+    "deleteSubRequest",
+    "deleteUserAccount",
+    "getAppMetrics",
+    "getOrCreateDirectConversation",
+    "joinLiveBroadcast",
+    "leaveLiveBroadcast",
+    "listNotificationFeed",
+    "manageBandSectionConversation",
+    "markAllNotificationsRead",
+    "markBandSectionConversationRead",
+    "markDirectConversationRead",
+    "markFeatureNotificationsRead",
+    "markNotificationRead",
+    "mutateBandEvent",
+    "mutateBandMembership",
+    "onBandEventCreated",
+    "onBandEventReadModelWritten",
+    "onBandEventWritten",
+    "onBandFileUploaded",
+    "onBandMemberWritten",
+    "onBandRoomMessageCreated",
+    "onCatalogueBandWritten",
+    "onCatalogueUserWritten",
+    "onCollabSessionApplicationChanged",
+    "onEventResponseChanged",
+    "onLegacyBandCalendarEventWritten",
+    "onPublicEventWritten",
+    "onSubRequestGroupPublished",
+    "onSubRequestResponseCreated",
+    "publishSubRequestGroup",
+    "registerNotificationInstallation",
+    "resolveCatalogueCity",
+    "resolveNotification",
+    "respondToSubRequest",
+    "revokeSubstituteAssignment",
+    "searchCatalogueCities",
+    "sendBandSectionMessage",
+    "sendDirectMessage",
+    "sendSubRequestNotification",
+    "sendTestPushNotification",
+    "startCatalogueCitySession",
+    "startLiveBroadcast",
+    "stopLiveBroadcast",
+    "storageMedia",
+    "triggerEventReminder",
+    "unregisterNotificationInstallation",
+    "updateMapPin",
+    "updateSessionApplicationStatus"
+  ],
+  "excluded": [
+    "checkEventReminders"
+  ],
+  "cutover": {
+    "newCallables": [
+      "registerNotificationInstallation",
+      "unregisterNotificationInstallation",
+      "listNotificationFeed",
+      "resolveNotification"
+    ],
+    "triggers": [
+      "onBandEventCreated",
+      "sendSubRequestNotification",
+      "onSubRequestGroupPublished",
+      "onEventResponseChanged",
+      "onCollabSessionApplicationChanged",
+      "onBandRoomMessageCreated",
+      "onSubRequestResponseCreated",
+      "onBandFileUploaded"
+    ],
+    "sendingCallables": [
+      "respondToSubRequest",
+      "assignSubstitute",
+      "sendDirectMessage",
+      "sendBandSectionMessage",
+      "triggerEventReminder",
+      "sendTestPushNotification"
+    ],
+    "acknowledgments": [
+      "markNotificationRead",
+      "markAllNotificationsRead",
+      "markFeatureNotificationsRead"
+    ],
+    "accountDeletion": [
+      "deleteUserAccount"
+    ]
+  }
+}

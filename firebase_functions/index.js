@@ -3973,6 +3973,9 @@ exports.deleteUserAccount = onCall({ region: 'europe-west1' }, async (request) =
       }
     }
 
+    // Revoke V2 token ownership before deleting the private notification data.
+    await notificationDelivery.revokeAccount(db, callerUid);
+
     // 4. Clean up user-specific nodes
     const rootUpdates = {};
     rootUpdates[`/users/${callerUid}`] = null;

@@ -77,6 +77,13 @@ for (const ruleFile of ['database.rules.json','database.transitional.rules.json'
     if (env) await env.cleanup();
     if (adminApp) await adminApp.delete();
   });
+  afterEach(async () => {
+    const ids = [band, 'created_' + band];
+    await db.ref().update(Object.fromEntries(ids.flatMap(id =>
+      ['Bands', 'membershipMutationOperations', 'bandconversations', 'bandSectionConversations']
+        .map(root => [root + '/' + id, null]))));
+  });
+
   for (const [name,value] of [['fabricated Leader',{Role:'Leader',Status:'active'}],['fabricated Admin',{Role:'Admin'}]]) {
     it(`denies ${name} in an existing band`,async()=>assertFails(env.authenticatedContext(uid.other).database().ref(`Bands/${band}/Members_band/${uid.other}`).set(value)));
   }
@@ -387,21 +394,35 @@ for (const ruleFile of ['database.rules.json','database.transitional.rules.json'
     for (const id of [uid.leader,uid.admin,uid.member]) assert.strictEqual((await db.ref(`userBandMembershipIndex/${id}/${band}`).get()).val(),null);
   });
   it('own account deletion transfers leadership atomically to an active successor',async()=>{
-    // The fixture writes canonical membership directly. Wait for its actual
-    // index trigger before exercising account deletion's index discovery.
-    let indexed=false;
-    for(let attempt=0;attempt<100;attempt++){
-      indexed=(await db.ref(`userBandMembershipIndex/${uid.leader}/${band}`).get()).exists();
-      if(indexed)break;
-      await new Promise(resolve=>setTimeout(resolve,100));
+    // A deleted Auth identity is permanent. Give each rule variant its own
+    // destructive fixture instead of reusing a shared leader UID.
+    const account = 'ma_delete_leader_' + rulesVariant;
+    const app = initializeApp({ projectId: namespace, apiKey: 'fake-api-key' }, account);
+    try {
+      const auth = getAuth(app);
+      connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });
+      await signInWithCustomToken(auth, await adminApp.auth().createCustomToken(account));
+      await db.ref(`Bands/${band}/Members_band`).update({
+        [uid.leader]: null, [account]: { Role: 'Leader', Status: 'active' },
+      });
+      let indexed=false;
+      for(let attempt=0;attempt<100;attempt++){
+        indexed=(await db.ref(`userBandMembershipIndex/${account}/${band}`).get()).exists();
+        if(indexed)break;
+        await new Promise(resolve=>setTimeout(resolve,100));
+      }
+      assert(indexed,'Membership index trigger did not converge');
+      const functions = getFunctions(app, 'europe-west1');
+      connectFunctionsEmulator(functions, '127.0.0.1', 5001);
+      await httpsCallable(functions, 'deleteUserAccount')({});
+      const value=await members();
+      assert.strictEqual(value[account],undefined);assert.strictEqual(leaderCount(value),1);
+      assert.strictEqual(value[uid.admin].Role,'Leader');
+      assert.strictEqual((await db.ref(`userBandMembershipIndex/${account}`).get()).val(),null);
+      assert.strictEqual((await db.ref(`userBandMembershipIndex/${account}/${band}`).get()).val(),null);
+    } finally {
+      await deleteApp(app);
     }
-    assert(indexed,'Membership index trigger did not converge');
-    await call('leader','deleteUserAccount',{});
-    const value=await members();
-    assert.strictEqual(value[uid.leader],undefined);assert.strictEqual(leaderCount(value),1);
-    assert.strictEqual(value[uid.admin].Role,'Leader');
-    assert.strictEqual((await db.ref(`userBandMembershipIndex/${uid.leader}`).get()).val(),null);
-    assert.strictEqual((await db.ref(`userBandMembershipIndex/${uid.leader}/${band}`).get()).val(),null);
   });
 
  });

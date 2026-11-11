@@ -2035,6 +2035,8 @@ function resolveNotificationFeatureId(notif) {
   }
 }
 
+const useMockNotificationWriter = (db, _uid, write) => write(db);
+
 async function handleMarkFeatureNotificationsRead(request, db) {
   const callerUid = request.auth?.uid;
   if (!callerUid) {
@@ -2047,7 +2049,7 @@ async function handleMarkFeatureNotificationsRead(request, db) {
   }
 
   return require('../notification_access').markRead(db, callerUid,
-    row => resolveNotificationFeatureId(row) === featureId.trim());
+    row => resolveNotificationFeatureId(row) === featureId.trim(), undefined, useMockNotificationWriter);
 }
 
 async function handleOnBandFileUploaded(bandId, fileId, fileData, db) {
@@ -2059,7 +2061,8 @@ async function handleOnBandFileUploaded(bandId, fileId, fileData, db) {
   const { publish } = require('../notification_delivery');
   const recipients = Object.keys(members).filter(uid => uid !== uploaderId && currentMember(members[uid]));
   const rows = await Promise.all(recipients.map(async uid =>
-    [uid, await publish(db, {}, uid, 'band_file_uploaded', [bandId, fileId], { bandId, fileId })]));
+    [uid, await publish(db, {}, uid, 'band_file_uploaded', [bandId, fileId], { bandId, fileId },
+      { writeAsRecipient: useMockNotificationWriter })]));
   return { notifiedCount: recipients.length, recipients, rows: Object.fromEntries(rows) };
 }
 
@@ -2147,7 +2150,7 @@ describe('HOME-ACTIVITY-BADGES-01: Backend Callable & Trigger Logic Tests', () =
     const { publish } = require('../notification_delivery');
     const uid = 'creator_uid', subRequestId = 'sub_123', responderId = 'applicant_uid';
     const result = await publish(db, {}, uid, 'sub_request_response', [subRequestId, responderId],
-      { subRequestId, responderId }, {});
+      { subRequestId, responderId }, { writeAsRecipient: useMockNotificationWriter });
 
     const row = db.data[`notificationFeedV2/${uid}/${result.id}`];
     assert.strictEqual(row.type, 'sub_request_response');
@@ -2162,7 +2165,7 @@ describe('HOME-ACTIVITY-BADGES-01: Backend Callable & Trigger Logic Tests', () =
     const { publish } = require('../notification_delivery');
     const uid = 'creator_uid', subRequestId = 'sub_123', responderId = 'applicant_uid';
     const create = () => publish(db, {}, uid, 'sub_request_response', [subRequestId, responderId],
-      { subRequestId, responderId }, {});
+      { subRequestId, responderId }, { writeAsRecipient: useMockNotificationWriter });
     const [first, second] = await Promise.all([create(), create()]);
     assert.strictEqual(first.id, second.id);
     assert.strictEqual([first, second].filter(result => result.duplicate).length, 1);
