@@ -18,6 +18,10 @@
 		A1B2C3061CF9000F007C0006 /* gig_rquest_response.wav in Resources */ = {isa = PBXBuildFile; fileRef = A1B2C3021CF9000F007C0002 /* gig_rquest_response.wav */; };
 		A1B2C3071CF9000F007C0007 /* reminder_rsvp.wav in Resources */ = {isa = PBXBuildFile; fileRef = A1B2C3031CF9000F007C0003 /* reminder_rsvp.wav */; };
 		A1B2C3081CF9000F007C0008 /* finalized_gig.wav in Resources */ = {isa = PBXBuildFile; fileRef = A1B2C3041CF9000F007C0004 /* finalized_gig.wav */; };
+		A1B2C3111CF9000F007C0001 /* notification_gig_request_v2.wav in Resources */ = {isa = PBXBuildFile; fileRef = A1B2C3101CF9000F007C0001 /* notification_gig_request_v2.wav */; };
+		A1B2C3111CF9000F007C0002 /* notification_gig_response_v2.wav in Resources */ = {isa = PBXBuildFile; fileRef = A1B2C3101CF9000F007C0002 /* notification_gig_response_v2.wav */; };
+		A1B2C3111CF9000F007C0003 /* notification_event_rsvp_v2.wav in Resources */ = {isa = PBXBuildFile; fileRef = A1B2C3101CF9000F007C0003 /* notification_event_rsvp_v2.wav */; };
+		A1B2C3111CF9000F007C0004 /* notification_gig_confirmed_v2.wav in Resources */ = {isa = PBXBuildFile; fileRef = A1B2C3101CF9000F007C0004 /* notification_gig_confirmed_v2.wav */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -63,6 +67,10 @@
 		A1B2C3021CF9000F007C0002 /* gig_rquest_response.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = gig_rquest_response.wav; sourceTree = "<group>"; };
 		A1B2C3031CF9000F007C0003 /* reminder_rsvp.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = reminder_rsvp.wav; sourceTree = "<group>"; };
 		A1B2C3041CF9000F007C0004 /* finalized_gig.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = finalized_gig.wav; sourceTree = "<group>"; };
+		A1B2C3101CF9000F007C0001 /* notification_gig_request_v2.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = notification_gig_request_v2.wav; sourceTree = "<group>"; };
+		A1B2C3101CF9000F007C0002 /* notification_gig_response_v2.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = notification_gig_response_v2.wav; sourceTree = "<group>"; };
+		A1B2C3101CF9000F007C0003 /* notification_event_rsvp_v2.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = notification_event_rsvp_v2.wav; sourceTree = "<group>"; };
+		A1B2C3101CF9000F007C0004 /* notification_gig_confirmed_v2.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = notification_gig_confirmed_v2.wav; sourceTree = "<group>"; };
 		A1B2C3091CF9000F007C0009 /* Runner.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Runner.entitlements; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -130,6 +138,10 @@
 				A1B2C3021CF9000F007C0002 /* gig_rquest_response.wav */,
 				A1B2C3031CF9000F007C0003 /* reminder_rsvp.wav */,
 				A1B2C3041CF9000F007C0004 /* finalized_gig.wav */,
+				A1B2C3101CF9000F007C0001 /* notification_gig_request_v2.wav */,
+				A1B2C3101CF9000F007C0002 /* notification_gig_response_v2.wav */,
+				A1B2C3101CF9000F007C0003 /* notification_event_rsvp_v2.wav */,
+				A1B2C3101CF9000F007C0004 /* notification_gig_confirmed_v2.wav */,
 				A1B2C3091CF9000F007C0009 /* Runner.entitlements */,
 			);
 			path = Runner;
@@ -239,6 +251,10 @@
 				A1B2C3061CF9000F007C0006 /* gig_rquest_response.wav in Resources */,
 				A1B2C3071CF9000F007C0007 /* reminder_rsvp.wav in Resources */,
 				A1B2C3081CF9000F007C0008 /* finalized_gig.wav in Resources */,
+				A1B2C3111CF9000F007C0001 /* notification_gig_request_v2.wav in Resources */,
+				A1B2C3111CF9000F007C0002 /* notification_gig_response_v2.wav in Resources */,
+				A1B2C3111CF9000F007C0003 /* notification_event_rsvp_v2.wav in Resources */,
+				A1B2C3111CF9000F007C0004 /* notification_gig_confirmed_v2.wav in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

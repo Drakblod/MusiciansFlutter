@@ -114,10 +114,11 @@ void main() {
       expect(find.text('Finalized Gig'), findsOneWidget);
 
       // Check channel IDs
-      expect(find.textContaining('gig_request_channel'), findsOneWidget);
-      expect(find.textContaining('gig_response_channel'), findsOneWidget);
-      expect(find.textContaining('rsvp_reminder_channel'), findsNWidgets(5));
-      expect(find.textContaining('finalized_gig_channel'), findsOneWidget);
+      expect(find.textContaining('gig_request_channel_v2'), findsOneWidget);
+      expect(find.textContaining('gig_response_channel_v2'), findsOneWidget);
+      expect(find.textContaining('rsvp_reminder_channel_v2'), findsNWidgets(5));
+      expect(find.textContaining('finalized_gig_channel_v2'), findsOneWidget);
+      expect(find.textContaining('Preview uses media volume.'), findsOneWidget);
 
       // Check Preview and Broadcast Push buttons exist for all cards
       expect(find.text('Preview'), findsNWidgets(8));

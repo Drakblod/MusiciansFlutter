@@ -12,11 +12,63 @@ const { getFunctions, connectFunctionsEmulator, httpsCallable } = require('fireb
 const delivery = require('../notification_delivery');
 
 const project = 'demo-musicians-test';
-const platform = { android: { notification: { sound: 'existing', channelId: 'existing' } } };
+const legacyReminder = { notification: { sound: 'reminder_rsvp', channelId: 'rsvp_reminder_channel' } };
 const notFound = error => error.code === 'functions/not-found';
 const get = async (db, path) => (await db.ref(path).get()).val();
 const idFor = (uid, type, key) => createHash('sha256')
   .update(JSON.stringify([uid, type, key])).digest('hex');
+
+describe('Native notification sound resources', () => {
+  const root = path.join(__dirname, '../..');
+  const read = name => fs.readFileSync(path.join(root, name));
+  const native = read('android/app/src/main/kotlin/com/musiciansonly/musicians_flutter/MainActivity.kt').toString();
+  const ios = read('ios/Runner.xcodeproj/project.pbxproj').toString();
+  const mappings = [
+    ['gig_request', 'gig_request_channel', ['sub_request_invite', 'grouped_sub_request']],
+    ['gig_response', 'gig_response_channel', ['sub_request_response', 'session_application', 'session_application_status']],
+    ['event_rsvp', 'rsvp_reminder_channel', ['event_invite', 'event_reminder', 'event_threshold']],
+    ['gig_confirmed', 'finalized_gig_channel', ['gig_finalized']],
+  ];
+  for (const [name, channel, types] of mappings) {
+    it(`packages and maps ${name} on both native platforms and the tester`, () => {
+      const stem = `notification_${name}_v2`;
+      const file = `${stem}.wav`;
+      const android = read(`android/app/src/main/res/raw/${file}`);
+      assert.equal(android.toString('ascii', 0, 4), 'RIFF');
+      assert.equal(android.toString('ascii', 8, 12), 'WAVE');
+      assert.equal(android.readUInt16LE(20), 1);
+      assert.equal(android.readUInt16LE(22), 1);
+      assert.equal(android.readUInt32LE(24), 44100);
+      assert.equal(android.readUInt16LE(34), 16);
+      assert.deepEqual(read(`ios/Runner/${file}`), android);
+      assert.deepEqual(read(`assets/audio/${file}`), android);
+      assert.ok(native.includes(`Triple("${channel}_v2",`));
+      assert.ok(native.includes(`"${stem}"`));
+      assert.equal(ios.split('\n').filter(line =>
+        line.trim().endsWith(`/* ${file} in Resources */,`)).length, 1);
+      for (const type of types) {
+        assert.deepEqual(delivery.messageFor({ soundProfile: 'android-v2' }, 'id', type).android.notification,
+          { sound: stem, channelId: `${channel}_v2` });
+        assert.equal(delivery.messageFor({ soundProfile: 'ios-v2' }, 'id', type).apns.payload.aps.sound, file);
+      }
+    });
+  }
+
+  it('uses the system sound for unknown mappings and never forwards supplied filenames or channels', () => {
+    assert.ok(native.includes('Triple("chat_notifications_v2", "Band Section Messages", null)'));
+    assert.ok(native.includes('RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)'));
+    assert.ok(native.includes('"event_notifications"'));
+    assert.doesNotMatch(read('android/app/src/main/AndroidManifest.xml').toString(),
+      /com\.google\.firebase\.messaging\.default_notification_channel_id/);
+    const payload = delivery.messageFor({
+      soundProfile: 'android-v2', android: { notification: { sound: 'guitarsound', channelId: 'event_notifications' } },
+    }, 'id', 'sound_test', 'unapproved.wav');
+    assert.deepEqual(payload.android.notification, { sound: 'default', channelId: 'chat_notifications_v2' });
+    assert.equal(payload.apns.payload.aps.sound, 'default');
+    assert.equal(delivery.testSoundPlatform('reminder_72h', 'android-v2').sound, 'notification_event_rsvp_v2');
+    assert.equal(delivery.testSoundPlatform('constructor', 'android-v2'), null);
+  });
+});
 
 async function waitForRow(db, uid, id, write) {
   const ref = db.ref(`notificationFeedV2/${uid}/${id}`);
@@ -119,7 +171,7 @@ for (const rules of ['database.rules.json', 'database.transitional.rules.json'])
       assert.equal(owner.installation, installation);
       const sent = [];
       const messaging = { send: async payload => { sent.push(payload); return 'accepted'; } };
-      assert.deepEqual(await delivery.deliver(db, messaging, old, platform, 'old-id', 'event_invite'),
+      assert.deepEqual(await delivery.deliver(db, messaging, old, 'old-id', 'event_invite'),
         { success: false, superseded: true });
       assert.equal(sent.length, 0);
       const next = randomBytes(32).toString('base64url');
@@ -131,6 +183,101 @@ for (const rules of ['database.rules.json', 'database.transitional.rules.json'])
       await b.call('unregisterNotificationInstallation', remove);
       assert.equal((await b.call('unregisterNotificationInstallation', remove)).success, true);
       assert.deepEqual(await delivery.recipients(db, [b.uid]), []);
+    });
+
+    it('selects allowlisted sounds per registered installation and keeps legacy chat feed-only', async () => {
+      const recipient = await client();
+      const soundProfiles = ['android-v2', 'ios-v2', 'arbitrary-sound.wav'];
+      const bindings = soundProfiles.map(soundProfile => ({
+        installation: randomBytes(16).toString('hex'),
+        proof: randomBytes(32).toString('hex'),
+        token: randomBytes(32).toString('base64url'),
+        sequence: 1, soundProfile,
+      }));
+      try {
+        for (const binding of bindings) {
+          await recipient.call('registerNotificationInstallation', binding);
+        }
+        await recipient.call('registerNotificationInstallation', bindings[0]);
+        await assert.rejects(() => recipient.call('registerNotificationInstallation', {
+          ...bindings[0], soundProfile: 'ios-v2',
+        }), error => error.code === 'functions/failed-precondition');
+        const destinations = await delivery.recipients(db, [recipient.uid]);
+        assert.deepEqual(bindings.map(binding =>
+          destinations.find(row => row.installation === binding.installation).soundProfile),
+        ['android-v2', 'ios-v2', undefined]);
+
+        const payloads = [];
+        const messaging = { send: async payload => { payloads.push(payload); return 'accepted'; } };
+        const publish = type => delivery.publish(db, messaging, recipient.uid, type,
+          [suffix, type], { bandId: 'privateBand' });
+        const { id } = await publish('sub_request_invite');
+        assert.equal(payloads.length, 3);
+        const [android, ios, legacy] = bindings.map(binding =>
+          payloads.find(payload => payload.token === binding.token));
+        assert.deepEqual(android.android.notification, {
+          sound: 'notification_gig_request_v2', channelId: 'gig_request_channel_v2',
+        });
+        assert.equal(ios.apns.payload.aps.sound, 'notification_gig_request_v2.wav');
+        assert.deepEqual(legacy.android.notification, {
+          sound: 'gig_rquest', channelId: 'gig_request_channel',
+        });
+        for (const payload of payloads) {
+          assert.deepEqual(payload.data, { schemaVersion: '2', notificationId: id, type: 'sub_request_invite' });
+          assert.deepEqual(payload.notification, {
+            title: 'New activity in Musicians', body: 'Open the app to view details.',
+          });
+        }
+        payloads.length = 0;
+        const chat = await publish('band_section_chat');
+        assert.equal(payloads.length, 2);
+        assert.ok(payloads.every(payload => payload.token !== legacy.token));
+        assert.deepEqual(payloads.find(payload => payload.token === android.token).android.notification, {
+          sound: 'default', channelId: 'chat_notifications_v2',
+        });
+        assert.equal(payloads.find(payload => payload.token === ios.token).apns.payload.aps.sound, 'default');
+        assert.ok(await get(db, `notificationFeedV2/${recipient.uid}/${chat.id}`));
+
+        payloads.length = 0;
+        for (const type of ['direct_message', 'session_message', 'band_room_message', 'band_file_uploaded']) {
+          const feed = await publish(type);
+          assert.equal((await get(db, `notificationFeedV2/${recipient.uid}/${feed.id}`)).type, type);
+          assert.equal((await get(db, `notificationRoutesV2/${recipient.uid}/${feed.id}`)).dispatchState, 'feed-only');
+        }
+        assert.equal(payloads.length, 0);
+      } finally {
+        for (const binding of bindings) {
+          await recipient.call('unregisterNotificationInstallation', { ...binding, sequence: 2 });
+        }
+      }
+    });
+
+    it('keeps test pushes authenticated, restricts broadcast and rejects arbitrary sounds or other-account devices', async () => {
+      const unauthenticated = await fetch(
+        `http://127.0.0.1:5001/${project}/europe-west1/sendTestPushNotification`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ data: { soundType: 'gig_rquest' } }) });
+      assert.equal((await unauthenticated.json()).error.status, 'UNAUTHENTICATED');
+      await assert.rejects(() => a.call('sendTestPushNotification', {
+        soundType: 'gig_rquest', broadcastToAll: true,
+      }), error => error.code === 'functions/permission-denied');
+      for (const soundType of ['../guitarsound', '__proto__', ['gig_rquest']]) {
+        await assert.rejects(() => a.call('sendTestPushNotification', { soundType }),
+          error => error.code === 'functions/invalid-argument');
+      }
+      const binding = {
+        installation: randomBytes(16).toString('hex'), proof: randomBytes(32).toString('hex'),
+        token: randomBytes(32).toString('base64url'), sequence: 1,
+      };
+      await b.call('registerNotificationInstallation', binding);
+      try {
+        const result = await a.call('sendTestPushNotification', {
+          soundType: 'gig_rquest', customToken: binding.token,
+        });
+        assert.deepEqual(result, { success: false, error: 'No registered device for this account.' });
+      } finally {
+        await b.call('unregisterNotificationInstallation', { ...binding, sequence: 2 });
+      }
     });
 
     it('blocks legacy applicant data, token leaves and all private notification trees from clients', async () => {
@@ -279,7 +426,7 @@ for (const rules of ['database.rules.json', 'database.transitional.rules.json'])
       };
       const publish = () => delivery.publish(db, messaging, a.uid, 'event_invite', suffix, {
         bandId: 'privateBand', eventId: 'privateEvent',
-      }, platform);
+      });
       const results = await Promise.all([publish(), publish(), publish()]);
       await publish();
       assert.equal(payloads.length, 1);
@@ -289,7 +436,8 @@ for (const rules of ['database.rules.json', 'database.transitional.rules.json'])
         title: 'New activity in Musicians', body: 'Open the app to view details.',
       });
       assert.deepEqual(payloads[0].data, { schemaVersion: '2', notificationId: id, type: 'event_invite' });
-      assert.deepEqual(payloads[0].android, platform.android);
+      assert.deepEqual(payloads[0].android, legacyReminder);
+      assert.equal(payloads[0].apns.payload.aps.sound, 'reminder_rsvp.wav');
       const row = await get(db, `notificationFeedV2/${a.uid}/${id}`);
       assert.deepEqual(Object.keys(row).sort(), ['createdAt', 'isRead', 'type']);
       await assert.rejects(() => b.call('resolveNotification', { notificationId: id }), notFound);
@@ -372,7 +520,7 @@ for (const rules of ['database.rules.json', 'database.transitional.rules.json'])
         [`Bands/${band}/Members_band/${b.uid}`]: { Role: 'Member', Status: 'active' },
         [`Bands/${band}/Events/${event}`]: { title: 'Private title', createdBy: a.uid, eventType: 'Rehearsal' },
       });
-      const { id } = await delivery.publish(db, {}, b.uid, 'event_invite', [band, event], { bandId: band, eventId: event }, {});
+      const { id } = await delivery.publish(db, {}, b.uid, 'event_invite', [band, event], { bandId: band, eventId: event });
       const result = await b.call('resolveNotification', { notificationId: id });
       assert.equal(result.title, 'Event Request');
       assert.equal(result.bandId, band);

@@ -12,6 +12,58 @@ const neutralAlert = Object.freeze({
   title: 'New activity in Musicians',
   body: 'Open the app to view details.',
 });
+const soundProfiles = new Set(['android-v2', 'ios-v2']);
+const sounds = new Map([
+  ['request', ['gig_rquest', 'gig_request_channel', 'notification_gig_request_v2']],
+  ['response', ['gig_rquest_response', 'gig_response_channel', 'notification_gig_response_v2']],
+  ['event', ['reminder_rsvp', 'rsvp_reminder_channel', 'notification_event_rsvp_v2']],
+  ['confirmed', ['finalized_gig', 'finalized_gig_channel', 'notification_gig_confirmed_v2']],
+]);
+const notificationSounds = new Map([
+  ['sub_request_invite', 'request'],
+  ['grouped_sub_request', 'request'],
+  ['sub_request_response', 'response'],
+  ['session_application', 'response'],
+  ['session_application_status', 'response'],
+  ['event_invite', 'event'],
+  ['event_reminder', 'event'],
+  ['event_threshold', 'event'],
+  ['gig_finalized', 'confirmed'],
+  ['band_section_chat', 'system'],
+]);
+const testSounds = new Map([
+  ['gig_rquest', 'request'],
+  ['gig_rquest_response', 'response'],
+  ['reminder_rsvp', 'event'],
+  ['reminder_24h', 'event'],
+  ['reminder_48h', 'event'],
+  ['reminder_72h', 'event'],
+  ['reminder_final', 'event'],
+  ['reminder_last', 'event'],
+  ['finalized_gig', 'confirmed'],
+]);
+
+function soundPlatform(profile, cue) {
+  const selected = sounds.get(cue);
+  if (!selected) {
+    return {
+      sound: 'default',
+      // A legacy Android installation has no known system-sound channel.
+      channelId: profile === 'android-v2' ? 'chat_notifications_v2' : undefined,
+      apnsSound: 'default',
+    };
+  }
+  const [legacySound, channelId, v2Sound] = selected;
+  return {
+    sound: profile === 'android-v2' ? v2Sound : legacySound,
+    channelId: profile === 'android-v2' ? channelId + '_v2' : channelId,
+    apnsSound: (profile === 'ios-v2' ? v2Sound : legacySound) + '.wav',
+  };
+}
+
+function testSoundPlatform(soundType, profile) {
+  return testSounds.has(soundType) ? soundPlatform(profile, testSounds.get(soundType)) : null;
+}
 const safeKey = value => typeof value === 'string' && value.length > 0 &&
   value.length <= 240 && !/[.#$\[\]/\u0000-\u001f\u007f]/.test(value) &&
   !['__proto__', 'constructor', 'prototype'].includes(value);
@@ -32,6 +84,7 @@ async function changeBinding(db, uid, input, unregister = false) {
   }
   const proofHash = digest(proof);
   const tokenHash = unregister ? null : digest(token);
+  const soundProfile = soundProfiles.has(input?.soundProfile) ? input.soundProfile : null;
   const ref = db.ref(registryPath);
   // A cold transaction can first run with an empty local cache.
   await ref.child('installations').child(installation).get();
@@ -50,7 +103,7 @@ async function changeBinding(db, uid, input, unregister = false) {
     removeAssociation(state, installation, previous);
     state.installations[installation] = unregister
       ? { proofHash, sequence }
-      : { uid, proofHash, sequence, token, tokenHash };
+      : { uid, proofHash, sequence, token, tokenHash, ...(soundProfile ? { soundProfile } : {}) };
     if (tokenHash) {
       state.tokens[tokenHash] = installation;
       (state.owners[uid] ||= {})[installation] = true;
@@ -60,7 +113,8 @@ async function changeBinding(db, uid, input, unregister = false) {
   const binding = tx.snapshot.val()?.installations?.[installation];
   // Identical retries succeed without replacing a newer binding.
   const replay = binding?.proofHash === proofHash && binding.sequence === sequence &&
-    (unregister ? !binding.uid : binding.uid === uid && binding.tokenHash === tokenHash);
+    (unregister ? !binding.uid : binding.uid === uid && binding.tokenHash === tokenHash &&
+      (binding.soundProfile || null) === soundProfile);
   if (!unregister && !tx.committed && !replay) {
     throw new HttpsError('failed-precondition', 'Notification registration is unavailable.');
   }
@@ -92,7 +146,10 @@ async function recipients(db, uids) {
 }
 
 function destination(installation, row) {
-  return { installation, userId: row.uid, sequence: row.sequence, token: row.token };
+  return {
+    installation, userId: row.uid, sequence: row.sequence, token: row.token,
+    soundProfile: row.soundProfile,
+  };
 }
 
 async function stillCurrent(db, recipient) {
@@ -115,26 +172,30 @@ async function removeInvalid(db, recipient, error) {
   });
 }
 
-function messageFor(message, id, type) {
-  const androidSound = message.android?.notification?.sound;
-  const channelId = message.android?.notification?.channelId;
-  const apnsSound = message.apns?.payload?.aps?.sound;
+function messageFor(recipient, id, type, soundTest) {
+  const cue = type === 'sound_test' ? testSounds.get(soundTest) : notificationSounds.get(type);
+  const { sound, channelId, apnsSound } = soundPlatform(recipient.soundProfile, cue);
   return {
-    token: message.token,
+    token: recipient.token,
     notification: neutralAlert,
     data: { schemaVersion: '2', notificationId: id, type },
-    ...(androidSound || channelId ? { android: { notification: {
-      ...(androidSound ? { sound: androidSound } : {}),
+    android: { notification: {
+      sound,
       ...(channelId ? { channelId } : {}),
-    } } } : {}),
-    ...(apnsSound ? { apns: { payload: { aps: { sound: apnsSound } } } } : {}),
+    } },
+    apns: { payload: { aps: { sound: apnsSound } } },
   };
 }
 
-async function deliver(db, messaging, recipient, message, id, type) {
+async function deliver(db, messaging, recipient, id, type, soundTest) {
   if (!(await stillCurrent(db, recipient))) return { success: false, superseded: true };
+  // A missing channel on an older Android client falls back to the guitar.
+  // Bindings that predate sound profiles cannot distinguish Android from iOS.
+  if (type === 'band_section_chat' && !soundProfiles.has(recipient.soundProfile)) {
+    return { success: false, noCompatibleSound: true };
+  }
   try {
-    const messageId = await messaging.send(messageFor({ ...message, token: recipient.token }, id, type));
+    const messageId = await messaging.send(messageFor(recipient, id, type, soundTest));
     return { success: true, messageId };
   } catch (error) {
     await removeInvalid(db, recipient, error);
@@ -150,7 +211,7 @@ async function dispatchRegistered(db, messaging, recipient, message) {
   if (Object.keys(route).length) {
     await db.ref(`${routesPath}/${recipient.userId}/${id}`).set({ type, ...route });
   }
-  return deliver(db, messaging, recipient, message, id, type);
+  return deliver(db, messaging, recipient, id, type, message.data?.soundType);
 }
 
 function routingData(data) {
@@ -164,7 +225,7 @@ function routingData(data) {
 
 // The private route doubles as the permanent delivery claim. No retry can
 // redispatch after an ambiguous provider result or an interrupted invocation.
-async function publish(db, messaging, uid, type, key, route, platform, { suppressPush = false } = {}) {
+async function publish(db, messaging, uid, type, key, route, { suppressPush = false } = {}) {
   const id = notificationId(uid, type, key);
   const claimRef = db.ref(`${routesPath}/${uid}/${id}`);
   const claim = await claimRef.transaction(current =>
@@ -179,15 +240,16 @@ async function publish(db, messaging, uid, type, key, route, platform, { suppres
     await claimRef.child('dispatchState').set('legacy-delivery');
     return { id, results: [] };
   }
-  if (!platform) {
+  if (!notificationSounds.has(type)) {
     await claimRef.child('dispatchState').set('feed-only');
     return { id, results: [] };
   }
   const destinations = await recipients(db, [uid]);
   const results = await Promise.all(destinations.map(recipient =>
-    deliver(db, messaging, recipient, platform, id, type)));
+    deliver(db, messaging, recipient, id, type)));
   const dispatchState = results.some(result => result.success) ? 'sent' :
-    results.some(result => result.error) ? 'undelivered-or-unknown' : 'no-current-installation';
+    results.some(result => result.error) ? 'undelivered-or-unknown' :
+    results.some(result => result.noCompatibleSound) ? 'no-compatible-sound' : 'no-current-installation';
   await claimRef.child('dispatchState').set(dispatchState);
   return { id, results };
 }
@@ -195,5 +257,6 @@ async function publish(db, messaging, uid, type, key, route, platform, { suppres
 module.exports = {
   changeBinding, recipients, stillCurrent, removeInvalid, messageFor, deliver, publish,
   dispatchRegistered, routingData,
+  testSoundPlatform,
   safeKey, feedPath, routesPath, signalPath,
 };

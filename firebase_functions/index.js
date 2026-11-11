@@ -249,19 +249,6 @@ function resolveNotificationFeatureId(notif) {
   }
 }
 
-const notificationPlatforms = {
-  event_invite: ['reminder_rsvp', 'rsvp_reminder_channel'],
-  sub_request_invite: ['gig_rquest', 'gig_request_channel'],
-  grouped_sub_request: ['gig_rquest', 'gig_request_channel'],
-  sub_request_response: ['gig_rquest_response', 'gig_response_channel'],
-  gig_finalized: ['finalized_gig', 'finalized_gig_channel'],
-  event_threshold: ['reminder_rsvp', 'rsvp_reminder_channel'],
-  event_reminder: ['reminder_rsvp', 'rsvp_reminder_channel'],
-  session_application: ['gig_rquest_response', 'gig_response_channel'],
-  session_application_status: ['gig_rquest_response', 'gig_response_channel'],
-  band_section_chat: ['default', 'chat_notifications', 'default'],
-};
-
 function notificationUid(request) {
   if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'Sign in to view notifications.');
   return request.auth.uid;
@@ -285,17 +272,8 @@ exports.resolveNotification = onCall({ region: 'europe-west1' }, request =>
     request.data?.slotId, notificationOptions, request.data?.preview === true));
 
 function publishNotification(uid, type, key, route, deliveryOptions) {
-  const config = notificationPlatforms[type];
-  let platform;
-  if (config) {
-    const [sound, channelId, apnsSound = sound + '.wav'] = config;
-    platform = {
-      android: { notification: { sound, channelId } },
-      apns: { payload: { aps: { sound: apnsSound } } },
-    };
-  }
   return notificationDelivery.publish(admin.database(), admin.messaging(), uid, type, key, route,
-    platform, deliveryOptions);
+    deliveryOptions);
 }
 
 async function notifyRequestResponse(subRequestId, responderId) {
@@ -2971,41 +2949,8 @@ exports.triggerEventReminder = onCall({ region: 'europe-west1' }, async (request
     };
   }
 
-  const reminderLabels = {
-    '24h': '24-Hour Reminder',
-    '48h': '48-Hour Reminder',
-    '72h': '72-Hour Reminder',
-    'last': 'Final Reminder',
-  };
-  const reminderLabel = reminderLabels[reminderType] || `${reminderType.toUpperCase()} Reminder`;
-
-  const messages = recipientsWithTokens.map(r => ({
-    token: r.token,
-    notification: {
-      title: `⏰ ${reminderLabel}: ${eventData.title || 'Band Event'}`,
-      body: `Please RSVP to ${eventData.title || 'the upcoming event'} (${eventData.eventType || 'Event'})! Let the band know if you can make it.`,
-    },
-    data: {
-      click_action: 'FLUTTER_NOTIFICATION_CLICK',
-      bandId: bandId,
-      eventId: eventId,
-      type: 'event_reminder',
-      reminderType: reminderType,
-      timestamp: Date.now().toString(),
-    },
-    android: {
-      notification: {
-        sound: 'reminder_rsvp',
-        channelId: 'rsvp_reminder_channel',
-      },
-    },
-    apns: {
-      payload: {
-        aps: {
-          sound: 'reminder_rsvp.wav',
-        },
-      },
-    },
+  const messages = recipientsWithTokens.map(() => ({
+    data: { bandId, eventId, type: 'event_reminder' },
   }));
 
   const fcmResponse = await dispatchRegisteredBatch(recipientsWithTokens, messages);
@@ -3778,81 +3723,10 @@ exports.sendTestPushNotification = onCall({ region: 'europe-west1' }, async (req
   notificationUid(request);
   const { soundType, customToken, broadcastToAll } = request.data || {};
 
-  if (!soundType) {
-    throw new HttpsError('invalid-argument', 'soundType is required.');
-  }
+  const config = notificationDelivery.testSoundPlatform(soundType);
+  if (!config) throw new HttpsError('invalid-argument', 'Invalid soundType.');
 
-  const soundConfigs = {
-    gig_rquest: {
-      channelId: 'gig_request_channel',
-      androidSound: 'gig_rquest',
-      apnsSound: 'gig_rquest.wav',
-      title: '🎸 New Gig Request',
-      body: 'Test Push: Bassist needed for Summer Fest in Gothenburg!',
-    },
-    gig_rquest_response: {
-      channelId: 'gig_response_channel',
-      androidSound: 'gig_rquest_response',
-      apnsSound: 'gig_rquest_response.wav',
-      title: '📬 Gig Request Response',
-      body: 'Test Push: A musician applied for your gig request!',
-    },
-    reminder_rsvp: {
-      channelId: 'rsvp_reminder_channel',
-      androidSound: 'reminder_rsvp',
-      apnsSound: 'reminder_rsvp.wav',
-      title: '⏰ RSVP Reminder',
-      body: 'Test Push: Rehearsal tomorrow at 18:00. Please confirm your attendance!',
-    },
-    reminder_24h: {
-      channelId: 'rsvp_reminder_channel',
-      androidSound: 'reminder_rsvp',
-      apnsSound: 'reminder_rsvp.wav',
-      title: '⏰ 24h RSVP Reminder',
-      body: 'Test Push: Rehearsal in 24 hours! Please confirm your attendance.',
-    },
-    reminder_48h: {
-      channelId: 'rsvp_reminder_channel',
-      androidSound: 'reminder_rsvp',
-      apnsSound: 'reminder_rsvp.wav',
-      title: '⏰ 48h RSVP Reminder',
-      body: 'Test Push: Rehearsal in 48 hours! Please confirm if you can make it.',
-    },
-    reminder_72h: {
-      channelId: 'rsvp_reminder_channel',
-      androidSound: 'reminder_rsvp',
-      apnsSound: 'reminder_rsvp.wav',
-      title: '⏰ 72h RSVP Reminder',
-      body: 'Test Push: Upcoming gig in 72 hours! Please let the band know if you can make it.',
-    },
-    reminder_final: {
-      channelId: 'rsvp_reminder_channel',
-      androidSound: 'reminder_rsvp',
-      apnsSound: 'reminder_rsvp.wav',
-      title: '🚨 Final RSVP Reminder',
-      body: 'Test Push: Final reminder! RSVP attendance before line-up locks!',
-    },
-    reminder_last: {
-      channelId: 'rsvp_reminder_channel',
-      androidSound: 'reminder_rsvp',
-      apnsSound: 'reminder_rsvp.wav',
-      title: '🚨 Final RSVP Reminder',
-      body: 'Test Push: Final reminder! RSVP attendance before line-up locks!',
-    },
-    finalized_gig: {
-      channelId: 'finalized_gig_channel',
-      androidSound: 'finalized_gig',
-      apnsSound: 'finalized_gig.wav',
-      title: '🎉 Gig Finalized!',
-      body: 'Test Push: You have been confirmed for the tour gig!',
-    },
-  };
-
-  const config = soundConfigs[soundType];
-  if (!config) {
-    throw new HttpsError('invalid-argument', `Invalid soundType. Must be one of: ${Object.keys(soundConfigs).join(', ')}`);
-  }
-
+  const message = { data: { type: 'sound_test', soundType } };
   // If broadcastToAll is requested, deliver to all registered push tokens in RTDB
   if (broadcastToAll === true) {
     if (request.auth.token?.admin !== true) throw new HttpsError('permission-denied', 'Administrator access is required.');
@@ -3865,32 +3739,7 @@ exports.sendTestPushNotification = onCall({ region: 'europe-west1' }, async (req
       };
     }
 
-    const messages = recipientTokens.map(r => ({
-      token: r.token,
-      notification: {
-        title: config.title,
-        body: config.body,
-      },
-      data: {
-        click_action: 'FLUTTER_NOTIFICATION_CLICK',
-        type: 'sound_test',
-        soundType: soundType,
-        timestamp: Date.now().toString(),
-      },
-      android: {
-        notification: {
-          sound: config.androidSound,
-          channelId: config.channelId,
-        },
-      },
-      apns: {
-        payload: {
-          aps: {
-            sound: config.apnsSound,
-          },
-        },
-      },
-    }));
+    const messages = recipientTokens.map(() => message);
 
     try {
       const response = await dispatchRegisteredBatch(recipientTokens, messages);
@@ -3902,7 +3751,9 @@ exports.sendTestPushNotification = onCall({ region: 'europe-west1' }, async (req
         successCount: response.successCount,
         failureCount: response.failureCount,
         soundType,
-        channelId: config.channelId,
+        // A mixed broadcast can use different channels per installation.
+        ...(recipientTokens.every(row => row.soundProfile !== 'android-v2')
+          ? { channelId: config.channelId } : {}),
       };
     } catch (err) {
       console.error('Error broadcasting test push notification via FCM:', err);
@@ -3920,32 +3771,6 @@ exports.sendTestPushNotification = onCall({ region: 'europe-west1' }, async (req
     return { success: false, error: 'No registered device for this account.' };
   }
 
-  const message = {
-    notification: {
-      title: config.title,
-      body: config.body,
-    },
-    data: {
-      click_action: 'FLUTTER_NOTIFICATION_CLICK',
-      type: 'sound_test',
-      soundType: soundType,
-      timestamp: Date.now().toString(),
-    },
-    android: {
-      notification: {
-        sound: config.androidSound,
-        channelId: config.channelId,
-      },
-    },
-    apns: {
-      payload: {
-        aps: {
-          sound: config.apnsSound,
-        },
-      },
-    },
-  };
-
   try {
     const delivery = await dispatchRegistered(recipient, message);
     return {
@@ -3953,7 +3778,7 @@ exports.sendTestPushNotification = onCall({ region: 'europe-west1' }, async (req
       broadcast: false,
       messageId: delivery.messageId || null,
       soundType,
-      channelId: config.channelId,
+      channelId: notificationDelivery.testSoundPlatform(soundType, recipient.soundProfile).channelId,
     };
   } catch (err) {
     console.error('Error sending test push notification via FCM:', err);

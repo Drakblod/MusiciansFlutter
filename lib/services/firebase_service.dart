@@ -2293,6 +2293,7 @@ class FirebaseService {
           !await prefs.setInt(sequenceKey, sequence)) {
         throw StateError('Notification installation storage is unavailable.');
       }
+      final soundProfile = unregister ? null : await _nativeNotificationSoundProfile();
       if (currentUserId != uid || (!unregister && _pushSessionEnding)) return;
       await _functions.httpsCallable(
         unregister ? 'unregisterNotificationInstallation' : 'registerNotificationInstallation',
@@ -2303,10 +2304,20 @@ class FirebaseService {
         'proof': proof,
         'sequence': sequence,
         if (!unregister) 'token': token,
+        if (soundProfile != null) 'soundProfile': soundProfile,
       });
     });
     _installationUpdates = next.then<void>((_) {}, onError: (Object _) {});
     return next;
+  }
+
+  Future<String?> _nativeNotificationSoundProfile() async {
+    try {
+      return await _notificationPlatform.invokeMethod<String>('getSoundProfile')
+          .timeout(const Duration(seconds: 2));
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<void> savePushTokenAsync(String token) async {

@@ -7,20 +7,32 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.ContentResolver
 import android.media.AudioAttributes
+import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 
 class MainActivity: FlutterActivity() {
+    private val soundChannelsV2 = listOf(
+        Triple("gig_request_channel_v2", "Gig Requests", "notification_gig_request_v2"),
+        Triple("gig_response_channel_v2", "Gig Responses", "notification_gig_response_v2"),
+        Triple("rsvp_reminder_channel_v2", "RSVP Reminders", "notification_event_rsvp_v2"),
+        Triple("finalized_gig_channel_v2", "Finalized Gigs", "notification_gig_confirmed_v2"),
+        Triple("chat_notifications_v2", "Band Section Messages", null)
+    )
+    private var soundProfile: String? = null
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "musicians/notifications")
             .setMethodCallHandler { call, result ->
-                if (call.method == "clearDelivered") {
-                    getSystemService(NotificationManager::class.java).cancelAll()
-                    result.success(null)
-                } else {
-                    result.notImplemented()
+                when (call.method) {
+                    "clearDelivered" -> {
+                        getSystemService(NotificationManager::class.java).cancelAll()
+                        result.success(null)
+                    }
+                    "getSoundProfile" -> result.success(soundProfile)
+                    else -> result.notImplemented()
                 }
             }
     }
@@ -28,6 +40,14 @@ class MainActivity: FlutterActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         createNotificationChannel()
+        val resourcesReady = soundChannelsV2.all { (_, _, sound) ->
+            sound == null || resources.getIdentifier(sound, "raw", packageName) != 0
+        }
+        val channelsReady = Build.VERSION.SDK_INT < Build.VERSION_CODES.O ||
+            soundChannelsV2.all { (id, _, _) ->
+                getSystemService(NotificationManager::class.java).getNotificationChannel(id) != null
+            }
+        if (resourcesReady && channelsReady) soundProfile = "android-v2"
     }
 
     private fun createNotificationChannel() {
@@ -40,10 +60,12 @@ class MainActivity: FlutterActivity() {
                 .setUsage(AudioAttributes.USAGE_NOTIFICATION)
                 .build()
 
-            fun registerChannel(channelId: String, name: String, descriptionText: String, rawSoundName: String) {
-                val soundUri = Uri.parse(
-                    ContentResolver.SCHEME_ANDROID_RESOURCE + "://" + packageName + "/raw/" + rawSoundName
-                )
+            fun registerChannel(channelId: String, name: String, descriptionText: String, rawSoundName: String?) {
+                val soundUri = if (rawSoundName == null) {
+                    RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+                } else {
+                    Uri.parse(ContentResolver.SCHEME_ANDROID_RESOURCE + "://" + packageName + "/raw/" + rawSoundName)
+                }
                 val channel = NotificationChannel(channelId, name, NotificationManager.IMPORTANCE_HIGH).apply {
                     description = descriptionText
                     setSound(soundUri, audioAttributes)
@@ -90,6 +112,10 @@ class MainActivity: FlutterActivity() {
                 "Notifications when gigs and substitute spots are finalized",
                 "finalized_gig"
             )
+
+            soundChannelsV2.forEach { (id, name, sound) ->
+                registerChannel(id, name, name, sound)
+            }
         }
     }
 }

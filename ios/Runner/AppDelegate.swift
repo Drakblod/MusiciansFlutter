@@ -16,12 +16,24 @@ import UserNotifications
         name: "musicians/notifications", binaryMessenger: controller.binaryMessenger
       )
       notifications.setMethodCallHandler { call, result in
-        guard call.method == "clearDelivered" else {
+        switch call.method {
+        case "clearDelivered":
+          UNUserNotificationCenter.current().removeAllDeliveredNotifications()
+          result(nil)
+        case "getSoundProfile":
+          let sounds = [
+            "notification_gig_request_v2",
+            "notification_gig_response_v2",
+            "notification_event_rsvp_v2",
+            "notification_gig_confirmed_v2"
+          ]
+          let ready = sounds.allSatisfy {
+            Bundle.main.url(forResource: $0, withExtension: "wav") != nil
+          }
+          result(ready ? "ios-v2" : nil)
+        default:
           result(FlutterMethodNotImplemented)
-          return
         }
-        UNUserNotificationCenter.current().removeAllDeliveredNotifications()
-        result(nil)
       }
     }
     application.registerForRemoteNotifications()
