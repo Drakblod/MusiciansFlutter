@@ -244,7 +244,7 @@ void main() {
       await pumpUiTransitions(tester);
 
       // Switch to Members tab (tab index 3)
-      final membersTab = find.text('5. Members');
+      final membersTab = find.text('Members');
       expect(membersTab, findsOneWidget);
       await tester.tap(membersTab);
       await pumpUiTransitions(tester);
@@ -272,7 +272,7 @@ void main() {
       await pumpUiTransitions(tester);
 
       // Go to Members tab
-      await tester.tap(find.text('5. Members'));
+      await tester.tap(find.text('Members'));
       await pumpUiTransitions(tester);
 
       // Find reactivate button for Dave Drummer (who is currently on_hold)

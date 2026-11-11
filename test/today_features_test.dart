@@ -140,10 +140,10 @@ void main() {
       await tester.pumpWidget(createTestApp(const FindGigsScreen(), appState));
       await pumpUiTransitions(tester);
 
-      expect(find.text('1. Substitute Requests'), findsOneWidget);
-      expect(find.text('2. New Member Requests'), findsOneWidget);
-      expect(find.text('3. Applied'), findsOneWidget);
-      expect(find.text('4. Saved'), findsOneWidget);
+      expect(find.text('Substitute Requests'), findsOneWidget);
+      expect(find.text('New Member Requests'), findsOneWidget);
+      expect(find.text('Applied'), findsOneWidget);
+      expect(find.text('Saved'), findsOneWidget);
     });
 
     testWidgets('2. FindGigsScreen displays Sub and New Member tags on gig cards', (tester) async {

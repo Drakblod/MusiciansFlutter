@@ -1,5 +1,6 @@
 {
   "region": "europe-west1",
+  "baselineRevision": "f6e5e40673958487a237ac631e62c3400e9efdac",
   "baselineDescriptorSha256": "156acf9b93007c0c542b5d17ed46bd4bda6894f50cfd62ba3b1a2de60acfd333",
   "descriptorSha256": "1be4c35f0ccf4a8db0fc834b99646f6540ca874890753d6649438960d4523003",
   "endpoints": [
@@ -97,6 +98,12 @@
     ],
     "accountDeletion": [
       "deleteUserAccount"
+    ],
+    "ownerPolish": [
+      "commitUserCity",
+      "onCatalogueUserWritten",
+      "onBandEventReadModelWritten",
+      "onBandMemberWritten"
     ]
   }
 }

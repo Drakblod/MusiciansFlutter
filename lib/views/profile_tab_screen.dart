@@ -778,7 +778,14 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
           ),
           const SizedBox(height: 12),
           if (user.audioSnippetUrl != null && user.audioSnippetUrl!.isNotEmpty)
-            AudioSnippetPlayer(audioUrl: user.audioSnippetUrl!)
+            Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(user.audioSnippetDisplayTitle),
+                        const SizedBox(height: 8),
+                        AudioSnippetPlayer(audioUrl: user.audioSnippetUrl!),
+                      ],
+                    )
           else
             InkWell(
               onTap: () async {

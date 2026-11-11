@@ -37,6 +37,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   final _collabBioController = TextEditingController();
   final _spotifyController = TextEditingController();
   final _youtubeController = TextEditingController();
+  final _trackNameController = TextEditingController();
   
   List<String> _primarySkills = [];
   List<String> _secondarySkills = [];
@@ -117,16 +118,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       _youtubeController.text = user.youtubeUrl ?? '';
       _profilePictureUrl = user.profilePictureUrl;
       _audioSnippetUrl = user.audioSnippetUrl;
-      if (user.audioSnippetUrl != null) {
-        try {
-          final uri = Uri.parse(user.audioSnippetUrl!);
-          final name = uri.pathSegments.last;
-          _pickedAudioFileName = name.contains('/') ? name.split('/').last : name;
-        } catch (_) {
-          _pickedAudioFileName = 'audio_snippet.mp3';
-        }
-      }
-      
+      _trackNameController.text = user.audioSnippetTitle ?? '';
+
       _primarySkills = user.mainSkills;
       _secondarySkills = user.secondarySkills;
 
@@ -146,6 +139,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _collabBioController.dispose();
     _spotifyController.dispose();
     _youtubeController.dispose();
+    _trackNameController.dispose();
     super.dispose();
   }
 
@@ -315,25 +309,28 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         final bytes = file.bytes;
         final name = file.name;
 
-        if (bytes != null) {
+        if (bytes != null && mounted) {
+          final appState = Provider.of<AppState>(context, listen: false);
+          final userId = _editingUserId;
+          if (userId == null || appState.currentUserId != userId) return;
+          final previousTitle = _trackNameController.text;
           setState(() {
             _isUploadingAudio = true;
+            _pickedAudioFileName = name.split(RegExp(r'[/\\]')).last;
+            _trackNameController.clear();
           });
 
-          final appState = Provider.of<AppState>(context, listen: false);
-          final userId = appState.currentUserProfile?.userId;
-          if (userId == null) throw Exception("User is not logged in");
+          String url;
+          try {
 
-          final url = await appState.firebaseService.uploadAudioSnippetAsync(
-            userId,
-            bytes,
-            name,
-          );
+            url = await appState.firebaseService.uploadAudioSnippetAsync(userId, bytes, name);
+          } catch (_) {
+            if (mounted) _trackNameController.text = previousTitle;
+            rethrow;
+          }
+          if (!mounted || appState.currentUserId != userId) return;
 
-          setState(() {
-            _audioSnippetUrl = url;
-            _pickedAudioFileName = name;
-          });
+          setState(() => _audioSnippetUrl = url);
 
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -345,11 +342,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           }
         }
       }
-    } catch (e) {
+    } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to upload track: $e'),
+          const SnackBar(
+            content: Text('Could not upload the track. Please try again.'),
             backgroundColor: AppTheme.danger,
           ),
         );
@@ -358,6 +355,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       if (mounted) {
         setState(() {
           _isUploadingAudio = false;
+          _pickedAudioFileName = null;
         });
       }
     }
@@ -374,7 +372,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   }
 
   Future<void> _saveProfile() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (_isUploadingAudio || !_formKey.currentState!.validate()) return;
     if (_primarySkills.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -422,6 +420,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           spotifyUrl: _spotifyController.text.trim().isEmpty ? null : _spotifyController.text.trim(),
           youtubeUrl: _youtubeController.text.trim().isEmpty ? null : _youtubeController.text.trim(),
           audioSnippetUrl: _audioSnippetUrl,
+          audioSnippetTitle: _audioSnippetUrl == null
+              ? null
+              : UserProfile.normalizeAudioSnippetTitle(_trackNameController.text),
           collabBio: _collabBioController.text.trim().isEmpty ? null : _collabBioController.text.trim(),
           mainInstrument: mainInstrumentStr,
         );
@@ -1070,17 +1071,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
                                         Text(
-                                          _pickedAudioFileName ?? 'track.mp3',
-                                          style: GoogleFonts.inter(
-                                            color: Colors.white,
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 14,
-                                          ),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                        const SizedBox(height: 4),
-                                        Text(
                                           'Track loaded',
                                           style: GoogleFonts.inter(
                                             color: AppTheme.success,
@@ -1100,7 +1090,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                     onPressed: () {
                                       setState(() {
                                         _audioSnippetUrl = null;
-                                        _pickedAudioFileName = null;
+                                        _trackNameController.clear();
                                       });
                                       ScaffoldMessenger.of(context).showSnackBar(
                                         const SnackBar(
@@ -1155,6 +1145,22 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               const SizedBox(height: 30),
 
               // Save Button
+              if (_audioSnippetUrl != null || _isUploadingAudio) ...[
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _trackNameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Track name',
+                    hintText: 'Music snippet',
+                  ),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) return null;
+                    if (UserProfile.normalizeAudioSnippetTitle(value) != null) return null;
+                    return 'Use 1–80 characters. File paths and control characters are not allowed.';
+                  },
+                ),
+                const SizedBox(height: 20),
+              ],
               _isSaving
                   ? const Center(child: CircularProgressIndicator(color: AppTheme.primaryAccent))
                   : AnimatedTapDetector(

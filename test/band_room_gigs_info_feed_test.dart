@@ -1,3 +1,4 @@
+import 'tab_label_expectations.dart';
 import 'support/bounded_ui_pump.dart';
 import 'package:musicians_flutter/utils/band_membership_policy.dart';
 import 'package:flutter/material.dart';
@@ -217,8 +218,15 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     await tester.pump(const Duration(milliseconds: 300));
 
+    tester.view.physicalSize = const Size(320, 2400);
+    await tester.pump();
+    expectVisibleTabLabels(tester, ['Chat', 'Files', 'Events', 'Gigs / Info', 'Members']);
+    expect(tester.takeException(), isNull);
+    tester.view.physicalSize = const Size(1200, 2400);
+    await tester.pump();
+
     // Switch to Gigs/Info tab
-    final gigsTab = find.text('4. Gigs / Info');
+    final gigsTab = find.text('Gigs / Info');
     expect(gigsTab, findsOneWidget);
     await tester.tap(gigsTab);
     for (int i = 0; i < 10; i++) {
@@ -349,7 +357,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
 
     // Tap Gigs/Info tab
-    await tester.tap(find.text('4. Gigs / Info'));
+    await tester.tap(find.text('Gigs / Info'));
     for (int i = 0; i < 10; i++) {
       await tester.pump(const Duration(milliseconds: 50));
     }
@@ -483,7 +491,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
 
     // Switch to Gigs/Info tab
-    await tester.tap(find.text('4. Gigs / Info'));
+    await tester.tap(find.text('Gigs / Info'));
     for (int i = 0; i < 10; i++) {
       await tester.pump(const Duration(milliseconds: 50));
     }

@@ -470,19 +470,19 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
 
       // Switch to Events tab
-      await tester.tap(find.text('3. Events'));
+      await tester.tap(find.text('Events'));
       await pumpUiTransitions(tester);
 
       // 8. Verify exact tabs in ManageEventsScreen
-      expect(find.text('1. NEW EVENTS (Needs RSVP)'), findsOneWidget);
-      expect(find.text('2. UPCOMING (Finalized)'), findsOneWidget);
-      expect(find.text('3. PAST EVENTS'), findsOneWidget);
+      expect(find.text('NEW EVENTS (Needs RSVP)'), findsOneWidget);
+      expect(find.text('UPCOMING (Finalized)'), findsOneWidget);
+      expect(find.text('PAST EVENTS'), findsOneWidget);
 
       // Verify unfinalized event on new events tab
       expect(find.text('”New Unfinalized Event”'), findsOneWidget);
 
       // Switch to Upcoming tab
-      await tester.tap(find.text('2. UPCOMING (Finalized)'));
+      await tester.tap(find.text('UPCOMING (Finalized)'));
       await pumpUiTransitions(tester);
 
       // 9. Tap on Finalized event card -> navigates to EventResultsPage

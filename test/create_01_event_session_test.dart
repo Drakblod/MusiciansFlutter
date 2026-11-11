@@ -904,7 +904,7 @@ void main() {
       await pumpUiTransitions(tester);
 
       // Switch to Events tab
-      await tester.tap(find.text('3. Events'));
+      await tester.tap(find.text('Events'));
       await pumpUiTransitions(tester);
 
       expect(find.text('Create Event'), findsWidgets);

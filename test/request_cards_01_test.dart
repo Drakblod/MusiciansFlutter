@@ -718,7 +718,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
-      expect(find.text('Applied'), findsOneWidget);
+      expect(find.descendant(of: find.byType(TabBarView), matching: find.text('Applied')), findsOneWidget);
       expect(find.text('Apply'), findsNothing);
     });
 

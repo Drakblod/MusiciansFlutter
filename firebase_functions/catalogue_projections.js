@@ -52,12 +52,21 @@ function url(value) {
   const s=text(value,2048);if(!s)return undefined;
   try { const candidate=/^(?:www\.|open\.spotify\.com|spotify\.com|youtube\.com|youtu\.be)/i.test(s)?`https://${s}`:s;const parsed=new URL(candidate);return parsed.protocol==='https:' && !parsed.username && !parsed.password ? candidate : undefined; } catch (_) {return undefined;}
 }
+function normalizeAudioSnippetTitle(value) {
+  if (typeof value !== 'string' || /[\\\x00-\x1f\x7f-\x9f\u2028\u2029]/.test(value)) return null;
+  const title = value.replace(/[ \u00a0\u1680\u2000-\u200a\u202f\u205f\u3000\ufeff]+/g, ' ').trim();
+  const words = title.split(' ');
+  return title.length > 0 && title.length <= 80 && words[0] !== '/' &&
+    words.at(-1) !== '/' && !title.includes(' / / ') && words.every(word => word === '/' || !word.includes('/')) ? title : null;
+}
 function userProfile(uid, source) {
   if(!key(uid)||!record(source))return null;
   const out={userId:uid};
   for(const f of ['DisplayName','Nickname','UserType','MainInstrument','Level']) {const v=text(field(source,f));if(v)out[f]=v;}
   for(const f of ['About','CollabBio']) {const v=text(field(source,f),4000);if(v)out[f]=v;}
   for(const f of ['ProfilePictureUrl','SpotifyUrl','YoutubeUrl','AudioSnippetUrl']) {const v=url(field(source,f));if(v)out[f]=v;}
+  const title = out.AudioSnippetUrl && normalizeAudioSnippetTitle(source.info?.AudioSnippetTitle);
+  if (title) out.AudioSnippetTitle = title;
   const location=publicLocation(source);if(location){out.Location=location.label;out.PublicLocation=location;}
   for(const f of ['Instruments','Styles','Genres','CollabRoles']) {const v=list(field(source,f));if(v.length)out[f]=v;}
   const main=list(out.MainInstrument).find(s=>!out.Instruments?.length || out.Instruments.includes(s));
@@ -115,4 +124,4 @@ function plan(users={},bands={},publicUsers={},publicBands={}) {
   }
   return {updates,counts};
 }
-module.exports={userProfile,bandProfile,countMembers,city,structuredLocation,publicLocation,list,key,equal,reconcile,plan};
+module.exports={userProfile,normalizeAudioSnippetTitle,bandProfile,countMembers,city,structuredLocation,publicLocation,list,key,equal,reconcile,plan};

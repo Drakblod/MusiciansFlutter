@@ -23,6 +23,29 @@ class UserProfile {
   final String? spotifyUrl;
   final String? youtubeUrl;
   final String? audioSnippetUrl;
+  final String? audioSnippetTitle;
+
+  static const audioSnippetTitleMaxLength = 80;
+  static final _titleControls = RegExp(r'[\\\x00-\x1f\x7f-\x9f\u2028\u2029]');
+  static final _titleSpaces = RegExp(r'[ \u00a0\u1680\u2000-\u200a\u202f\u205f\u3000\ufeff]+');
+
+  static String? normalizeAudioSnippetTitle(Object? value) {
+    if (value is! String || _titleControls.hasMatch(value)) return null;
+    final title = value.replaceAll(_titleSpaces, ' ').trim();
+    final words = title.split(' ');
+    final hasPathSeparator = words.first == '/' || words.last == '/' ||
+        title.contains(' / / ') ||
+        words.any((word) => word != '/' && word.contains('/'));
+    return title.isNotEmpty &&
+            title.length <= audioSnippetTitleMaxLength &&
+            !hasPathSeparator
+        ? title
+        : null;
+  }
+
+  String get audioSnippetDisplayTitle =>
+      normalizeAudioSnippetTitle(audioSnippetTitle) ?? 'Music snippet';
+
   final List<String> collabRoles;
   final bool collabRemote;
   final String? collabBio;
@@ -49,6 +72,7 @@ class UserProfile {
     this.spotifyUrl,
     this.youtubeUrl,
     this.audioSnippetUrl,
+    this.audioSnippetTitle,
     this.collabRoles = const [],
     this.collabRemote = false,
     this.collabBio,
@@ -130,6 +154,7 @@ class UserProfile {
               infoMap['audioSnippetUrl'] ??
               json['audioSnippetUrl'])
           ?.toString(),
+      audioSnippetTitle: normalizeAudioSnippetTitle(infoMap['AudioSnippetTitle']),
       collabRoles: _toList(
         infoMap['CollabRoles'] ??
             json['CollabRoles'] ??
@@ -167,6 +192,9 @@ class UserProfile {
       'SpotifyUrl': spotifyUrl,
       'YoutubeUrl': youtubeUrl,
       'AudioSnippetUrl': audioSnippetUrl,
+      'AudioSnippetTitle': audioSnippetUrl?.trim().isNotEmpty == true
+          ? normalizeAudioSnippetTitle(audioSnippetTitle)
+          : null,
       'CollabRoles': collabRoles,
       'CollabRemote': collabRemote,
       'CollabBio': collabBio,

@@ -1,3 +1,4 @@
+import 'tab_label_expectations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
@@ -218,9 +219,16 @@ void main() {
       expect(find.byType(TextField), findsOneWidget);
 
       // 3 Tabs
-      expect(find.text('1. NEW EVENTS (Needs RSVP)'), findsOneWidget);
-      expect(find.text('2. UPCOMING (Finalized)'), findsOneWidget);
-      expect(find.text('3. PAST EVENTS'), findsOneWidget);
+      expect(find.text('NEW EVENTS (Needs RSVP)'), findsOneWidget);
+      expect(find.text('UPCOMING (Finalized)'), findsOneWidget);
+      expect(find.text('PAST EVENTS'), findsOneWidget);
+
+      tester.view.physicalSize = const Size(320, 2400);
+      await tester.pump();
+      expectVisibleTabLabels(tester, ['NEW EVENTS (Needs RSVP)', 'UPCOMING (Finalized)', 'PAST EVENTS']);
+      expect(tester.takeException(), isNull);
+      tester.view.physicalSize = const Size(1080, 2400);
+      await tester.pump();
 
       // New Events tab (active by default): displays event needing RSVP
       expect(find.text('”Summer Arena Concert”'), findsOneWidget);
@@ -251,7 +259,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
 
       // Tap UPCOMING tab
-      await tester.tap(find.text('2. UPCOMING (Finalized)'));
+      await tester.tap(find.text('UPCOMING (Finalized)'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 500));
 
@@ -277,7 +285,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
 
       // Tap PAST EVENTS tab
-      await tester.tap(find.text('3. PAST EVENTS'));
+      await tester.tap(find.text('PAST EVENTS'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 500));
 

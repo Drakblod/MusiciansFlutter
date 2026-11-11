@@ -61,6 +61,7 @@ class AppNotification {
       case 'band_section_chat':
       case 'event_invite':
       case 'event_reminder':
+      case 'event_ready_to_finalize':
       case 'event_threshold':
       case 'event_milestone':
       case 'band_file_uploaded':
@@ -92,6 +93,7 @@ class AppNotification {
         return 'messages';
       case 'event_invite':
       case 'event_reminder':
+      case 'event_ready_to_finalize':
       case 'event_threshold':
       case 'event_milestone':
         return 'events';

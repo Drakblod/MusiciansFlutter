@@ -532,7 +532,7 @@ class __AuthorizedSubRequestResponsesScreenState extends State<_AuthorizedSubReq
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Text('1. Substitutes'),
+                          const Text('Substitutes'),
                           if (_hasSubstituteActivity) ...[
                             const SizedBox(width: 6),
                             Container(
@@ -554,7 +554,7 @@ class __AuthorizedSubRequestResponsesScreenState extends State<_AuthorizedSubReq
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Text('2. Members'),
+                          const Text('Members'),
                           if (_hasMemberActivity) ...[
                             const SizedBox(width: 6),
                             Container(

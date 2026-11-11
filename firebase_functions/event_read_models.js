@@ -278,4 +278,4 @@ async function reconcileLegacyCalendar(db,bandId,eventId) {
 }
 
 module.exports={memberEvent,project,manualInvite,verifiedAssignments,reconcile,
-  reconcileBand,legacyCalendarEvent,reconcileLegacyCalendar,requestsFor,equal,key};
+  reconcileBand,excludedIds,legacyCalendarEvent,reconcileLegacyCalendar,requestsFor,equal,key};

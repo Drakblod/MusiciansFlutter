@@ -1,3 +1,4 @@
+import 'tab_label_expectations.dart';
 import 'support/bounded_ui_pump.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -280,9 +281,9 @@ void main() {
       );
       await pumpUiTransitions(tester);
 
-      expect(find.text('1. Substitute Requests'), findsOneWidget);
-      expect(find.text('2. New Member Requests'), findsOneWidget);
-      expect(find.text('4. Saved'), findsOneWidget);
+      expect(find.text('Substitute Requests'), findsOneWidget);
+      expect(find.text('New Member Requests'), findsOneWidget);
+      expect(find.text('Saved'), findsOneWidget);
       expect(find.text('Available gigs'), findsNothing);
       expect(find.text('Direct Invitations'), findsNothing);
     });
@@ -337,7 +338,7 @@ void main() {
       expect(find.text('Direct Invite'), findsOneWidget);
 
       // Switch to New Member Requests tab
-      await tester.tap(find.text('2. New Member Requests'));
+      await tester.tap(find.text('New Member Requests'));
       await pumpUiTransitions(tester);
 
       expect(find.text('Jazz Band Member'), findsOneWidget);
@@ -410,7 +411,7 @@ void main() {
       expect(find.text('Band Spaced NM'), findsNothing);
 
       // Switch to New Member Requests tab
-      await tester.tap(find.text('2. New Member Requests'));
+      await tester.tap(find.text('New Member Requests'));
       await pumpUiTransitions(tester);
 
       // All 3 variations are classified under New Member Requests
@@ -644,6 +645,7 @@ void main() {
       );
       await pumpUiTransitions(tester);
 
+      expectVisibleTabLabels(tester, ['Substitute Requests', 'New Member Requests', 'Applied', 'Saved']);
       expect(tester.takeException(), isNull);
     });
 

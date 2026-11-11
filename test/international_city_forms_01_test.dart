@@ -90,6 +90,50 @@ Future<void> save(WidgetTester tester,String text) async {
 void main(){
  TestWidgetsFlutterBinding.ensureInitialized();
  setUpAll(() async {setupFirebaseCoreMocks();await Firebase.initializeApp();});
+ testWidgets('Music Snippet title can be renamed repeatedly and removed without uploading', (tester) async {
+  const url = 'https://example.test/never-display-this-filename.mp3';
+  final state = FormState(UserProfile(
+    userId: 'test_uid_123', displayName: 'Artist identity', instruments: ['Guitar'],
+    mainInstrument: 'Guitar', audioSnippetUrl: url,
+  ));
+  final track = find.widgetWithText(TextFormField, 'Track name');
+  Future<void> reopen() async {
+    await tester.pumpWidget(const SizedBox.shrink());
+    await mountForm(tester, const EditProfileScreen(), state, null);
+    await tester.ensureVisible(track);
+  }
+  expect(state.profile!.audioSnippetDisplayTitle, 'Music snippet');
+  await reopen();
+  expect(find.textContaining('never-display-this-filename'), findsNothing);
+  await tester.enterText(track, '/local/private.mp3');
+  await save(tester, 'Save Profile');
+  expect(state.service.saved, isNull);
+  expect(find.text('Use 1–80 characters. File paths and control characters are not allowed.'), findsOneWidget);
+  await tester.enterText(track, '  First   Take / Reprise!  ');
+  await save(tester, 'Save Profile');
+  expect(state.service.saved!.audioSnippetTitle, 'First Take / Reprise!');
+  expect(state.service.saved!.audioSnippetUrl, url);
+  expect(state.service.saved!.displayName, 'Artist identity');
+
+  state.profile = UserProfile.fromJson(state.service.saved!.toJson(), 'test_uid_123');
+  await reopen();
+  expect(find.text('First Take / Reprise!'), findsOneWidget);
+  await tester.enterText(track, 'Final Take');
+  await save(tester, 'Save Profile');
+  expect(state.service.saved!.audioSnippetTitle, 'Final Take');
+  expect(state.service.saved!.audioSnippetUrl, url);
+
+  state.profile = state.service.saved;
+  await reopen();
+  final remove = find.byTooltip('Remove track');
+  await tester.ensureVisible(remove);
+  await tester.tap(remove);
+  await tester.pump();
+  expect(track, findsNothing);
+  await save(tester, 'Save Profile');
+  expect(state.service.saved!.audioSnippetTitle, isNull);
+  expect(state.service.saved!.audioSnippetUrl, isNull);
+ });
  testWidgets('confirmed Ljusdal saves in one callable and reloads before an ordinary edit', (tester) async {
   const functions=BasicMessageChannel<Object?>(
     'dev.flutter.pigeon.cloud_functions_platform_interface.CloudFunctionsHostApi.call',StandardMessageCodec());

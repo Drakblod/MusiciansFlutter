@@ -9,6 +9,16 @@ describe('SAFE-CATALOGUE-PROJECTIONS-01 sanitizers and safe backfill',()=>{
   assert.deepStrictEqual(Object.keys(p).sort(),['userId','DisplayName','Nickname','UserType','MainInstrument','Instruments','SecondarySkills','Styles','Genres','Location','PublicLocation','About','Level','ProfilePictureUrl','SpotifyUrl','YoutubeUrl','AudioSnippetUrl','CollabRoles','CollabRemote','CollabBio'].sort());
   assert.deepStrictEqual(p.SecondarySkills,['Piano','Vocals']);assert(!JSON.stringify(p).includes('private'));assert(!JSON.stringify(p).includes('secret'));
  });
+ it('only projects normalized canonical Music Snippet titles alongside audio',()=>{
+  const url='https://example.test/filename.mp3';
+  const source=title=>({AudioSnippetTitle:'Root title',info:{AudioSnippetUrl:url,AudioSnippetTitle:title,Email:'private'}});
+  assert.deepStrictEqual(userProfile('u',source('  Vår\u00a0  låt / Repris!  ')),
+    {userId:'u',AudioSnippetUrl:url,AudioSnippetTitle:'Vår låt / Repris!'});
+  for(const title of [null, true, 'x'.repeat(81), 'File\nname', 'C:\\secret.mp3','/secret.mp3']){
+   assert.deepStrictEqual(userProfile('u',source(title)),{userId:'u',AudioSnippetUrl:url});
+  }
+  assert.deepStrictEqual(userProfile('u',{info:{AudioSnippetTitle:'No audio'}}),{userId:'u'});
+ });
  for(const alias of ['infoPascal','rootPascal','infoCamel','rootCamel'])it(`normalizes legacy user fields ${alias}`,()=>{
   const v=alias.endsWith('Pascal')?{DisplayName:'Name',Instruments:'Guitar',Genres:{b:'Jazz',a:'Rock'}}:{displayName:'Name',instruments:'Guitar',genres:{b:'Jazz',a:'Rock'}};
   const p=userProfile('key',alias.startsWith('info')?{info:v}:v);assert.strictEqual(p.DisplayName,'Name');assert.deepStrictEqual(p.Genres,['Rock','Jazz']);assert.strictEqual(p.userId,'key');

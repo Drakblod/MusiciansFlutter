@@ -47,6 +47,7 @@ class CatalogueProfiles {
       spotifyUrl: text(value['SpotifyUrl']),
       youtubeUrl: text(value['YoutubeUrl']),
       audioSnippetUrl: text(value['AudioSnippetUrl']),
+      audioSnippetTitle: UserProfile.normalizeAudioSnippetTitle(value['AudioSnippetTitle']),
       collabRoles: list(value['CollabRoles']),
       collabRemote: value['CollabRemote'] == true,
       collabBio: text(value['CollabBio']),

@@ -346,7 +346,8 @@ void main() {
       await pumpUiTransitions(tester);
 
       // Navigate to Past Events
-      await tester.tap(find.text('3. PAST EVENTS'));
+      await tester.ensureVisible(find.text('PAST EVENTS'));
+      await tester.tap(find.text('PAST EVENTS'));
       await pumpUiTransitions(tester);
 
       expect(find.text('”Past Autumn Session”'), findsOneWidget);
@@ -382,7 +383,7 @@ void main() {
       await pumpUiTransitions(tester);
 
       // Go to Upcoming tab
-      await tester.tap(find.text('2. UPCOMING (Finalized)'));
+      await tester.tap(find.text('UPCOMING (Finalized)'));
       await pumpUiTransitions(tester);
 
       expect(find.text('”Locked Festival Gig”'), findsOneWidget);
@@ -416,7 +417,8 @@ void main() {
       expect(find.text('”Summer Tour”'), findsOneWidget);
 
       // Switch to Past tab at 320px
-      await tester.tap(find.text('3. PAST EVENTS'));
+      await tester.ensureVisible(find.text('PAST EVENTS'));
+      await tester.tap(find.text('PAST EVENTS'));
       await pumpUiTransitions(tester);
       expect(tester.takeException(), isNull);
       expect(find.text('”Past Autumn Session”'), findsOneWidget);

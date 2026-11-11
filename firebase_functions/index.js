@@ -1,5 +1,6 @@
 const notificationDelivery = require('./notification_delivery');
 const notificationAccess = require('./notification_access');
+const eventReadiness = require('./event_readiness');
 const { currentMember: notificationMember } = notificationAccess;
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
@@ -94,7 +95,9 @@ function profileEdits(profile) {
     throw new HttpsError('invalid-argument','Invalid profile fields.');
   }
   const entries = Object.entries(profile);
+  const normalizeTitle = require('./catalogue_projections').normalizeAudioSnippetTitle;
   const valid = (key, value) => {
+    if (key === 'AudioSnippetTitle') return value === null || normalizeTitle(value) !== null;
     if (profileTextFields.has(key)) return value === null || typeof value === 'string';
     if (profileListFields.has(key)) return value === null ||
       (Array.isArray(value) && value.every(item => typeof item === 'string'));
@@ -103,7 +106,7 @@ function profileEdits(profile) {
   if (!entries.every(([key,value]) => valid(key,value))) {
     throw new HttpsError('invalid-argument','Invalid profile fields.');
   }
-  return entries;
+  return entries.map(([key,value]) => [key,key === 'AudioSnippetTitle' ? normalizeTitle(value) : value]);
 }
 exports.commitUserCity = onCall({region:'europe-west1'},async request=>{
   if(!request.auth)throw new HttpsError('unauthenticated','Sign in first.');
@@ -131,6 +134,11 @@ exports.commitUserCity = onCall({region:'europe-west1'},async request=>{
     for(const [key,value] of edits) {
       info[key]=value;
       if(profileMirrors.has(key))current[key]=value;
+    }
+    const hasSnippet = typeof info.AudioSnippetUrl === 'string' && info.AudioSnippetUrl.trim();
+    if (Object.hasOwn(profile || {}, 'AudioSnippetTitle') && info.AudioSnippetTitle && !hasSnippet) return;
+    if (Object.hasOwn(profile || {}, 'AudioSnippetUrl') && !hasSnippet) {
+      delete info.AudioSnippetTitle;
     }
     Object.assign(info,{
       Location:clear?null:`${receipt.location.city}, ${receipt.location.country}`,
@@ -200,7 +208,14 @@ exports.onCatalogueBandWritten = onValueWritten({ref:'/Bands/{bandId}',region:da
   });
 exports.onBandEventReadModelWritten = onValueWritten({
   ref:'/Bands/{bandId}/Events/{eventId}',region:databaseTriggerRegion,retry:true,
-},event=>eventReadModels.reconcile(admin.database(),event.params.bandId,event.params.eventId));
+}, async event => {
+  const { bandId, eventId } = event.params;
+  const db = admin.database();
+  await eventReadModels.reconcile(db, bandId, eventId);
+  if (eventReadiness.eventAudienceChanged(event.data.before.val(), event.data.after.val())) {
+    await eventReadiness.notify(db, bandId, eventId, publishNotification);
+  }
+});
 exports.onLegacyBandCalendarEventWritten = onValueWritten({
   ref:'/Bands/{bandId}/Calendar/{eventId}',region:databaseTriggerRegion,retry:true,
 },event=>{
@@ -238,6 +253,7 @@ function resolveNotificationFeatureId(notif) {
     case 'band_section_chat':
     case 'event_invite':
     case 'event_reminder':
+    case 'event_ready_to_finalize':
     case 'event_threshold':
     case 'event_milestone':
     case 'band_file_uploaded':
@@ -2059,76 +2075,13 @@ exports.getAppMetrics = functions.region('europe-west1').https.onRequest(async (
   }
 });
 
-/**
- * Triggered when a member responds to an event under /Bands/{bandId}/Events/{eventId}/Responses/{userId}.
- * Sends a push notification to the event creator when 70% or more of invited members have responded.
- */
+// Direct member RSVPs write their own canonical response leaf.
 exports.onEventResponseChanged = functions.region(databaseTriggerRegion).database
   .ref('/Bands/{bandId}/Events/{eventId}/Responses/{userId}')
-  .onWrite(async (change, context) => {
-    const bandId = context.params.bandId;
-    const eventId = context.params.eventId;
-
-    try {
-      // 1. Fetch the event details
-      const eventRef = admin.database().ref(`/Bands/${bandId}/Events/${eventId}`);
-      const eventSnapshot = await eventRef.once('value');
-      const eventData = eventSnapshot.val();
-
-      if (!eventData) {
-        console.log(`Event ${eventId} not found under band ${bandId}`);
-        return null;
-      }
-
-      // Exit early if creatorThresholdNotified is already true or event is locked
-      if (eventData.creatorThresholdNotified === true || eventData.isLocked === true) {
-        console.log(`Event ${eventId} threshold already notified or event is locked.`);
-        return null;
-      }
-
-      // 2. Fetch the band members
-      const membersRef = admin.database().ref(`/Bands/${bandId}/Members_band`);
-      const membersSnapshot = await membersRef.once('value');
-      const members = membersSnapshot.val();
-      if (!members) {
-        console.log(`No members found for band ${bandId}`);
-        return null;
-      }
-
-      const totalMembersCount = Object.keys(members).length;
-      if (totalMembersCount === 0) return null;
-
-      // 3. Count responses
-      const responses = eventData.Responses || {};
-      const totalResponsesCount = Object.keys(responses).length;
-
-      const responseRate = totalResponsesCount / totalMembersCount;
-      console.log(`Event ${eventId} response count: ${totalResponsesCount}/${totalMembersCount} (${(responseRate * 100).toFixed(1)}%)`);
-
-      // 4. If response rate is >= 70% (0.70)
-      if (responseRate >= 0.70) {
-        const creatorId = eventData.createdBy;
-        if (!creatorId) {
-          console.log(`No creatorId found on event ${eventId}`);
-          return null;
-        }
-
-        try {
-          await notificationAccess.authorizedEvent(admin.database(), creatorId, bandId, eventId);
-          await publishNotification(creatorId, 'event_threshold', [bandId, eventId], { bandId, eventId });
-        } catch (error) {
-          if (error.code !== 'not-found') throw error;
-        }
-
-        // Update database to prevent repeated notifications
-        await eventRef.child('creatorThresholdNotified').set(true);
-      }
-
-      return null;
-    } catch (error) {
-      console.error('Error in onEventResponseChanged trigger:', error);
-      return null;
-    }
+  .onWrite(async (_change, context) => {
+    const { bandId, eventId } = context.params;
+    await eventReadiness.notify(admin.database(), bandId, eventId, publishNotification);
+    return null;
   });
 
 /**
@@ -3574,7 +3527,12 @@ exports.onBandMemberWritten = onValueWritten({
   try {
     await require('./band_membership_index').reconcileMembershipIndex(
       admin.database(), event.params.bandId, event.params.memberId);
-    await eventReadModels.reconcileBand(admin.database(),event.params.bandId,event.params.memberId);
+    const db = admin.database();
+    const { bandId, memberId } = event.params;
+    await eventReadModels.reconcileBand(db, bandId, memberId);
+    if (eventReadiness.memberEligibilityChanged(event.data.before.val(), event.data.after.val())) {
+      await eventReadiness.notifyBand(db, bandId, publishNotification);
+    }
   } finally {
     // Preserve audience reconciliation even if index maintenance needs a retry.
     await handleBandMemberChange(event);

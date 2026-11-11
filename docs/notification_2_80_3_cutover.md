@@ -1,6 +1,6 @@
 # Notification V2 cutover for 2.80.3+256
 
-This plan is for review. The release uses one controlled cutover, with the final RTDB rules from `database.rules.json` and the exact 22 Functions in `firebase_functions/scripts/notification_2_80_3_manifest.json`. That file distinguishes the 58 discovered endpoints from the selected deployment targets. Both existing rules files already contain final notification denials. Keep the deployed rules in place until the final rules step below. Historical release manifests remain evidence for their own releases.
+This plan is for review. The release uses one controlled cutover, with the final RTDB rules from `database.rules.json` and the exact 26 Functions in `firebase_functions/scripts/notification_2_80_3_manifest.json`. That file distinguishes the 58 discovered endpoints from the selected deployment targets. Both existing rules files already contain final notification denials. Keep the deployed rules in place until the final rules step below. Historical release manifests remain evidence for their own releases.
 
 Unsupported clients, including iOS 2.66 and Web 2.80.2, lose new notifications, the legacy Notification Center, and notification badges at cutover. The owner accepted this impact until those clients upgrade. There is no enrollment phase against legacy producers for upgraded installations.
 
@@ -76,10 +76,22 @@ Complete physical-device sound and notification QA using an approved test enviro
 
 ## Release window
 
+The four owner-polish updates are commitUserCity, onCatalogueUserWritten, onBandEventReadModelWritten, and onBandMemberWritten. Offline discovery must report 58 endpoints. The filtered Firebase planner must report four creates, 22 updates, and zero deletes or replacements, all in europe-west1. The generated target list is the source for the eventual authorized deployment.
+
+From a clean candidate checkout with Node 22.13.1, run the snapshot check with paths to the installed npm and Firebase CLI JavaScript entry points.
+
+```sh
+python firebase_functions/scripts/prepare_preview_snapshot.py build/notification-cutover --npm-cli "$NPM_CLI" --firebase-cli "$FIREBASE_CLI"
+```
+
+Review `deployment-actions.json` and `deployment-plan.json` from the snapshot. Generate each later `--only` selector by prefixing its exact target with `functions:`. Stop if the production deployment proposes any other identity, region, removal or replacement.
+
+The owner can rename or clear the Music Snippet title and URL together. Older clients that clear only the URL may be denied once a saved title exists. Untitled clips display Music snippet. No migration or backfill is needed.
+
 Account deletion keeps the existing band discovery and departure flow. It revokes the deleting account's Notification V2 bindings before clearing its V2 feed, routes, and signal. Auth deletion remains last. The revocation transaction preserves any installation already transferred to a different account. The two reviewed rules variants check the revocation at commit for the restricted server writer on the existing V2 feed, route and signal paths. A delayed V2 writer cannot repopulate them after revocation. Historical legacy notification rows remain stored. The V2 cleanup is repeatable and the legacy account and band operations retain their existing retry limits.
 
-1. Confirm the compatible signed iOS and Android artifacts and the matching Web build. Confirm the 22 reviewed names, region, rules file, and expected cutover impact.
-2. Deploy only the 22 named Functions in the reviewed cutover manifest. Exclude `checkEventReminders`. Leave its existing scheduler paused and create no replacement.
+1. Confirm the compatible signed iOS and Android artifacts and the matching Web build. Confirm the 26 reviewed names, region, rules file, and expected cutover impact.
+2. Deploy only the 26 named Functions in the reviewed cutover manifest. Exclude `checkEventReminders`. Leave its existing scheduler paused and create no replacement.
 3. Verify every selected Function is ACTIVE and healthy on the reviewed revision before moving to rules.
 4. Deploy only `database.rules.json` as the final active RTDB rules. The new V2 writer fails closed against the earlier rules. Keep the Functions-to-rules interval short and expect a notification-delivery gap during that interval. Complete write-path smoke tests after final rules are active.
 5. Push the approved versioned Web client to main and verify the Pages deployment reports 2.80.3 build 256.
@@ -98,4 +110,4 @@ Resolve this separate security and privacy task before broad public launch. The 
 - Delayed `onBandEventReadModelWritten`, `onLegacyBandCalendarEventWritten`, and `onBandEventWritten` can recreate derived Event or Calendar data.
 - A comprehensive repair requires coordinated commit-time fencing or a schema redesign across the Admin writers. A database reset cannot prevent future deletion races.
 
-The preview's 22 targets exclude membership mutation, direct band deletion, and these derived writers.
+The 26-target preview includes onBandMemberWritten and onBandEventReadModelWritten for readiness checks only. Their existing deletion races remain deferred. mutateBandMembership, deleteBand, onCatalogueBandWritten, onLegacyBandCalendarEventWritten, and onBandEventWritten stay outside the cutover.

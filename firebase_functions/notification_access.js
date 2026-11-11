@@ -4,6 +4,7 @@ const { HttpsError } = require('firebase-functions/v2/https');
 const { randomUUID } = require('node:crypto');
 const { validMember } = require('./band_membership_index');
 const { authorizeRequest, normalize } = require('./membership_authority');
+const { canFinalizeReadyEvent } = require('./event_readiness');
 const {
   safeKey, feedPath, routesPath, signalPath, isAccountRevoked, withNotificationWriter,
 } = require('./notification_delivery');
@@ -111,6 +112,12 @@ function requestItem(id, request, options) {
 async function resolveRoute(db, uid, route, options, { preview = false, slotId } = {}) {
   const { type, subRequestId, responderId, bandId, eventId, publicationId, conversationId,
     sessionId, fileId, messageId, assignedAt, applicantId, decision } = route;
+  if (type === 'event_ready_to_finalize') {
+    const ready = await canFinalizeReadyEvent(db, uid, bandId, eventId, route.generation);
+    if (!ready) throw unavailable();
+    return { kind: 'event', title: 'Event Ready to Finalize',
+      body: summary(ready.event, ready.bandName, options.format, true), bandId, eventId, memberAccess: true };
+  }
   if (eventTypes.has(type)) {
     const { event, bandName, memberAccess } = await authorizedEvent(db, uid, bandId, eventId);
     const title = type === 'event_invite' ? 'Event Request' :

@@ -1025,12 +1025,17 @@ class _BandRoomChatScreenState extends State<_BandRoomContent>
           labelColor: Colors.white,
           unselectedLabelColor: AppTheme.textSecondary,
           labelStyle: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 13),
+          isScrollable: MediaQuery.sizeOf(context).width < 360,
+          tabAlignment: MediaQuery.sizeOf(context).width < 360
+              ? TabAlignment.start
+              : TabAlignment.fill,
+          labelPadding: const EdgeInsets.symmetric(horizontal: 8),
           tabs: const [
-            Tab(text: '1. Chat'),
-            Tab(text: '2. Files'),
-            Tab(text: '3. Events'),
-            Tab(text: '4. Gigs / Info'),
-            Tab(text: '5. Members'),
+            Tab(text: 'Chat'),
+            Tab(text: 'Files'),
+            Tab(text: 'Events'),
+            Tab(text: 'Gigs / Info'),
+            Tab(text: 'Members'),
           ],
         ),
 

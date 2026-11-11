@@ -26,7 +26,7 @@ describe('Native notification sound resources', () => {
   const mappings = [
     ['gig_request', 'gig_request_channel', ['sub_request_invite', 'grouped_sub_request']],
     ['gig_response', 'gig_response_channel', ['sub_request_response', 'session_application', 'session_application_status']],
-    ['event_rsvp', 'rsvp_reminder_channel', ['event_invite', 'event_reminder', 'event_threshold']],
+    ['event_rsvp', 'rsvp_reminder_channel', ['event_invite', 'event_reminder', 'event_threshold', 'event_ready_to_finalize']],
     ['gig_confirmed', 'finalized_gig_channel', ['gig_finalized']],
   ];
   for (const [name, channel, types] of mappings) {
@@ -288,6 +288,83 @@ for (const rules of ['database.rules.json', 'database.transitional.rules.json'])
       }
     });
 
+    it('claims ready Events once per canonical RSVP audience and rechecks exact-band manager authority', async () => {
+      const band = 'ready_' + suffix;
+      const event = 'rsvp_ready';
+      const [leader, member, guest, former] = await Promise.all([client(), client(), client(), client()]);
+      const adminMember = await client();
+      const bandPath = `Bands/${band}`;
+      const eventPath = `${bandPath}/Events/${event}`;
+      const when = new Date(Date.now() + 86400000).toISOString();
+      const rsvp = status => ({ status, timestamp: new Date().toISOString(), comment: 'Private response' });
+      await db.ref(bandPath).set({
+        Name: 'Ready Band',
+        Members_band: {
+          [leader.uid]: { Role: 'Leader', Status: 'active' },
+          [adminMember.uid]: { Role: 'Admin', Status: 'active' },
+          [member.uid]: { Role: 'Member', Status: 'active' },
+          [former.uid]: { Role: 'Leader', Status: 'removed' },
+        },
+        Events: { [event]: {
+          title: 'Private title', description: 'Private description', eventType: 'Concert',
+          startDateTime: when, endDateTime: when, requireResponse: true, createdBy: former.uid,
+          excludedMemberIds: [adminMember.uid],
+          externalInvitees: { [guest.uid]: { source: 'manual', status: 'pending' } },
+        } },
+      });
+      const readyRoute = row => row.type === 'event_ready_to_finalize' && row.eventId === event;
+      const routePath = uid => `notificationRoutesV2/${uid}`;
+      const readyRows = async uid => Object.entries(await get(db, routePath(uid)) || {})
+        .filter(([, row]) => readyRoute(row));
+      const readiness = require('../event_readiness');
+      const fakePublish = () => assert.fail('an invalid or missing RSVP must block the readiness claim');
+
+      await leader.rulesDb.ref(`${eventPath}/Responses/${leader.uid}`).set(rsvp('Yes'));
+      await db.ref(`${eventPath}/Responses/${member.uid}`).set(rsvp('invalid'));
+      await readiness.notify(db, band, event, fakePublish);
+      await member.rulesDb.ref(`${eventPath}/Responses/${member.uid}`).set(rsvp('No'));
+      await readiness.notify(db, band, event, fakePublish);
+
+      const id = await waitForRoute(db, leader.uid, readyRoute, () => guest.call('mutateBandEvent', {
+        action: 'inviteResponse', bandId: band, eventId: event, status: 'maybe',
+      }));
+      await waitForRoute(db, adminMember.uid, readyRoute, async () => {});
+      const open = (user, notificationId = id) => user.call('resolveNotification', { notificationId });
+      const route = await open(leader);
+      assert.equal(route.kind, 'event');
+      assert.equal(route.eventId, event);
+      assert.equal(route.bandId, band);
+      assert.equal(route.title, 'Event Ready to Finalize');
+      assert.match(route.body, /Ready Band .* Concert/);
+      assert.doesNotMatch(JSON.stringify(route), /Private title|Private description|Private response/);
+      await assert.rejects(open(member), notFound);
+      assert.deepEqual(await readyRows(former.uid), []);
+      assert.deepEqual(await readyRows(guest.uid), []);
+
+      const publish = (uid, type, key, data, options) => delivery.publish(db, {}, uid, type, key, data, options);
+      await Promise.all(Array.from({ length: 4 }, () => readiness.notify(db, band, event, publish)));
+      assert.equal((await readyRows(leader.uid)).length, 1);
+
+      const routeGeneration = (await get(db, `${routePath(leader.uid)}/${id}`)).generation;
+      // Removing an active member creates a new canonical generation.
+      const newId = await waitForRoute(db, leader.uid, row => readyRoute(row) &&
+        row.generation !== routeGeneration, () => db.ref(`${bandPath}/Members_band/${member.uid}/Status`).set('removed'));
+      assert.notEqual(newId, id);
+      await assert.rejects(open(leader), notFound);
+      assert.equal((await open(leader, newId)).eventId, event);
+      const adminId = (await readyRows(adminMember.uid)).find(([, row]) => row.generation !== routeGeneration)?.[0] ||
+        await waitForRoute(db, adminMember.uid, row => readyRoute(row) && row.generation !== routeGeneration, async () => {});
+      assert.equal((await adminMember.call('markFeatureNotificationsRead', { featureId: 'band_room' })).success, true);
+      assert.equal((await get(db, `notificationFeedV2/${adminMember.uid}/${adminId}`)).isRead, true);
+      await db.ref(`${bandPath}/Members_band/${adminMember.uid}/Role`).set('Member');
+      await assert.rejects(open(adminMember, adminId), notFound);
+      await leader.call('mutateBandEvent', { action: 'lock', bandId: band, eventId: event });
+      await assert.rejects(open(leader, newId), notFound);
+      await db.ref(eventPath).remove();
+      await assert.rejects(open(leader, newId), notFound);
+      await db.ref(bandPath).remove();
+    });
+
     it('selects allowlisted sounds per registered installation and keeps legacy chat feed-only', async () => {
       const recipient = await client();
       const soundProfiles = ['android-v2', 'ios-v2', 'arbitrary-sound.wav'];
@@ -312,6 +389,12 @@ for (const rules of ['database.rules.json', 'database.transitional.rules.json'])
 
         const payloads = [];
         const messaging = { send: async payload => { payloads.push(payload); return 'accepted'; } };
+        let readinessChecks = 0;
+        await delivery.publish(db, messaging, recipient.uid, 'event_ready_to_finalize',
+          [suffix, 'revoked-before-dispatch'], { bandId: 'privateBand', eventId: 'privateEvent' },
+          { canPublish: async () => ++readinessChecks === 1 });
+        assert.equal(readinessChecks, 4);
+        assert.deepEqual(payloads, []);
         const publish = type => delivery.publish(db, messaging, recipient.uid, type,
           [suffix, type], { bandId: 'privateBand' });
         const { id } = await publish('sub_request_invite');

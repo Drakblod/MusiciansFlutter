@@ -77,6 +77,7 @@
         },
         "info": {
           ".read": false,
+          ".validate": "!newData.child('AudioSnippetTitle').exists() || (newData.child('AudioSnippetUrl').isString() && newData.child('AudioSnippetUrl').val().length > 0)",
           "DisplayName": {
             ".read": "auth != null && auth.uid == $userId",
             ".write": "auth != null && auth.uid == $userId",
@@ -126,6 +127,11 @@
             ".read": "auth != null && auth.uid == $userId",
             ".write": "auth != null && auth.uid == $userId",
             ".validate": "newData.isString()"
+          },
+          "AudioSnippetTitle": {
+            ".read": "auth != null && auth.uid == $userId",
+            ".write": "auth != null && auth.uid == $userId",
+            ".validate": "newData.isString() && newData.val().length <= 80 && newData.val().matches(/^[^ \\/\u0000-\u001f\u007f-\u009f\u00a0\u1680\u2000-\u200a\u202f\u205f\u3000\ufeff]+(( \\/)? [^ \\/\u0000-\u001f\u007f-\u009f\u00a0\u1680\u2000-\u200a\u202f\u205f\u3000\ufeff]+)*$/) && !newData.val().contains('\\\\') && !newData.val().contains('\\u2028') && !newData.val().contains('\\u2029')"
           },
           "CollabBio": {
             ".read": "auth != null && auth.uid == $userId",

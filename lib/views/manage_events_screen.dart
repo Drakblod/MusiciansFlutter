@@ -396,15 +396,17 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> with SingleTick
                   // Tabs: New Events, Upcoming & Past
                   TabBar(
                     controller: _tabController,
+                    isScrollable: true,
+                    tabAlignment: TabAlignment.start,
                     indicatorColor: AppTheme.primaryAccent,
                     indicatorWeight: 3,
                     labelColor: Colors.white,
                     unselectedLabelColor: AppTheme.textSecondary,
                     labelStyle: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.bold),
                     tabs: const [
-                      Tab(text: '1. NEW EVENTS (Needs RSVP)'),
-                      Tab(text: '2. UPCOMING (Finalized)'),
-                      Tab(text: '3. PAST EVENTS'),
+                      Tab(text: 'NEW EVENTS (Needs RSVP)'),
+                      Tab(text: 'UPCOMING (Finalized)'),
+                      Tab(text: 'PAST EVENTS'),
                     ],
                   ),
                 ],

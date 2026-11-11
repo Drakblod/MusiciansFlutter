@@ -86,7 +86,8 @@ describe(`INTERNATIONAL-CITY-PICKER-01 server grants and rules: ${rules}`,functi
         purpose:'profile',targetId:uid,city:selected.city,country:selected.country});
       const profile={DisplayName:'After',UserType:'Guitar',MainInstrument:'Guitar',Nickname:'Musician',
         Instruments:['Guitar','Piano'],Genres:['Rock'],CollabRoles:['Musician'],CollabRemote:true,
-        ProfilePictureUrl:'https://example.test/photo.jpg',SpotifyUrl:'https://example.test/link'};
+        ProfilePictureUrl:'https://example.test/photo.jpg',SpotifyUrl:'https://example.test/link',
+        AudioSnippetUrl:'https://example.test/track.wav',AudioSnippetTitle:'  Summer   Take  '};
       const save={nonce:receipt.nonce,operationId:'profile_save',location:receipt.location,targetId:uid,profile};
       const before=(await db.ref(user).get()).val();
       await assert.rejects(()=>call('commitUserCity',{...save,targetId:bob}),
@@ -108,7 +109,13 @@ describe(`INTERNATIONAL-CITY-PICKER-01 server grants and rules: ${rules}`,functi
       await call('commitUserCity',save);
       const saved=await readProfileFields(['PublicLocation','Email',...Object.keys(profile)]);
       assert.deepStrictEqual(saved.PublicLocation,receipt.location);
-      for(const [key,value] of Object.entries(profile))assert.deepStrictEqual(saved[key],value);
+      for(const [key,value] of Object.entries(profile))
+        assert.deepStrictEqual(saved[key],key==='AudioSnippetTitle'?'Summer Take':value);
+      const beforeInvalidTrack=(await db.ref(user).get()).val();
+      await assert.rejects(()=>call('commitUserCity',{clear:true,targetId:uid,
+        profile:{About:'Must remain unchanged',AudioSnippetTitle:'/private/track.wav'}}),
+        error=>error.code==='functions/invalid-argument');
+      assert.deepStrictEqual((await db.ref(user).get()).val(),beforeInvalidTrack);
       assert.strictEqual(saved.Email,before.info.Email);
       await assertFails(owner.ref(info).get());
       await assertFails(owner.ref(`${info}/PushToken`).get());

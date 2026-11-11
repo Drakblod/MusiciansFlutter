@@ -266,6 +266,7 @@ class FirebaseService {
       'SpotifyUrl',
       'YoutubeUrl',
       'AudioSnippetUrl',
+      'AudioSnippetTitle',
       'CollabRoles',
       'CollabRemote',
       'CollabBio',
@@ -297,6 +298,13 @@ class FirebaseService {
       throw StateError('You can only update your own profile.');
     }
 
+    final hasSnippet = profile.audioSnippetUrl?.trim().isNotEmpty == true;
+    final trackTitle = hasSnippet
+        ? UserProfile.normalizeAudioSnippetTitle(profile.audioSnippetTitle)
+        : null;
+    if (hasSnippet && profile.audioSnippetTitle != null && trackTitle == null) {
+      throw ArgumentError('Invalid track name.');
+    }
     final fields = <String, dynamic>{
       'DisplayName': profile.displayName,
       'Level': profile.level,
@@ -313,6 +321,7 @@ class FirebaseService {
       'SpotifyUrl': profile.spotifyUrl,
       'YoutubeUrl': profile.youtubeUrl,
       'AudioSnippetUrl': profile.audioSnippetUrl,
+      'AudioSnippetTitle': trackTitle,
       'CollabRoles': profile.collabRoles,
       'CollabRemote': profile.collabRemote,
       'CollabBio': profile.collabBio,
@@ -396,6 +405,9 @@ class FirebaseService {
               (await _dbRef('users/$targetId/info/$legacyKey').get()).value;
           if (value != null) info[field] = value;
         }(),
+      _dbRef('users/$targetId/info/AudioSnippetTitle').get().then((snapshot) {
+        if (snapshot.exists) info['AudioSnippetTitle'] = snapshot.value;
+      }),
       _dbRef('users/$targetId/info/PublicLocation').get().then((snapshot) {
         if (snapshot.exists) info['PublicLocation'] = snapshot.value;
       }),
@@ -3112,15 +3124,17 @@ class FirebaseService {
     String status, {
     String? comment,
   }) async {
-    try {
-      if(currentUserId!=userId)throw StateError('Your session changed.');
-      await _functions.httpsCallable('mutateBandEvent').call({
-        'action':'inviteResponse','bandId':bandId,'eventId':eventId,
-        'status':status,'comment':comment,
-      });
-    } catch (e) { _rethrowAccessDenied(e);
-      debugPrint('[FirebaseService] updateExternalInviteeResponseAsync notice: $e');
-    }
+    if (currentUserId != userId) throw StateError('Your session changed.');
+    final inviteStatus = switch (classifyEventResponse(status)) {
+      EventResponseStatus.yes => 'attending',
+      EventResponseStatus.no => 'declined',
+      EventResponseStatus.uncertain => 'maybe',
+      EventResponseStatus.noAnswer => throw ArgumentError('Invalid invitation response.'),
+    };
+    await _functions.httpsCallable('mutateBandEvent').call({
+      'action': 'inviteResponse', 'bandId': bandId, 'eventId': eventId,
+      'status': inviteStatus, 'comment': comment,
+    });
   }
 
   Future<void> lockBandEventAsync(String bandId, String eventId) async {

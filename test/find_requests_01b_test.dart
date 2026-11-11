@@ -530,7 +530,7 @@ void main() {
       expect(find.text('Band B'), findsNothing);
 
       // Switch to Tab 2: New Member Requests
-      await tester.tap(find.text('2. New Member Requests'));
+      await tester.tap(find.text('New Member Requests'));
       await pumpUiTransitions(tester);
 
       expect(find.text('Band B'), findsOneWidget);

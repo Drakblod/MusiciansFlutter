@@ -784,8 +784,13 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
                   const SizedBox(height: 12),
                   if (widget.musician.audioSnippetUrl != null &&
                       widget.musician.audioSnippetUrl!.isNotEmpty)
-                    AudioSnippetPlayer(
-                      audioUrl: widget.musician.audioSnippetUrl!,
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(widget.musician.audioSnippetDisplayTitle),
+                        const SizedBox(height: 8),
+                        AudioSnippetPlayer(audioUrl: widget.musician.audioSnippetUrl!),
+                      ],
                     )
                   else if (isMe)
                     InkWell(

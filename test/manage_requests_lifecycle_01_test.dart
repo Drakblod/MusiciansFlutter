@@ -1,4 +1,5 @@
 // ignore_for_file: depend_on_referenced_packages
+import 'tab_label_expectations.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -426,6 +427,7 @@ void main() {
         ];
       await mount(tester, service);
       expect(find.text('View Responses (3)'), findsOneWidget);
+      expectVisibleTabLabels(tester, ['Substitutes', 'Members']);
       expect(tester.takeException(), isNull);
       await unmount(tester);
     });
@@ -558,7 +560,7 @@ void main() {
             ),
           ];
         await mount(tester, service);
-        await tester.tap(find.text('2. Members'));
+        await tester.tap(find.text('Members'));
         await settle(tester);
         expect(card('member'), findsOneWidget);
         expect(card('closed'), findsNothing);

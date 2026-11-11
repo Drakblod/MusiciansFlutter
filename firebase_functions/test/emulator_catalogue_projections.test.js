@@ -26,6 +26,37 @@ for(const rules of ['database.rules.json','database.transitional.rules.json'])de
     await assertFails(owner.ref(`${root}/${id}`).set({forged:true}));
   }
  });
+ it('an owner can rename a track without changing its URL and only the server can project its title',async()=>{
+  const id=`${prefix}_track_owner`, info=`users/${id}/info`, projection=`publicUserProfiles/${id}`;
+  const owner=env.authenticatedContext(id).database();
+  const other=env.authenticatedContext('track_other').database();
+  const url='https://example.test/uploads/private-storage-object.mp3';
+  await db.ref(info).set({DisplayName:'Track owner',AudioSnippetUrl:url,Email:'private@example.test'});
+  const legacy=await wait(projection,v=>v?.AudioSnippetUrl===url);
+  assert(!('AudioSnippetTitle' in legacy));
+  await assertSucceeds(owner.ref(info).update({AudioSnippetTitle:'First Track',About:'Updated'}));
+  const titled=await wait(projection,v=>v?.AudioSnippetTitle==='First Track');
+  assert.strictEqual(titled.AudioSnippetUrl,url);
+  assert.strictEqual(titled.About,'Updated');
+  assert(!('Email' in titled));
+  const title=owner.ref(`${info}/AudioSnippetTitle`);
+  await assertSucceeds(title.set('Andra låten / Repris!'));
+  assert.strictEqual((await title.get()).val(),'Andra låten / Repris!');
+  await assertFails(other.ref(`${info}/AudioSnippetTitle`).get());
+  await assertFails(other.ref(`${info}/AudioSnippetTitle`).set('Forged'));
+  await assertFails(owner.ref(`${projection}/AudioSnippetTitle`).set('Forged'));
+  for(const invalid of [true,'x'.repeat(81),'Line\nBreak','A\u0001B','A\u0085B','A\u2028B','Leading  spaces','Non\u00a0breaking','/private/local.wav','C:\\private.wav']) {
+   await assertFails(title.set(invalid));
+  }
+  const replacement='https://example.test/uploads/replacement.wav';
+  await assertSucceeds(owner.ref(info).update({AudioSnippetUrl:replacement,AudioSnippetTitle:'Second Take: Finale!'}));
+  const replaced=await wait(projection,v=>v?.AudioSnippetUrl===replacement);
+  assert.strictEqual(replaced.AudioSnippetTitle,'Second Take: Finale!');
+  await assertFails(owner.ref(`${info}/AudioSnippetUrl`).remove());
+  await assertSucceeds(owner.ref(info).update({AudioSnippetUrl:null,AudioSnippetTitle:null}));
+  await wait(projection,v=>v?.DisplayName==='Track owner'&&!v.AudioSnippetUrl&&!v.AudioSnippetTitle);
+  await assertFails(title.set('Without an audio clip'));
+ });
  it('explicitly cleared profile never republishes a legacy root city',async()=>{
   const id=`${prefix}_cleared_city`;
   await db.ref(`users/${id}`).set({Location:'Stockholm',info:{DisplayName:'Cleared',LocationCleared:true}});
