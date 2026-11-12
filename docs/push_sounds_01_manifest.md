@@ -15,7 +15,7 @@ Each output filename is the APNs sound name. Android uses the stem. The Android 
 | --- | ---: | ---: | ---: | --- | --- | --- |
 | `notification_gig_request_v2.wav` | 5.57 | −17.75 | −2.77 | `fa847191acb4c6b3ce73f0a985d87ac76734a0031039365195abd37eb093680d` | `sub_request_invite`, `grouped_sub_request` | `gig_request_channel_v2` |
 | `notification_gig_response_v2.wav` | 2.97 | −18.06 | −5.77 | `5df676f51c9707dc92734de2f95e22134e1fbc1af39a957aab108cf9c7ebed4f` | `sub_request_response`, `session_application`, `session_application_status` | `gig_response_channel_v2` |
-| `notification_event_rsvp_v2.wav` | 4.03 | −18.30 | −2.13 | `a08a50704999a843bbbdd40c374889e8c8b66f2852979bd1ffecdaa688a5d4b5` | `event_invite`, `event_reminder`, `event_threshold` | `rsvp_reminder_channel_v2` |
+| `notification_event_rsvp_v2.wav` | 4.03 | −18.30 | −2.13 | `a08a50704999a843bbbdd40c374889e8c8b66f2852979bd1ffecdaa688a5d4b5` | `event_invite`, `event_reminder`, `event_threshold`, `event_ready_to_finalize` | `rsvp_reminder_channel_v2` |
 | `notification_gig_confirmed_v2.wav` | 4.27 | −18.54 | −4.42 | `8ff200758efcabfbc7ef3084b648fc60829c6d251216de6d4897c548708c0f45` | `gig_finalized` | `finalized_gig_channel_v2` |
 | System sound | — | — | — | — | `band_section_chat` | `chat_notifications_v2` |
 

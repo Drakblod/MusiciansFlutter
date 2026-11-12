@@ -10,10 +10,18 @@ const registryPath = 'notificationTokenRegistry';
 const feedPath = 'notificationFeedV2';
 const routesPath = 'notificationRoutesV2';
 const signalPath = 'notificationFeedSignals';
-const neutralAlert = Object.freeze({
-  title: 'New activity in Musicians',
-  body: 'Open the app to view details.',
-});
+const nativeTitles = new Map([
+  ['sub_request_invite', 'Substitute Request'],
+  ['grouped_sub_request', 'Substitute Request'],
+  ['sub_request_response', 'Substitute Request Response'],
+  ['event_invite', 'Event Request'],
+  ['event_reminder', 'Event Request'],
+  ['event_ready_to_finalize', 'Event Ready to Finalize'],
+  ['gig_finalized', 'Gig Confirmed'],
+  ['session_application', 'Collab Application'],
+  ['session_application_status', 'Collab Application Update'],
+  ['band_section_chat', 'New Band Message'],
+]);
 const soundProfiles = new Set(['android-v2', 'ios-v2']);
 const sounds = new Map([
   ['request', ['gig_rquest', 'gig_request_channel', 'notification_gig_request_v2']],
@@ -234,7 +242,10 @@ function messageFor(recipient, id, type, soundTest) {
   const { sound, channelId, apnsSound } = soundPlatform(recipient.soundProfile, cue);
   return {
     token: recipient.token,
-    notification: neutralAlert,
+    notification: {
+      title: nativeTitles.get(type) ?? 'New activity in Musicians',
+      body: 'Open the app to view details.',
+    },
     data: { schemaVersion: '2', notificationId: id, type },
     android: { notification: {
       sound,

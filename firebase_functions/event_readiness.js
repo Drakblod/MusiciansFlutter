@@ -10,8 +10,9 @@ const type = 'event_ready_to_finalize';
 const responses = new Set(['yes', 'no', 'maybe', 'uncertain', 'attending', 'declined']);
 const inactive = new Set(['cancelled', 'canceled', 'deleted', 'inactive', 'archived',
   'finalized', 'completed', 'complete', 'closed', 'removed', 'revoked', 'withdrawn']);
-const hasMemberAccess = member => validMember(member) &&
-  (member.Status == null || member.status == null || normalize(member.Status) === normalize(member.status));
+// A hold pauses RSVP obligations while preserving canonical band access.
+const eligibleMember = member => validMember(member) &&
+  [member.Status, member.status].every(status => status == null || normalize(status) === 'active');
 
 function eventIsOpen(event, now) {
   if (!event || event.requireResponse === false || event.isLocked === true ||
@@ -30,15 +31,7 @@ function eventIsOpen(event, now) {
 
 function eligibleGuest(invite) {
   return ['manual', 'direct'].includes(normalize(invite?.source)) &&
-    !inactive.has(normalize(invite.status));
-}
-
-function validMemberResponse(response) {
-  const status = normalize(response?.status);
-  if (!responses.has(status) || typeof response.timestamp !== 'string' ||
-      !Number.isFinite(Date.parse(response.timestamp))) return false;
-  return !['maybe', 'uncertain'].includes(status) ||
-    [response.uncertainReason, response.comment].some(value => typeof value === 'string' && value.trim());
+    invite.isActive !== false && !inactive.has(normalize(invite.status));
 }
 
 function readiness(event, members, now = Date.now()) {
@@ -46,14 +39,15 @@ function readiness(event, members, now = Date.now()) {
   const excluded = new Set(excludedIds(event));
   const eligible = new Map();
   const persistedResponses = event.Responses ?? event.responses;
+  const hasResponded = uid => responses.has(normalize(persistedResponses?.[uid]?.status));
   for (const [uid, member] of Object.entries(members || {})) {
-    if (key(uid) && !excluded.has(uid) && hasMemberAccess(member)) {
-      eligible.set(uid, validMemberResponse(persistedResponses?.[uid]));
+    if (key(uid) && !excluded.has(uid) && eligibleMember(member)) {
+      eligible.set(uid, hasResponded(uid));
     }
   }
   for (const [uid, invite] of Object.entries(event.externalInvitees || {})) {
     if (key(uid) && !excluded.has(uid) && eligibleGuest(invite)) {
-      eligible.set(uid, responses.has(normalize(invite.status)));
+      eligible.set(uid, hasResponded(uid) || responses.has(normalize(invite.status)));
     }
   }
   if (!eligible.size || [...eligible.values()].some(answered => !answered)) return null;
@@ -63,14 +57,14 @@ function readiness(event, members, now = Date.now()) {
 
 function eventAudienceChanged(before, after) {
   if (!after) return false;
-  return ['externalInvitees', 'excludedMemberIds', 'ExcludedMemberIds', 'requireResponse',
+  return ['externalInvitees', 'excludedMemberIds', 'ExcludedMemberIds', 'requireResponse', 'responses', 'createdAt',
     'status', 'Status', 'isActive', 'IsActive', 'isLocked', 'IsFinalized', 'isFinalized', 'isCancelled', 'isCanceled',
     'isDeleted', 'startDateTime', 'endDateTime']
     .some(field => !isDeepStrictEqual(before?.[field], after[field]));
 }
 
 function memberEligibilityChanged(before, after) {
-  return hasMemberAccess(before) !== hasMemberAccess(after) || manager(before) !== manager(after);
+  return eligibleMember(before) !== eligibleMember(after);
 }
 
 function validBandId(bandId) {
@@ -101,9 +95,9 @@ async function canFinalizeReadyEvent(db, uid, bandId, eventId, generation) {
   return ready?.generation === generation && manager(ready?.members?.[uid]) ? ready : null;
 }
 
-async function notify(db, bandId, eventId, publish) {
+async function notify(db, bandId, eventId, publish, entersReadiness) {
   const ready = await read(db, bandId, eventId);
-  if (!ready) return;
+  if (!ready || !entersReadiness(ready)) return;
   const { generation, members } = ready;
   const recipients = Object.keys(members || {}).filter(uid => key(uid) && manager(members[uid]));
   await Promise.all(recipients.map(uid => publish(uid, type, [bandId, eventId, generation],
@@ -111,14 +105,42 @@ async function notify(db, bandId, eventId, publish) {
     { canPublish: () => canFinalizeReadyEvent(db, uid, bandId, eventId, generation) })));
 }
 
-async function notifyBand(db, bandId, publish) {
+function changedGeneration(generation, before, after) {
+  return after === generation && before !== generation;
+}
+
+function notifyEventChange(db, bandId, eventId, before, after, publish) {
+  return notify(db, bandId, eventId, publish, ({ members, generation }) =>
+    changedGeneration(generation, readiness(before, members), readiness(after, members)));
+}
+
+function notifyResponseChange(db, bandId, eventId, uid, before, after, publish) {
+  if (!key(uid)) return;
+  return notify(db, bandId, eventId, publish, ({ event, members, generation }) => {
+    const withResponse = response => ({
+      ...event, Responses: { ...event.Responses, [uid]: response },
+    });
+    return changedGeneration(generation, readiness(withResponse(before), members),
+      readiness(withResponse(after), members));
+  });
+}
+
+async function notifyBand(db, bandId, uid, before, after, publish) {
   if (!validBandId(bandId)) return;
   const band = db.ref(`Bands/${bandId}`);
   const [events, members] = await Promise.all([band.child('Events').get(), band.child('Members_band').get()]);
   const roster = members.val();
+  const priorRoster = { ...roster, [uid]: before };
+  const changedRoster = { ...roster, [uid]: after };
   for (const [eventId, event] of Object.entries(events.val() || {})) {
-    if (readiness(event, roster)) await notify(db, bandId, eventId, publish);
+    const current = readiness(event, roster);
+    if (current && changedGeneration(current, readiness(event, priorRoster), readiness(event, changedRoster))) {
+      await notify(db, bandId, eventId, publish, ({ generation }) => generation === current);
+    }
   }
 }
 
-module.exports = { readiness, eventAudienceChanged, memberEligibilityChanged, canFinalizeReadyEvent, notify, notifyBand };
+module.exports = {
+  readiness, eventAudienceChanged, memberEligibilityChanged, canFinalizeReadyEvent,
+  notifyEventChange, notifyResponseChange, notifyBand,
+};

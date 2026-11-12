@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:musicians_flutter/models/band.dart';
 import 'package:musicians_flutter/models/band_event.dart';
 import 'package:musicians_flutter/models/request_management_access.dart';
 import 'package:musicians_flutter/models/sub_request.dart';
@@ -77,13 +78,28 @@ class RoutingService extends FirebaseService {
       UserProfile(userId: userId, displayName: userId);
 
   (String, String, bool)? eventRead;
+  BandEvent? notificationEvent;
   @override
   Future<BandEvent?> getNotificationEventAsync(
     String bandId, String eventId, {required bool memberAccess}
   ) async {
     eventRead = (bandId, eventId, memberAccess);
-    return null;
+    return notificationEvent;
   }
+
+  @override
+  Stream<BandEvent?> subscribeToBandEvent(String bandId, String eventId) =>
+      Stream.value(notificationEvent);
+
+  @override
+  Future<Band?> getPublicBandProfileAsync(String bandId) async => null;
+
+  @override
+  Future<bool> canManageBandEventAsync(String bandId) async =>
+      bandId == 'exact-band' && notificationEvent != null;
+
+  @override
+  Future<List<BandEvent>> getBandEventsListAsync(String bandId) async => [];
 }
 
 void main() {
@@ -236,5 +252,33 @@ void main() {
     expect(service.eventRead, ('exact-band', 'exact-event', true));
     expect(find.byType(EventDetailsPage), findsNothing);
     expect(find.text('This notification is unavailable.'), findsOneWidget);
+  });
+
+  testWidgets('ready notification opens the exact Event with finalization',
+      (tester) async {
+    await mount(tester, uid: 'a');
+    final when = DateTime.now().add(const Duration(days: 1)).toIso8601String();
+    service.notificationEvent = BandEvent.fromJson({
+      'title': 'Ready concert',
+      'startDateTime': when,
+      'endDateTime': when,
+      'requireResponse': true,
+    }, 'exact-event');
+    service.resolve = (_, __, ___) => {
+      'type': 'event_ready_to_finalize',
+      'kind': 'event',
+      'bandId': 'exact-band',
+      'eventId': 'exact-event',
+      'memberAccess': true,
+    };
+
+    await router.open(id);
+    await tester.pumpAndSettle();
+
+    final page = tester.widget<EventDetailsPage>(find.byType(EventDetailsPage));
+    expect(service.eventRead, ('exact-band', 'exact-event', true));
+    expect(page.bandId, 'exact-band');
+    expect(page.eventId, 'exact-event');
+    expect(find.text('Finalize Event & Lock RSVPs'), findsOneWidget);
   });
 }

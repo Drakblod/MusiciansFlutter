@@ -212,8 +212,10 @@ exports.onBandEventReadModelWritten = onValueWritten({
   const { bandId, eventId } = event.params;
   const db = admin.database();
   await eventReadModels.reconcile(db, bandId, eventId);
-  if (eventReadiness.eventAudienceChanged(event.data.before.val(), event.data.after.val())) {
-    await eventReadiness.notify(db, bandId, eventId, publishNotification);
+  const before = event.data.before.val();
+  const after = event.data.after.val();
+  if (eventReadiness.eventAudienceChanged(before, after)) {
+    await eventReadiness.notifyEventChange(db, bandId, eventId, before, after, publishNotification);
   }
 });
 exports.onLegacyBandCalendarEventWritten = onValueWritten({
@@ -2078,9 +2080,10 @@ exports.getAppMetrics = functions.region('europe-west1').https.onRequest(async (
 // Direct member RSVPs write their own canonical response leaf.
 exports.onEventResponseChanged = functions.region(databaseTriggerRegion).database
   .ref('/Bands/{bandId}/Events/{eventId}/Responses/{userId}')
-  .onWrite(async (_change, context) => {
-    const { bandId, eventId } = context.params;
-    await eventReadiness.notify(admin.database(), bandId, eventId, publishNotification);
+  .onWrite(async (change, context) => {
+    const { bandId, eventId, userId } = context.params;
+    await eventReadiness.notifyResponseChange(admin.database(), bandId, eventId, userId,
+      change.before.val(), change.after.val(), publishNotification);
     return null;
   });
 
@@ -3530,8 +3533,10 @@ exports.onBandMemberWritten = onValueWritten({
     const db = admin.database();
     const { bandId, memberId } = event.params;
     await eventReadModels.reconcileBand(db, bandId, memberId);
-    if (eventReadiness.memberEligibilityChanged(event.data.before.val(), event.data.after.val())) {
-      await eventReadiness.notifyBand(db, bandId, publishNotification);
+    const before = event.data.before.val();
+    const after = event.data.after.val();
+    if (eventReadiness.memberEligibilityChanged(before, after)) {
+      await eventReadiness.notifyBand(db, bandId, memberId, before, after, publishNotification);
     }
   } finally {
     // Preserve audience reconciliation even if index maintenance needs a retry.

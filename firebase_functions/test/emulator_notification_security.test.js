@@ -18,7 +18,7 @@ const get = async (db, path) => (await db.ref(path).get()).val();
 const idFor = (uid, type, key) => createHash('sha256')
   .update(JSON.stringify([uid, type, key])).digest('hex');
 
-describe('Native notification sound resources', () => {
+describe('Native notification payloads and sound resources', () => {
   const root = path.join(__dirname, '../..');
   const read = name => fs.readFileSync(path.join(root, name));
   const native = read('android/app/src/main/kotlin/com/musiciansonly/musicians_flutter/MainActivity.kt').toString();
@@ -29,6 +29,34 @@ describe('Native notification sound resources', () => {
     ['event_rsvp', 'rsvp_reminder_channel', ['event_invite', 'event_reminder', 'event_threshold', 'event_ready_to_finalize']],
     ['gig_confirmed', 'finalized_gig_channel', ['gig_finalized']],
   ];
+  it('uses fixed activity titles and includes only opaque routing data', () => {
+    const titles = [
+      ['sub_request_invite', 'Substitute Request'],
+      ['grouped_sub_request', 'Substitute Request'],
+      ['sub_request_response', 'Substitute Request Response'],
+      ['event_invite', 'Event Request'],
+      ['event_reminder', 'Event Request'],
+      ['event_ready_to_finalize', 'Event Ready to Finalize'],
+      ['gig_finalized', 'Gig Confirmed'],
+      ['session_application', 'Collab Application'],
+      ['session_application_status', 'Collab Application Update'],
+      ['band_section_chat', 'New Band Message'],
+      ...['system', 'sound_test', 'event_threshold', 'unknown', '__proto__']
+        .map(type => [type, 'New activity in Musicians']),
+    ];
+    const recipient = {
+      token: 'device-token', userId: 'private-user-id', soundProfile: 'ios-v2',
+      bandId: 'private-band-id', name: 'private name', date: 'private date',
+      description: 'private description', response: 'private response',
+    };
+    for (const [type, title] of titles) {
+      const payload = delivery.messageFor(recipient, 'opaque-id', type);
+      assert.deepEqual(payload.notification, { title, body: 'Open the app to view details.' });
+      assert.deepEqual(payload.data, { schemaVersion: '2', notificationId: 'opaque-id', type });
+      assert.deepEqual(Object.keys(payload).sort(), ['android', 'apns', 'data', 'notification', 'token']);
+      assert.doesNotMatch(JSON.stringify(payload), /private/);
+    }
+  });
   for (const [name, channel, types] of mappings) {
     it(`packages and maps ${name} on both native platforms and the tester`, () => {
       const stem = `notification_${name}_v2`;
@@ -292,7 +320,7 @@ for (const rules of ['database.rules.json', 'database.transitional.rules.json'])
       const band = 'ready_' + suffix;
       const event = 'rsvp_ready';
       const [leader, member, guest, former] = await Promise.all([client(), client(), client(), client()]);
-      const adminMember = await client();
+      const [adminMember, held] = await Promise.all([client(), client()]);
       const bandPath = `Bands/${band}`;
       const eventPath = `${bandPath}/Events/${event}`;
       const when = new Date(Date.now() + 86400000).toISOString();
@@ -304,6 +332,7 @@ for (const rules of ['database.rules.json', 'database.transitional.rules.json'])
           [adminMember.uid]: { Role: 'Admin', Status: 'active' },
           [member.uid]: { Role: 'Member', Status: 'active' },
           [former.uid]: { Role: 'Leader', Status: 'removed' },
+          [held.uid]: { Role: 'Member', Status: 'on_hold' },
         },
         Events: { [event]: {
           title: 'Private title', description: 'Private description', eventType: 'Concert',
@@ -320,11 +349,15 @@ for (const rules of ['database.rules.json', 'database.transitional.rules.json'])
       const fakePublish = () => assert.fail('an invalid or missing RSVP must block the readiness claim');
 
       await leader.rulesDb.ref(`${eventPath}/Responses/${leader.uid}`).set(rsvp('Yes'));
-      await db.ref(`${eventPath}/Responses/${member.uid}`).set(rsvp('invalid'));
-      await readiness.notify(db, band, event, fakePublish);
-      await member.rulesDb.ref(`${eventPath}/Responses/${member.uid}`).set(rsvp('No'));
-      await readiness.notify(db, band, event, fakePublish);
+      const invalid = rsvp('invalid');
+      const no = rsvp('No');
+      await db.ref(`${eventPath}/Responses/${member.uid}`).set(invalid);
+      await readiness.notifyResponseChange(db, band, event, member.uid, null, invalid, fakePublish);
+      await member.rulesDb.ref(`${eventPath}/Responses/${member.uid}`).set(no);
+      await readiness.notifyResponseChange(db, band, event, member.uid, invalid, no, fakePublish);
+      assert.deepEqual(await readyRows(leader.uid), []);
 
+      const pendingEvent = await get(db, eventPath);
       const id = await waitForRoute(db, leader.uid, readyRoute, () => guest.call('mutateBandEvent', {
         action: 'inviteResponse', bandId: band, eventId: event, status: 'maybe',
       }));
@@ -338,12 +371,24 @@ for (const rules of ['database.rules.json', 'database.transitional.rules.json'])
       assert.match(route.body, /Ready Band .* Concert/);
       assert.doesNotMatch(JSON.stringify(route), /Private title|Private description|Private response/);
       await assert.rejects(open(member), notFound);
+      assert.deepEqual(await readyRows(member.uid), []);
       assert.deepEqual(await readyRows(former.uid), []);
       assert.deepEqual(await readyRows(guest.uid), []);
+      assert.deepEqual(await readyRows(held.uid), []);
 
       const publish = (uid, type, key, data, options) => delivery.publish(db, {}, uid, type, key, data, options);
-      await Promise.all(Array.from({ length: 4 }, () => readiness.notify(db, band, event, publish)));
+      const readyEvent = await get(db, eventPath);
+      await Promise.all(Array.from({ length: 4 }, () =>
+        readiness.notifyEventChange(db, band, event, pendingEvent, readyEvent, publish)));
       assert.equal((await readyRows(leader.uid)).length, 1);
+      const answeredAgain = {
+        ...readyEvent, externalInvitees: {
+          ...readyEvent.externalInvitees,
+          [guest.uid]: { ...readyEvent.externalInvitees[guest.uid], status: 'declined' },
+        },
+      };
+      await readiness.notifyEventChange(db, band, event, answeredAgain, readyEvent,
+        () => assert.fail('an RSVP edit within the same ready generation must not publish'));
 
       const routeGeneration = (await get(db, `${routePath(leader.uid)}/${id}`)).generation;
       // Removing an active member creates a new canonical generation.
@@ -362,6 +407,53 @@ for (const rules of ['database.rules.json', 'database.transitional.rules.json'])
       await assert.rejects(open(leader, newId), notFound);
       await db.ref(eventPath).remove();
       await assert.rejects(open(leader, newId), notFound);
+      await db.ref(bandPath).remove();
+    });
+
+    it('waits for the final main RSVP and skips empty or unchanged eligible audiences', async () => {
+      const band = 'ready_member_' + suffix;
+      const event = 'main_rsvp';
+      const [leader, member, held] = await Promise.all([client(), client(), client()]);
+      const bandPath = `Bands/${band}`;
+      const eventPath = `${bandPath}/Events/${event}`;
+      const when = new Date(Date.now() + 86400000).toISOString();
+      const rsvp = status => ({ status, timestamp: new Date().toISOString(), comment: 'Private' });
+      const members = {
+        [leader.uid]: { Role: 'Leader', Status: 'active' },
+        [member.uid]: { Role: 'Member', Status: 'active' },
+        [held.uid]: { Role: 'Member', Status: 'temporarily_off' },
+      };
+      const base = {
+        title: 'Test Event', startDateTime: when, requireResponse: true,
+        createdAt: Date.now(),
+      };
+      const readyRoute = row => row.type === 'event_ready_to_finalize' && row.eventId === event;
+      const readiness = require('../event_readiness');
+      assert.equal(readiness.readiness({
+        ...base, excludedMemberIds: [leader.uid, member.uid],
+        externalInvitees: { [held.uid]: { source: 'direct', status: 'inactive' } },
+      }, members), null);
+      await db.ref(bandPath).set({ Members_band: members, Events: { [event]: base } });
+      await leader.rulesDb.ref(`${eventPath}/Responses/${leader.uid}`).set(rsvp('Uncertain'));
+      await member.rulesDb.ref(`${eventPath}/ScheduleResponses/part/${member.uid}`).set(rsvp('Yes'));
+      assert.equal(readiness.readiness(await get(db, eventPath), members), null);
+      const last = rsvp('maybe');
+      const id = await waitForRoute(db, leader.uid, readyRoute, () =>
+        member.rulesDb.ref(`${eventPath}/Responses/${member.uid}`).set(last));
+      const routePath = `notificationRoutesV2/${leader.uid}`;
+      const { generation } = await get(db, `${routePath}/${id}`);
+      assert.equal((await waitForRow(db, leader.uid, id, async () => {})).type, 'event_ready_to_finalize');
+      assert.ok(!Object.values(await get(db, `notificationRoutesV2/${member.uid}`) || {}).some(readyRoute));
+      const publish = (uid, type, key, data, options) => delivery.publish(db, {}, uid, type, key, data, options);
+      await Promise.all(Array.from({ length: 4 }, () =>
+        readiness.notifyResponseChange(db, band, event, member.uid, null, last, publish)));
+      assert.deepEqual(Object.entries(await get(db, routePath)).filter(([, row]) => readyRoute(row))
+        .map(([id]) => id), [id]);
+
+      await db.ref(`${eventPath}/excludedMemberIds`).set([held.uid]);
+      assert.equal(readiness.readiness(await get(db, eventPath), members), generation);
+      assert.equal(readiness.memberEligibilityChanged(members[member.uid],
+        { ...members[member.uid], Role: 'Admin' }), false);
       await db.ref(bandPath).remove();
     });
 
@@ -411,13 +503,29 @@ for (const rules of ['database.rules.json', 'database.transitional.rules.json'])
         for (const payload of payloads) {
           assert.deepEqual(payload.data, { schemaVersion: '2', notificationId: id, type: 'sub_request_invite' });
           assert.deepEqual(payload.notification, {
-            title: 'New activity in Musicians', body: 'Open the app to view details.',
+            title: 'Substitute Request', body: 'Open the app to view details.',
           });
         }
+        payloads.length = 0;
+        const ready = await publish('event_ready_to_finalize');
+        assert.equal(payloads.length, 3);
+        for (const payload of payloads) {
+          assert.deepEqual(payload.notification, {
+            title: 'Event Ready to Finalize', body: 'Open the app to view details.',
+          });
+          assert.deepEqual(payload.data, {
+            schemaVersion: '2', notificationId: ready.id, type: 'event_ready_to_finalize',
+          });
+        }
+        assert.deepEqual(payloads.find(payload => payload.token === android.token).android.notification,
+          { sound: 'notification_event_rsvp_v2', channelId: 'rsvp_reminder_channel_v2' });
+        assert.equal(payloads.find(payload => payload.token === ios.token).apns.payload.aps.sound,
+          'notification_event_rsvp_v2.wav');
         payloads.length = 0;
         const chat = await publish('band_section_chat');
         assert.equal(payloads.length, 2);
         assert.ok(payloads.every(payload => payload.token !== legacy.token));
+        assert.ok(payloads.every(payload => payload.notification.title === 'New Band Message'));
         assert.deepEqual(payloads.find(payload => payload.token === android.token).android.notification, {
           sound: 'default', channelId: 'chat_notifications_v2',
         });
@@ -597,7 +705,7 @@ for (const rules of ['database.rules.json', 'database.transitional.rules.json'])
       await assert.rejects(() => b.call('resolveNotification', { notificationId: decision }), notFound);
     });
 
-    it('delivers one account-neutral alert after concurrent claims, with no retry after an ambiguous send', async () => {
+    it('delivers one private-data-free alert after concurrent claims, with no retry after an ambiguous send', async () => {
       const installation = randomBytes(16).toString('hex');
       await a.call('registerNotificationInstallation', {
         installation, proof: randomBytes(32).toString('hex'), sequence: 1,
@@ -619,7 +727,7 @@ for (const rules of ['database.rules.json', 'database.transitional.rules.json'])
       assert.equal(new Set(results.map(result => result.id)).size, 1);
       const { id } = results[0];
       assert.deepEqual(payloads[0].notification, {
-        title: 'New activity in Musicians', body: 'Open the app to view details.',
+        title: 'Event Request', body: 'Open the app to view details.',
       });
       assert.deepEqual(payloads[0].data, { schemaVersion: '2', notificationId: id, type: 'event_invite' });
       assert.deepEqual(payloads[0].android, legacyReminder);
