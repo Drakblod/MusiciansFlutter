@@ -14,6 +14,7 @@ import 'package:musicians_flutter/providers/app_state.dart';
 import 'package:musicians_flutter/services/firebase_service.dart';
 import 'package:musicians_flutter/utils/sub_request_card_helper.dart';
 import 'package:musicians_flutter/views/sub_request_responses_screen.dart';
+import 'package:musicians_flutter/views/sub_request_response_details_screen.dart';
 
 class ManageService extends Fake implements FirebaseService {
   // Lifecycle fixtures model an already authorized exact-band manager. The
@@ -35,6 +36,9 @@ class ManageService extends Fake implements FirebaseService {
 
   @override
   Stream<int> subscribeToSubRequestResponseCount(String id) => const Stream<int>.empty();
+
+  @override
+  Future<Map<String, dynamic>> getSubRequestResponsesAsync(String id) async => {};
 
   List<SubRequest> requests = [];
   List<SubRequest> bandRequests = [];
@@ -139,6 +143,7 @@ Future<void> mount(
   DateTime Function()? clock,
   String band = 'band',
   void Function(SubRequest)? navigated,
+  bool openRealDetails = false,
 }) async {
   await tester.pumpWidget(
     ChangeNotifierProvider<AppState>.value(
@@ -155,6 +160,9 @@ Future<void> mount(
                         as Map)['subRequest']
                     as SubRequest;
             navigated?.call(req);
+            if (openRealDetails) {
+              return SubRequestResponseDetailsScreen(subRequest: req);
+            }
             return const Scaffold(body: Text('Isolated detail route'));
           },
         },
@@ -174,6 +182,93 @@ void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues({});
     GoogleFonts.config.allowRuntimeFetching = false;
+  });
+
+  testWidgets('Manage renders stored Event and payment fields before and after opening responses', (tester) async {
+    final service = ManageService();
+    service.requests.add(SubRequest.fromJson({
+      'BandId': 'band', 'BandName': 'Venue Band', 'CreatorUserId': 'manager',
+      'Role': 'Substitute', 'Status': 'published', 'Date': '2026-11-10',
+      'EventType': 'Concert', 'IsPaid': true, 'StartTime': '18:30',
+      'EndTime': '21:15', 'Location': '12 Music Street', 'Venue': 'Main Hall',
+      'Description': 'Use the stage entrance after soundcheck.',
+    }, 'complete'));
+    await mount(tester, service, openRealDetails: true);
+    expect(find.text('Concert · Paid'), findsOneWidget);
+    expect(find.textContaining('18.30–21.15'), findsOneWidget);
+    expect(find.text('Main Hall · 12 Music Street'), findsOneWidget);
+    expect(find.text('View Responses (3)'), findsOneWidget);
+    expect(find.text('New Members'), findsOneWidget);
+
+    await tester.tap(card('complete'));
+    await settle(tester);
+    expect(find.text('Concert · Paid'), findsOneWidget);
+    expect(find.textContaining('18.30–21.15'), findsOneWidget);
+    expect(find.text('Location / Venue: Main Hall · 12 Music Street'), findsOneWidget);
+    expect(find.text('Description / Details'), findsOneWidget);
+    expect(find.text('Use the stage entrance after soundcheck.'), findsOneWidget);
+    expect(find.text('No responses received yet.'), findsOneWidget);
+    await unmount(tester);
+  });
+
+  testWidgets('Legacy requests display stored time and venue and omit absent fields', (tester) async {
+    final service = ManageService();
+    service.requests.add(SubRequest.fromJson({
+      'bandId': 'band', 'role': 'Substitute', 'status': 'published',
+      'endTime': '21:15', 'venueName': 'Main Hall', 'address': '7 Jazz Lane',
+    }, 'legacy'));
+    await mount(tester, service, openRealDetails: true);
+    expect(find.text('21.15'), findsOneWidget);
+    expect(find.text('Main Hall · 7 Jazz Lane'), findsOneWidget);
+    await tester.tap(card('legacy'));
+    await settle(tester);
+    expect(find.text('21.15'), findsOneWidget);
+    expect(find.text('Location / Venue: Main Hall · 7 Jazz Lane'), findsOneWidget);
+    expect(find.text('Description / Details'), findsNothing);
+    expect(find.textContaining('Paid'), findsNothing);
+    expect(find.text('No responses received yet.'), findsOneWidget);
+    await unmount(tester);
+  });
+
+  testWidgets('Legacy New Member EventType without Role belongs to New Members', (tester) async {
+    final service = ManageService();
+    service.requests.add(SubRequest.fromJson({
+      'BandId': 'band', 'EventType': 'new_member', 'Status': 'published',
+    }, 'legacy-member'));
+    await mount(tester, service, openRealDetails: true);
+    expect(card('legacy-member'), findsNothing);
+    await tester.tap(find.text('New Members'));
+    await settle(tester);
+    expect(card('legacy-member'), findsOneWidget);
+    await tester.tap(card('legacy-member'));
+    await settle(tester);
+    expect(find.textContaining('will not create a formal Agreement'), findsOneWidget);
+    await unmount(tester);
+  });
+
+  testWidgets('Long request details and responses are reachable on a narrow phone', (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(320, 568);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    final description = List.filled(35, 'Open the side door after soundcheck.').join(' ');
+    final service = ManageService();
+    service.requests.add(request(id: 'long-details').copyWith(description: description));
+    await mount(tester, service, openRealDetails: true);
+    await tester.tap(card('long-details'));
+    await settle(tester);
+    expect(tester.takeException(), isNull);
+    expect(find.text(description), findsOneWidget);
+    final emptyResponses = find.text('No responses received yet.');
+    await tester.scrollUntilVisible(
+      emptyResponses,
+      350,
+      scrollable: find.byType(Scrollable),
+      maxScrolls: 12,
+    );
+    await settle(tester);
+    expect(emptyResponses.hitTestable(), findsOneWidget);
+    await unmount(tester);
   });
   group('Central active management policy', () {
     test('01 Future published Substitute is visible', () {

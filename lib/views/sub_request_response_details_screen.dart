@@ -12,6 +12,7 @@ import '../widgets/gradient_scaffold.dart';
 import '../widgets/animated_tap_detector.dart';
 import 'chat_detail_screen.dart';
 import '../utils/sub_request_card_helper.dart';
+import '../utils/active_manage_requests.dart';
 import '../widgets/request_management_gate.dart';
 
 class SubRequestResponseDetailsScreen extends StatelessWidget {
@@ -180,8 +181,9 @@ class __AuthorizedSubRequestResponseDetailsScreenState
       return;
     }
 
+    final RequestManagementAccess access;
     try {
-      await appState.firebaseService.authorizeRequestManagement(
+      access = await appState.firebaseService.authorizeRequestManagement(
         requestId: reqId,
         bandId: widget.subRequest.bandId,
         expectedCreatorId: widget.subRequest.creatorUserId ?? widget.subRequest.userId,
@@ -197,11 +199,8 @@ class __AuthorizedSubRequestResponseDetailsScreenState
       return;
     }
     if (!mounted || !_current) return;
-    final bool isMemberRequest =
-        widget.subRequest.role == 'New Member' ||
-        widget.subRequest.role == 'Member';
 
-    if (isMemberRequest) {
+    if (isManageMemberRecruitment(access.request!)) {
       // For Member Recruitment: no formal agreement is created.
       try {
         final conversationId = await appState.firebaseService.getOrCreateDirectConversationAsync(
@@ -410,7 +409,10 @@ class __AuthorizedSubRequestResponseDetailsScreenState
   }
 
   Widget _buildRequestSummaryHeader() {
-    final presentation = SubRequestCardPresentation.fromSubRequest(widget.subRequest);
+    final presentation = SubRequestCardPresentation.fromSubRequest(
+      widget.subRequest,
+      forManagement: true,
+    );
 
     return Container(
       width: double.infinity,
@@ -562,68 +564,76 @@ class __AuthorizedSubRequestResponseDetailsScreenState
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Column(
             children: [
-              const SizedBox(height: 8),
-              _buildRequestSummaryHeader(),
-              const SizedBox(height: 16),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  'CANDIDATES & RESPONSES',
-                  style: GoogleFonts.outfit(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.primaryAccent,
-                    letterSpacing: 1.5,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
-              if (widget.subRequest.role == 'New Member' || widget.subRequest.role == 'Member')
-                Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: AppTheme.primaryAccent.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppTheme.primaryAccent.withValues(alpha: 0.3)),
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Icon(Icons.info_outline, color: AppTheme.primaryAccent, size: 18),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          'You may communicate with several prospective members, arrange a time for an audition, and ultimately make your selection through messaging. MUSICIANS will not create a formal Agreement.',
-                          style: GoogleFonts.inter(
-                            fontSize: 12,
-                            color: Colors.white.withValues(alpha: 0.9),
-                            height: 1.4,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
               Expanded(
-                child: _isLoading
-                    ? const Center(
-                        child: CircularProgressIndicator(
-                          color: AppTheme.primaryAccent,
-                        ),
-                      )
-                    : _responders.isEmpty
-                    ? Center(
-                        child: Text(
-                          'No responses received yet.',
-                          style: GoogleFonts.inter(
-                            color: AppTheme.textSecondary,
+                child: CustomScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  slivers: [
+                    SliverList.list(
+                      children: [
+                        const SizedBox(height: 8),
+                        _buildRequestSummaryHeader(),
+                        const SizedBox(height: 16),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            'CANDIDATES & RESPONSES',
+                            style: GoogleFonts.outfit(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: AppTheme.primaryAccent,
+                              letterSpacing: 1.5,
+                            ),
                           ),
                         ),
+                        const SizedBox(height: 8),
+                        if (isManageMemberRecruitment(widget.subRequest))
+                          Container(
+                            margin: const EdgeInsets.only(bottom: 12),
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: AppTheme.primaryAccent.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: AppTheme.primaryAccent.withValues(alpha: 0.3)),
+                            ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Icon(Icons.info_outline, color: AppTheme.primaryAccent, size: 18),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    'You may communicate with several prospective members, arrange a time for an audition, and ultimately make your selection through messaging. MUSICIANS will not create a formal Agreement.',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 12,
+                                      color: Colors.white.withValues(alpha: 0.9),
+                                      height: 1.4,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                      ],
+                    ),
+                    if (_isLoading || _responders.isEmpty)
+                      SliverFillRemaining(
+                        hasScrollBody: false,
+                        child: Center(
+                          child: _isLoading
+                              ? const CircularProgressIndicator(
+                                  color: AppTheme.primaryAccent,
+                                )
+                              : Text(
+                                  'No responses received yet.',
+                                  style: GoogleFonts.inter(
+                                    color: AppTheme.textSecondary,
+                                  ),
+                                ),
+                        ),
                       )
-                    : ListView.builder(
+                    else
+                      SliverList.builder(
                         itemCount: _responders.length,
-                        physics: const BouncingScrollPhysics(),
                         itemBuilder: (context, index) {
                           final item = _responders[index];
                           final isSelected = _selectedUserId == item.userId;
@@ -775,8 +785,10 @@ class __AuthorizedSubRequestResponseDetailsScreenState
                             ),
                           ),
                         );
-                      },
+                        },
                       ),
+                  ],
+                ),
               ),
               if (_responders.isNotEmpty) ...[
                 const SizedBox(height: 16),
@@ -809,7 +821,7 @@ class __AuthorizedSubRequestResponseDetailsScreenState
                     ),
                     child: Center(
                       child: Text(
-                        (widget.subRequest.role == 'New Member' || widget.subRequest.role == 'Member')
+                        isManageMemberRecruitment(widget.subRequest)
                             ? 'MESSAGE CANDIDATE'
                             : 'CONFIRM SELECTION',
                         style: GoogleFonts.inter(

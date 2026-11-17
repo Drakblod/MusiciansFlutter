@@ -1,5 +1,7 @@
 import '../widgets/request_management_gate.dart';
 import '../utils/catalogue_loading.dart';
+import '../utils/sub_request_card_helper.dart';
+import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -309,6 +311,33 @@ class _FindSubScreenState extends State<_FindSubForm> {
     super.dispose();
   }
 
+  Future<void> _refreshActiveBandRequestCount(AppState appState, String bandId) async {
+    final uid = appState.currentUserId;
+    final activeBandId = appState.activeBandId;
+    bool current() => mounted &&
+        uid == appState.currentUserId &&
+        activeBandId == appState.activeBandId;
+    if (uid == null) return;
+    try {
+      await appState.firebaseService.authorizeRequestManagement(
+        bandId: bandId,
+        isCurrent: current,
+      );
+      if (!current()) return;
+      final requests = await loadActiveManageRequests(
+        service: appState.firebaseService,
+        userId: uid,
+        bandId: bandId,
+        includeBandFeed: true,
+        now: DateTime.now,
+        isCurrent: current,
+      );
+      if (current()) setState(() => _activeBandSubCount = requests.length);
+    } catch (_) {
+      if (current()) setState(() => _activeBandSubCount = 0);
+    }
+  }
+
   Future<void> _loadDataAsync() async {
     setState(() => _isLoading = true);
     final appState = Provider.of<AppState>(context, listen: false);
@@ -329,20 +358,8 @@ class _FindSubScreenState extends State<_FindSubForm> {
           _bandName = band.name;
         }
 
-        final currentUserId = appState.currentUserId;
-        if (currentUserId != null) {
-          final userSubs = await appState.firebaseService.getUserSubRequestsAsync(currentUserId);
-          final activeSubs = userSubs.where((req) {
-            final matchesBand = (req.bandId != null && req.bandId == effectiveBandId) ||
-                (req.bandName != null &&
-                    (req.bandName == _bandName ||
-                        req.bandName == effectiveBandId ||
-                        req.bandName!.replaceAll(' ', '_') == effectiveBandId));
-            final isNotDeleted = req.status != 'deleted';
-            return matchesBand && isNotDeleted;
-          }).toList();
-          _activeBandSubCount = activeSubs.length;
-        }
+        if (!mounted) return;
+        unawaited(_refreshActiveBandRequestCount(appState, effectiveBandId));
       } catch (e) {
         debugPrint('Error loading band info: ' + e.toString());
       }
@@ -1227,80 +1244,84 @@ class _FindSubScreenState extends State<_FindSubForm> {
                     ],
 
                     if (_activeBandSubCount > 0) ...[
-                      Container(
-                        margin: const EdgeInsets.only(bottom: 16),
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF1B1638),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.4)),
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: AppTheme.primaryAccent.withOpacity(0.2),
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(
-                                Icons.people_outline_rounded,
-                                color: AppTheme.primaryAccent,
-                                size: 20,
-                              ),
+                      RequestManagementGate(
+                        hideWhenDenied: true,
+                        bandId: widget.bandId ?? appState.activeBandId,
+                        builder: (access) => Container(
+                            margin: const EdgeInsets.only(bottom: 16),
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF1B1638),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: AppTheme.primaryAccent.withOpacity(0.4)),
                             ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    '$_activeBandSubCount Active Request${_activeBandSubCount == 1 ? '' : 's'}',
-                                    style: GoogleFonts.outfit(
-                                      fontSize: 14,
+                            child: Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.primaryAccent.withOpacity(0.2),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.people_outline_rounded,
+                                    color: AppTheme.primaryAccent,
+                                    size: 20,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        '$_activeBandSubCount Active Request${_activeBandSubCount == 1 ? '' : 's'}',
+                                        style: GoogleFonts.outfit(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        'Review applicants or manage active postings',
+                                        style: GoogleFonts.inter(
+                                          fontSize: 11,
+                                          color: AppTheme.textSecondary,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                ElevatedButton(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: AppTheme.primaryAccent,
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                    elevation: 0,
+                                  ),
+                                  onPressed: () async {
+                                    await Navigator.pushNamed(
+                                      context,
+                                      '/sub-request-responses',
+                                      arguments: {'bandId': access.bandId},
+                                    );
+                                    if (mounted) {
+                                      await _refreshActiveBandRequestCount(appState, access.bandId);
+                                    }
+                                  },
+                                  child: Text(
+                                    'Manage',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 12,
                                       fontWeight: FontWeight.bold,
                                       color: Colors.white,
                                     ),
                                   ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    'Review applicants or manage active postings',
-                                    style: GoogleFonts.inter(
-                                      fontSize: 11,
-                                      color: AppTheme.textSecondary,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            RequestManagementGate(hideWhenDenied:true,bandId:widget.bandId ?? appState.activeBandId ?? 'freelance',builder:(_) => ElevatedButton(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppTheme.primaryAccent,
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                elevation: 0,
-                              ),
-                              onPressed: () {
-                                final effectiveBandId = widget.bandId ?? appState.activeBandId;
-                                if (effectiveBandId != null) {
-                                  Navigator.pushNamed(
-                                    context,
-                                    '/sub-request-responses',
-                                    arguments: {'bandId': effectiveBandId},
-                                  );
-                                }
-                              },
-                              child: Text(
-                                'Manage',
-                                style: GoogleFonts.inter(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
                                 ),
-                              ),
-                            )),
-                          ],
-                        ),
+                              ],
+                            ),
+                          ),
                       ),
                     ],
 

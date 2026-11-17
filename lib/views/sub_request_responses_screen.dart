@@ -10,6 +10,7 @@ import '../models/request_management_access.dart';
 import '../widgets/custom_top_bar.dart';
 import '../widgets/gradient_scaffold.dart';
 import '../utils/sub_request_card_helper.dart';
+import '../utils/active_manage_requests.dart';
 import '../widgets/request_management_gate.dart';
 
 class SubRequestResponsesScreen extends StatelessWidget {
@@ -197,73 +198,26 @@ class __AuthorizedSubRequestResponsesScreenState extends State<_AuthorizedSubReq
     try {
       if (userId == null) return;
 
-      // 1. Fetch user's sub requests
-      final list = List<SubRequest>.of(
-        await appState.firebaseService.getUserSubRequestsAsync(userId),
+      final isBandAdmin = widget.bandId.isNotEmpty && widget.bandId != 'all' &&
+          await appState.firebaseService.isBandLeaderOrAdminAsync(widget.bandId, userId);
+      if (!current()) return;
+      _isBandAdmin = isBandAdmin;
+      final requests = await loadActiveManageRequests(
+        service: appState.firebaseService,
+        userId: userId,
+        bandId: widget.bandId,
+        includeBandFeed: _isBandAdmin,
+        now: () => _now,
+        isCurrent: current,
+        onAuthorized: (access) {
+          _accessSubscriptions.add(appState.firebaseService.watchRequestManagementAccess(access).listen(
+            (allowed) { if (!allowed) _accessLost(generation); },
+            onError: (Object _) => _accessLost(generation),
+          ));
+        },
       );
       if (!current()) return;
-      final seenIds = list
-          .map((r) => r.subRequestId ?? r.id ?? '')
-          .where((id) => id.isNotEmpty)
-          .toSet();
-
-      // If a specific bandId is requested and the current user is an admin/leader of that band,
-      // also include open requests belonging to that band so band admins can manage requests created by co-leaders.
-      if (widget.bandId.isNotEmpty && widget.bandId != 'all') {
-        try {
-          final isBandAdmin = await appState.firebaseService
-              .isBandLeaderOrAdminAsync(widget.bandId, userId);
-          if (!current()) return;
-          _isBandAdmin = isBandAdmin;
-          if (isBandAdmin) {
-            final allRequests = await appState.firebaseService
-                .getAllSubRequestsAsync();
-            for (final req in allRequests) {
-              final reqId = req.subRequestId ?? req.id ?? '';
-              if (reqId.isEmpty || seenIds.contains(reqId)) continue;
-              final matchesBand = req.bandId == widget.bandId;
-              if (matchesBand) {
-                seenIds.add(reqId);
-                list.add(req);
-              }
-            }
-          }
-        } catch (_) { rethrow; }
-      }
-
-      // Exact canonical owning band only; band names and passed models are not authority.
-      final selectedRequests = list.where((req) => req.bandId == widget.bandId).toList();
-
-      if (!current()) return;
-      // Evaluate exact positions before response reads or tab classification.
-      final candidates = filterActiveManageRequests(
-        selectedRequests,
-        now: _now,
-      );
-
-      final bandRequests = <SubRequest>[];
-      for (final hint in candidates) {
-        if (!current()) return;
-        final id=hint.subRequestId ?? hint.id;
-        if (id == null) continue;
-        try {
-          final access=await appState.firebaseService.authorizeRequestManagement(
-            bandId:widget.bandId,requestId:id,expectedCreatorId:hint.creatorUserId ?? hint.userId,isCurrent:current);
-          if (!current()) return;
-          if (access.request != null && isActiveManageRequest(access.request!, now: _now)) {
-            _accessSubscriptions.add(appState.firebaseService.watchRequestManagementAccess(access).listen(
-              (allowed) { if (!allowed) _accessLost(generation); },
-              onError: (Object _) => _accessLost(generation),
-            ));
-            bandRequests.add(access.request!);
-          }
-        } catch (_) {
-          // A stale creator feed is not permission to enumerate this request.
-          if (!current()) return;
-        }
-      }
-
-      if (!current()) return;
+      final bandRequests = [for (final access in requests) access.request!];
       // 3. Concurrently fetch responses count for each active request
       final Map<String, int> counts = {};
       await Future.wait(
@@ -281,14 +235,7 @@ class __AuthorizedSubRequestResponsesScreenState extends State<_AuthorizedSubReq
       final List<SubRequest> subs = [];
       final List<SubRequest> members = [];
       for (final req in filterActiveManageRequests(bandRequests, now: _now)) {
-        if (req.role == 'Substitute') {
-          subs.add(req);
-        } else if (req.role == 'Member' || req.role == 'New Member') {
-          members.add(req);
-        } else {
-          // Default fallback
-          subs.add(req);
-        }
+        (isManageMemberRecruitment(req) ? members : subs).add(req);
       }
 
       final prefs = await SharedPreferences.getInstance();
@@ -628,6 +575,7 @@ class __AuthorizedSubRequestResponsesScreenState extends State<_AuthorizedSubReq
             req,
             currentUserId: currentUserId,
             isBandAdmin: _isBandAdmin,
+            forManagement: true,
           );
 
           return Container(

@@ -1,6 +1,9 @@
 import 'package:intl/intl.dart';
 import '../models/sub_request.dart';
 import '../models/agreement.dart';
+import '../models/request_management_access.dart';
+import '../services/firebase_service.dart';
+import 'active_manage_requests.dart';
 
 /// Formats agreement payment if present and positive (> 0).
 /// E.g. "Paid · 1,500 SEK" or "Paid · 1,500" if currency is absent or malformed.
@@ -38,24 +41,21 @@ String formatSubRequestTime(String time) {
 /// Formats the date and time line according to the standard:
 /// `Fri, Oct 30 · 18.00–21.30`
 ///
-/// Returns null if date is missing or empty.
+/// Returns null if date is missing or empty unless [allowTimeWithoutDate]
+/// is enabled for a view that can display separately stored times.
 /// Does not invent event duration or fallback times.
 String? formatSubRequestDateTime({
   String? date,
   String? startTime,
   String? endTime,
+  bool allowTimeWithoutDate = false,
 }) {
-  if (date == null || date.trim().isEmpty) {
-    return null;
-  }
-
-  String datePart;
-  final parsed = DateTime.tryParse(date.trim());
-  if (parsed != null) {
-    datePart = DateFormat('EEE, MMM d').format(parsed.toLocal());
-  } else {
-    datePart = date.trim();
-  }
+  final storedDate = date?.trim() ?? '';
+  if (storedDate.isEmpty && !allowTimeWithoutDate) return null;
+  final parsed = DateTime.tryParse(storedDate);
+  final datePart = parsed == null
+      ? storedDate
+      : DateFormat('EEE, MMM d').format(parsed.toLocal());
 
   final hasStart = startTime != null && startTime.trim().isNotEmpty;
   final hasEnd = endTime != null && endTime.trim().isNotEmpty;
@@ -69,12 +69,8 @@ String? formatSubRequestDateTime({
     timePart = formatSubRequestTime(endTime);
   }
 
-  if (datePart.isNotEmpty && timePart.isNotEmpty) {
-    return '$datePart · $timePart';
-  } else if (datePart.isNotEmpty) {
-    return datePart;
-  }
-  return null;
+  final parts = [if (datePart.isNotEmpty) datePart, if (timePart.isNotEmpty) timePart];
+  return parts.isEmpty ? null : parts.join(' · ');
 }
 
 /// Resolves user-facing request type label.
@@ -235,6 +231,7 @@ class SubRequestCardPresentation {
     bool isBandAdminPending = false,
     bool isBandAdminFailed = false,
     Set<String>? appliedIds,
+    bool forManagement = false,
   }) {
     final typeLabel = resolveRequestTypeLabel(req);
     final isNewMember = typeLabel == 'New Band Member';
@@ -272,6 +269,7 @@ class SubRequestCardPresentation {
             date: req.date,
             startTime: req.startTime,
             endTime: req.endTime,
+            allowTimeWithoutDate: forManagement,
           );
 
     // Line 5: Location / Venue
@@ -280,6 +278,14 @@ class SubRequestCardPresentation {
         : (req.city != null && req.city!.trim().isNotEmpty)
             ? req.city!.trim()
             : null;
+    final storedLocationParts = <String>{
+      if (forManagement) ...[
+        if (req.venue case final String venue) venue.trim(),
+        if (req.location case final String location) location.trim(),
+        if ((req.extraFields['Address'] ?? req.extraFields['address'])
+            case final String address) address.trim(),
+      ],
+    }..remove('');
 
     final creator = isCreatorOfSubRequest(req, currentUserId);
     final applied = hasAppliedToSubRequest(req, currentUserId, appliedIds: appliedIds);
@@ -303,7 +309,7 @@ class SubRequestCardPresentation {
       formattedPayment: paymentStr,
       eventTypeAndPaymentLine: line3,
       formattedDateTime: dateTimeLine,
-      locationVenue: loc,
+      locationVenue: storedLocationParts.isEmpty ? loc : storedLocationParts.join(' · '),
       description: desc,
       payDetails: details,
       isCreator: creator,
@@ -722,4 +728,54 @@ List<SubRequest> filterActiveManageRequests(
     if (id.isEmpty || !seen.add(id)) return false;
     return isActiveManageRequest(request, now: clock);
   }).toList();
+}
+
+/// Discover through the existing feeds, then authorize each exact request.
+Future<List<RequestManagementAccess>> loadActiveManageRequests({
+  required FirebaseService service,
+  required String userId,
+  required String bandId,
+  required bool includeBandFeed,
+  required DateTime Function() now,
+  required bool Function() isCurrent,
+  void Function(RequestManagementAccess)? onAuthorized,
+}) async {
+  if (!isCurrent()) return [];
+  final ownRequests = await service.getUserSubRequestsAsync(userId);
+  if (!isCurrent()) return [];
+  final visibleRequests = includeBandFeed
+      ? await service.getAllSubRequestsAsync()
+      : const <SubRequest>[];
+  if (!isCurrent()) return [];
+
+  final candidates = filterActiveManageRequests(
+    manageRequestCandidates(
+      ownRequests: ownRequests,
+      visibleRequests: visibleRequests,
+      bandId: bandId,
+    ),
+    now: now(),
+  );
+  final authorized = <RequestManagementAccess>[];
+  for (final hint in candidates) {
+    if (!isCurrent()) return [];
+    try {
+      final access = await service.authorizeRequestManagement(
+        bandId: bandId,
+        requestId: hint.subRequestId ?? hint.id,
+        expectedCreatorId: hint.creatorUserId ?? hint.userId,
+        isCurrent: isCurrent,
+      );
+      if (!isCurrent()) return [];
+      final request = access.request;
+      if (request != null && isActiveManageRequest(request, now: now())) {
+        onAuthorized?.call(access);
+        authorized.add(access);
+      }
+    } catch (_) {
+      // A stale or inaccessible feed item contributes no request or count.
+      if (!isCurrent()) return [];
+    }
+  }
+  return authorized;
 }

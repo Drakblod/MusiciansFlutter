@@ -20,10 +20,16 @@ class MockRoutingFirebaseService extends Fake implements FirebaseService {
   @override
   Future<RequestManagementAccess> authorizeRequestManagement({String? bandId,String? requestId,String? expectedCreatorId,bool Function()? isCurrent}) async {
     if(bandId!='band_1' || (isCurrent!=null && !isCurrent())) throw const PrivateDataAccessException();
-    return RequestManagementAccess(userId:currentUserId!,bandId:bandId!);
+    final request = requestId == null ? null : [...subRequests, ...bandRequests]
+        .firstWhere((request) => request.id == requestId);
+    return RequestManagementAccess(userId:currentUserId!,bandId:bandId!,request:request);
   }
 
   final List<SubRequest> subRequests = [];
+  final List<SubRequest> bandRequests = [];
+
+  @override
+  Future<List<SubRequest>> getAllSubRequestsAsync() async => bandRequests;
   final Map<String, String> userBands = {'band_1': 'Rock Band'};
 
   @override
@@ -124,9 +130,10 @@ void main() {
       bandId: 'band_1',
       bandName: 'Rock Band',
       role: 'Guitar',
-      status: 'pending',
+      status: 'published',
       userId: 'user_1',
     ));
+    mockService.subRequests.add(mockService.subRequests.single);
 
     final appState = MockAppStateForRoutingTest(mockService);
 
@@ -149,6 +156,30 @@ void main() {
     // Check that active requests banner is present
     expect(find.text('1 Active Request'), findsOneWidget);
     expect(find.text('Manage'), findsOneWidget);
+  });
+
+  testWidgets('Banner counts co-manager positions and excludes stale or other-band rows', (tester) async {
+    final service = MockRoutingFirebaseService();
+    service.subRequests.addAll([
+      SubRequest(id: 'closed', bandId: 'band_1', status: 'closed'),
+      SubRequest(id: 'pending', bandId: 'band_1', status: 'pending'),
+      SubRequest(id: 'expired', bandId: 'band_1', status: 'published', date: '2000-01-01'),
+      SubRequest(id: 'assigned', bandId: 'band_1', status: 'published', assignedUserId: 'other'),
+      SubRequest(id: 'other-band', bandId: 'band_2', bandName: 'Rock Band', status: 'published'),
+      SubRequest(id: 'no-band', bandName: 'Rock Band', status: 'published'),
+    ]);
+    service.bandRequests.add(SubRequest(id: 'co-manager', bandId: 'band_1',
+        status: 'published', creatorUserId: 'co-manager'));
+    await tester.pumpWidget(ChangeNotifierProvider<AppState>.value(
+      value: MockAppStateForRoutingTest(service),
+      child: const MaterialApp(home: FindSubScreen(bandId: 'band_1')),
+    ));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text('1 Active Request'), findsOneWidget);
+    expect(find.textContaining(RegExp(r'[2-9] Active Requests')), findsNothing);
   });
 
   testWidgets('FindSubScreen does not display top banner when no active sub-requests exist', (WidgetTester tester) async {
