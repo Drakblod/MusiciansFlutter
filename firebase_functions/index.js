@@ -156,6 +156,8 @@ exports.cleanupCityVerificationState = onSchedule({schedule:'every 30 minutes',
 exports.mutateBandMembership = onCall({
   region: 'europe-west1',
   serviceAccount: '674065132924-compute@developer.gserviceaccount.com',
+  ingressSettings: 'ALLOW_ALL',
+  timeoutSeconds: 60,
 }, request => {
   if (!['create','add','role','musicalRole','status','remove','leave','transfer','metadata'].includes(request.data?.action)) {
     throw new HttpsError('invalid-argument','Unsupported membership action.');
