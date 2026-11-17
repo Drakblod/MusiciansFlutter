@@ -4,6 +4,7 @@ import '../utils/private_file_download.dart';
 import '../utils/membership_mutation_feedback.dart';
 import '../utils/band_membership_policy.dart';
 import '../utils/band_member_role_label.dart';
+import '../widgets/band_musical_role_picker.dart';
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -296,18 +297,10 @@ class _BandRoomChatScreenState extends State<_BandRoomContent>
 
   String _getMemberInstrument(String? userId) {
     if (userId == null) return '';
-    final profile = _memberProfiles[userId];
-    if (profile == null) return '';
-    if (profile.primarySkill.isNotEmpty) {
-      return profile.primarySkill;
-    }
-    if (profile.mainInstrument != null && profile.mainInstrument!.isNotEmpty) {
-      return profile.mainInstrument!.split(',').first.trim();
-    }
-    if (profile.instruments.isNotEmpty) {
-      return profile.instruments.first;
-    }
-    return '';
+    return BandMusicalRolePicker.memberLabel(
+      _members.where((member) => member.userId == userId).firstOrNull,
+      _memberProfiles[userId],
+    );
   }
 
   List<String> _getMemberSecondarySkills(String? userId) {
@@ -2094,7 +2087,9 @@ class _BandRoomChatScreenState extends State<_BandRoomContent>
                                 builder: (context) {
                                   final instrument = _getMemberInstrument(member.userId);
                                   final secondary = _getMemberSecondarySkills(member.userId);
-                                  if (instrument.isEmpty && secondary.isEmpty) return const SizedBox.shrink();
+                                  final canEdit = bandId != null && isLeaderOrAdmin &&
+                                      BandMusicalRolePicker.canEdit(currentMember, member);
+                                  if (instrument.isEmpty && secondary.isEmpty && !canEdit) return const SizedBox.shrink();
                                   return Padding(
                                     padding: const EdgeInsets.only(top: 3),
                                     child: Wrap(
@@ -2115,6 +2110,15 @@ class _BandRoomChatScreenState extends State<_BandRoomContent>
                                           SecondarySkillsBadge(
                                             memberName: _getMemberName(member),
                                             secondarySkills: secondary,
+                                          ),
+                                        if (canEdit)
+                                          TextButton(
+                                            onPressed: () async {
+                                              if (await BandMusicalRolePicker.edit(context, bandId, member, _getMemberName(member)) && mounted) {
+                                                await _initBand(bandId);
+                                              }
+                                            },
+                                            child: const Text('Edit musical role'),
                                           ),
                                       ],
                                     ),
@@ -3009,6 +3013,7 @@ class _BandRoomChatScreenState extends State<_BandRoomContent>
               userId: _members[idx].userId,
               nickname: _members[idx].nickname,
               role: _members[idx].role,
+              musicalRole: _members[idx].musicalRole,
               status: newStatus,
             );
           }
@@ -4039,6 +4044,8 @@ class AddMemberDialogContentState extends State<AddMemberDialogContent> {
 
     final appState = Provider.of<AppState>(context, listen: false);
     final name = user.displayName ?? user.nickname ?? 'Unknown';
+    final uid = appState.currentUserId;
+    if (uid == null || appState.activeBandId != widget.bandId) return;
 
     setState(() {
       _isAdding = true;
@@ -4046,17 +4053,23 @@ class AddMemberDialogContentState extends State<AddMemberDialogContent> {
     });
 
     try {
+      final musicalRole = await BandMusicalRolePicker.show(context, name);
+      if (!mounted || musicalRole == null ||
+          uid != appState.currentUserId || appState.activeBandId != widget.bandId) {
+        return;
+      }
       if (!await MembershipMutationFeedback.run(context, widget.bandId, () async { await appState.firebaseService.addBandMemberAsync(
         widget.bandId,
         userId,
         'Member',
         user.nickname ?? name,
+        musicalRole: musicalRole,
       ); })) { return; }
       widget.onMemberAdded();
-      if (context.mounted) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text("$name added to the band!"),
+            content: Text("$name added to the band as ${BandMusicalRolePicker.label(musicalRole)}."),
             backgroundColor: AppTheme.success,
           ),
         );
@@ -4064,7 +4077,7 @@ class AddMemberDialogContentState extends State<AddMemberDialogContent> {
       }
     } catch (e) {
       debugPrint("Error adding band member: $e");
-      if (context.mounted) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text("Failed to add $name: $e"),

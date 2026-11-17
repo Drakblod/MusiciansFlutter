@@ -16,6 +16,7 @@ import '../widgets/searchable_category_multi_select_sheet.dart';
 import '../widgets/what_is_map_view_dialog.dart';
 import '../data/genres_taxonomy.dart';
 import '../utils/band_member_role_label.dart';
+import '../widgets/band_musical_role_picker.dart';
 
 class CreateBandScreen extends StatefulWidget {
   const CreateBandScreen({super.key});
@@ -34,6 +35,7 @@ class _CreateBandScreenState extends State<CreateBandScreen> {
 
   final List<UserProfile> _selectedMembers = [];
   final Map<String, String> _memberRoles = {};
+  final Map<String, String> _memberMusicalRoles = {};
 
   String _level = 'C = INTERMEDIATE';
   String _rehearsalDay = 'Monday';
@@ -168,6 +170,7 @@ class _CreateBandScreenState extends State<CreateBandScreen> {
             if (member.userId != null && member.userId != userId)
               member.userId!: BandMember(
                 role: _memberRoles[member.userId] ?? 'Member',
+                musicalRole: _memberMusicalRoles[member.userId],
                 nickname: member.nickname ?? member.displayName,
               ),
         },
@@ -253,10 +256,18 @@ class _CreateBandScreenState extends State<CreateBandScreen> {
             child: _SelectBandMemberDialog(
               allUsers: allUsers,
               existingUserIds: existingUserIds,
-              onUserSelected: (user) {
+              onUserSelected: (pickerContext, user) async {
+                final name = user.displayName ?? user.nickname ?? 'Member';
+                final role = await BandMusicalRolePicker.show(pickerContext, name);
+                if (!mounted || !pickerContext.mounted || role == null ||
+                    currentUserId != appState.currentUserId) {
+                  return false;
+                }
                 setState(() {
                   _selectedMembers.add(user);
+                  _memberMusicalRoles[user.userId!] = role;
                 });
+                return true;
               },
             ),
           ),
@@ -400,7 +411,10 @@ class _CreateBandScreenState extends State<CreateBandScreen> {
         if (_selectedMembers.isNotEmpty)
           ..._selectedMembers.map((member) {
             final name = member.displayName ?? member.nickname ?? 'Unknown';
-            final instrumentsStr = member.instruments.isNotEmpty
+            final musicalRole = _memberMusicalRoles[member.userId];
+            final instrumentsStr = musicalRole != null
+                ? BandMusicalRolePicker.label(musicalRole)
+                : member.instruments.isNotEmpty
                 ? member.instruments.join(', ')
                 : (member.mainInstrument ?? 'Member');
             final role = _memberRoles[member.userId] ?? 'Member';
@@ -548,6 +562,7 @@ class _CreateBandScreenState extends State<CreateBandScreen> {
                       setState(() {
                         _selectedMembers.removeWhere((m) => m.userId == member.userId);
                         _memberRoles.remove(member.userId);
+                        _memberMusicalRoles.remove(member.userId);
                       });
                     },
                     padding: EdgeInsets.zero,
@@ -1089,7 +1104,7 @@ class _CreateBandScreenState extends State<CreateBandScreen> {
 class _SelectBandMemberDialog extends StatefulWidget {
   final List<UserProfile> allUsers;
   final Set<String> existingUserIds;
-  final Function(UserProfile) onUserSelected;
+  final Future<bool> Function(BuildContext, UserProfile) onUserSelected;
 
   const _SelectBandMemberDialog({
     required this.allUsers,
@@ -1105,6 +1120,19 @@ class _SelectBandMemberDialogState extends State<_SelectBandMemberDialog> {
   final _searchController = TextEditingController();
   String _searchQuery = '';
   late final Set<String> _addedIds;
+  bool _choosingRole = false;
+
+  Future<void> _chooseMember(UserProfile user) async {
+    if (_choosingRole || _addedIds.contains(user.userId)) return;
+    setState(() => _choosingRole = true);
+    try {
+      if (await widget.onUserSelected(context, user) && mounted) {
+        setState(() => _addedIds.add(user.userId!));
+      }
+    } finally {
+      if (mounted) setState(() => _choosingRole = false);
+    }
+  }
 
   @override
   void initState() {
@@ -1242,12 +1270,7 @@ class _SelectBandMemberDialogState extends State<_SelectBandMemberDialog> {
                             else
                               IconButton(
                                 icon: const Icon(Icons.add_circle, color: AppTheme.primaryAccent, size: 24),
-                                onPressed: () {
-                                  setState(() {
-                                    _addedIds.add(user.userId!);
-                                  });
-                                  widget.onUserSelected(user);
-                                },
+                                onPressed: _choosingRole ? null : () => _chooseMember(user),
                                 padding: EdgeInsets.zero,
                                 constraints: const BoxConstraints(),
                               ),

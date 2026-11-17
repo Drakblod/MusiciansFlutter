@@ -18,6 +18,7 @@ import '../widgets/animated_tap_detector.dart';
 import '../widgets/searchable_category_multi_select_sheet.dart';
 import '../data/genres_taxonomy.dart';
 import '../utils/band_member_role_label.dart';
+import '../widgets/band_musical_role_picker.dart';
 import '../widgets/secondary_skills_badge.dart';
 import '../utils/band_section_utils.dart';
 import '../widgets/create_band_section_sheet.dart';
@@ -368,22 +369,6 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
       return member.nickname!;
     }
     return member.userId ?? 'Member';
-  }
-
-  String _getMemberInstrument(String? userId) {
-    if (userId == null) return '';
-    final profile = _memberProfiles[userId];
-    if (profile == null) return '';
-    if (profile.primarySkill.isNotEmpty) {
-      return profile.primarySkill;
-    }
-    if (profile.mainInstrument != null && profile.mainInstrument!.isNotEmpty) {
-      return profile.mainInstrument!.split(',').first.trim();
-    }
-    if (profile.instruments.isNotEmpty) {
-      return profile.instruments.first;
-    }
-    return '';
   }
 
   List<String> _getMemberSecondarySkills(String? userId) {
@@ -742,6 +727,7 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
               userId: _members[idx].userId,
               nickname: _members[idx].nickname,
               role: _members[idx].role,
+              musicalRole: _members[idx].musicalRole,
               status: newStatus,
             );
           }
@@ -967,9 +953,11 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
                               ),
                               Builder(
                                 builder: (context) {
-                                  final instrument = _getMemberInstrument(member.userId);
+                                  final instrument = BandMusicalRolePicker.memberLabel(member, _memberProfiles[member.userId]);
                                   final secondary = _getMemberSecondarySkills(member.userId);
-                                  if (instrument.isEmpty && secondary.isEmpty) return const SizedBox.shrink();
+                                  final canEdit = bandId != null && isLeaderOrAdmin &&
+                                      BandMusicalRolePicker.canEdit(currentMember, member);
+                                  if (instrument.isEmpty && secondary.isEmpty && !canEdit) return const SizedBox.shrink();
                                   return Padding(
                                     padding: const EdgeInsets.only(top: 3),
                                     child: Wrap(
@@ -990,6 +978,15 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
                                           SecondarySkillsBadge(
                                             memberName: _getMemberName(member),
                                             secondarySkills: secondary,
+                                          ),
+                                        if (canEdit)
+                                          TextButton(
+                                            onPressed: () async {
+                                              if (await BandMusicalRolePicker.edit(context, bandId, member, _getMemberName(member)) && mounted) {
+                                                await _loadMembers();
+                                              }
+                                            },
+                                            child: const Text('Edit musical role'),
                                           ),
                                       ],
                                     ),

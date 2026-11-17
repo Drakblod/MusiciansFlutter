@@ -634,6 +634,7 @@ class FirebaseService {
               'userId': e.key,
               'role': e.value.role ?? 'Member',
               'nickname': e.value.nickname ?? 'Member',
+              if (e.value.musicalRole != null) 'musicalRole': e.value.musicalRole,
             },
           )
           .toList(),
@@ -2971,13 +2972,27 @@ class FirebaseService {
     String bandId,
     String userId,
     String role,
-    String nickname,
-  ) => _submitMembershipMutation({
+    String nickname, {
+    String? musicalRole,
+  }) => _submitMembershipMutation({
     'action': 'add',
     'bandId': bandId,
     'userId': userId,
     'role': role,
     'nickname': nickname,
+    if (musicalRole != null) 'musicalRole': musicalRole,
+    'operationId': _membershipOperationId(),
+  });
+
+  Future<void> updateBandMemberMusicalRoleAsync(
+    String bandId,
+    String userId,
+    String musicalRole,
+  ) => _submitMembershipMutation({
+    'action': 'musicalRole',
+    'bandId': bandId,
+    'userId': userId,
+    'musicalRole': musicalRole,
     'operationId': _membershipOperationId(),
   });
 

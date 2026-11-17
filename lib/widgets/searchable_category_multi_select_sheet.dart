@@ -12,6 +12,7 @@ enum CategoryPickerPresentation {
 
 class SearchableCategoryMultiSelectSheet extends StatefulWidget {
   final String title;
+  final String? prompt;
   final Map<String, List<String>> categoryMap;
   final List<String> initialSelected;
   final bool isSingleSelect;
@@ -21,6 +22,7 @@ class SearchableCategoryMultiSelectSheet extends StatefulWidget {
   const SearchableCategoryMultiSelectSheet({
     super.key,
     required this.title,
+    this.prompt,
     required this.categoryMap,
     required this.initialSelected,
     this.isSingleSelect = false,
@@ -31,6 +33,7 @@ class SearchableCategoryMultiSelectSheet extends StatefulWidget {
   static Future<List<String>?> show({
     required BuildContext context,
     required String title,
+    String? prompt,
     required Map<String, List<String>> categoryMap,
     required List<String> initialSelected,
     bool isSingleSelect = false,
@@ -44,6 +47,7 @@ class SearchableCategoryMultiSelectSheet extends StatefulWidget {
       backgroundColor: Colors.transparent,
       builder: (context) => SearchableCategoryMultiSelectSheet(
         title: title,
+        prompt: prompt,
         categoryMap: categoryMap,
         initialSelected: initialSelected,
         isSingleSelect: isSingleSelect,
@@ -383,6 +387,12 @@ class _SearchableCategoryMultiSelectSheetState
               ],
             ),
           ),
+
+          if (widget.prompt case final String prompt)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+              child: Text(prompt, style: GoogleFonts.inter(color: Colors.white)),
+            ),
 
           // Search Bar
           Padding(

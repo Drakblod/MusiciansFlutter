@@ -154,12 +154,14 @@ class BandMember {
   final String? userId;
   final String? nickname;
   final String? role;
+  final String? musicalRole;
   final String? status;
 
   BandMember({
     this.userId,
     this.nickname,
     this.role,
+    this.musicalRole,
     this.status = 'active',
   });
 
@@ -177,6 +179,7 @@ class BandMember {
       userId: userId,
       nickname: json['Nickname']?.toString() ?? json['nickname']?.toString(),
       role: conflicts('Role','role') ? null : json['Role']?.toString() ?? json['role']?.toString(),
+      musicalRole: json['MusicalRole'] is String ? json['MusicalRole'] as String : null,
       status: conflicts('Status','status') ? 'unknown' : json['Status']?.toString() ?? json['status']?.toString() ?? 'active',
     );
   }
@@ -185,6 +188,7 @@ class BandMember {
     return {
       'Nickname': nickname,
       'Role': role,
+      if (musicalRole != null) 'MusicalRole': musicalRole,
       'Status': status ?? 'active',
     };
   }

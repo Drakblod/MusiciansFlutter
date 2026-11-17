@@ -84,6 +84,96 @@ for (const ruleFile of ['database.rules.json','database.transitional.rules.json'
         .map(root => [root + '/' + id, null]))));
   });
 
+  it('creates mixed legacy and musical members atomically without changing authority', async () => {
+    const created = 'created_' + band;
+    const args = {
+      bandId: created, operationId: 'create_musical', metadata: {Name:'Musical band'},
+      initialMembers: [
+        {userId: uid.member, role:'Member', musicalRole:'BANDLEADER'},
+        {userId: uid.target, role:'Member'},
+      ],
+    };
+    await mutation('leader', 'create', args);
+    await mutation('leader', 'create', args);
+    const roster = (await db.ref(`Bands/${created}/Members_band`).get()).val();
+    assert.strictEqual(roster[uid.leader].Role, 'Leader');
+    assert.strictEqual(roster[uid.member].Role, 'Member');
+    assert.strictEqual(roster[uid.member].MusicalRole, 'BANDLEADER');
+    assert(!Object.hasOwn(roster[uid.target], 'MusicalRole'));
+    assert.strictEqual(leaderCount(roster), 1);
+    assert(!manager(roster[uid.member]));
+    assert.strictEqual((await db.ref(`userBandMembershipIndex/${uid.member}/${created}`).get()).val(), true);
+    await assert.rejects(
+      mutation('leader', 'create', {...args,
+        initialMembers: [{...args.initialMembers[0], musicalRole:'Trumpet'}]}),
+      {code:'functions/invalid-argument'},
+    );
+  });
+
+  it('validates the closed allowlist before create, add or edit writes', async () => {
+    const created = 'created_' + band;
+    for (const musicalRole of [false, null, '', 'Trumpet '.repeat(15), 'Trumpet\n', 'Trumpet\u200b', 'Custom instrument', 'Leader', 'Admin', 'MOD']) {
+      await assert.rejects(mutation('admin','add',{userId:uid.target,musicalRole}), {code:'functions/invalid-argument'});
+      await assert.rejects(mutation('leader','musicalRole',{userId:uid.member,musicalRole}), {code:'functions/invalid-argument'});
+      await assert.rejects(mutation('leader','create',{
+        bandId:created, metadata:{Name:'Rejected'}, initialMembers:[{userId:uid.target,musicalRole}],
+      }), {code:'functions/invalid-argument'});
+    }
+    await assert.rejects(mutation('leader','musicalRole',{userId:uid.member}), {code:'functions/invalid-argument'});
+    assert(!(await db.ref(`Bands/${created}`).get()).exists());
+    assert(!(await members())[uid.target]);
+    assert(!Object.hasOwn((await members())[uid.member], 'MusicalRole'));
+  });
+
+  it('edits only MusicalRole as a permitted manager and makes retries safe', async () => {
+    await mutation('admin','add',{userId:uid.target,role:'Member'});
+    assert(!Object.hasOwn((await members())[uid.target], 'MusicalRole'));
+    const args = {userId:uid.target,role:'Member',musicalRole:'Trumpet',operationId:'musical_add'};
+    await mutation('admin','add',args);
+    await mutation('admin','add',args);
+    await mutation('admin','add',{userId:uid.target,role:'Member'});
+    assert.strictEqual((await members())[uid.target].MusicalRole, 'Trumpet');
+    const before = (await members())[uid.target];
+    const path = `Bands/${band}/Members_band/${uid.target}/MusicalRole`;
+    for (const actor of ['member','other','target']) {
+      await assert.rejects(mutation(actor,'musicalRole',{userId:uid.target,musicalRole:'Vocalist'}),
+        {code:'functions/permission-denied'});
+    }
+    for (const actor of ['leader','admin','target','other']) {
+      await assertFails(env.authenticatedContext(uid[actor]).database().ref(path).set('Vocalist'));
+    }
+    for (const protectedRole of ['leader','other']) {
+      if (protectedRole === 'other') await db.ref(`Bands/${band}/Members_band/${uid.other}`).set({Role:'Admin',Status:'active'});
+      await assert.rejects(mutation('admin','musicalRole',{userId:uid[protectedRole],musicalRole:'Vocalist'}),
+        {code:'functions/permission-denied'});
+    }
+    const edit = {userId:uid.target,role:'Leader',musicalRole:'BANDLEADER',operationId:'musical_edit'};
+    await mutation('admin','musicalRole',edit);
+    assert.deepStrictEqual((await members())[uid.target], {...before,MusicalRole:'BANDLEADER'});
+    await assert.rejects(mutation('target','musicalRole',{userId:uid.member,musicalRole:'Trumpet'}),
+      {code:'functions/permission-denied'});
+    await mutation('leader','musicalRole',{userId:uid.target,musicalRole:'Vocalist'});
+    await mutation('admin','musicalRole',edit);
+    assert.deepStrictEqual((await members())[uid.target], {...before,MusicalRole:'Vocalist'});
+    assert.strictEqual(leaderCount(await members()), 1);
+  });
+
+  it('does not grant Event manager access or expose musical roles in the public band projection', async () => {
+    await mutation('leader','musicalRole',{userId:uid.member,musicalRole:'BANDLEADER'});
+    const memberDb = env.authenticatedContext(uid.member).database();
+    const leaderDb = env.authenticatedContext(uid.leader).database();
+    await assertSucceeds(memberDb.ref(`Bands/${band}/Members_band/${uid.member}/MusicalRole`).get());
+    await db.ref(`bandManagerEvents/${band}/event`).set({eventId:'event'});
+    await assertFails(memberDb.ref(`bandManagerEvents/${band}/event`).get());
+    await assertSucceeds(leaderDb.ref(`bandManagerEvents/${band}/event`).get());
+    const {bandProfile} = require('../catalogue_projections');
+    const bandData = (await db.ref(`Bands/${band}`).get()).val();
+    assert.deepStrictEqual(bandProfile(band, bandData), bandProfile(band, {
+      ...bandData,
+      Members_band: {...bandData.Members_band, [uid.member]:{Role:'Member',Status:'active'}},
+    }));
+  });
+
   for (const [name,value] of [['fabricated Leader',{Role:'Leader',Status:'active'}],['fabricated Admin',{Role:'Admin'}]]) {
     it(`denies ${name} in an existing band`,async()=>assertFails(env.authenticatedContext(uid.other).database().ref(`Bands/${band}/Members_band/${uid.other}`).set(value)));
   }

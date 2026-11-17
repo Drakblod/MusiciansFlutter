@@ -5,6 +5,7 @@ import 'package:musicians_flutter/models/city_location.dart';
 import 'international_city_picker_01_test.dart' as picker;
 import 'international_city_forms_01_test.dart' show chooseBerlin;
 import 'support/bounded_ui_pump.dart';
+import 'band_musical_role_test.dart' show chooseMusicalRole;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:firebase_core/firebase_core.dart' hide FirebaseService;
@@ -24,6 +25,10 @@ class MockBandFirebaseService extends FirebaseService {
   List<BandMember> members = [];
   Band? createdBand;
   Band? updatedBand;
+  List<UserProfile> availableMembers = [];
+
+  @override
+  Future<List<UserProfile>> getAllUsersAsync() async => availableMembers;
 
   @override
   Future<void> createBandAsync(String userId, Band band) async {
@@ -87,6 +92,49 @@ void main() {
   });
 
   group('Create and Edit Band Focused Owner-Feedback Tests', () {
+    testWidgets('Create Band prompts separately and saves both selected musical roles', (tester) async {
+      tester.view.physicalSize = const Size(800, 2000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+      final service = MockBandFirebaseService()..availableMembers = [
+        UserProfile(userId:'one', displayName:'Alex Trumpet'),
+        UserProfile(userId:'two', displayName:'Kim Vocalist'),
+      ];
+      await tester.pumpWidget(createTestWidget(const CreateBandScreen(), MockBandAppState(service)));
+      await pumpUiTransitions(tester);
+      await tester.enterText(find.widgetWithText(TextFormField, 'Enter band name'), 'Two Parts');
+      await chooseBerlin(tester);
+      await tester.tap(find.text('Add Member'));
+      await pumpUiTransitions(tester);
+
+      await tester.tap(find.byIcon(Icons.add_circle).first);
+      await pumpUiTransitions(tester);
+      expect(find.text('Which instrument or role would you like Alex Trumpet to take on in this particular band?'), findsOneWidget);
+      await chooseMusicalRole(tester, 'Trumpet');
+      await pumpUiTransitions(tester);
+      expect(find.text('Added'), findsOneWidget);
+
+      expect(find.byIcon(Icons.add_circle), findsOneWidget);
+      await tester.tap(find.byIcon(Icons.add_circle));
+      await pumpUiTransitions(tester);
+      expect(find.text('Which instrument or role would you like Kim Vocalist to take on in this particular band?'), findsOneWidget);
+      await chooseMusicalRole(tester, 'BANDLEADER');
+      await pumpUiTransitions(tester);
+      expect(find.text('Added'), findsNWidgets(2));
+      await tester.tap(find.byIcon(Icons.close_rounded));
+      await pumpUiTransitions(tester);
+      await tester.ensureVisible(find.text('Save Band'));
+      await tester.tap(find.text('Save Band'));
+      await pumpUiTransitions(tester);
+
+      final members = service.createdBand!.membersBand;
+      expect(members.keys, unorderedEquals(['one','two']));
+      expect(members['one']!.musicalRole, 'Trumpet');
+      expect(members['two']!.musicalRole, 'BANDLEADER');
+      expect(members.values.map((member) => member.role), everyElement('Member'));
+    });
+
     testWidgets('1. About appears directly after Band Name in CreateBandScreen', (tester) async {
       tester.view.physicalSize = const Size(800, 3000);
       tester.view.devicePixelRatio = 1.0;

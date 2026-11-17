@@ -1,11 +1,21 @@
 'use strict';
 const { HttpsError } = require('firebase-functions/v2/https');
 const { validStatus, validMember, reconcileMembershipIndex } = require('./band_membership_index');
+const musicalRoles = new Set(require('./band_musical_roles.json'));
 const normalize = value => typeof value === 'string' ? value.trim().toLowerCase() : '';
 const role = member => normalize(member?.Role ?? member?.role);
 const consistent = member => !(member?.Status != null && member?.status != null && normalize(member.Status) !== normalize(member.status)) && !(member?.Role != null && member?.role != null && normalize(member.Role) !== normalize(member.role));
 const manager = member => consistent(member) && validMember(member) && ['leader', 'admin'].includes(role(member));
 const leader = member => consistent(member) && validMember(member) && role(member) === 'leader';
+function musicalRoleValue(payload, required = false) {
+  if (!required && !Object.hasOwn(payload, 'musicalRole')) return undefined;
+  const value = payload.musicalRole;
+  if (typeof value !== 'string' || value.length > 80 ||
+      /[\p{Cc}\p{Cf}]/u.test(value) || !musicalRoles.has(value)) {
+    throw new HttpsError('invalid-argument', 'Select a supported musical role.');
+  }
+  return value;
+}
 function key(value, label = 'ID') {
   if (typeof value !== 'string' || !value.trim() || value.length > 128 || /[.#$\[\]\/]/.test(value) || value !== value.trim() || ['__proto__','prototype','constructor'].includes(value)) {
     throw new HttpsError('invalid-argument', `Invalid ${label}.`);
@@ -121,8 +131,11 @@ async function mutate(db, uid, data) {
   const action = data.action;
   const target = data.userId == null ? uid : key(data.userId, 'member ID');
   const operationId = key(data.operationId, 'operation ID');
-  const allowed = ['create','add','role','status','remove','leave','transfer','metadata','departAccount','delete'];
+  const allowed = ['create','add','role','musicalRole','status','remove','leave','transfer','metadata','departAccount','delete'];
   if (!allowed.includes(action)) throw new HttpsError('invalid-argument','Unknown membership action.');
+  const musicalRole = ['add', 'musicalRole'].includes(action)
+    ? musicalRoleValue(data, action === 'musicalRole')
+    : undefined;
   // Validate creation before allocating private retry state for a new band ID.
   if (action === 'create' || action === 'metadata') {
     const fields = metadata(data.metadata,!!data.cityGrantNonce);
@@ -132,8 +145,12 @@ async function mutate(db, uid, data) {
       if (!Array.isArray(initial) || initial.length > 100) throw new HttpsError('invalid-argument','Invalid initial members.');
       const ids = new Set([uid]);
       for (const entry of initial) {
+        if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+          throw new HttpsError('invalid-argument', 'Invalid initial member.');
+        }
         const id = key(entry.userId,'member ID');
         if (ids.has(id) || !['member','admin'].includes(normalize(entry.role || 'Member'))) throw new HttpsError('invalid-argument','Invalid initial member.');
+        musicalRoleValue(entry);
         ids.add(id);
       }
     }
@@ -151,7 +168,9 @@ async function mutate(db, uid, data) {
   }
   const fingerprint = require('crypto').createHash('sha256').update(JSON.stringify({ action, target, role: data.role ?? null, status: data.status ?? null,
     nickname: data.nickname ?? null, metadata: data.metadata ?? null,
-    cityGrantNonce:data.cityGrantNonce??null,initialMembers: data.initialMembers ?? null })).digest('hex');
+    cityGrantNonce:data.cityGrantNonce??null,initialMembers: data.initialMembers ?? null,
+    // JSON omits undefined, preserving fingerprints from older clients.
+    musicalRole })).digest('hex');
   let failure, affected = [], deleted = false;
   const ref = db.ref(`Bands/${bandId}`);
   const before = (await ref.get()).val();
@@ -223,6 +242,7 @@ async function mutate(db, uid, data) {
           const r = normalize(entry.role || 'Member');
           if (!['member','admin'].includes(r)) throw new HttpsError('invalid-argument','Invalid initial role.');
           members[id] = { Role:r === 'admin' ? 'Admin' : 'Member', Status:'active', Nickname:String(entry.nickname || 'Member').slice(0,200) };
+          if (entry.musicalRole !== undefined) members[id].MusicalRole = entry.musicalRole;
         }
         current = { ...fields, Members_band:members, _createdBy:uid, _createOperation:operationId };
       } else {
@@ -262,12 +282,20 @@ async function mutate(db, uid, data) {
               if (normalize(subject.Role ?? subject.role) !== r) throw new HttpsError('already-exists','Member already exists; use the role/status operation.');
               subject.Status = 'active'; delete subject.status;
             } else members[target] = { Role:r === 'admin' ? 'Admin':'Member', Status:'active', Nickname:String(data.nickname || 'Member').slice(0,200) };
+            if (musicalRole !== undefined) members[target].MusicalRole = musicalRole;
           } else {
             if (!subject) {
               if (action === 'remove') return current;
               throw new HttpsError('not-found','Member not found.');
             }
-            if (action === 'transfer') {
+            if (action === 'musicalRole') {
+              const subjectRole = role(subject);
+              if (!consistent(subject) || (!leader(caller) &&
+                  (subjectRole === 'leader' || (subjectRole === 'admin' && target !== uid)))) {
+                throw new HttpsError('permission-denied', 'You cannot administer this band member.');
+              }
+              subject.MusicalRole = musicalRole;
+            } else if (action === 'transfer') {
               if (!leader(caller) || target === uid || !validMember(subject)) throw new HttpsError('permission-denied','Only the current Leader may transfer to an active member.');
               members[uid].Role = 'Admin'; delete members[uid].role;
               subject.Role = 'Leader'; delete subject.role;
@@ -304,7 +332,7 @@ async function mutate(db, uid, data) {
     throw new HttpsError('aborted','Membership changed; retry the operation.');
   }
   if (!result.snapshot.exists() && !['delete','departAccount'].includes(action)) throw new HttpsError('not-found','Band not found.');
-  await reconcileBand(db,bandId,affected);
+  if (action !== 'musicalRole') await reconcileBand(db,bandId,affected);
   if (deleted) await db.ref().update({ [`membershipMutationOperations/${bandId}`]:null, [`bandconversations/${bandId}`]:null, [`bandSectionConversations/${bandId}`]:null });
   return { success:true, bandId };
 }

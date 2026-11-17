@@ -64,8 +64,9 @@ class MockFeatureFirebaseService extends Fake implements FirebaseService {
     String bandId,
     String userId,
     String role,
-    String nickname,
-  ) async {}
+    String nickname, {
+    String? musicalRole,
+  }) async {}
 }
 
 class MockFeatureAppState extends Fake with ChangeNotifier implements AppState {

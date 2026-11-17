@@ -266,6 +266,27 @@ void main() {
       expect(service.calls.single['action'], 'add');
       expect(service.calls.single['userId'], 'member');
     });
+    test('musical role payloads stay separate from the authorization role', () async {
+      final service = AuthorityService();
+      await service.createBandAsync(
+        'leader',
+        Band(name: 'Band', membersBand: {
+          'one': BandMember(role: 'Member', musicalRole: 'Trumpet'),
+          'two': BandMember(role: 'Member', musicalRole: 'BANDLEADER'),
+        }),
+      );
+      expect(service.calls.single['initialMembers'], [
+        {'userId': 'one', 'role': 'Member', 'nickname': 'Member', 'musicalRole': 'Trumpet'},
+        {'userId': 'two', 'role': 'Member', 'nickname': 'Member', 'musicalRole': 'BANDLEADER'},
+      ]);
+      await service.addBandMemberAsync('band', 'one', 'Member', 'Alex', musicalRole: 'BANDLEADER');
+      expect(service.calls[1]['role'], 'Member');
+      expect(service.calls[1]['musicalRole'], 'BANDLEADER');
+      await service.updateBandMemberMusicalRoleAsync('band', 'one', 'Vocalist');
+      expect(service.calls.last['action'], 'musicalRole');
+      expect(service.calls.last['musicalRole'], 'Vocalist');
+      expect(service.calls.last.containsKey('role'), isFalse);
+    });
     test('role and status updates use scoped callable payloads', () async {
       final service = AuthorityService();
       await service.updateBandMemberRoleAsync('band', 'member', 'Admin');

@@ -1,4 +1,5 @@
 import 'support/bounded_ui_pump.dart';
+import 'band_musical_role_test.dart' show chooseMusicalRole, inMusicalRolePicker;
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -73,8 +74,9 @@ class MockSettingsFirebaseService extends FirebaseService {
     String bandId,
     String userId,
     String role,
-    String nickname,
-  ) async {
+    String nickname, {
+    String? musicalRole,
+  }) async {
     if (addMemberCompleter != null) {
       await addMemberCompleter!.future;
     }
@@ -83,8 +85,19 @@ class MockSettingsFirebaseService extends FirebaseService {
       'userId': userId,
       'role': role,
       'nickname': nickname,
+      if (musicalRole != null) 'musicalRole': musicalRole,
     });
-    membersToReturn.add(BandMember(userId: userId, role: role, nickname: nickname));
+    membersToReturn.add(BandMember(userId: userId, role: role, nickname: nickname, musicalRole: musicalRole));
+  }
+
+  @override
+  Future<void> updateBandMemberMusicalRoleAsync(String bandId, String userId, String musicalRole) async {
+    final index = membersToReturn.indexWhere((m) => m.userId == userId);
+    final member = membersToReturn[index];
+    membersToReturn[index] = BandMember(
+      userId: member.userId, nickname: member.nickname, status: member.status,
+      role: member.role, musicalRole: musicalRole,
+    );
   }
 }
 
@@ -323,12 +336,23 @@ void main() {
       // Tap on the user's name text in the row
       await tester.tap(find.text('Alice Bassist'));
       await pumpUiTransitions(tester);
+      expect(find.text('Which instrument or role would you like Alice Bassist to take on in this particular band?'), findsOneWidget);
+      expect(mockService.addedMembers, isEmpty);
+      await tester.tap(inMusicalRolePicker(find.byIcon(Icons.close_rounded)));
+      await pumpUiTransitions(tester);
+      expect(mockService.addedMembers, isEmpty);
+      expect(callbackInvoked, isFalse);
+      await tester.tap(find.text('Alice Bassist'));
+      await pumpUiTransitions(tester);
+      await chooseMusicalRole(tester, 'Trumpet');
+      await pumpUiTransitions(tester);
 
       expect(mockService.addedMembers.length, 1);
       expect(mockService.addedMembers.first['userId'], 'u_candidate');
       expect(mockService.addedMembers.first['bandId'], 'band_123');
       expect(callbackInvoked, isTrue);
-      expect(find.text('Alice Bassist added to the band!'), findsOneWidget);
+      expect(mockService.addedMembers.single['musicalRole'], 'Trumpet');
+      expect(find.text('Alice Bassist added to the band as Trumpet.'), findsOneWidget);
     });
 
     testWidgets('Tapping + icon button also triggers member addition', (tester) async {
@@ -381,9 +405,13 @@ void main() {
       // Tap on the + icon directly
       await tester.tap(find.byIcon(Icons.add_circle));
       await pumpUiTransitions(tester);
+      await chooseMusicalRole(tester, 'BANDLEADER');
+      await pumpUiTransitions(tester);
 
       expect(mockService.addedMembers.length, 1);
       expect(mockService.addedMembers.first['userId'], 'u_drummer');
+      expect(mockService.addedMembers.single['role'], 'Member');
+      expect(mockService.addedMembers.single['musicalRole'], 'BANDLEADER');
       expect(callbackInvoked, isTrue);
     });
 
@@ -435,6 +463,8 @@ void main() {
       // Double tap rapidly before completer finishes
       await tester.tap(find.text('Gary Guitar'));
       await tester.tap(find.text('Gary Guitar'));
+      await pumpUiTransitions(tester);
+      await chooseMusicalRole(tester, 'Electric Guitar');
       await tester.pump();
 
       // Complete async addition
@@ -653,13 +683,26 @@ void main() {
       // Tap Dan Drummer to add
       await tester.tap(find.text('Dan Drummer'));
       await pumpUiTransitions(tester);
+      await chooseMusicalRole(tester, 'Drums');
+      await pumpUiTransitions(tester);
 
       // Verify member addition
       expect(mockService.addedMembers.length, 1);
       expect(mockService.addedMembers.first['userId'], 'user_drummer');
       expect(mockService.addedMembers.first['bandId'], 'band_edit_1');
-      expect(find.text('Dan Drummer added to the band!'), findsOneWidget);
+      expect(find.text('Dan Drummer added to the band as Drums.'), findsOneWidget);
+      final editor = find.widgetWithText(TextButton, 'Edit musical role').last;
+      await tester.ensureVisible(editor);
+      await tester.tap(editor);
+      await pumpUiTransitions(tester);
+      expect(find.text('Which instrument or role would you like Dan Drummer to take on in this particular band?'), findsOneWidget);
+      await chooseMusicalRole(tester, 'Vocalist');
+      await pumpUiTransitions(tester);
+      final updated = mockService.membersToReturn.singleWhere((m) => m.userId == 'user_drummer');
+      expect(updated.role, 'Member');
+      expect(updated.musicalRole, 'Vocalist');
+      expect(mockService.roleUpdates, isEmpty);
+      expect(find.text('Vocalist'), findsOneWidget);
     });
   });
 }
-
