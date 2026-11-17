@@ -554,7 +554,7 @@ class __AuthorizedSubRequestResponsesScreenState extends State<_AuthorizedSubReq
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Text('Members'),
+                          const Text('New Members'),
                           if (_hasMemberActivity) ...[
                             const SizedBox(width: 6),
                             Container(

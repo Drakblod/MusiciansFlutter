@@ -51,6 +51,8 @@ class _BandRoomContent extends StatefulWidget {
 
 class _BandRoomChatScreenState extends State<_BandRoomContent>
     with SingleTickerProviderStateMixin {
+  static const _audioCategory = 'MP3s';
+  static const _audioCategoryLabel = 'MP3, WAV, AIFF…';
   late TabController _tabController;
   final _messageController = TextEditingController();
   final _scrollController = ScrollController();
@@ -536,8 +538,8 @@ class _BandRoomChatScreenState extends State<_BandRoomContent>
               ),
               const SizedBox(height: 16),
               _buildCategoryPickerOption(
-                title: 'MP3s',
-                label: 'MP3s / Audio',
+                title: _audioCategory,
+                label: _audioCategoryLabel,
                 subtitle: 'Demos, tracks, stems, audio recordings',
                 icon: Icons.audiotrack_outlined,
                 color: Colors.orangeAccent,
@@ -638,6 +640,9 @@ class _BandRoomChatScreenState extends State<_BandRoomContent>
         chosenCategory = await _showCategoryPickerSheet();
         if (chosenCategory == null) return;
       }
+      final categoryLabel = chosenCategory == _audioCategory
+          ? _audioCategoryLabel
+          : chosenCategory;
 
       final result = await FilePicker.platform.pickFiles(
         type: FileType.any,
@@ -681,7 +686,7 @@ class _BandRoomChatScreenState extends State<_BandRoomContent>
                   const CircularProgressIndicator(color: AppTheme.primaryAccent),
                   const SizedBox(height: 16),
                   Text(
-                    'Uploading ${file.name} to $chosenCategory...',
+                    'Uploading ${file.name} to $categoryLabel...',
                     style: GoogleFonts.inter(color: Colors.white, fontSize: 14, decoration: TextDecoration.none),
                   ),
                 ],
@@ -1466,7 +1471,15 @@ class _BandRoomChatScreenState extends State<_BandRoomContent>
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              _buildFileCategorySection('MP3s', Icons.audiotrack_outlined, Colors.orangeAccent, mp3s, bandId, appState),
+              _buildFileCategorySection(
+                _audioCategory,
+                Icons.audiotrack_outlined,
+                Colors.orangeAccent,
+                mp3s,
+                bandId,
+                appState,
+                label: _audioCategoryLabel,
+              ),
               _buildFileCategorySection('VIDEOS', Icons.videocam_outlined, Colors.purpleAccent, videos, bandId, appState),
               _buildFileCategorySection('SHEET MUSIC', Icons.description_outlined, AppTheme.primaryAccent, sheetMusic, bandId, appState),
               _buildFileCategorySection('OTHER (Pdf, Jpeg, Png...)', Icons.insert_drive_file_outlined, Colors.blueAccent, other, bandId, appState),
@@ -1504,13 +1517,14 @@ class _BandRoomChatScreenState extends State<_BandRoomContent>
   }
 
   Widget _buildFileCategorySection(
-    String title,
+    String category,
     IconData icon,
     Color color,
     Map<String, Map<String, String>> categoryFiles,
     String bandId,
-    AppState appState,
-  ) {
+    AppState appState, {
+    String? label,
+  }) {
     return Theme(
       data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
       child: Container(
@@ -1524,7 +1538,7 @@ class _BandRoomChatScreenState extends State<_BandRoomContent>
           initiallyExpanded: true,
           leading: Icon(icon, color: color, size: 24),
           title: Text(
-            '$title (${categoryFiles.length})',
+            '${label ?? category} (${categoryFiles.length})',
             style: GoogleFonts.outfit(
               fontSize: 16,
               fontWeight: FontWeight.bold,
@@ -1549,7 +1563,7 @@ class _BandRoomChatScreenState extends State<_BandRoomContent>
                           ),
                         ),
                         InkWell(
-                          onTap: () => _pickAndUploadBandFile(bandId, category: title),
+                          onTap: () => _pickAndUploadBandFile(bandId, category: category),
                           borderRadius: BorderRadius.circular(6),
                           child: Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -1671,7 +1685,7 @@ class _BandRoomChatScreenState extends State<_BandRoomContent>
                   Padding(
                     padding: const EdgeInsets.fromLTRB(12, 4, 12, 10),
                     child: InkWell(
-                      onTap: () => _pickAndUploadBandFile(bandId, category: title),
+                      onTap: () => _pickAndUploadBandFile(bandId, category: category),
                       borderRadius: BorderRadius.circular(8),
                       child: Container(
                         padding: const EdgeInsets.symmetric(vertical: 8),
@@ -1687,7 +1701,7 @@ class _BandRoomChatScreenState extends State<_BandRoomContent>
                             Icon(Icons.add, size: 16, color: color),
                             const SizedBox(width: 6),
                             Text(
-                              'Upload to $title',
+                              'Upload to ${label ?? category}',
                               style: GoogleFonts.inter(fontSize: 12, color: color, fontWeight: FontWeight.w600),
                             ),
                           ],

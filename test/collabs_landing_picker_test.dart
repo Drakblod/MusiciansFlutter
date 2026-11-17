@@ -107,6 +107,7 @@ void main() {
 
       await tester.pumpWidget(createTestWidget(const CollabsLandingScreen(), service: service));
       await pumpUiTransitions(tester);
+      expect(find.text('Location (Optional)'), findsOneWidget);
 
       // Enter Description / Details
       await tester.enterText(
@@ -183,6 +184,7 @@ void main() {
       expect(published.targetUserIds!.toSet().length, equals(published.targetUserIds!.length));
       expect(published.targetUserIds, unorderedEquals(['fav_1', 'fav_2', 'fav_3']));
       expect(published.description, equals('Looking for acoustic track co-writer'));
+      expect(published.location, 'Stockholm, Sweden');
     });
 
     testWidgets('FindCollabsScreen Select Favorites: Select all and Clear all functionality', (WidgetTester tester) async {
@@ -199,6 +201,7 @@ void main() {
 
       await tester.pumpWidget(createTestWidget(const FindCollabsScreen(), service: service));
       await pumpUiTransitions(tester);
+      expect(find.text('Location (Optional)'), findsOneWidget);
 
       await tester.tap(find.text('FAVORITES LIST'));
       await pumpUiTransitions(tester);

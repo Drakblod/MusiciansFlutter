@@ -90,6 +90,14 @@ Future<void> save(WidgetTester tester,String text) async {
 void main(){
  TestWidgetsFlutterBinding.ensureInitialized();
  setUpAll(() async {setupFirebaseCoreMocks();await Firebase.initializeApp();});
+ testWidgets('Edit Profile offers an audio track upload with accurate help', (tester) async {
+  final state = FormState(UserProfile(userId: 'test_uid_123', displayName: 'Musician'));
+  await mountForm(tester, const EditProfileScreen(), state, null);
+  expect(find.text('Upload Audio Track'), findsOneWidget);
+  expect(find.text('Upload an audio track of your own music to play on your profile.'), findsOneWidget);
+  expect(find.text('Audio track formats: MP3, M4A, WAV, AAC, OGG and FLAC'), findsOneWidget);
+  expect(find.text('Upload MP3 Track'), findsNothing);
+ });
  testWidgets('Music Snippet title can be renamed repeatedly and removed without uploading', (tester) async {
   const url = 'https://example.test/never-display-this-filename.mp3';
   final state = FormState(UserProfile(

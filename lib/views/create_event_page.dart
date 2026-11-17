@@ -100,7 +100,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
       // Existing event RSVP compatibility
       final existingInterval = existing.reminderIntervalHours;
       if (existingInterval == 0) {
-        // Explicit 0 means No automatic Reminders
+        // An explicit 0 disables automatic reminders.
         _isCustomReminderHours = false;
         _reminderIntervalHours = 0;
         _customReminderController.text = '';
@@ -1801,11 +1801,11 @@ class _CreateEventPageState extends State<CreateEventPage> {
                               border: OutlineInputBorder(),
                             ),
                             items: const [
+                              DropdownMenuItem(value: -1, child: Text('Set your own time', overflow: TextOverflow.ellipsis)),
                               DropdownMenuItem(value: 48, child: Text('48 hours (From event is published)', overflow: TextOverflow.ellipsis)),
                               DropdownMenuItem(value: 24, child: Text('24 hours (From event is published)', overflow: TextOverflow.ellipsis)),
                               DropdownMenuItem(value: 12, child: Text('12 hours (From event is published)', overflow: TextOverflow.ellipsis)),
-                              DropdownMenuItem(value: -1, child: Text('Set your own', overflow: TextOverflow.ellipsis)),
-                              DropdownMenuItem(value: 0, child: Text('No automatic Reminders', overflow: TextOverflow.ellipsis)),
+                              DropdownMenuItem(value: 0, child: Text('No automatic reminder', overflow: TextOverflow.ellipsis)),
                             ],
                             onChanged: (val) {
                               if (val != null) {

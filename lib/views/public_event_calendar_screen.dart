@@ -360,7 +360,7 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
                         children: [
                           Expanded(
                             child: Text(
-                              'Discover live music, sessions, workshops and music events.',
+                              'Discover live music, sessions, workshops and more.',
                               style: GoogleFonts.inter(
                                 fontSize: 13,
                                 color: AppTheme.textSecondary,

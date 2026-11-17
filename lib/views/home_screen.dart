@@ -567,7 +567,7 @@ class HomeScreen extends StatelessWidget {
         id: 'event_calendar',
         icon: Icons.calendar_today_outlined,
         title: 'Event Calendar',
-        subtitle: 'Discover live music, open sessions, workshops and music events',
+        subtitle: 'Discover live music, sessions, workshops and more.',
         badgeCount: 0,
         showRedDot: false,
         onTap: () {
@@ -1637,7 +1637,7 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
         id: 'event_calendar',
         icon: Icons.calendar_today_outlined,
         title: 'Event Calendar',
-        subtitle: 'Discover live music, open sessions, workshops and music events',
+        subtitle: 'Discover live music, sessions, workshops and more.',
         badgeCount: 0,
         showRedDot: false,
         onTap: () async {

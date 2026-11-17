@@ -466,6 +466,12 @@ void main() {
 
       // Dropdown selected is 48 hours preset
       expect(find.text('48 hours (From event is published)'), findsOneWidget);
+      final options = tester.widget<DropdownButton<int>>(
+        find.byType(DropdownButton<int>),
+      ).items!;
+      expect(options.map((item) => item.value), [-1, 48, 24, 12, 0]);
+      expect((options.first.child as Text).data, 'Set your own time');
+      expect((options.last.child as Text).data, 'No automatic reminder');
 
       // Info text box and Additional Notes are removed
       expect(find.textContaining('50% shorter'), findsNothing);
@@ -492,11 +498,11 @@ void main() {
       await tester.enterText(find.widgetWithText(TextFormField, 'Main Event Name'), 'Test Rehearsal');
       await tester.enterText(find.descendant(of: find.byType(LocationPickerField), matching: find.byType(TextFormField)), 'Berlin');
 
-      // Switch to custom mode "Set your own"
+      // Switch to custom mode "Set your own time"
       await tester.tap(find.byType(DropdownButtonFormField<int>));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
-      await tester.tap(find.text('Set your own').last);
+      await tester.tap(find.text('Set your own time').last);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
 
@@ -571,7 +577,7 @@ void main() {
       expect(appState.mockFirebase.savedBandEvents.first.reminderIntervalHours, equals(48));
     });
 
-    testWidgets('RSVP preset option: No automatic Reminders', (WidgetTester tester) async {
+    testWidgets('RSVP preset option: No automatic reminder', (WidgetTester tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() => tester.view.resetPhysicalSize());
@@ -587,12 +593,12 @@ void main() {
       await tester.enterText(find.widgetWithText(TextFormField, 'Main Event Name'), 'No Reminder Event');
       await tester.enterText(find.descendant(of: find.byType(LocationPickerField), matching: find.byType(TextFormField)), 'Rome');
 
-      // Select No automatic Reminders
+      // Select No automatic reminder
       await tester.tap(find.byType(DropdownButtonFormField<int>));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
 
-      await tester.tap(find.text('No automatic Reminders').last);
+      await tester.tap(find.text('No automatic reminder').last);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
 
@@ -676,14 +682,14 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
-      // Custom 'Set your own' selected, custom input visible with 36
-      expect(find.text('Set your own'), findsOneWidget);
+      // Custom 'Set your own time' selected, custom input visible with 36
+      expect(find.text('Set your own time'), findsOneWidget);
       expect(find.widgetWithText(TextFormField, 'Set hours here'), findsOneWidget);
       final customField = tester.widget<TextFormField>(find.widgetWithText(TextFormField, 'Set hours here'));
       expect(customField.controller?.text, equals('36'));
     });
 
-    testWidgets('21c. Existing event with explicit 0 selects No automatic Reminders', (WidgetTester tester) async {
+    testWidgets('21c. Existing event with explicit 0 selects No automatic reminder', (WidgetTester tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() => tester.view.resetPhysicalSize());
@@ -715,8 +721,8 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
-      // Explicit 0 selects No automatic Reminders, custom field hidden
-      expect(find.text('No automatic Reminders'), findsOneWidget);
+      // Explicit 0 selects No automatic reminder, custom field hidden
+      expect(find.text('No automatic reminder'), findsOneWidget);
       expect(find.widgetWithText(TextFormField, 'Set hours here'), findsNothing);
       expect(appState.mockFirebase.saveBandEventCalls, equals(0)); // Opening does not mutate Firebase
     });
@@ -753,7 +759,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
-      // null interval falls back to 48 hours, NOT No automatic Reminders
+      // null interval falls back to 48 hours, NOT No automatic reminder
       expect(find.text('48 hours (From event is published)'), findsOneWidget);
       expect(find.widgetWithText(TextFormField, 'Set hours here'), findsNothing);
       expect(appState.mockFirebase.saveBandEventCalls, equals(0)); // Opening does not mutate Firebase

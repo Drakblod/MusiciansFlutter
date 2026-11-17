@@ -1029,7 +1029,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               ),
               const SizedBox(height: 4),
               Text(
-                'Upload an MP3 track of your own music to play on your profile.',
+                'Upload an audio track of your own music to play on your profile.',
                 style: GoogleFonts.inter(
                   fontSize: 13,
                   color: AppTheme.textSecondary,
@@ -1122,7 +1122,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                   ),
                                   const SizedBox(height: 12),
                                   Text(
-                                    'Upload MP3 Track',
+                                    'Upload Audio Track',
                                     style: GoogleFonts.inter(
                                       color: Colors.white,
                                       fontWeight: FontWeight.bold,
@@ -1131,7 +1131,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
-                                    'Only MP3 files supported',
+                                    'Audio track formats: MP3, M4A, WAV, AAC, OGG and FLAC',
                                     style: GoogleFonts.inter(
                                       color: AppTheme.textMuted,
                                       fontSize: 12,

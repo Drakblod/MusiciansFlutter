@@ -1021,11 +1021,11 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
                           border: OutlineInputBorder(),
                         ),
                         items: const [
-                          DropdownMenuItem(value: -1, child: Text('Set your own')),
+                          DropdownMenuItem(value: -1, child: Text('Set your own time')),
                           DropdownMenuItem(value: 48, child: Text('48 hours (From session is published)')),
                           DropdownMenuItem(value: 24, child: Text('24 hours (From session is published)')),
                           DropdownMenuItem(value: 12, child: Text('12 hours (From session is published)')),
-                          DropdownMenuItem(value: 0, child: Text('No automatic Reminders')),
+                          DropdownMenuItem(value: 0, child: Text('No automatic reminder')),
                         ],
                         onChanged: (val) {
                           if (val != null) {

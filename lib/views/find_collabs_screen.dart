@@ -669,20 +669,9 @@ class _FindCollabsScreenState extends State<FindCollabsScreen> {
                   ),
                   const SizedBox(height: 16),
 
-                  // Location (City, Country)
-                  Text.rich(
-                    TextSpan(
-                      children: [
-                        TextSpan(
-                          text: 'Location',
-                          style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
-                        ),
-                        TextSpan(
-                          text: ' (City, Country)',
-                          style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.normal, color: Colors.white),
-                        ),
-                      ],
-                    ),
+                  Text(
+                    'Location (Optional)',
+                    style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
                   ),
                   const SizedBox(height: 6),
                   TextFormField(

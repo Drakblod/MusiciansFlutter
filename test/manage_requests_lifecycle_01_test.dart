@@ -427,7 +427,7 @@ void main() {
         ];
       await mount(tester, service);
       expect(find.text('View Responses (3)'), findsOneWidget);
-      expectVisibleTabLabels(tester, ['Substitutes', 'Members']);
+      expectVisibleTabLabels(tester, ['Substitutes', 'New Members']);
       expect(tester.takeException(), isNull);
       await unmount(tester);
     });
@@ -547,7 +547,7 @@ void main() {
       },
     );
     testWidgets(
-      '29 Members tab keeps undated active member and hides closed member',
+      '29 New Members tab keeps undated active member and hides closed member',
       (tester) async {
         final service = ManageService()
           ..requests = [
@@ -560,7 +560,7 @@ void main() {
             ),
           ];
         await mount(tester, service);
-        await tester.tap(find.text('Members'));
+        await tester.tap(find.text('New Members'));
         await settle(tester);
         expect(card('member'), findsOneWidget);
         expect(card('closed'), findsNothing);

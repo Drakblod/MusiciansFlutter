@@ -50,6 +50,7 @@ class MockGigsInfoFirebaseService extends FirebaseService {
   BandEvent? testEvent;
   List<BandEvent> testEventsList = [];
   List<BandMember> testMembers = [];
+  Map<String, Map<String, String>> testFiles = {};
   final List<Map<String, String>> updatedResponses = [];
 
   @override
@@ -108,7 +109,7 @@ class MockGigsInfoFirebaseService extends FirebaseService {
 
   @override
   Future<Map<String, Map<String, String>>> getBandFilesAsync(String bandId) async {
-    return {};
+    return testFiles;
   }
 
   @override
@@ -169,6 +170,34 @@ void main() {
 
   setUp(() {
     SharedPreferences.setMockInitialValues({});
+  });
+
+  testWidgets('Files tab and upload picker relabel the legacy audio category', (tester) async {
+    tester.view.physicalSize = const Size(1080, 1400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final service = MockGigsInfoFirebaseService()
+      ..testFiles = {
+        'audio': {'FileName': 'rehearsal.aiff', 'Category': 'MP3s'},
+      };
+    await tester.pumpWidget(
+      ChangeNotifierProvider<AppState>(
+        create: (_) => MockGigsInfoAppState(service),
+        child: const MaterialApp(home: BandRoomChatScreen()),
+      ),
+    );
+    await pumpUiTransitions(tester);
+    await tester.tap(find.text('Files'));
+    await pumpUiTransitions(tester);
+    expect(find.text('MP3, WAV, AIFF… (1)'), findsOneWidget);
+    expect(find.text('rehearsal.aiff'), findsOneWidget);
+    expect(find.text('MP3s (1)'), findsNothing);
+
+    await tester.tap(find.text('Upload a File'));
+    await pumpUiTransitions(tester);
+    expect(find.text('MP3, WAV, AIFF…'), findsOneWidget);
+    expect(find.text('MP3s / Audio'), findsNothing);
   });
 
   testWidgets('Gigs/Info event card is whole clickable, has chevron, no RSVP button, opens EventResultsPage', (tester) async {

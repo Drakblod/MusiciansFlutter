@@ -774,7 +774,7 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
                   if (isMe) ...[
                     const SizedBox(height: 4),
                     Text(
-                      'Upload an MP3 track of your own music to play on your profile.',
+                      'Upload an audio track of your own music to play on your profile.',
                       style: GoogleFonts.inter(
                         fontSize: 13,
                         color: AppTheme.textSecondary,
@@ -823,7 +823,7 @@ class _MusicianProfileScreenState extends State<MusicianProfileScreen> {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              'Only MP3 files supported',
+                              'Add an audio track in Edit Profile.',
                               style: GoogleFonts.inter(
                                 color: AppTheme.textMuted,
                                 fontSize: 12,

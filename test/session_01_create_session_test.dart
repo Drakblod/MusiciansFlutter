@@ -550,7 +550,7 @@ void main() {
       expect(second.subSessionSequence, equals(2));
     });
 
-    testWidgets('30, 31, 32. RSVP defaults to Set your own and deadline uses publishedAt', (WidgetTester tester) async {
+    testWidgets('30, 31, 32. RSVP defaults to Set your own time and deadline uses publishedAt', (WidgetTester tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() => tester.view.resetPhysicalSize());
@@ -563,7 +563,13 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
-      expect(find.text('Set your own'), findsOneWidget);
+      expect(find.text('Set your own time'), findsOneWidget);
+      final options = tester.widget<DropdownButton<int>>(
+        find.byType(DropdownButton<int>),
+      ).items!;
+      expect(options.map((item) => item.value), [-1, 48, 24, 12, 0]);
+      expect((options.first.child as Text).data, 'Set your own time');
+      expect((options.last.child as Text).data, 'No automatic reminder');
       expect(find.widgetWithText(TextFormField, 'Set hours here'), findsOneWidget);
       final customField = tester.widget<TextFormField>(find.widgetWithText(TextFormField, 'Set hours here'));
       expect(customField.controller?.text, equals(''));

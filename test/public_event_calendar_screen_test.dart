@@ -141,7 +141,7 @@ void main() {
       await pumpUiTransitions(tester);
 
       expect(find.text('EVENT CALENDAR'), findsOneWidget);
-      expect(find.text('Discover live music, sessions, workshops and music events.'), findsOneWidget);
+      expect(find.text('Discover live music, sessions, workshops and more.'), findsOneWidget);
       expect(find.text('DEMO EVENTS'), findsNothing);
     });
 
