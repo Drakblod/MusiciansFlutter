@@ -16,6 +16,7 @@ import 'package:musicians_flutter/views/edit_profile_screen.dart';
 import 'package:musicians_flutter/views/find_sub_screen.dart';
 import 'package:musicians_flutter/views/register_screen.dart';
 import 'package:musicians_flutter/widgets/searchable_category_multi_select_sheet.dart';
+import 'package:musicians_flutter/widgets/skill_picker.dart';
 
 class MockRuta02FirebaseService extends FirebaseService {
   @override
@@ -103,6 +104,53 @@ void main() {
 
   setUpAll(() async {
     await Firebase.initializeApp();
+  });
+
+  testWidgets('Skill search scrolls and selects with the keyboard open', (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(320, 568);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetViewInsets);
+
+    List<String>? selected;
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: Builder(
+      builder: (context) => TextButton(
+        onPressed: () async {
+          selected = await SkillPicker.show(
+            context,
+            title: 'Skills / Instruments',
+            taxonomyContext: SkillTaxonomyContext.editProfile,
+            selected: [],
+          );
+        },
+        child: const Text('Open skills'),
+      ),
+    ))));
+    await tester.tap(find.text('Open skills'));
+    await tester.pumpAndSettle();
+    final search = find.byType(TextField);
+    await tester.tap(search);
+    tester.view.viewInsets = const FakeViewPadding(bottom: 390);
+    await tester.enterText(search, 'trumpet');
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+
+    final trumpet = find.text('Trumpet');
+    await tester.ensureVisible(trumpet);
+    await tester.pumpAndSettle();
+    expect(trumpet.hitTestable(), findsOneWidget);
+    expect(tester.getBottomRight(trumpet).dy, lessThanOrEqualTo(178));
+    expect(tester.widget<EditableText>(find.byType(EditableText)).focusNode.hasFocus, isTrue);
+    await tester.tap(trumpet);
+    await tester.pumpAndSettle();
+
+    final done = find.text('Done (1 Selected)');
+    await tester.ensureVisible(done);
+    await tester.tap(done);
+    await tester.pumpAndSettle();
+    expect(selected, ['Trumpet']);
+    expect(tester.takeException(), isNull);
   });
 
   const expectedInstrumentOrder = [

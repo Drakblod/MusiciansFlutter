@@ -309,18 +309,11 @@ class _SearchableCategoryMultiSelectSheetState
       }
     });
 
-    return Container(
-      constraints: BoxConstraints(maxHeight: maxSheetHeight),
-      margin: EdgeInsets.only(bottom: bottomInset),
-      decoration: BoxDecoration(
-        color: const Color(0xFF0F0C22).withOpacity(0.98),
-        borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(24),
-          topRight: Radius.circular(24),
-        ),
-        border: Border.all(color: const Color(0xFF2E2A4E), width: 1.5),
-      ),
-      child: Column(
+    Widget buildContent(bool compact) {
+      Widget fitOptions(Widget options) =>
+          compact ? options : Expanded(child: options);
+
+      return Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -441,8 +434,8 @@ class _SearchableCategoryMultiSelectSheetState
           const SizedBox(height: 8),
 
           // Expandable Accordion List with RUTA-02 Structured Hierarchy
-          Expanded(
-            child: () {
+          fitOptions(
+            () {
               final hasBandleaderMatch = isSkillsMode &&
                   (_searchQuery.isEmpty ||
                       'bandleader'.contains(_searchQuery.toLowerCase()) ||
@@ -466,9 +459,12 @@ class _SearchableCategoryMultiSelectSheetState
               }
 
               return ListView(
+                shrinkWrap: compact,
                 padding: const EdgeInsets.symmetric(
                     horizontal: 16, vertical: 4),
-                physics: const BouncingScrollPhysics(),
+                physics: compact
+                    ? const NeverScrollableScrollPhysics()
+                    : const BouncingScrollPhysics(),
                 children: () {
                   final widgets = <Widget>[];
 
@@ -719,6 +715,36 @@ class _SearchableCategoryMultiSelectSheetState
             ),
           ),
         ],
+      );
+    }
+
+    return Container(
+      constraints: BoxConstraints(maxHeight: maxSheetHeight),
+      margin: EdgeInsets.only(bottom: bottomInset),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0F0C22).withOpacity(0.98),
+        borderRadius: const BorderRadius.only(
+          topLeft: Radius.circular(24),
+          topRight: Radius.circular(24),
+        ),
+        border: Border.all(color: const Color(0xFF2E2A4E), width: 1.5),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          // Scroll the controls and results together when the keyboard leaves
+          // too little space for a separate results viewport.
+          final compact = bottomInset > 0 && constraints.maxHeight < 360;
+          return SingleChildScrollView(
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.manual,
+            physics: compact ? null : const NeverScrollableScrollPhysics(),
+            child: ConstrainedBox(
+              constraints: compact
+                  ? const BoxConstraints()
+                  : BoxConstraints.tightFor(height: constraints.maxHeight),
+              child: buildContent(compact),
+            ),
+          );
+        },
       ),
     );
   }
