@@ -289,7 +289,7 @@ void main() {
     state.service.bands['real'] = realBand(role: 'Member');
     await tester.pumpWidget(app(state, const FindSubScreen()));
     await settle(tester);
-    expect(find.text('Band leader or admin required'), findsOneWidget);
+    expect(find.text('Bandleader or admin required'), findsOneWidget);
     expect(state.service.formReads, 0);
     expect(state.service.writes, 0);
   });

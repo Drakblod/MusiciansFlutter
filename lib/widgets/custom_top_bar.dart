@@ -516,7 +516,7 @@ class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
                             if (!canEdit) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
-                                  content: Text('Only band Leaders or Admins can edit this band.'),
+                                  content: Text('Only Bandleaders or Admins can edit this band.'),
                                   backgroundColor: AppTheme.warning,
                                 ),
                               );

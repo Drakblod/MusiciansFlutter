@@ -204,7 +204,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
 
       expect(find.byType(CreateEventPage), findsNothing);
-      expect(find.text('You need to be a Leader, Admin, or MOD of a band to create a Band Event. You can create a Session without a band.'), findsOneWidget);
+      expect(find.text('You need to be a Bandleader, Admin, or MOD of a band to create a Band Event. You can create a Session without a band.'), findsOneWidget);
     });
 
     testWidgets('6. Ordinary band Member cannot open CreateEventPage and sees explanation', (WidgetTester tester) async {
@@ -222,7 +222,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
 
       expect(find.byType(CreateEventPage), findsNothing);
-      expect(find.text('You need to be a Leader, Admin, or MOD of a band to create a Band Event. You can create a Session without a band.'), findsOneWidget);
+      expect(find.text('You need to be a Bandleader, Admin, or MOD of a band to create a Band Event. You can create a Session without a band.'), findsOneWidget);
     });
 
     testWidgets('7. User with exactly 1 authorized band (Leader) opens CreateEventPage directly', (WidgetTester tester) async {

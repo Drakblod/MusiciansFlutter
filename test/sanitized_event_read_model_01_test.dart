@@ -133,7 +133,7 @@ void main() {
     await tester.pump();
     await tester.pump();
     expect(service.managerLoads, 0);
-    expect(find.textContaining('Only current band leaders and admins'), findsOneWidget);
+    expect(find.textContaining('Only current Bandleaders and admins'), findsOneWidget);
     await service.memberEvents.close();
   });
 

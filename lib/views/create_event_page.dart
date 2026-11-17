@@ -1,5 +1,6 @@
 import '../utils/catalogue_profiles.dart';
 import '../utils/catalogue_loading.dart';
+import '../utils/band_member_role_label.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -203,7 +204,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
         return p.instruments.join(', ');
       }
     }
-    return member.role ?? 'Member';
+    return bandMemberRoleLabel(member.role);
   }
   @override
   void dispose() {
@@ -229,7 +230,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
         if (!isAuthorized) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Access Denied: Only band Leaders, Admins, and MODs can create events.'),
+              content: Text('Access Denied: Only Bandleaders, Admins, and MODs can create events.'),
               backgroundColor: AppTheme.danger,
             ),
           );

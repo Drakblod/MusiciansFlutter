@@ -160,7 +160,7 @@ void main() {
         )),);
       await pumpUiTransitions(tester);
 
-      expect(find.text('BAND LEADER ACTIONS'), findsOneWidget);
+      expect(find.text('BANDLEADER ACTIONS'), findsOneWidget);
       expect(find.text('Delete Band'), findsOneWidget);
     });
 
@@ -193,7 +193,7 @@ void main() {
         )),);
       await pumpUiTransitions(tester);
 
-      expect(find.text('BAND LEADER ACTIONS'), findsNothing);
+      expect(find.text('BANDLEADER ACTIONS'), findsNothing);
       expect(find.text('Delete Band'), findsNothing);
     });
 

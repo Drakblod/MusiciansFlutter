@@ -275,6 +275,7 @@ void main() {
       final descField = find.widgetWithText(TextFormField, 'Detailed program, schedule, line-up, participant details...');
       expect(descField, findsOneWidget);
       await tester.enterText(descField, 'An immersive synth meetup with guest live performers.');
+      await selectBlues(tester, find.text('Select Genres & Tags'));
 
       // Toggle Free Admission
       final switchFinder = find.byType(Switch);
@@ -296,6 +297,8 @@ void main() {
       final created = events.firstWhere((e) => e.title == 'Nordic Synth Gathering');
       expect(created.venueName, 'Kulturhuset Studio 3');
       expect(created.isFree, true);
+      expect(created.genres, ['Blues']);
+      expect(PublicCalendarEvent.fromJson(created.toJson(), created.id).genres, ['Blues']);
     });
 
     testWidgets('Renders Cover Image section and supports image URL', (tester) async {

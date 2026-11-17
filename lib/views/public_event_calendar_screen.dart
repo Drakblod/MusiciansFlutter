@@ -240,7 +240,7 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Only Band Leaders and Admins can create public calendar events.'),
+              content: Text('Only Bandleaders and Admins can create public calendar events.'),
               backgroundColor: AppTheme.warning,
               duration: Duration(seconds: 4),
             ),

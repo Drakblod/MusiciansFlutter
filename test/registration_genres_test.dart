@@ -211,14 +211,15 @@ void main() {
       await pumpUiTransitions(tester);
 
       // Tap Sign Up
+      await selectBlues(tester, find.text('Genres/Band Types'));
       await tester.tap(find.text('Sign Up'));
       await pumpUiTransitions(tester);
 
       expect(appState.registeredNickname, equals('JimmyPage'));
       expect(appState.registeredEmail, equals('jimmy@ledzep.com'));
-      expect(appState.registeredGenres, equals(['Rock', 'Pop']));
+      expect(appState.registeredGenres, equals(['Rock', 'Pop', 'Blues']));
       expect(appState.savedProfile, isNotNull);
-      expect(appState.savedProfile!.genres, equals(['Rock', 'Pop']));
+      expect(appState.savedProfile!.genres, equals(['Rock', 'Pop', 'Blues']));
       expect(find.text('Main Nav'), findsOneWidget);
     });
 

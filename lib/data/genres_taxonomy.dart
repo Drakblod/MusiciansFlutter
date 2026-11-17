@@ -4,6 +4,7 @@ class GenresTaxonomy {
   static const Map<String, List<String>> categoryMap = {
     '🎸 Rock, Pop, R&B, Hip Hop, etc': [
       'Rock',
+      'Blues',
       'Pop',
       'R&B',
       'Hip Hop',

@@ -1,4 +1,5 @@
 // ignore_for_file: depend_on_referenced_packages
+import 'support/bounded_ui_pump.dart' show selectBlues;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -248,18 +249,27 @@ void main(){
     userType:'Guitar',instruments:['Guitar'],location:old.label,publicLocation:old));
   await mountForm(tester,const EditProfileScreen(),state,picker.FakeCities());
   expect(find.text('Confirmed: Oslo, Norway'),findsOneWidget);
+  await selectBlues(tester, find.text('GENRES/BAND TYPES'));
   await chooseBerlin(tester);await save(tester,'Save Profile');
   expect(state.service.saved?.publicLocation?.label,'Berlin, Germany');
   expect(state.service.saved?.location,'Berlin, Germany');
+  final profile = state.service.saved!;
+  expect(profile.genres, ['Blues']);
+  expect(UserProfile.fromJson(profile.toJson(), 'test_uid_123').genres, ['Blues']);
  });
  testWidgets('Create Band saves confirmed city, not typed search', (tester) async {
   final state=FormState(null);await mountForm(tester,const CreateBandScreen(),state,picker.FakeCities());
   await chooseBerlin(tester);
   final name=find.widgetWithText(TextFormField,'Enter band name');
   await tester.enterText(name,'International Band');
+  await selectBlues(tester, find.text('GENRES/BAND TYPES'));
   await save(tester,'Save Band');
   expect(state.service.created?.publicLocation?.label,'Berlin, Germany');
   expect(state.service.created?.location,'Berlin, Germany');
+  final band = state.service.created!;
+  expect(band.genres, ['Blues']);
+  expect(band.styleBand, ['Blues']);
+  expect(Band.fromJson(band.toJson(), 'band_1').genres, ['Blues']);
  });
  testWidgets('Create Band rejects typed city without provider confirmation', (tester) async {
   final state=FormState(null);await mountForm(tester,const CreateBandScreen(),state,picker.FakeCities());
@@ -277,9 +287,12 @@ void main(){
     membersBand:{'test_uid_123':BandMember(userId:'test_uid_123',role:'Leader',status:'active')})),
     state,picker.FakeCities());
   expect(find.text('Confirmed: Oslo, Norway'),findsOneWidget);
+  await selectBlues(tester, find.text('GENRES/BAND TYPES'));
   await chooseBerlin(tester);await save(tester,'Save Changes');
   expect(state.service.updated?.publicLocation?.label,'Berlin, Germany');
   expect(state.service.updated?.location,'Berlin, Germany');
+  final band = state.service.updated!;
+  expect(Band.fromJson(band.toJson(), 'band_1').genres, ['Blues']);
  });
  testWidgets('legacy profile location is guidance, never confirmed automatically', (tester) async {
   final state=FormState(UserProfile(userId:'test_uid_123',displayName:'Musician',email:'a@example.test',

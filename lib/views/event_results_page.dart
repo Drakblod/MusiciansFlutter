@@ -205,7 +205,7 @@ class _EventResultsPageState extends State<EventResultsPage> {
         if (mounted) {
           setState(() {
             _isLoading=false;
-            _errorMessage='Only current band leaders and admins can view event results.';
+            _errorMessage='Only current Bandleaders and admins can view event results.';
           });
         }
         return;

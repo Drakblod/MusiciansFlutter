@@ -17,6 +17,7 @@ import '../widgets/custom_top_bar.dart';
 import '../widgets/animated_tap_detector.dart';
 import '../widgets/searchable_category_multi_select_sheet.dart';
 import '../data/genres_taxonomy.dart';
+import '../utils/band_member_role_label.dart';
 import '../widgets/secondary_skills_badge.dart';
 import '../utils/band_section_utils.dart';
 import '../widgets/create_band_section_sheet.dart';
@@ -961,7 +962,7 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
                               ),
                               const SizedBox(height: 2),
                               Text(
-                                member.role ?? 'Member',
+                                bandMemberRoleLabel(member.role),
                                 style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
                               ),
                               Builder(
@@ -1042,7 +1043,7 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
                                       : null,
                             ),
                             child: Text(
-                              isLeaderRole ? 'Leader' : isAdminRole ? 'Admin' : 'MOD',
+                              bandMemberRoleLabel(isLeaderRole ? member.role : isAdminRole ? 'Admin' : 'MOD'),
                               style: GoogleFonts.inter(
                                 fontSize: 10,
                                 color: isMODRole
@@ -1106,7 +1107,7 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
                                   if (!mounted) return;
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
-                                      content: Text('${_getMemberName(member)}\'s role updated to $newRole'),
+                                      content: Text('${_getMemberName(member)}\'s role updated to ${bandMemberRoleLabel(newRole)}'),
                                       backgroundColor: AppTheme.success,
                                     ),
                                   );
@@ -1139,7 +1140,7 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
                                     children: [
                                       Icon(Icons.star_outline_rounded, color: AppTheme.primaryAccent, size: 16),
                                       SizedBox(width: 8),
-                                      Text('Transfer Leadership', style: GoogleFonts.inter(color: AppTheme.primaryAccent)),
+                                      Flexible(child: Text('Transfer Leadership', style: GoogleFonts.inter(color: AppTheme.primaryAccent))),
                                     ],
                                   ),
                                 ),
@@ -1733,7 +1734,7 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
                             ),
                             const SizedBox(width: 8),
                             Expanded(child: Text(
-                              'BAND LEADER ACTIONS',
+                              'BANDLEADER ACTIONS',
                               style: GoogleFonts.outfit(
                                 fontSize: 13,
                                 fontWeight: FontWeight.bold,

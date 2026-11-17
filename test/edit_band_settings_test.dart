@@ -22,6 +22,7 @@ class MockSettingsFirebaseService extends FirebaseService {
   Map<String, String> userBandsToReturn = {};
   final List<Map<String, String>> addedMembers = [];
   final List<Map<String, String>> removedMembers = [];
+  final List<(String, String, String)> roleUpdates = [];
   List<BandMember> membersToReturn = [];
   Map<String, UserProfile> userProfiles = {};
   List<UserProfile> allUsersToReturn = [];
@@ -54,6 +55,11 @@ class MockSettingsFirebaseService extends FirebaseService {
   @override
   Future<List<UserProfile>> getAllUsersAsync() async {
     return allUsersToReturn;
+  }
+
+  @override
+  Future<void> updateBandMemberRoleAsync(String bandId, String userId, String role) async {
+    roleUpdates.add((bandId, userId, role));
   }
 
   @override
@@ -549,6 +555,15 @@ void main() {
       expect(find.text('Gary Guitar'), findsOneWidget);
       expect(find.text('Electric Guitar'), findsOneWidget);
       expect(find.text('Add Band Member'), findsWidgets);
+      expect(find.text('Bandleader'), findsWidgets);
+
+      await tester.tap(find.byTooltip('Set Admin Roles'));
+      await pumpUiTransitions(tester);
+      await tester.tap(find.text('Transfer Leadership'));
+      await pumpUiTransitions(tester);
+
+      expect(mockService.roleUpdates, [('band_edit_1', 'user_guitarist', 'Leader')]);
+      expect(find.text("Gary Guitar's role updated to Bandleader"), findsOneWidget);
     });
 
     testWidgets('EditBandInfoScreen allows removing a member with confirmation dialog', (tester) async {

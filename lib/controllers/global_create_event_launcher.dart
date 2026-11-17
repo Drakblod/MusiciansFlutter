@@ -326,7 +326,7 @@ class GlobalCreateEventLauncher {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text(
-                'You need to be a Leader, Admin, or MOD of a band to create a Band Event. You can create a Session without a band.',
+                'You need to be a Bandleader, Admin, or MOD of a band to create a Band Event. You can create a Session without a band.',
               ),
               backgroundColor: AppTheme.warning,
               duration: Duration(seconds: 4),

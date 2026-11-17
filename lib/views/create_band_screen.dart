@@ -15,6 +15,7 @@ import '../widgets/animated_tap_detector.dart';
 import '../widgets/searchable_category_multi_select_sheet.dart';
 import '../widgets/what_is_map_view_dialog.dart';
 import '../data/genres_taxonomy.dart';
+import '../utils/band_member_role_label.dart';
 
 class CreateBandScreen extends StatefulWidget {
   const CreateBandScreen({super.key});
@@ -373,7 +374,7 @@ class _CreateBandScreenState extends State<CreateBandScreen> {
                       style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
                     ),
                     Text(
-                      'Leader',
+                      bandMemberRoleLabel('Leader'),
                       style: GoogleFonts.inter(color: AppTheme.primaryAccent, fontSize: 11, fontWeight: FontWeight.w500),
                     ),
                   ],
@@ -387,7 +388,7 @@ class _CreateBandScreenState extends State<CreateBandScreen> {
                   border: Border.all(color: AppTheme.primaryAccent.withValues(alpha: 0.4)),
                 ),
                 child: Text(
-                  'Leader',
+                  bandMemberRoleLabel('Leader'),
                   style: GoogleFonts.inter(color: AppTheme.primaryAccent, fontSize: 10, fontWeight: FontWeight.bold),
                 ),
               ),
@@ -435,7 +436,7 @@ class _CreateBandScreenState extends State<CreateBandScreen> {
                           style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
                         ),
                         Text(
-                          role,
+                          bandMemberRoleLabel(role),
                           style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
                         ),
                         if (instrumentsStr.isNotEmpty && instrumentsStr != 'Member')
@@ -466,7 +467,7 @@ class _CreateBandScreenState extends State<CreateBandScreen> {
                                 : Border.all(color: AppTheme.primaryAccent.withValues(alpha: 0.4)),
                       ),
                       child: Text(
-                        isLeaderRole ? 'Leader' : isAdminRole ? 'Admin' : 'MOD',
+                        bandMemberRoleLabel(isLeaderRole ? role : isAdminRole ? 'Admin' : 'MOD'),
                         style: GoogleFonts.inter(
                           fontSize: 10,
                           color: isMODRole
@@ -489,7 +490,7 @@ class _CreateBandScreenState extends State<CreateBandScreen> {
                         });
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
-                            content: Text('$name\'s role set to $newRole'),
+                            content: Text('$name\'s role set to ${bandMemberRoleLabel(newRole)}'),
                             backgroundColor: AppTheme.success,
                             duration: const Duration(seconds: 2),
                           ),
@@ -533,7 +534,7 @@ class _CreateBandScreenState extends State<CreateBandScreen> {
                           children: [
                             const Icon(Icons.star_outline_rounded, color: AppTheme.primaryAccent, size: 16),
                             const SizedBox(width: 8),
-                            Text('Set as Leader', style: GoogleFonts.inter(color: AppTheme.primaryAccent)),
+                            Flexible(child: Text('Set as ${bandMemberRoleLabel('Leader')}', style: GoogleFonts.inter(color: AppTheme.primaryAccent))),
                           ],
                         ),
                       ),

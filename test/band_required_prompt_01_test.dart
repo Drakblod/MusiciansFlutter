@@ -447,7 +447,7 @@ void main() {
       await click(tester, true);
       expect(find.byType(BandRequiredDialog), findsNothing);
       if (role == 'Member') {
-        expect(find.text('Band leader or admin required'), findsOneWidget);
+        expect(find.text('Bandleader or admin required'), findsOneWidget);
         expect(state.service.formReads, 0);
         expect(find.text('Create a Band'), findsNothing);
       } else {

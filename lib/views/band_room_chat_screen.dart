@@ -3,6 +3,7 @@ import '../utils/catalogue_loading.dart';
 import '../utils/private_file_download.dart';
 import '../utils/membership_mutation_feedback.dart';
 import '../utils/band_membership_policy.dart';
+import '../utils/band_member_role_label.dart';
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -2086,7 +2087,7 @@ class _BandRoomChatScreenState extends State<_BandRoomContent>
                               ),
                               const SizedBox(height: 2),
                               Text(
-                                member.role ?? 'Member',
+                                bandMemberRoleLabel(member.role),
                                 style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textSecondary),
                               ),
                               Builder(
@@ -2160,7 +2161,7 @@ class _BandRoomChatScreenState extends State<_BandRoomContent>
                                       : null,
                             ),
                             child: Text(
-                              isLeaderRole ? 'Leader' : isAdminRole ? 'Admin' : 'MOD',
+                              bandMemberRoleLabel(isLeaderRole ? member.role : isAdminRole ? 'Admin' : 'MOD'),
                               style: GoogleFonts.inter(
                                 fontSize: 10,
                                 color: isMODRole
@@ -2224,7 +2225,7 @@ class _BandRoomChatScreenState extends State<_BandRoomContent>
                                   if (mounted) {
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       SnackBar(
-                                        content: Text('${_getMemberName(member)}\'s role updated to $newRole'),
+                                        content: Text('${_getMemberName(member)}\'s role updated to ${bandMemberRoleLabel(newRole)}'),
                                         backgroundColor: AppTheme.success,
                                       ),
                                     );
@@ -2258,7 +2259,7 @@ class _BandRoomChatScreenState extends State<_BandRoomContent>
                                     children: [
                                       Icon(Icons.star_outline_rounded, color: AppTheme.primaryAccent, size: 16),
                                       SizedBox(width: 8),
-                                      Text('Transfer Leadership', style: GoogleFonts.inter(color: AppTheme.primaryAccent)),
+                                      Flexible(child: Text('Transfer Leadership', style: GoogleFonts.inter(color: AppTheme.primaryAccent))),
                                     ],
                                   ),
                                 ),
@@ -2774,7 +2775,7 @@ class _BandRoomChatScreenState extends State<_BandRoomContent>
                           Row(
                             children: [
                               Text(
-                                member.role ?? 'Member',
+                                bandMemberRoleLabel(member.role),
                                 style: GoogleFonts.inter(
                                   fontSize: 12,
                                   color: AppTheme.textSecondary,

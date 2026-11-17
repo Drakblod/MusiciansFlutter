@@ -1,3 +1,4 @@
+import 'support/bounded_ui_pump.dart' show selectBlues;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:firebase_core/firebase_core.dart' hide FirebaseService;
@@ -431,6 +432,12 @@ void main() {
       expect(find.text('🎸 Rock, Pop, R&B, Hip Hop, etc'), findsOneWidget);
       expect(find.text('🎷 Jazz'), findsOneWidget);
       expect(find.text('🌍 World Music'), findsOneWidget);
+      expect(
+        tester.widget<SearchableCategoryMultiSelectSheet>(
+          find.byType(SearchableCategoryMultiSelectSheet),
+        ).categoryMap.keys.toList(),
+        ['🎸 Rock, Pop, R&B, Hip Hop, etc', '🎷 Jazz', '🌍 World Music'],
+      );
 
       // Unrelated categories not present
       expect(find.text('🗣️ Choir'), findsNothing);
@@ -456,6 +463,7 @@ void main() {
       await tester.enterText(find.widgetWithText(TextFormField, 'Session Title'), 'Pop Songwriting Workshop');
       await tester.enterText(find.widgetWithText(TextFormField, 'Session Description'), 'Writing hooks and toplines together');
       await tester.enterText(find.widgetWithText(TextFormField, 'Set hours here'), '24');
+      await selectBlues(tester, find.text('Tap to select genres'));
 
       // Tap Category dropdown and select Workshop
       await tester.tap(find.byType(DropdownButtonFormField<String>));
@@ -478,6 +486,8 @@ void main() {
       expect(saved.lookingForRoles, isEmpty);
       expect(saved.lookingForInstruments, isEmpty);
       expect(saved.reminderIntervalHours, equals(24));
+      expect(saved.genres, ['Blues']);
+      expect(CollabSession.fromJson(saved.toJson(), saved.id!).genres, ['Blues']);
     });
 
     testWidgets('22, 23. Date & Time picker structure and end time validation', (WidgetTester tester) async {

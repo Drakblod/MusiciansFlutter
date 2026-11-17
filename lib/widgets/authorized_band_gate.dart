@@ -17,11 +17,11 @@ class NoBandState extends StatelessWidget {
   Widget build(BuildContext context) => SafeArea(child: Center(child: SingleChildScrollView(
     padding: const EdgeInsets.all(24),
     child: Column(mainAxisSize: MainAxisSize.min, children: [
-      Text(managerRequired ? 'Band leader or admin required' :
+      Text(managerRequired ? 'Bandleader or admin required' :
         staffing ? staffingTitle : 'You’re not in a band yet', textAlign: TextAlign.center,
         style: Theme.of(context).textTheme.titleLarge),
       const SizedBox(height: 12),
-      Text(managerRequired ? 'Ask a band leader or admin to manage staffing requests.' :
+      Text(managerRequired ? 'Ask a Bandleader or admin to manage staffing requests.' :
         staffing ? staffingBody : 'Create a band to start using Band Room, invite members and manage your band.',
         textAlign: TextAlign.center),
       const SizedBox(height: 20),
