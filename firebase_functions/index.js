@@ -3247,7 +3247,12 @@ exports.markBandSectionConversationRead = onCall({ region: 'europe-west1' }, asy
 /**
  * 9. manageBandSectionConversation
  */
-exports.manageBandSectionConversation = onCall({ region: 'europe-west1' }, async (request) => {
+exports.manageBandSectionConversation = onCall({
+  region: 'europe-west1',
+  serviceAccount: '674065132924-compute@developer.gserviceaccount.com',
+  ingressSettings: 'ALLOW_ALL',
+  timeoutSeconds: 60,
+}, async (request) => {
   const callerUid = request.auth?.uid;
   if (!callerUid) {
     throw new HttpsError('unauthenticated', 'User must be authenticated.');
