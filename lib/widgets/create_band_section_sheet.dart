@@ -13,19 +13,22 @@ class CreateBandSectionSheet extends StatefulWidget {
   final String? initialBandId;
   final String? initialInstrument;
   final String? initialMemberId;
+  final bool lockToInitialBand;
 
   const CreateBandSectionSheet({
     super.key,
     this.initialBandId,
     this.initialInstrument,
     this.initialMemberId,
-  });
+    this.lockToInitialBand = false,
+  }) : assert(!lockToInitialBand || initialBandId != null);
 
   static Future<Map<String, dynamic>?> show(
     BuildContext context, {
     String? initialBandId,
     String? initialInstrument,
     String? initialMemberId,
+    bool lockToInitialBand = false,
   }) {
     return showModalBottomSheet<Map<String, dynamic>>(
       context: context,
@@ -39,6 +42,7 @@ class CreateBandSectionSheet extends StatefulWidget {
           initialBandId: initialBandId,
           initialInstrument: initialInstrument,
           initialMemberId: initialMemberId,
+          lockToInitialBand: lockToInitialBand,
         ),
       ),
     );
@@ -55,6 +59,8 @@ class _CreateBandSectionSheetState extends State<CreateBandSectionSheet> {
 
   Map<String, String> _userBands = {};
   String? _selectedBandId;
+  String? _creatorUid;
+  int _memberLoadGeneration = 0;
 
   List<BandMember> _bandMembers = [];
   Map<String, UserProfile> _memberProfiles = {};
@@ -83,14 +89,23 @@ class _CreateBandSectionSheetState extends State<CreateBandSectionSheet> {
     setState(() => _isLoadingBands = true);
     final appState = Provider.of<AppState>(context, listen: false);
     final selfId = appState.currentUserId;
+    _creatorUid = selfId;
     if (selfId == null) {
       setState(() => _isLoadingBands = false);
       return;
     }
 
     try {
-      final bands = await appState.firebaseService.getUserBandsAsync(selfId);
+      final availableBands = await appState.firebaseService.getUserBandsAsync(selfId);
       if (mounted) {
+        final bands = appState.currentUserId != selfId
+            ? <String, String>{}
+            : widget.lockToInitialBand
+                ? <String, String>{
+                    if (availableBands.containsKey(widget.initialBandId))
+                      widget.initialBandId!: availableBands[widget.initialBandId]!,
+                  }
+                : availableBands;
         setState(() {
           _userBands = bands;
           _isLoadingBands = false;
@@ -110,23 +125,35 @@ class _CreateBandSectionSheetState extends State<CreateBandSectionSheet> {
       if (mounted) {
         setState(() {
           _isLoadingBands = false;
-          _errorMessage = 'Failed to load bands: $e';
+          _errorMessage = 'Could not load bands. Please try again.';
         });
       }
     }
   }
 
   Future<void> _loadBandMembers(String bandId) async {
+    final generation = ++_memberLoadGeneration;
     setState(() {
       _isLoadingMembers = true;
       _errorMessage = null;
+      _bandMembers = [];
+      _memberProfiles = {};
+      _suggestions = [];
+      _selectedSuggestion = null;
+      _selectedMemberIds.clear();
     });
 
     final appState = Provider.of<AppState>(context, listen: false);
     final selfId = appState.currentUserId;
 
     try {
-      final members = await appState.firebaseService.getBandMembersAsync(bandId);
+      final members = (await appState.firebaseService.getBandMembersAsync(bandId))
+          .where((member) => member.userId?.isNotEmpty == true &&
+              (member.status == null || RegExp(r'^ *(active|on_hold|temporarily_off) *$',
+                  caseSensitive: false).hasMatch(member.status!))).toList();
+      if (!members.any((member) => member.userId == selfId)) {
+        throw StateError('Band membership is unavailable');
+      }
       final Map<String, UserProfile> profiles = {};
 
       for (final m in members) {
@@ -142,7 +169,8 @@ class _CreateBandSectionSheetState extends State<CreateBandSectionSheet> {
         userProfiles: profiles,
       );
 
-      if (mounted) {
+      if (mounted && generation == _memberLoadGeneration &&
+          appState.currentUserId == selfId && _selectedBandId == bandId) {
         setState(() {
           _bandMembers = members;
           _memberProfiles = profiles;
@@ -163,14 +191,20 @@ class _CreateBandSectionSheetState extends State<CreateBandSectionSheet> {
             } else {
               _isCustomMode = true;
               _groupNameController.text = '${widget.initialInstrument} Section';
-              if (widget.initialMemberId != null) {
+              if (members.any((member) => member.userId == widget.initialMemberId)) {
                 _selectedMemberIds.add(widget.initialMemberId!);
               }
             }
           } else if (widget.initialMemberId != null) {
             _isCustomMode = true;
-            _selectedMemberIds.add(widget.initialMemberId!);
+            if (members.any((member) => member.userId == widget.initialMemberId)) {
+              _selectedMemberIds.add(widget.initialMemberId!);
+            }
             _groupNameController.text = 'Custom Section';
+          } else if (widget.lockToInitialBand) {
+            _isCustomMode = true;
+            _selectedSuggestion = null;
+            _groupNameController.clear();
           } else if (suggestions.isNotEmpty) {
             _applySuggestion(suggestions.first);
           } else {
@@ -180,10 +214,10 @@ class _CreateBandSectionSheetState extends State<CreateBandSectionSheet> {
         });
       }
     } catch (e) {
-      if (mounted) {
+      if (mounted && generation == _memberLoadGeneration && _selectedBandId == bandId) {
         setState(() {
           _isLoadingMembers = false;
-          _errorMessage = 'Failed to load band members: $e';
+          _errorMessage = 'Could not verify the band members. Close and try again.';
         });
       }
     }
@@ -202,6 +236,16 @@ class _CreateBandSectionSheetState extends State<CreateBandSectionSheet> {
   }
 
   Future<void> _handleCreateGroup() async {
+    if (_isSubmitting || _isLoadingMembers) return;
+    final appState = Provider.of<AppState>(context, listen: false);
+    final bandId = _selectedBandId;
+    final callerUid = appState.currentUserId;
+    if (callerUid == null || callerUid != _creatorUid ||
+        (widget.lockToInitialBand && (bandId != widget.initialBandId ||
+            appState.activeBandId != bandId))) {
+      setState(() => _errorMessage = 'Your band or account changed. Close and try again.');
+      return;
+    }
     final groupName = _groupNameController.text.trim();
     if (groupName.isEmpty) {
       setState(() => _errorMessage = 'Please enter a group name.');
@@ -215,7 +259,7 @@ class _CreateBandSectionSheetState extends State<CreateBandSectionSheet> {
       setState(() => _errorMessage = 'Please select at least 2 members for the group.');
       return;
     }
-    if (_selectedBandId == null) {
+    if (bandId == null) {
       setState(() => _errorMessage = 'Please select a band.');
       return;
     }
@@ -225,21 +269,23 @@ class _CreateBandSectionSheetState extends State<CreateBandSectionSheet> {
       _errorMessage = null;
     });
 
-    final appState = Provider.of<AppState>(context, listen: false);
-
     try {
       final convId = await appState.firebaseService.createBandSectionConversationAsync(
-        bandId: _selectedBandId!,
+        bandId: bandId,
         groupName: groupName,
         participantIds: _selectedMemberIds.toList(),
         sectionKey: _isCustomMode ? null : _selectedSuggestion?.sectionKey,
         sourceInstrument: _isCustomMode ? null : _selectedSuggestion?.sectionName,
       );
+      if (convId.trim().isEmpty || appState.currentUserId != callerUid ||
+          (widget.lockToInitialBand && appState.activeBandId != bandId)) {
+        throw StateError('Group context is unavailable');
+      }
 
       if (mounted) {
         Navigator.pop(context, {
           'conversationId': convId,
-          'bandId': _selectedBandId,
+          'bandId': bandId,
           'groupName': groupName,
         });
       }
@@ -247,7 +293,7 @@ class _CreateBandSectionSheetState extends State<CreateBandSectionSheet> {
       if (mounted) {
         setState(() {
           _isSubmitting = false;
-          _errorMessage = 'Failed to create group: $e';
+          _errorMessage = 'Could not create this group. Check the members and try again.';
         });
       }
     }
@@ -296,7 +342,9 @@ class _CreateBandSectionSheetState extends State<CreateBandSectionSheet> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'You must be a member of at least one band to create a section group chat.',
+                          widget.lockToInitialBand
+                              ? 'This band is unavailable for your current access.'
+                              : 'You must be a member of at least one band to create a section group chat.',
                           style: GoogleFonts.inter(
                             fontSize: 14,
                             color: AppTheme.textSecondary,
@@ -336,18 +384,22 @@ class _CreateBandSectionSheetState extends State<CreateBandSectionSheet> {
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text(
-                              'NEW SECTION GROUP',
-                              style: GoogleFonts.outfit(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                                letterSpacing: 1.0,
+                            Expanded(
+                              child: Text(
+                                'NEW SECTION GROUP',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                  letterSpacing: 1.0,
+                                ),
                               ),
                             ),
                             IconButton(
+                              key: const ValueKey('cancel-band-group'),
+                              tooltip: 'Cancel',
                               icon: const Icon(Icons.close, color: Colors.white70),
-                              onPressed: () => Navigator.pop(context),
+                              onPressed: _isSubmitting ? null : () => Navigator.pop(context),
                             ),
                           ],
                         ),
@@ -362,7 +414,7 @@ class _CreateBandSectionSheetState extends State<CreateBandSectionSheet> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               // Band Picker if multiple bands
-                              if (_userBands.length > 1) ...[
+                              if (!widget.lockToInitialBand && _userBands.length > 1) ...[
                                 Text(
                                   'Select Band',
                                   style: GoogleFonts.outfit(
@@ -544,6 +596,7 @@ class _CreateBandSectionSheetState extends State<CreateBandSectionSheet> {
                                 ),
                                 const SizedBox(height: 8),
                                 TextField(
+                                  key: const ValueKey('band-group-name'),
                                   controller: _groupNameController,
                                   maxLength: 80,
                                   style: GoogleFonts.inter(color: Colors.white),
@@ -574,14 +627,17 @@ class _CreateBandSectionSheetState extends State<CreateBandSectionSheet> {
                                 Row(
                                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
-                                    Text(
-                                      'Review Members (${_selectedMemberIds.length})',
-                                      style: GoogleFonts.outfit(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w600,
-                                        color: Colors.white,
+                                    Expanded(
+                                      child: Text(
+                                        'Review Members (${_selectedMemberIds.length})',
+                                        style: GoogleFonts.outfit(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.white,
+                                        ),
                                       ),
                                     ),
+                                    const SizedBox(width: 8),
                                     Text(
                                       'Min 2 required',
                                       style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textMuted),
@@ -610,6 +666,7 @@ class _CreateBandSectionSheetState extends State<CreateBandSectionSheet> {
                                       final inst = BandSectionUtils.resolveEffectiveInstrument(profile) ?? 'Musician';
 
                                       return CheckboxListTile(
+                                        key: ValueKey('band-group-member-$uid'),
                                         value: isSelected,
                                         activeColor: AppTheme.primaryAccent,
                                         checkColor: Colors.white,
@@ -687,6 +744,7 @@ class _CreateBandSectionSheetState extends State<CreateBandSectionSheet> {
 
                               // Confirm Button
                               AnimatedTapDetector(
+                                key: const ValueKey('create-band-group'),
                                 onTap: _isSubmitting || _isLoadingMembers ? () {} : _handleCreateGroup,
                                 child: Container(
                                   height: 48,

@@ -1058,6 +1058,18 @@ class _BandRoomChatScreenState extends State<_BandRoomContent>
   Widget _buildChatTab() {
     return Column(
       children: [
+        Align(
+          alignment: Alignment.centerRight,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            child: TextButton.icon(
+              key: const ValueKey('band-room-new-group'),
+              onPressed: _createChatGroup,
+              icon: const Icon(Icons.group_add_outlined),
+              label: const Text('New Group'),
+            ),
+          ),
+        ),
         // Message thread
         Expanded(
           child: _chatMessages.isEmpty
@@ -1196,6 +1208,28 @@ class _BandRoomChatScreenState extends State<_BandRoomContent>
         ),
       ],
     );
+  }
+
+  Future<void> _createChatGroup() async {
+    final appState = Provider.of<AppState>(context, listen: false);
+    final bandId = _activeBand?.id;
+    final uid = appState.currentUserId;
+    if (bandId == null || appState.activeBandId != bandId ||
+        !BandMembershipPolicy.isMember(_activeBand, uid)) {
+      return;
+    }
+    final result = await CreateBandSectionSheet.show(
+      context,
+      initialBandId: bandId,
+      lockToInitialBand: true,
+    );
+    if (!mounted || result == null || appState.currentUserId != uid ||
+        appState.activeBandId != bandId || result['bandId'] != bandId) {
+      return;
+    }
+    final id = result['conversationId'];
+    if (id is! String || id.trim().isEmpty) return;
+    Navigator.pushNamed(context, '/band-section-chat', arguments: result);
   }
 
   String _getSenderName(Message msg) {
@@ -1821,6 +1855,7 @@ class _BandRoomChatScreenState extends State<_BandRoomContent>
                     final result = await CreateBandSectionSheet.show(
                       context,
                       initialBandId: bandId,
+                      lockToInitialBand: true,
                       initialInstrument: instrument,
                       initialMemberId: memberId,
                     );
@@ -1837,6 +1872,7 @@ class _BandRoomChatScreenState extends State<_BandRoomContent>
                   final result = await CreateBandSectionSheet.show(
                     context,
                     initialBandId: bandId,
+                    lockToInitialBand: true,
                     initialMemberId: memberId,
                   );
                   if (result != null && mounted) {

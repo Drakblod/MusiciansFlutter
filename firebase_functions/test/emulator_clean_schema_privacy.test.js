@@ -160,6 +160,82 @@ for(const ruleFile of ['database.rules.json','database.transitional.rules.json']
     await assertFails(other.ref(`Collabs/Applications/${session}`).get());
   });
 
+  describe('New Group canonical membership and atomic creation',()=>{
+    let groupBand,sequence=0;
+    beforeEach(async()=>{
+      groupBand=`new_group_${tag}_${++sequence}`;
+      await db.ref(`Bands/${groupBand}`).set({Name:'Current band',Members_band:{
+        [ids.member]:{Role:'Member',Status:'active'},
+        [ids.leader]:{Role:'Leader',Status:'active'},
+      }});
+    });
+    const create=participantIds=>call('member','createBandSectionConversation',{
+      bandId:groupBand,groupName:'Exact selected group',participantIds,
+    });
+    async function assertNoGroup(){
+      assert.equal((await db.ref(`bandSectionConversations/${groupBand}`).get()).exists(),false);
+      const conversations=(await db.ref('conversations').get()).val()||{};
+      assert.equal(Object.values(conversations).some(c=>c.bandId===groupBand),false);
+      for(const uid of Object.values(ids)){
+        const entries=(await db.ref(`userConversations/${uid}`).get()).val()||{};
+        assert.equal(Object.values(entries).some(c=>c.bandId===groupBand),false);
+      }
+    }
+    for(const [label,status] of [
+      ['legacy',{}],['active',{Status:'active'}],['on_hold',{Status:'on_hold'}],
+      ['temporarily_off',{Status:'temporarily_off'}],['case and spaces',{Status:' ACTIVE '}],
+      ['lowercase alias',{status:'on_hold'}],['two permitted aliases',{Status:'active',status:'temporarily_off'}],
+    ])it(`${label} creator and participant retain chat access`,async()=>{
+      await db.ref(`Bands/${groupBand}/Members_band`).set({
+        [ids.member]:{Role:'Member',...status},[ids.leader]:{Role:'Leader',...status},
+      });
+      const result=await create([ids.leader,ids.member,ids.leader]);
+      const id=result.conversationId;assert(id);
+      const row=(await assertSucceeds(client(ids.member).ref(`conversations/${id}`).get())).val();
+      assert.equal(row.groupName,'Exact selected group');assert.equal(row.bandId,groupBand);
+      assert.deepEqual(row.participants,{[ids.member]:true,[ids.leader]:true});
+      assert.equal(row.participantCount,2);
+      await assertSucceeds(client(ids.leader).ref(`conversations/${id}`).get());
+      assert.equal((await db.ref(`bandSectionConversations/${groupBand}/${id}`).get()).val(),true);
+      for(const uid of [ids.member,ids.leader])
+        assert.equal((await db.ref(`userConversations/${uid}/${id}/groupName`).get()).val(),'Exact selected group');
+    });
+    for(const [label,status] of [
+      ['inactive',{Status:'inactive'}],['removed',{Status:'removed'}],['invited',{Status:'invited'}],
+      ['unknown',{Status:'unknown'}],['empty',{Status:''}],['wrong type',{Status:42}],
+      ['disallowed whitespace',{Status:'\tactive\t'}],
+      ['denied lowercase alias',{status:'inactive'}],
+      ['conflicting eligibility',{Status:'active',status:'inactive'}],
+    ]){
+      it(`${label} creator is denied without a conversation or indexes`,async()=>{
+        await db.ref(`Bands/${groupBand}/Members_band/${ids.member}`).set({Role:'Member',...status});
+        await assert.rejects(create([ids.leader]),e=>e.code==='functions/permission-denied');
+        await assertNoGroup();
+      });
+      it(`${label} selected participant rejects the entire otherwise-valid group`,async()=>{
+        await db.ref(`Bands/${groupBand}/Members_band/${ids.outsider}`).set({Role:'Member',...status});
+        await assert.rejects(create([ids.leader,ids.outsider]),e=>e.code==='functions/permission-denied');
+        await assertNoGroup();
+      });
+    }
+    it('another-band creator is denied with no writes',async()=>{
+      await db.ref(`Bands/${groupBand}/Members_band/${ids.member}`).remove();
+      await db.ref(`Bands/${groupBand}_other/Members_band/${ids.member}`).set({Role:'Leader',Status:'active'});
+      await assert.rejects(create([ids.leader]),e=>e.code==='functions/permission-denied');
+      await assertNoGroup();
+    });
+    it('another-band participant rejects the whole group rather than being silently dropped',async()=>{
+      await db.ref(`Bands/${groupBand}_other/Members_band/${ids.outsider}`).set({Role:'Member',Status:'active'});
+      await assert.rejects(create([ids.leader,ids.outsider]),e=>e.code==='functions/permission-denied');
+      await assertNoGroup();
+    });
+    for(const participantIds of [null,'not-a-list',[null],[''],[42]])
+      it(`malformed participant input ${JSON.stringify(participantIds)} writes nothing`,async()=>{
+        await assert.rejects(create(participantIds),e=>e.code==='functions/invalid-argument');
+        await assertNoGroup();
+      });
+  });
+
   it('current Leader reads manager data; role loss denies member/manager projections and canonical creator request access',async()=>{
     const c=client(ids.leader);
     const section=await call('leader','createBandSectionConversation',{

@@ -160,13 +160,14 @@ class MockGigsInfoAppState extends AppState {
       );
 }
 
+Future<void> initializeBandRoomTestFirebase() async {
+  setupFirebaseCoreMocks();
+  await Firebase.initializeApp();
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  setupFirebaseCoreMocks();
-
-  setUpAll(() async {
-    await Firebase.initializeApp();
-  });
+  setUpAll(initializeBandRoomTestFirebase);
 
   setUp(() {
     SharedPreferences.setMockInitialValues({});

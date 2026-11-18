@@ -2998,9 +2998,16 @@ exports.createBandSectionConversation = onCall({ region: 'europe-west1' }, async
   }
   const bandMembers = membersSnap.val();
 
-  // Verify caller is a current band member (any valid role including Member)
-  if (!bandMembers[callerUid]) {
-    throw new HttpsError('permission-denied', 'You are not a member of this band.');
+  // Match the conversation read rule: both status aliases must allow chat.
+  // A hold pauses RSVP obligations, not chat access; missing status is legacy active.
+  const canAccessChat = uid => {
+    const member = Object.prototype.hasOwnProperty.call(bandMembers, uid) && bandMembers[uid];
+    return member && typeof member === 'object' && !Array.isArray(member) &&
+      Object.keys(member).length > 0 && [member.Status, member.status].every(status =>
+        status == null || (typeof status === 'string' && /^ *(active|on_hold|temporarily_off) *$/i.test(status)));
+  };
+  if (!canAccessChat(callerUid)) {
+    throw new HttpsError('permission-denied', 'You cannot create a group in this band.');
   }
 
   // Get authoritative band name snapshot
@@ -3011,17 +3018,22 @@ exports.createBandSectionConversation = onCall({ region: 'europe-west1' }, async
   }
 
   // Validate and deduplicate participants
-  const rawParticipants = Array.isArray(participantIds) ? participantIds : [];
+  if (!Array.isArray(participantIds)) {
+    throw new HttpsError('invalid-argument', 'participantIds must be a list.');
+  }
+  const rawParticipants = participantIds;
   const validParticipantSet = new Set();
   validParticipantSet.add(callerUid);
 
   for (const pid of rawParticipants) {
-    if (pid && typeof pid === 'string' && pid.trim().length > 0) {
-      const cleanPid = pid.trim();
-      if (bandMembers[cleanPid]) {
-        validParticipantSet.add(cleanPid);
-      }
+    if (typeof pid !== 'string' || pid.trim().length === 0) {
+      throw new HttpsError('invalid-argument', 'Every selected participant must have a valid ID.');
     }
+    const cleanPid = pid.trim();
+    if (!canAccessChat(cleanPid)) {
+      throw new HttpsError('permission-denied', 'One or more selected participants cannot access this band.');
+    }
+    validParticipantSet.add(cleanPid);
   }
 
   if (validParticipantSet.size < 2) {
