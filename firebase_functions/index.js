@@ -2972,7 +2972,12 @@ exports.triggerEventReminder = onCall({ region: 'europe-west1' }, async (request
 /**
  * 6. createBandSectionConversation
  */
-exports.createBandSectionConversation = onCall({ region: 'europe-west1' }, async (request) => {
+exports.createBandSectionConversation = onCall({
+  region: 'europe-west1',
+  serviceAccount: '674065132924-compute@developer.gserviceaccount.com',
+  ingressSettings: 'ALLOW_ALL',
+  timeoutSeconds: 60,
+}, async (request) => {
   const callerUid = request.auth?.uid;
   if (!callerUid) {
     throw new HttpsError('unauthenticated', 'User must be authenticated.');
