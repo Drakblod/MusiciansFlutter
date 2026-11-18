@@ -236,6 +236,98 @@ for(const ruleFile of ['database.rules.json','database.transitional.rules.json']
       });
   });
 
+  describe('Edit Group rename authorization and atomic name indexes',()=>{
+    let groupBand,conversationId,sequence=0;
+    const rename=who=>call(who,'manageBandSectionConversation',{
+      conversationId,action:'rename',groupName:'  Renamed group  ',
+    });
+    beforeEach(async()=>{
+      groupBand=`edit_group_${tag}_${++sequence}`;
+      await db.ref(`Bands/${groupBand}`).set({Name:'Rename band',Members_band:{
+        [ids.member]:{Role:'Member'},[ids.leader]:{Role:'Member'},[ids.applicant]:{Role:'Member'},
+      }});
+      ({conversationId}=await call('member','createBandSectionConversation',{
+        bandId:groupBand,groupName:'Original group',participantIds:[ids.leader,ids.applicant],
+      }));
+      await db.ref(`conversations/${conversationId}/admins/${ids.applicant}`).set(true);
+      await db.ref(`conversations/${conversationId}/messages/existing`).set({senderId:ids.leader,text:'Keep this message'});
+    });
+    async function snapshot(){
+      const indexes={};
+      for(const uid of Object.values(ids))
+        indexes[uid]=(await db.ref(`userConversations/${uid}/${conversationId}`).get()).val();
+      return {conversation:(await db.ref(`conversations/${conversationId}`).get()).val(),indexes,
+        bandIndex:(await db.ref(`bandSectionConversations/${groupBand}`).get()).val()};
+    }
+    async function assertDenied(who,awaitMembershipRemoval=false){
+      // Canonical revocation already schedules the existing membership cleanup.
+      // Let its atomic removal finish before measuring writes by the denied rename.
+      if(awaitMembershipRemoval)
+        await waitFor(`conversations/${conversationId}/participants/${ids[who]}`,v=>v==null);
+      const before=await snapshot();
+      await assert.rejects(rename(who),e=>e.code==='functions/permission-denied');
+      assert.deepEqual(await snapshot(),before,'Denied rename must not change conversation, messages or indexes');
+    }
+    async function assertRenamed(who){
+      const before=await snapshot();
+      assert.equal((await rename(who)).success,true);
+      const after=await snapshot();
+      assert.equal(typeof after.conversation.updatedTimestamp,'string');
+      before.conversation.updatedTimestamp=after.conversation.updatedTimestamp;
+      before.conversation.groupName='Renamed group';
+      for(const row of Object.values(before.indexes))if(row)row.groupName='Renamed group';
+      assert.deepEqual(after,before,'Only name, name indexes and update timestamp may change');
+    }
+    for(const [label,status] of [
+      ['legacy missing status',{}],['active',{Status:'active'}],['on hold',{Status:'on_hold'}],
+      ['temporarily off',{Status:'temporarily_off'}],['case and spaces',{Status:' AcTiVe '}],
+      ['lowercase alias',{status:' ON_HOLD '}],['both allowed aliases',{Status:'active',status:'temporarily_off'}],
+    ])for(const who of ['member','applicant'])
+      it(`${label}: participating ${who==='member'?'creator':'group admin'} renames and can read the same conversation`,async()=>{
+        await db.ref(`Bands/${groupBand}/Members_band/${ids[who]}`).set({Role:'Member',...status});
+        await assertSucceeds(client(ids[who]).ref(`conversations/${conversationId}`).get());
+        await assertRenamed(who);
+        const row=(await assertSucceeds(client(ids[who]).ref(`conversations/${conversationId}`).get())).val();
+        assert.equal(row.groupName,'Renamed group');
+      });
+    for(const who of ['member','applicant'])
+      it(`former participating ${who==='member'?'creator':'group admin'} loses local rename authority`,async()=>{
+        await call(who,'manageBandSectionConversation',{conversationId,action:'leave'});
+        // Even a retained stale group-admin flag must not restore authority.
+        await db.ref(`conversations/${conversationId}/admins/${ids[who]}`).set(true);
+        await assertDenied(who);
+        await assertFails(client(ids[who]).ref(`conversations/${conversationId}`).get());
+      });
+    for(const [label,status,removalExpected=true] of [
+      ['inactive',{Status:'inactive'}],['removed',{Status:'removed'}],['invited',{Status:'invited'}],
+      ['unknown',{Status:'unknown'}],['empty',{Status:''}],['wrong type',{Status:42}],
+      ['tab whitespace',{Status:'\tactive\t'},false],['denied lowercase alias',{status:'inactive'}],
+      ['conflicting aliases',{Status:'active',status:'inactive'},false],
+    ])for(const [who,role] of [['member','Member'],['applicant','Member'],['outsider','Admin']])
+      it(`${label}: ${who} cannot rename or read`,async()=>{
+        await db.ref(`Bands/${groupBand}/Members_band/${ids[who]}`).set({Role:role,...status});
+        await assertDenied(who,removalExpected && who!=='outsider');
+        await assertFails(client(ids[who]).ref(`conversations/${conversationId}`).get());
+      });
+    it('ordinary participating member cannot rename',async()=>{await assertDenied('leader');});
+    it('a group creator without a current canonical band membership cannot rename',async()=>{
+      await db.ref(`Bands/${groupBand}/Members_band/${ids.member}`).remove();
+      await assertDenied('member',true);
+    });
+    it('a Leader of another band cannot rename this conversation',async()=>{
+      await db.ref(`Bands/${groupBand}_other/Members_band/${ids.outsider}`).set({Role:'Leader'});
+      await assertDenied('outsider');
+    });
+    for(const role of ['Leader','Admin','MOD'])
+      it(`${role} retains exact-band rename authority without participation or new read access`,async()=>{
+        await db.ref(`Bands/${groupBand}/Members_band/${ids.outsider}`).set({Role:role,Status:'on_hold'});
+        await assertFails(client(ids.outsider).ref(`conversations/${conversationId}`).get());
+        await assertRenamed('outsider');
+        await assertFails(client(ids.outsider).ref(`conversations/${conversationId}`).get());
+        assert.equal((await db.ref(`userConversations/${ids.outsider}/${conversationId}`).get()).exists(),false);
+      });
+  });
+
   it('current Leader reads manager data; role loss denies member/manager projections and canonical creator request access',async()=>{
     const c=client(ids.leader);
     const section=await call('leader','createBandSectionConversation',{

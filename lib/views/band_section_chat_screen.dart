@@ -175,14 +175,14 @@ class _BandSectionChatScreenState extends State<BandSectionChatScreen> {
                         if (canManage)
                           IconButton(
                             icon: const Icon(Icons.edit_outlined, color: AppTheme.primaryAccent, size: 20),
-                            tooltip: 'Rename Group',
+                            tooltip: 'Edit Group',
                             onPressed: () async {
                               final nameCtrl = TextEditingController(text: groupName);
                               final newName = await showDialog<String>(
                                 context: context,
                                 builder: (dCtx) => AlertDialog(
                                   backgroundColor: AppTheme.cardBackground,
-                                  title: Text('Rename Group', style: GoogleFonts.outfit(color: Colors.white)),
+                                  title: Text('Edit Group', style: GoogleFonts.outfit(color: Colors.white)),
                                   content: TextField(
                                     controller: nameCtrl,
                                     maxLength: 80,
@@ -202,12 +202,20 @@ class _BandSectionChatScreenState extends State<BandSectionChatScreen> {
                                 ),
                               );
                               if (newName != null && newName.isNotEmpty && newName != groupName) {
-                                await appState.firebaseService.manageBandSectionConversationAsync(
-                                  conversationId: widget.conversationId,
-                                  action: 'rename',
-                                  groupName: newName,
-                                );
-                                if (mounted) Navigator.pop(ctx);
+                                try {
+                                  await appState.firebaseService.manageBandSectionConversationAsync(
+                                    conversationId: widget.conversationId,
+                                    action: 'rename',
+                                    groupName: newName,
+                                  );
+                                  if (ctx.mounted) Navigator.pop(ctx);
+                                } catch (_) {
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(this.context).showSnackBar(
+                                      const SnackBar(content: Text('Could not rename this group. Check your access and try again.')),
+                                    );
+                                  }
+                                }
                               }
                             },
                           ),

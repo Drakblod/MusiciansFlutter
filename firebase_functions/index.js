@@ -3295,7 +3295,13 @@ exports.manageBandSectionConversation = onCall({ region: 'europe-west1' }, async
   updates[`/conversations/${conversationId}/updatedTimestamp`] = timestampIso;
 
   if (action === 'rename') {
-    if (!isGroupAdmin && !isBandAdminOrLeader) {
+    // Same status policy as New Group and both conversation read rules.
+    // Missing status is legacy active; both aliases must independently allow chat.
+    const member = bandMembers[callerUid];
+    const hasChatStatus = member && typeof member === 'object' && !Array.isArray(member) &&
+      Object.keys(member).length > 0 && [member.Status, member.status].every(status =>
+        status == null || (typeof status === 'string' && /^ *(active|on_hold|temporarily_off) *$/i.test(status)));
+    if (!hasChatStatus || (!(isGroupAdmin && pMap[callerUid] === true) && !isBandAdminOrLeader)) {
       throw new HttpsError('permission-denied', 'Only group admins or Band Leaders/Admins can rename the group.');
     }
     if (!groupName || typeof groupName !== 'string' || groupName.trim().length === 0) {
