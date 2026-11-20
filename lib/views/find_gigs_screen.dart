@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import '../widgets/request_management_gate.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -723,7 +724,28 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                       ),
                       const SizedBox(height: 16),
 
-                      // 3. Role / Instrument
+                      // 3. Event Type (omit for New Band Member or if missing)
+                      if (presentation.requestType != 'New Band Member' && presentation.eventType != null && presentation.eventType!.trim().isNotEmpty) ...[
+                        Text(
+                          'Event Type',
+                          style: GoogleFonts.outfit(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          presentation.eventType!.trim(),
+                          style: GoogleFonts.inter(
+                            fontSize: 14,
+                            color: AppTheme.textSecondary,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+
+                      // 4. Role / Instrument
                       Text(
                         'Role / Instrument',
                         style: GoogleFonts.outfit(
@@ -955,27 +977,6 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                       }),
                       const SizedBox(height: 16),
 
-                      // 4. Event Type (omit for New Band Member or if missing)
-                      if (presentation.requestType != 'New Band Member' && presentation.eventType != null && presentation.eventType!.trim().isNotEmpty) ...[
-                        Text(
-                          'Event Type',
-                          style: GoogleFonts.outfit(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          presentation.eventType!.trim(),
-                          style: GoogleFonts.inter(
-                            fontSize: 14,
-                            color: AppTheme.textSecondary,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                      ],
-
                       if (presentation.isPaid && presentation.formattedPayment != null) ...[
                         Text(
                           'Payment',
@@ -1108,100 +1109,67 @@ class _FindGigsScreenState extends State<FindGigsScreen>
         showBack: true,
       ),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'Find Gigs',
-                        style: GoogleFonts.outfit(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                        overflow: TextOverflow.ellipsis,
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Find Gigs',
+                      style: GoogleFonts.outfit(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
                       ),
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(width: 8),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (FeatureToggles.enableMapView &&
-                            !FeatureToggles.showMapInTopBar) ...[
-                          TextButton.icon(
-                            onPressed: () {
-                              Navigator.pushNamed(context, '/gig-map');
-                            },
-                            icon: const Icon(Icons.map_rounded, color: AppTheme.primaryAccent, size: 16),
-                            label: Text(
-                              'Map View',
-                              style: GoogleFonts.inter(
-                                color: AppTheme.primaryAccent,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 12,
-                              ),
-                            ),
-                            style: TextButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              backgroundColor: AppTheme.primaryAccent.withValues(alpha: 0.12),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                                side: BorderSide(color: AppTheme.primaryAccent.withValues(alpha: 0.3)),
-                              ),
+                  ),
+                  const SizedBox(width: 8),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (FeatureToggles.enableMapView &&
+                          !FeatureToggles.showMapInTopBar) ...[
+                        TextButton.icon(
+                          onPressed: () {
+                            Navigator.pushNamed(context, '/gig-map');
+                          },
+                          icon: const Icon(Icons.map_rounded, color: AppTheme.primaryAccent, size: 16),
+                          label: Text(
+                            'Map View',
+                            style: GoogleFonts.inter(
+                              color: AppTheme.primaryAccent,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
                             ),
                           ),
-                          const SizedBox(width: 8),
-                        ],
-                        const Icon(Icons.filter_list_rounded, color: Colors.white, size: 22),
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            backgroundColor: AppTheme.primaryAccent.withValues(alpha: 0.12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              side: BorderSide(color: AppTheme.primaryAccent.withValues(alpha: 0.3)),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
                       ],
-                    ),
-                  ],
-                ),
-              ),
-
-              TabBar(
-                controller: _tabController,
-                indicatorColor: AppTheme.primaryAccent,
-                labelColor: Colors.white,
-                unselectedLabelColor: AppTheme.textSecondary,
-                labelPadding: const EdgeInsets.symmetric(horizontal: 4),
-                labelStyle: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 13),
-                tabs: const [
-                  Tab(
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text('Substitute Requests', maxLines: 1),
-                    ),
-                  ),
-                  Tab(
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text('New Member Requests', maxLines: 1),
-                    ),
-                  ),
-                  Tab(
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text('Applied', maxLines: 1),
-                    ),
-                  ),
-                  Tab(
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text('Saved', maxLines: 1),
-                    ),
+                      const Icon(Icons.filter_list_rounded, color: Colors.white, size: 22),
+                    ],
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
+            ),
 
-              Expanded(
+            _buildRequestTabs(),
+            const SizedBox(height: 16),
+
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: _isLoading
                     ? const Center(child: CircularProgressIndicator(color: AppTheme.primaryAccent))
                     : TabBarView(
@@ -1218,11 +1186,58 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                         ],
                       ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
+  }
+
+  Widget _buildRequestTabs() {
+    const fontSize = 13.0;
+    final scaledSize = MediaQuery.textScalerOf(context).scale(fontSize);
+    final tabHeight = math.max(46.0, scaledSize * 2 * 1.2 + 12);
+
+    return LayoutBuilder(builder: (context, constraints) {
+      // Use the full width and allow scrolling when equal-width tabs would
+      // press the request headings together at the user's text size.
+      final scrollable = constraints.maxWidth < 420 * (scaledSize / fontSize);
+      return TabBar(
+        controller: _tabController,
+        isScrollable: scrollable,
+        tabAlignment: scrollable ? TabAlignment.start : TabAlignment.fill,
+        padding: EdgeInsets.symmetric(horizontal: scrollable ? 0 : 16),
+        indicatorColor: AppTheme.primaryAccent,
+        labelColor: Colors.white,
+        unselectedLabelColor: AppTheme.textSecondary,
+        labelPadding: const EdgeInsets.symmetric(horizontal: 4),
+        labelStyle: GoogleFonts.inter(
+          fontWeight: FontWeight.bold,
+          fontSize: fontSize,
+          height: 1.2,
+        ),
+        tabs: [
+          Tab(
+            height: tabHeight,
+            child: const Text(
+              'Substitute\nRequests',
+              semanticsLabel: 'Substitute Requests',
+              textAlign: TextAlign.center,
+            ),
+          ),
+          Tab(
+            height: tabHeight,
+            child: const Text(
+              'New Member\nRequests',
+              semanticsLabel: 'New Member Requests',
+              textAlign: TextAlign.center,
+            ),
+          ),
+          Tab(height: tabHeight, text: 'Applied'),
+          Tab(height: tabHeight, text: 'Saved'),
+        ],
+      );
+    });
   }
 
   Widget _buildGigsList(List<GigGroup> groupList) {

@@ -141,8 +141,8 @@ void main() {
       await tester.pumpWidget(createTestApp(const FindGigsScreen(), appState));
       await pumpUiTransitions(tester);
 
-      expect(find.text('Substitute Requests'), findsOneWidget);
-      expect(find.text('New Member Requests'), findsOneWidget);
+      expect(find.text('Substitute\nRequests'), findsOneWidget);
+      expect(find.text('New Member\nRequests'), findsOneWidget);
       expect(find.text('Applied'), findsOneWidget);
       expect(find.text('Saved'), findsOneWidget);
     });

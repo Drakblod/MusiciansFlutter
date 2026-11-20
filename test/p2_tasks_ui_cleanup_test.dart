@@ -224,8 +224,8 @@ void main() {
         );
         await pumpUiTransitions(tester);
 
-        expect(find.text('Substitute Requests'), findsOneWidget);
-        expect(find.text('New Member Requests'), findsOneWidget);
+        expect(find.text('Substitute\nRequests'), findsOneWidget);
+        expect(find.text('New Member\nRequests'), findsOneWidget);
         expect(find.text('Saved'), findsOneWidget);
         expect(find.text('Upcoming'), findsNothing);
         expect(find.text('Upcoming (booked)'), findsNothing);

@@ -1,6 +1,10 @@
+import 'dart:convert';
+import 'dart:io';
 import 'tab_label_expectations.dart';
 import 'support/bounded_ui_pump.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart' hide FirebaseService;
@@ -267,6 +271,57 @@ void main() {
   });
 
   group('FIND-GIGS-01A Specification Verification', () {
+    testWidgets('Both request tabs fit in two lines at 320px with normal and doubled text', (tester) async {
+      tester.view.physicalSize = const Size(320, 700);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      // Use the SDK's proportional font offline in place of the Ahem test font.
+      await tester.runAsync(() async {
+        final config = jsonDecode(File('.dart_tool/package_config.json').readAsStringSync());
+        final sdk = Uri.parse(config['flutterRoot'] as String).toFilePath();
+        final font = await File('$sdk/bin/cache/artifacts/material_fonts/roboto-bold.ttf').readAsBytes();
+        await (FontLoader('Inter_700')..addFont(Future.value(ByteData.sublistView(font)))).load();
+      });
+
+      final appState = MockFindGigsAppState(MockFindGigsFirebaseService());
+      addTearDown(appState.dispose);
+      for (final scale in [1.0, 2.0]) {
+        await tester.pumpWidget(ChangeNotifierProvider<AppState>.value(
+          value: appState,
+          child: MaterialApp(
+            builder: (context, child) => MediaQuery(
+              data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(scale)),
+              child: child!,
+            ),
+            home: const FindGigsScreen(),
+          ),
+        ));
+        await pumpUiTransitions(tester);
+
+        final viewport = tester.getRect(find.byType(TabBar)).inflate(0.01);
+        for (final label in ['Substitute\nRequests', 'New Member\nRequests']) {
+          final tabText = find.text(label);
+          expect(tabText, findsOneWidget);
+          final richText = find.descendant(of: tabText, matching: find.byType(RichText));
+          final paragraph = tester.renderObject<RenderParagraph>(richText);
+          expect(paragraph.text.style?.fontSize, 13);
+          expect(paragraph.textScaler.scale(13), 13 * scale);
+          final bounds = paragraph.getBoxesForSelection(TextSelection(baseOffset: 0, extentOffset: label.length));
+          expect(bounds.map((box) => box.top).toSet(), hasLength(2));
+          for (final box in bounds) {
+            final topLeft = paragraph.localToGlobal(box.toRect().topLeft);
+            final bottomRight = paragraph.localToGlobal(box.toRect().bottomRight);
+            expect(viewport.contains(topLeft) && viewport.contains(bottomRight), isTrue,
+              reason: '$label at ${scale}x occupies $topLeft–$bottomRight inside $viewport');
+          }
+        }
+        expect(tester.takeException(), isNull);
+      }
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
+
     testWidgets('1. Tabs are exactly Substitute Requests, New Member Requests, and Saved', (WidgetTester tester) async {
       final mockFirebase = MockFindGigsFirebaseService();
       final appState = MockFindGigsAppState(mockFirebase);
@@ -281,8 +336,8 @@ void main() {
       );
       await pumpUiTransitions(tester);
 
-      expect(find.text('Substitute Requests'), findsOneWidget);
-      expect(find.text('New Member Requests'), findsOneWidget);
+      expect(find.text('Substitute\nRequests'), findsOneWidget);
+      expect(find.text('New Member\nRequests'), findsOneWidget);
       expect(find.text('Saved'), findsOneWidget);
       expect(find.text('Available gigs'), findsNothing);
       expect(find.text('Direct Invitations'), findsNothing);
@@ -338,7 +393,7 @@ void main() {
       expect(find.text('Direct Invite'), findsOneWidget);
 
       // Switch to New Member Requests tab
-      await tester.tap(find.text('New Member Requests'));
+      await tester.tap(find.text('New Member\nRequests'));
       await pumpUiTransitions(tester);
 
       expect(find.text('Jazz Band Member'), findsOneWidget);
@@ -411,7 +466,7 @@ void main() {
       expect(find.text('Band Spaced NM'), findsNothing);
 
       // Switch to New Member Requests tab
-      await tester.tap(find.text('New Member Requests'));
+      await tester.tap(find.text('New Member\nRequests'));
       await pumpUiTransitions(tester);
 
       // All 3 variations are classified under New Member Requests
@@ -645,7 +700,7 @@ void main() {
       );
       await pumpUiTransitions(tester);
 
-      expectVisibleTabLabels(tester, ['Substitute Requests', 'New Member Requests', 'Applied', 'Saved']);
+      expectVisibleTabLabels(tester, ['Substitute\nRequests', 'New Member\nRequests', 'Applied', 'Saved']);
       expect(tester.takeException(), isNull);
     });
 

@@ -530,7 +530,7 @@ void main() {
       expect(find.text('Band B'), findsNothing);
 
       // Switch to Tab 2: New Member Requests
-      await tester.tap(find.text('New Member Requests'));
+      await tester.tap(find.text('New Member\nRequests'));
       await pumpUiTransitions(tester);
 
       expect(find.text('Band B'), findsOneWidget);
@@ -549,7 +549,7 @@ void main() {
         requestType: 'Substitute',
         role: 'Substitute',
         voicePart: 'Keyboards',
-        date: '2026-11-10T19:00:00Z',
+        date: DateTime.now().add(const Duration(days: 2)).toIso8601String(),
         startTime: '19:00',
         endTime: '22:00',
         location: 'Stockholm Jazz Club',
@@ -585,9 +585,9 @@ void main() {
       final y5 = tester.getTopLeft(fDesc).dy;
       final y6 = tester.getTopLeft(fRole).dy;
 
-      expect(y2, lessThan(y6));
-      expect(y6, lessThan(y1));
-      expect(y1, lessThan(y4));
+      expect(y2, lessThan(y1));
+      expect(y1, lessThan(y6));
+      expect(y6, lessThan(y4));
       expect(y4, lessThan(y3));
       expect(y3, lessThan(y5));
     });
@@ -602,7 +602,7 @@ void main() {
         requestType: 'Substitute',
         role: 'Substitute',
         voicePart: 'Electric Guitar',
-        date: '2026-11-12T19:00:00Z',
+        date: DateTime.now().add(const Duration(days: 2)).toIso8601String(),
         eventTitle: 'Secret Arena Show',
         location: 'Stockholm',
         description: 'Show details here',
@@ -614,7 +614,7 @@ void main() {
       await tester.tap(find.text('Beta Band'));
       await pumpUiTransitions(tester);
 
-      // Event Type row must show 'Not provided', NEVER 'Secret Arena Show'
+      // Omit the Event Type row when the request has only an event name.
       expect(find.text('Event Type'), findsNothing);
       expect(find.text('Not provided'), findsNothing);
       expect(find.text('Secret Arena Show'), findsNothing);

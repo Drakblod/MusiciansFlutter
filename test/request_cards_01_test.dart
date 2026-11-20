@@ -16,6 +16,8 @@ import 'package:musicians_flutter/views/sub_request_responses_screen.dart';
 import 'package:musicians_flutter/views/sub_request_response_details_screen.dart';
 import 'package:musicians_flutter/utils/sub_request_card_helper.dart';
 
+import 'support/bounded_ui_pump.dart';
+
 class MockCardsFirebaseService extends FirebaseService {
   String? Function()? userIdProvider;
   @override Stream<String?> get catalogueIdentityChanges => const Stream.empty();
@@ -329,8 +331,7 @@ void main() {
       expect(formatted, isNot(contains('21:00')));
     });
 
-    // 6. Request Type appears before Role/Event Type in details
-    testWidgets('6. Request Type appears before Role and Event Type in details bottom sheet', (tester) async {
+    testWidgets('6. Details show Request Type, Event Type and Role / Instrument in adjacent sections', (tester) async {
       tester.view.physicalSize = const Size(800, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -342,7 +343,7 @@ void main() {
         bandName: 'Hierarchy Band',
         requestType: 'Substitute',
         voicePart: 'Tenor Sax',
-        date: '2026-11-15T19:00:00Z',
+        date: DateTime.now().add(const Duration(days: 2)).toIso8601String(),
         extraFields: {'eventType': 'Festival'},
       ));
 
@@ -364,13 +365,14 @@ void main() {
       expect(fRole, findsOneWidget);
       expect(fEventType, findsOneWidget);
 
-      final yReqType = tester.getTopLeft(fReqType).dy;
-      final yRole = tester.getTopLeft(fRole).dy;
-      final yEventType = tester.getTopLeft(fEventType).dy;
-
-      // Required hierarchy: Request Type < Role < Event Type
-      expect(yReqType, lessThan(yRole));
-      expect(yRole, lessThan(yEventType));
+      final section = find.ancestor(of: fReqType, matching: find.byType(Column)).first;
+      final labelsAndValues = tester.widget<Column>(section).children.whereType<Text>().map((text) => text.data).toList();
+      final start = labelsAndValues.indexOf('Request Type');
+      expect(labelsAndValues.skip(start).take(5), [
+        'Request Type', 'Substitute', 'Event Type', 'Festival', 'Role / Instrument',
+      ]);
+      expect(tester.getTopLeft(fReqType).dy, lessThan(tester.getTopLeft(fEventType).dy));
+      expect(tester.getTopLeft(fEventType).dy, lessThan(tester.getTopLeft(fRole).dy));
     });
 
     // 7. Role / Instrument contains no Date & Time
@@ -603,6 +605,7 @@ void main() {
         role: 'New Member',
         voicePart: 'Lead Vocalist',
         location: 'Uppsala',
+        eventType: 'Concert',
       ));
 
       final appState = MockCardsAppState(mockService);
@@ -612,13 +615,16 @@ void main() {
 
       // Switch to Members tab
       await tester.tap(find.textContaining('New Member'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
+      await pumpUiTransitions(tester);
 
       expect(find.text('Recruiting Band'), findsOneWidget);
       expect(find.text('New Band Member · Lead Vocalist'), findsOneWidget);
-      // No event type or date placeholders
+      await tester.tap(find.text('Recruiting Band').hitTestable());
+      await pumpUiTransitions(tester);
+      expect(find.text('Request Type'), findsOneWidget);
+      expect(find.text('Role / Instrument'), findsOneWidget);
       expect(find.textContaining('Event Type'), findsNothing);
+      expect(find.text('Concert'), findsNothing);
       expect(find.textContaining('Date & Time'), findsNothing);
     });
 
