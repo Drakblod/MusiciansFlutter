@@ -201,7 +201,7 @@ void main() {
     expect(find.text('MP3s / Audio'), findsNothing);
   });
 
-  testWidgets('Gigs/Info event card is whole clickable, has chevron, no RSVP button, opens EventResultsPage', (tester) async {
+  testWidgets('News event card is whole clickable, has chevron, no RSVP button, opens EventResultsPage', (tester) async {
     tester.view.physicalSize = const Size(1200, 2400);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(() {
@@ -250,13 +250,12 @@ void main() {
 
     tester.view.physicalSize = const Size(320, 2400);
     await tester.pump();
-    expectVisibleTabLabels(tester, ['Chat', 'Files', 'Events', 'Gigs / Info', 'Members']);
+    expectVisibleTabLabels(tester, ['Chat', 'Files', 'Events', 'News', 'Members']);
     expect(tester.takeException(), isNull);
     tester.view.physicalSize = const Size(1200, 2400);
     await tester.pump();
 
-    // Switch to Gigs/Info tab
-    final gigsTab = find.text('Gigs / Info');
+    final gigsTab = find.text('News');
     expect(gigsTab, findsOneWidget);
     await tester.tap(gigsTab);
     for (int i = 0; i < 10; i++) {
@@ -312,7 +311,7 @@ void main() {
     expect(find.textContaining('NO ANSWER (0)'), findsOneWidget);
   });
 
-  testWidgets('Gigs/Info sub-tabs: Events (left) & Other (right), sub-filters Upcoming & Past, and newest first sorting', (tester) async {
+  testWidgets('News sub-tabs: Events (left) & Other (right), sub-filters Upcoming & Past, and newest first sorting', (tester) async {
     tester.view.physicalSize = const Size(1200, 2400);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(() {
@@ -386,8 +385,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     await tester.pump(const Duration(milliseconds: 300));
 
-    // Tap Gigs/Info tab
-    await tester.tap(find.text('Gigs / Info'));
+    await tester.tap(find.text('News'));
     for (int i = 0; i < 10; i++) {
       await tester.pump(const Duration(milliseconds: 50));
     }
@@ -520,8 +518,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     await tester.pump(const Duration(milliseconds: 300));
 
-    // Switch to Gigs/Info tab
-    await tester.tap(find.text('Gigs / Info'));
+    await tester.tap(find.text('News'));
     for (int i = 0; i < 10; i++) {
       await tester.pump(const Duration(milliseconds: 50));
     }

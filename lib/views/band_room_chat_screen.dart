@@ -1034,7 +1034,7 @@ class _BandRoomChatScreenState extends State<_BandRoomContent>
             Tab(text: 'Chat'),
             Tab(text: 'Files'),
             Tab(text: 'Events'),
-            Tab(text: 'Gigs / Info'),
+            Tab(text: 'News'),
             Tab(text: 'Members'),
           ],
         ),
