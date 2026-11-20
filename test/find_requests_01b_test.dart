@@ -311,6 +311,44 @@ void main() {
       expect(published.toJson()['RequestType'], equals('Substitute'));
     });
 
+    testWidgets('An invalid legacy Substitute draft cannot publish until its role is replaced', (tester) async {
+      final mock = Mock01bFirebaseService();
+      final initialRequest = SubRequest(
+        bandId: 'band_123',
+        requestType: 'Substitute',
+        voicePart: 'Band Leader',
+        status: 'draft',
+      );
+      await pumpTestApp(tester, mockService: mock, child: FindSubScreen(initialRequest: initialRequest));
+      await tester.tap(find.byWidgetPredicate((w) => w is DropdownButton<String> && (w.items?.any((item) => item.value == 'Concert') ?? false)));
+      await pumpUiTransitions(tester);
+      await tester.tap(find.text('Concert').last);
+      await pumpUiTransitions(tester);
+
+      await tester.tap(find.textContaining('PUBLISH SUBSTITUTE REQUESTS'));
+      await pumpUiTransitions(tester);
+      expect(find.text('BANDLEADER is unavailable for Substitute requests. Choose another Role / Instrument.'), findsOneWidget);
+      expect(mock.publishCalls, 0);
+      expect(mock.savedBatchRequests, isEmpty);
+      expect(find.text('Band Leader'), findsOneWidget);
+    });
+
+    testWidgets('Find Gigs still shows a published legacy Substitute with its original BANDLEADER role', (tester) async {
+      final mock = Mock01bFirebaseService();
+      mock.allSubRequests.add(SubRequest(
+        id: 'legacy_sub_bandleader',
+        bandId: 'band_1',
+        bandName: 'Legacy Band',
+        requestType: 'Substitute',
+        voicePart: 'BANDLEADER',
+        date: DateTime.now().add(const Duration(days: 7)).toIso8601String(),
+        status: 'published',
+      ));
+      await pumpTestApp(tester, mockService: mock, child: const FindGigsScreen());
+      expect(find.text('Legacy Band'), findsOneWidget);
+      expect(find.text('Substitute · BANDLEADER'), findsOneWidget);
+    });
+
     // 6. Publishing New Member persists RequestType = 'New Member'
     testWidgets('6. Publishing New Member persists RequestType = New Member', (tester) async {
       final mock = Mock01bFirebaseService();

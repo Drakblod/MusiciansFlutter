@@ -1,6 +1,7 @@
 import '../widgets/request_management_gate.dart';
 import '../utils/catalogue_loading.dart';
 import '../utils/sub_request_card_helper.dart';
+import '../utils/substitute_role.dart';
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
@@ -773,6 +774,7 @@ class _FindSubScreenState extends State<_FindSubForm> {
       categoryMap: _allSkillsCategoryMap,
       initialSelected: [slot.instrument],
       isSingleSelect: true,
+      showBandleader: false,
       presentation: CategoryPickerPresentation.skillsHierarchy,
     );
     if (selectedList != null && selectedList.isNotEmpty) {
@@ -825,6 +827,17 @@ class _FindSubScreenState extends State<_FindSubForm> {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
                 content: Text('Please select Role / Instrument before publishing.'),
+                backgroundColor: AppTheme.danger,
+              ),
+            );
+            return;
+          }
+          if (isBandleaderRole(slot.instrument)) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'BANDLEADER is unavailable for Substitute requests. Choose another Role / Instrument.',
+                ),
                 backgroundColor: AppTheme.danger,
               ),
             );

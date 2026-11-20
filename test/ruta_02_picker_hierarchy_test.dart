@@ -911,7 +911,7 @@ void main() {
       await tester.pump();
     });
 
-    testWidgets('25. FindSubScreen uses the RUTA-02B centralized hierarchy', (WidgetTester tester) async {
+    testWidgets('25. Substitute picker keeps the skills hierarchy without BANDLEADER', (WidgetTester tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() => tester.view.resetPhysicalSize());
@@ -928,7 +928,15 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
 
       expect(find.byType(SearchableCategoryMultiSelectSheet), findsOneWidget);
-      expect(find.byKey(const ValueKey('standalone_bandleader_chip')), findsOneWidget);
+      expect(find.byKey(const ValueKey('instruments_voices_section_heading')), findsOneWidget);
+      expect(find.byKey(const ValueKey('standalone_bandleader_chip')), findsNothing);
+      await tester.enterText(find.descendant(
+        of: find.byType(SearchableCategoryMultiSelectSheet),
+        matching: find.byType(TextField),
+      ), 'band leader');
+      await pumpUiTransitions(tester);
+      expect(find.text('No matching options found.'), findsOneWidget);
+      expect(find.byKey(const ValueKey('standalone_bandleader_chip')), findsNothing);
 
       Navigator.pop(tester.element(find.byType(SearchableCategoryMultiSelectSheet)));
       await tester.pump();

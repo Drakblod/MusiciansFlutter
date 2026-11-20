@@ -1,6 +1,7 @@
 import '../utils/catalogue_profiles.dart';
 import '../utils/catalogue_loading.dart';
 import '../utils/band_member_role_label.dart';
+import '../utils/substitute_role.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -16,6 +17,27 @@ import '../widgets/gradient_scaffold.dart';
 import '../widgets/custom_top_bar.dart';
 import '../widgets/animated_tap_detector.dart';
 import '../widgets/location_picker_field.dart';
+
+String? _substituteInstrument(UserProfile? profile, {String? savedInstrument}) {
+  var hasBandleader = false;
+  for (final value in [
+    if (savedInstrument?.trim() != 'Sub') savedInstrument,
+    profile?.primarySkill,
+    ...?profile?.mainInstrument?.split(','),
+    ...?profile?.instruments,
+    profile?.userType,
+  ]) {
+    final instrument = value?.trim() ?? '';
+    if (instrument.isEmpty) continue;
+    if (isBandleaderRole(instrument)) {
+      hasBandleader = true;
+      continue;
+    }
+    return instrument;
+  }
+  return hasBandleader ? null : (savedInstrument ?? 'Musician');
+}
+
 class CreateEventPage extends StatefulWidget {
   final String bandId;
   final BandEvent? existingEvent;
@@ -1245,19 +1267,13 @@ class _CreateEventPageState extends State<CreateEventPage> {
           if (invitee.subRequestId != null && invitee.subRequestId!.isNotEmpty) {
             continue;
           }
+          // Leave an unlinked legacy BANDLEADER invitee as stored.
+          if (isBandleaderRole(invitee.instrument ?? '')) continue;
           final profile = _memberProfiles[uid];
           final subReqId = 'sub_${widget.bandId}_${eventId}_${uid}_$nowMs';
-          final instrument = (invitee.instrument != null && invitee.instrument!.trim().isNotEmpty && invitee.instrument != 'Sub')
-              ? invitee.instrument!.trim()
-              : (profile?.primarySkill.isNotEmpty == true
-                  ? profile!.primarySkill
-                  : (profile?.mainInstrument != null && profile!.mainInstrument!.trim().isNotEmpty
-                      ? profile.mainInstrument!.split(',').first.trim()
-                      : (profile?.instruments.isNotEmpty == true
-                          ? profile!.instruments.first
-                          : (profile?.userType != null && profile!.userType!.trim().isNotEmpty
-                              ? profile.userType!.trim()
-                              : (invitee.instrument ?? 'Musician')))));
+          final instrument = _substituteInstrument(profile, savedInstrument: invitee.instrument);
+          // Preserve legacy invitees without publishing a new invalid request.
+          if (instrument == null) continue;
           final startTimeStr = '${_startTime.hour.toString().padLeft(2, '0')}:${_startTime.minute.toString().padLeft(2, '0')}';
           final endTimeStr = '${_endTime.hour.toString().padLeft(2, '0')}:${_endTime.minute.toString().padLeft(2, '0')}';
           final eventTitleStr = _titleController.text.trim().isNotEmpty ? _titleController.text.trim() : effectiveBandName;
@@ -2179,15 +2195,16 @@ class _AddEventGuestSheetState extends State<_AddEventGuestSheet> {
                                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                   ),
                                   onPressed: () {
-                                    final resolvedInst = user.primarySkill.isNotEmpty
-                                        ? user.primarySkill
-                                        : (user.mainInstrument != null && user.mainInstrument!.trim().isNotEmpty
-                                            ? user.mainInstrument!.split(',').first.trim()
-                                            : (user.instruments.isNotEmpty
-                                                ? user.instruments.first.trim()
-                                                : (user.userType != null && user.userType!.trim().isNotEmpty
-                                                    ? user.userType!.trim()
-                                                    : (inst.isNotEmpty ? inst : 'Musician'))));
+                                    final resolvedInst = _substituteInstrument(user);
+                                    if (resolvedInst == null) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(
+                                          content: Text('This musician needs another skill or instrument to be invited as a substitute.'),
+                                          backgroundColor: AppTheme.danger,
+                                        ),
+                                      );
+                                      return;
+                                    }
                                     final invitee = ExternalInvitee(
                                       userId: uid,
                                       displayName: name,

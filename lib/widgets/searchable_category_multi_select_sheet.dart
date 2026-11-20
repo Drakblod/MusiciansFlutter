@@ -16,6 +16,7 @@ class SearchableCategoryMultiSelectSheet extends StatefulWidget {
   final Map<String, List<String>> categoryMap;
   final List<String> initialSelected;
   final bool isSingleSelect;
+  final bool showBandleader;
   final int? maxSelection;
   final CategoryPickerPresentation presentation;
 
@@ -26,6 +27,7 @@ class SearchableCategoryMultiSelectSheet extends StatefulWidget {
     required this.categoryMap,
     required this.initialSelected,
     this.isSingleSelect = false,
+    this.showBandleader = true,
     this.maxSelection,
     this.presentation = CategoryPickerPresentation.standard,
   });
@@ -37,6 +39,7 @@ class SearchableCategoryMultiSelectSheet extends StatefulWidget {
     required Map<String, List<String>> categoryMap,
     required List<String> initialSelected,
     bool isSingleSelect = false,
+    bool showBandleader = true,
     int? maxSelection,
     CategoryPickerPresentation presentation =
         CategoryPickerPresentation.standard,
@@ -51,6 +54,7 @@ class SearchableCategoryMultiSelectSheet extends StatefulWidget {
         categoryMap: categoryMap,
         initialSelected: initialSelected,
         isSingleSelect: isSingleSelect,
+        showBandleader: showBandleader,
         maxSelection: maxSelection,
         presentation: presentation,
       ),
@@ -446,7 +450,7 @@ class _SearchableCategoryMultiSelectSheetState
           // Expandable Accordion List with RUTA-02 Structured Hierarchy
           fitOptions(
             () {
-              final hasBandleaderMatch = isSkillsMode &&
+              final hasBandleaderMatch = isSkillsMode && widget.showBandleader &&
                   (_searchQuery.isEmpty ||
                       'bandleader'.contains(_searchQuery.toLowerCase()) ||
                       'band leader'.contains(_searchQuery.toLowerCase()) ||

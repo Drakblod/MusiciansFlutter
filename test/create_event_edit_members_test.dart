@@ -253,8 +253,13 @@ void main() {
       expect(appState.mockFirebase.lastSavedEvent!.excludedMemberIds, isNot(contains('u1')));
     });
 
-    testWidgets('Adding guest musician adds to externalInvitees and displays guest badge', (tester) async {
+    testWidgets('Event substitute uses a profile instrument instead of BANDLEADER and preserves the guest badge', (tester) async {
       await tester.binding.setSurfaceSize(const Size(800, 1400));
+      appState.mockFirebase.mockUsers.removeWhere((user) => user.userId == 'u4');
+      appState.mockFirebase.mockUsers.add(UserProfile(
+        userId: 'u4', displayName: 'Dave Bass', nickname: 'Dave',
+        instruments: ['BANDLEADER', 'Bass'], location: 'Stockholm',
+      ));
 
       await tester.pumpWidget(
         ChangeNotifierProvider<AppState>.value(
@@ -293,6 +298,9 @@ void main() {
       expect(find.text('+1 Sub'), findsOneWidget);
       expect(find.text('Dave Bass'), findsOneWidget);
       expect(find.text('Sub'), findsOneWidget);
+      expect(find.text('Bass'), findsOneWidget);
+      expect(find.text('BANDLEADER'), findsNothing);
+      expect(appState.mockFirebase.lastSavedEvent, isNull);
 
       // Save event
       await tester.enterText(find.widgetWithText(TextFormField, 'Main Event Name'), 'Special Show');
@@ -308,6 +316,7 @@ void main() {
       expect(appState.mockFirebase.lastSavedEvent, isNotNull);
       expect(appState.mockFirebase.lastSavedEvent!.externalInvitees.containsKey('u4'), true);
       expect(appState.mockFirebase.lastSavedEvent!.externalInvitees['u4']?.displayName, 'Dave Bass');
+      expect(appState.mockFirebase.lastSavedEvent!.externalInvitees['u4']?.instrument, 'Bass');
       expect(appState.mockFirebase.lastSavedEvent!.externalInvitees['u4']?.subRequestId, isNotNull);
       expect(appState.mockFirebase.lastSavedEvent!.externalInvitees['u4']?.source, 'subRequest');
       expect(appState.mockFirebase.savedSubRequests, isNotEmpty);
@@ -317,6 +326,57 @@ void main() {
       expect(sub.requestType, 'Substitute');
       expect(sub.voicePart, 'Bass');
       expect(sub.eventId, 'event_123');
+    });
+
+    testWidgets('Event Add Sub rejects a musician whose only skill is BANDLEADER', (tester) async {
+      await tester.binding.setSurfaceSize(const Size(800, 1400));
+      appState.mockFirebase.mockUsers.removeWhere((user) => user.userId == 'u4');
+      appState.mockFirebase.mockUsers.add(UserProfile(
+        userId: 'u4', displayName: 'Dave Bass', instruments: ['BANDLEADER'],
+      ));
+      await tester.pumpWidget(ChangeNotifierProvider<AppState>.value(
+        value: appState,
+        child: const MaterialApp(home: CreateEventPage(bandId: 'band_1')),
+      ));
+      await pumpUiTransitions(tester);
+      await tester.tap(find.text('EDIT BAND MEMBERS (& SUBS)'));
+      await pumpUiTransitions(tester);
+      await tester.tap(find.text('+ Add Sub'));
+      await pumpUiTransitions(tester);
+      expect(find.text('Dave Bass'), findsOneWidget);
+      await tester.tap(find.text('+ Add'));
+      await pumpUiTransitions(tester);
+      expect(find.text('This musician needs another skill or instrument to be invited as a substitute.'), findsOneWidget);
+      expect(find.text('Added'), findsNothing);
+      expect(appState.mockFirebase.savedSubRequests, isEmpty);
+    });
+
+    testWidgets('Editing an Event preserves an unlinked legacy BANDLEADER invitee without republishing', (tester) async {
+      await tester.binding.setSurfaceSize(const Size(800, 1400));
+      final date = DateTime.now().add(const Duration(days: 2));
+      final legacyInvitee = ExternalInvitee(
+        userId: 'u4', displayName: 'Dave Bass', instrument: 'BANDLEADER',
+        status: 'pending', source: 'subRequest', invitedAt: 1000,
+      );
+      final event = BandEvent(
+        id: 'legacy_event', title: 'Legacy Event', location: 'Stockholm',
+        startDateTime: date.toIso8601String(),
+        endDateTime: date.add(const Duration(hours: 2)).toIso8601String(),
+        description: '', additionalNotes: '', createdBy: 'u1',
+        createdAt: 1000, updatedAt: 1000, requireResponse: true,
+        externalInvitees: {'u4': legacyInvitee},
+      );
+      await tester.pumpWidget(ChangeNotifierProvider<AppState>.value(
+        value: appState,
+        child: MaterialApp(home: CreateEventPage(bandId: 'band_1', existingEvent: event)),
+      ));
+      await pumpUiTransitions(tester);
+      await tester.drag(find.byType(ListView), const Offset(0, -600));
+      await pumpUiTransitions(tester);
+      await tester.tap(find.text('Publish Event'));
+      await pumpUiTransitions(tester);
+      expect(appState.mockFirebase.lastSavedEvent?.externalInvitees['u4']?.toJson(), legacyInvitee.toJson());
+      expect(appState.mockFirebase.savedSubRequests, isEmpty);
     });
 
     testWidgets('Date range is automatically derived from sub-events/rehearsals', (tester) async {
