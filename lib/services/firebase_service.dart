@@ -1892,7 +1892,13 @@ class FirebaseService {
     await _functions.httpsCallable('markAllNotificationsRead').call();
   }
 
-  Future<List<Map<String, dynamic>>> getActiveConversationsAsync() => _forCurrentSession(() async {
+  Future<List<Map<String, dynamic>>> getActiveConversationsAsync() =>
+      _getConversationThreads();
+
+  Future<List<Map<String, dynamic>>> getBandGroupThreadsAsync(String bandId) =>
+      _getConversationThreads(groupBandId: bandId);
+
+  Future<List<Map<String, dynamic>>> _getConversationThreads({String? groupBandId}) => _forCurrentSession(() async {
     final selfId = currentUserId;
     if (selfId == null) return [];
 
@@ -1927,13 +1933,23 @@ class FirebaseService {
         final item = entry.value;
         if (item is Map) {
           Map? canonical;
-          if (needsConversationMetadata(item)) {
+          if (groupBandId != null &&
+              (item['bandId'] != groupBandId || !isGroupThread(item) ||
+                  conversationAgreement(item) != null)) {
+            continue;
+          }
+          if (groupBandId != null || needsConversationMetadata(item)) {
             try {
               final value = (await _dbRef('conversations/$convId').get()).value;
               if (value is Map) canonical = value;
             } on FirebaseException {
               // An unavailable legacy conversation does not erase its inbox row.
             }
+          }
+          if (groupBandId != null &&
+              (canonical == null || !canOpenBandGroup(canonical, groupBandId, selfId) ||
+                  conversationAgreement(canonical) != null)) {
+            continue;
           }
           final metadata = resolveConversationMetadata(
             index: item, canonical: canonical, selfId: selfId,

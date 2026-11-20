@@ -30,6 +30,7 @@ import 'event_details_page.dart';
 import 'event_results_page.dart';
 import 'event_room_chat_screen.dart';
 import 'edit_band_info_screen.dart';
+import 'inbox_screen.dart';
 import 'manage_events_screen.dart';
 import '../utils/band_section_utils.dart';
 import '../utils/date_parser.dart';
@@ -1062,11 +1063,23 @@ class _BandRoomChatScreenState extends State<_BandRoomContent>
           alignment: Alignment.centerRight,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-            child: TextButton.icon(
-              key: const ValueKey('band-room-new-group'),
-              onPressed: _createChatGroup,
-              icon: const Icon(Icons.group_add_outlined),
-              label: const Text('New Group'),
+            child: Wrap(
+              alignment: WrapAlignment.end,
+              spacing: 8,
+              children: [
+                TextButton.icon(
+                  key: const ValueKey('band-room-groups'),
+                  onPressed: _openChatGroups,
+                  icon: const Icon(Icons.groups_outlined),
+                  label: const Text('Groups'),
+                ),
+                TextButton.icon(
+                  key: const ValueKey('band-room-new-group'),
+                  onPressed: _createChatGroup,
+                  icon: const Icon(Icons.group_add_outlined),
+                  label: const Text('New Group'),
+                ),
+              ],
             ),
           ),
         ),
@@ -1208,6 +1221,18 @@ class _BandRoomChatScreenState extends State<_BandRoomContent>
         ),
       ],
     );
+  }
+
+  void _openChatGroups() {
+    final state = context.read<AppState>();
+    final bandId = _activeBand?.id;
+    if (bandId == null || bandId != state.activeBandId ||
+        !BandMembershipPolicy.isMember(_activeBand, state.currentUserId)) {
+      return;
+    }
+    Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => InboxScreen.bandGroups(bandId: bandId),
+    ));
   }
 
   Future<void> _createChatGroup() async {

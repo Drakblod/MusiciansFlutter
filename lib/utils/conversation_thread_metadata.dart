@@ -23,6 +23,15 @@ bool isAgreementThread(Map row) =>
 bool isGroupThread(Map row) =>
     !isAgreementThread(row) && conversationType(row) == 'band_section';
 
+bool canOpenBandGroup(Map? row, String bandId, String userId) {
+  final participants = row?['participants'];
+  return row != null &&
+      isGroupThread(row) &&
+      row['bandId'] == bandId &&
+      participants is Map &&
+      participants[userId] == true;
+}
+
 bool needsConversationMetadata(Map index) {
   final type = conversationType(index);
   final agreement = conversationAgreement(index);

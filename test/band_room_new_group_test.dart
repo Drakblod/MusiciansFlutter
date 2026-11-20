@@ -117,6 +117,59 @@ class GroupState extends fixtures.MockGigsInfoAppState {
   String? get activeBandId => selectedBand;
   @override
   bool get isLoading => false;
+
+  void switchBand(String bandId) {
+    selectedBand = bandId;
+    notifyListeners();
+  }
+}
+
+class _ExistingGroupsService extends GroupService {
+  final scopedReads = <String>[];
+  int inboxReads = 0;
+  Completer<Map<String, dynamic>?>? pendingGroup;
+
+  @override
+  Future<List<Map<String, dynamic>>> getActiveConversationsAsync() async {
+    inboxReads++;
+    return [];
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> getBandGroupThreadsAsync(String bandId) async {
+    scopedReads.add(bandId);
+    return [
+      for (final (id, name, type, band) in [
+        ('strings', 'Strings', 'band_section', 'band_feed_test'),
+        ('horns', 'Horns', 'band_section', 'band_feed_test'),
+        ('stale', 'Previous group', 'band_section', 'band_feed_test'),
+        ('foreign', 'Foreign group', 'band_section', 'other_band'),
+        ('agreement', 'Gig agreement', 'agreement', 'band_feed_test'),
+      ])
+        {
+          'conversationId': id,
+          'conversationType': type,
+          'bandId': band,
+          'groupName': name,
+          'otherUserName': name,
+        },
+    ];
+  }
+
+  @override
+  Stream<bool> subscribeToBandProfileAccess(String bandId) => Stream.value(true);
+
+  @override
+  Stream<Map<String, dynamic>?> subscribeToBandSectionMetadata(String id) {
+    openedIds.add(id);
+    if (pendingGroup case final pending?) return Stream.fromFuture(pending.future);
+    return Stream.value({
+      'conversationType': 'band_section',
+      'bandId': 'band_feed_test',
+      'groupName': 'Horns current name',
+      'participants': {'leader_1': id != 'stale', 'peer': true},
+    });
+  }
 }
 
 void main() {
@@ -208,12 +261,73 @@ void main() {
     await tester.pump();
   }
 
+  testWidgets('Band Room Groups opens the exact authorized group in the active band', (tester) async {
+    final service = _ExistingGroupsService();
+    await mount(tester, service);
+    await tester.tap(find.byKey(const ValueKey('band-room-groups')));
+    await pumpUiTransitions(tester);
+
+    expect(service.scopedReads, ['band_feed_test']);
+    expect(service.inboxReads, 0);
+    expect(find.text('Strings'), findsOneWidget);
+    expect(find.text('Foreign group'), findsNothing);
+    expect(find.text('Gig agreement'), findsNothing);
+
+    await tester.tap(find.text('Previous group'));
+    await pumpUiTransitions(tester);
+    expect(find.text('This group is currently unavailable.'), findsOneWidget);
+    expect(find.byType(BandSectionChatScreen), findsNothing);
+    expect(service.readIds, isEmpty);
+
+    await tester.tap(find.text('Horns'));
+    await pumpUiTransitions(tester);
+    final screen = tester.widget<BandSectionChatScreen>(find.byType(BandSectionChatScreen));
+    expect(screen.conversationId, 'horns');
+    expect(screen.bandId, 'band_feed_test');
+    expect(screen.initialGroupName, 'Horns current name');
+    expect(find.text('Group chat'), findsOneWidget);
+    expect(service.readIds, ['horns']);
+    expect(service.openedIds.first, 'stale');
+    expect(service.openedIds.skip(1), isNotEmpty);
+    expect(service.openedIds.skip(1), everyElement('horns'));
+    expect(service.groupCalls, isEmpty);
+    await unmount(tester);
+  });
+
+  testWidgets('Changing band while opening a group discards the pending selection', (tester) async {
+    final service = _ExistingGroupsService()..pendingGroup = Completer();
+    final state = await mount(tester, service);
+    await tester.tap(find.byKey(const ValueKey('band-room-groups')));
+    await pumpUiTransitions(tester);
+    await tester.tap(find.text('Horns'));
+    await tester.pump();
+    expect(service.openedIds, ['horns']);
+    state.switchBand('other_band');
+    service.pendingGroup!.complete({
+      'conversationType': 'band_section',
+      'bandId': 'band_feed_test',
+      'groupName': 'Horns current name',
+      'participants': {'leader_1': true},
+    });
+    await pumpUiTransitions(tester);
+    expect(find.byType(BandSectionChatScreen), findsNothing);
+    expect(find.text('Horns'), findsNothing);
+    expect(find.text('Groups are unavailable for your current band.'), findsOneWidget);
+    expect(service.readIds, isEmpty);
+    await unmount(tester);
+  });
+
   testWidgets(
     'Chat creates and opens exactly the named conversation for selected current-band members',
     (tester) async {
       final s = GroupService();
       await mount(tester, s);
       await open(tester);
+      expect(find.descendant(
+        of: find.byType(CreateBandSectionSheet), matching: find.text('New Group'),
+      ), findsOneWidget);
+      expect(find.text('New Section Group'), findsNothing);
+      expect(find.text('Section Choice'), findsNothing);
       expect(find.text('Select Band'), findsNothing);
       expect(find.byType(DropdownButton<String>), findsNothing);
       expect(

@@ -329,7 +329,7 @@ class _CreateBandSectionSheetState extends State<CreateBandSectionSheet> {
                         Text(
                           widget.lockToInitialBand
                               ? 'This band is unavailable for your current access.'
-                              : 'You must be a member of at least one band to create a section group chat.',
+                              : 'You must be a member of at least one band to create a group chat.',
                           style: GoogleFonts.inter(
                             fontSize: 14,
                             color: AppTheme.textSecondary,
@@ -371,7 +371,7 @@ class _CreateBandSectionSheetState extends State<CreateBandSectionSheet> {
                           children: [
                             Expanded(
                               child: Text(
-                                'NEW SECTION GROUP',
+                                'New Group',
                                 style: GoogleFonts.outfit(
                                   fontSize: 18,
                                   fontWeight: FontWeight.bold,

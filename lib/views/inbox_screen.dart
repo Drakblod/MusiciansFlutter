@@ -19,7 +19,12 @@ import '../widgets/band_musical_role_picker.dart';
 enum _InboxTab { messages, agreements, groups }
 
 class InboxScreen extends StatefulWidget {
-  const InboxScreen({super.key});
+  final String? groupBandId;
+
+  const InboxScreen({super.key}) : groupBandId = null;
+
+  const InboxScreen.bandGroups({super.key, required String bandId})
+    : groupBandId = bandId;
 
   @override
   State<InboxScreen> createState() => _InboxScreenState();
@@ -30,6 +35,8 @@ class _InboxScreenState extends State<InboxScreen> {
   bool _isLoading = true;
   AppState? _observedState;
   String? _observedUid;
+  String? _observedBandId;
+  String? _scopeUid;
   int _generation = 0;
   final _bandAccess = <StreamSubscription<bool>>[];
   final _readableGroupBands = <String>{};
@@ -39,10 +46,17 @@ class _InboxScreenState extends State<InboxScreen> {
     _readableGroupBands.clear();
   }
   String? _accessError;
+  bool _scopeAvailable(AppState state) => widget.groupBandId == null ||
+      (_scopeUid != null && state.currentUserId == _scopeUid &&
+          state.activeBandId == widget.groupBandId);
+
   void _identityChanged() {
-    final uid = _observedState?.currentUserId;
-    if (uid == _observedUid) return;
+    final state = _observedState!;
+    final uid = state.currentUserId;
+    final bandId = widget.groupBandId == null ? null : state.activeBandId;
+    if (uid == _observedUid && bandId == _observedBandId) return;
     _observedUid = uid;
+    _observedBandId = bandId;
     _generation++;
     _cancelBandAccess();
     if (!mounted) return;
@@ -64,6 +78,11 @@ class _InboxScreenState extends State<InboxScreen> {
     super.initState();
     _observedState = Provider.of<AppState>(context, listen: false);
     _observedUid = _observedState!.currentUserId;
+    if (widget.groupBandId != null) {
+      _activeTab = _InboxTab.groups;
+      _observedBandId = _observedState!.activeBandId;
+      _scopeUid = _observedUid;
+    }
     _observedState!.addListener(_identityChanged);
     _loadThreads();
   }
@@ -76,9 +95,14 @@ class _InboxScreenState extends State<InboxScreen> {
     final uid = appState.currentUserId;
     bool current() => mounted && generation == _generation && appState.currentUserId == uid;
     try {
-      if (uid == null) return;
-      final list = await appState.firebaseService.getActiveConversationsAsync();
-      if (!current()) return;
+      if (uid == null || !_scopeAvailable(appState)) return;
+      final bandId = widget.groupBandId;
+      final service = appState.firebaseService;
+      final list = bandId == null
+          ? await service.getActiveConversationsAsync()
+          : (await service.getBandGroupThreadsAsync(bandId)).where((thread) =>
+              thread['bandId'] == bandId && isGroupThread(thread)).toList();
+      if (!current() || !_scopeAvailable(appState)) return;
       setState(() => _threads = list);
       for (final bandId in list.where((thread) =>
           isGroupThread(thread) || thread['otherBandMember'] is BandMember)
@@ -118,7 +142,7 @@ class _InboxScreenState extends State<InboxScreen> {
   }
 
   Future<void> _openGroup(Map<String, dynamic> thread, AppState state) async {
-    if (_openingGroup) return;
+    if (_openingGroup || !_scopeAvailable(state)) return;
     final uid = state.currentUserId;
     final id = conversationText(thread['conversationId']);
     final bandId = conversationText(thread['bandId']);
@@ -128,11 +152,8 @@ class _InboxScreenState extends State<InboxScreen> {
     try {
       final metadata = await state.firebaseService
           .subscribeToBandSectionMetadata(id).first;
-      if (!mounted || state.currentUserId != uid) return;
-      final participants = metadata?['participants'];
-      if (metadata == null || !isGroupThread(metadata) ||
-          metadata['bandId'] != bandId ||
-          participants is! Map || participants[uid] != true ||
+      if (!mounted || state.currentUserId != uid || !_scopeAvailable(state)) return;
+      if (!canOpenBandGroup(metadata, bandId, uid) ||
           !_threads.contains(thread)) {
         throw const FormatException('Group unavailable');
       }
@@ -140,11 +161,11 @@ class _InboxScreenState extends State<InboxScreen> {
       await Navigator.pushNamed(context, '/band-section-chat', arguments: {
         'conversationId': id,
         'bandId': bandId,
-        'groupName': metadata['groupName'] ?? 'Group chat',
+        'groupName': metadata!['groupName'] ?? 'Group chat',
       });
       if (mounted && state.currentUserId == uid) await _loadThreads();
     } catch (_) {
-      if (!mounted || state.currentUserId != uid) return;
+      if (!mounted || state.currentUserId != uid || !_scopeAvailable(state)) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('This group is currently unavailable.')),
       );
@@ -573,22 +594,28 @@ class _InboxScreenState extends State<InboxScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final appState = Provider.of<AppState>(context);
+    final scoped = widget.groupBandId != null;
+    if (!_scopeAvailable(appState)) {
+      return const GradientScaffold(
+        appBar: CustomTopBar(title: 'Groups', showBack: true),
+        body: Center(child: Text('Groups are unavailable for your current band.')),
+      );
+    }
     if (_accessError != null) {
       return GradientScaffold(
-        appBar: const CustomTopBar(title: 'Messages', showBack: true),
+        appBar: CustomTopBar(title: scoped ? 'Groups' : 'Messages', showBack: true),
         body: Center(child: Text(_accessError!)),
       );
     }
-    final appState = Provider.of<AppState>(context);
-
     return GradientScaffold(
-      appBar: const CustomTopBar(showBack: true),
+      appBar: CustomTopBar(title: scoped ? 'Groups' : '', showBack: true),
       body: SafeArea(
         top: false,
         child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
+          if (!scoped) Padding(
             padding: const EdgeInsets.only(left: 20.0, top: 20.0, bottom: 8.0),
             child: Text(
               'MESSAGES / AGREEMENTS',
@@ -602,7 +629,7 @@ class _InboxScreenState extends State<InboxScreen> {
           ),
 
           // Custom Tab Switcher
-          Container(
+          if (!scoped) Container(
             margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             padding: const EdgeInsets.all(4),
             decoration: BoxDecoration(
@@ -649,7 +676,7 @@ class _InboxScreenState extends State<InboxScreen> {
             ),
           ),
 
-          if (_activeTab != _InboxTab.agreements)
+          if (!scoped && _activeTab != _InboxTab.agreements)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
               child: Align(
@@ -767,7 +794,9 @@ class _InboxScreenState extends State<InboxScreen> {
                                       switch (_activeTab) {
                                         _InboxTab.messages => 'Start a chat by tapping Message on a profile.',
                                         _InboxTab.agreements => 'Agreements are started when a sub request is accepted.',
-                                        _InboxTab.groups => 'Use New group to start a group chat.',
+                                        _InboxTab.groups => scoped
+                                            ? 'Groups you belong to in this band appear here.'
+                                            : 'Use New group to start a group chat.',
                                       },
                                       style: GoogleFonts.inter(
                                         fontSize: 14,
