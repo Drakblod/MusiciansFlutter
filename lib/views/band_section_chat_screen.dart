@@ -10,6 +10,7 @@ import '../providers/app_state.dart';
 import '../theme/app_theme.dart';
 import '../utils/band_section_utils.dart';
 import '../widgets/animated_tap_detector.dart';
+import '../widgets/band_musical_role_picker.dart';
 import '../widgets/custom_top_bar.dart';
 import '../widgets/gradient_scaffold.dart';
 
@@ -108,7 +109,7 @@ class _BandSectionChatScreenState extends State<BandSectionChatScreen> {
     final appState = Provider.of<AppState>(context, listen: false);
     final selfId = appState.currentUserId;
     final bandId = metadata['bandId'] as String? ?? widget.bandId ?? '';
-    final groupName = metadata['groupName'] as String? ?? 'Section Chat';
+    final groupName = metadata['groupName'] as String? ?? 'Group chat';
     final participantsMap = (metadata['participants'] as Map?) ?? {};
     final adminsMap = (metadata['admins'] as Map?) ?? {};
     final isGroupAdmin = selfId != null && (adminsMap[selfId] == true || metadata['createdBy'] == selfId);
@@ -248,13 +249,18 @@ class _BandSectionChatScreenState extends State<BandSectionChatScreen> {
                                 (m) => m?.userId == memberUid,
                                 orElse: () => null,
                               );
-                          final displayName = memberObj?.nickname ?? 'Musician';
+                          final displayName = memberObj?.nickname ?? 'Unknown participant';
+                          final musicalRole = BandMusicalRolePicker.memberLabel(memberObj, null);
 
                           return ListTile(
                             dense: true,
                             title: Text(
                               isUserMe ? '$displayName (You)' : displayName,
                               style: GoogleFonts.inter(color: Colors.white, fontSize: 13),
+                            ),
+                            subtitle: musicalRole.isEmpty ? null : Text(
+                              musicalRole,
+                              style: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 12),
                             ),
                             trailing: Row(
                               mainAxisSize: MainAxisSize.min,
@@ -474,7 +480,7 @@ class _BandSectionChatScreenState extends State<BandSectionChatScreen> {
           }
         }
 
-        final groupName = metadata?['groupName'] as String? ?? widget.initialGroupName ?? 'Section Chat';
+        final groupName = metadata?['groupName'] as String? ?? widget.initialGroupName ?? 'Group chat';
         final bandName = metadata?['bandName'] as String? ?? 'Band';
         final participantCount = metadata?['participantCount'] is int
             ? metadata!['participantCount'] as int
@@ -513,7 +519,7 @@ class _BandSectionChatScreenState extends State<BandSectionChatScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'SECTION CHAT',
+                                'Group chat',
                                 style: GoogleFonts.outfit(
                                   fontSize: 10,
                                   fontWeight: FontWeight.bold,

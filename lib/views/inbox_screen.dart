@@ -8,9 +8,15 @@ import '../theme/app_theme.dart';
 import '../widgets/gradient_scaffold.dart';
 import '../widgets/custom_top_bar.dart';
 import '../models/agreement.dart';
+import '../models/band.dart';
+import '../models/user_profile.dart';
+import '../utils/conversation_thread_metadata.dart';
 import '../utils/sub_request_card_helper.dart';
 import '../utils/date_parser.dart';
 import '../widgets/create_band_section_sheet.dart';
+import '../widgets/band_musical_role_picker.dart';
+
+enum _InboxTab { messages, agreements, groups }
 
 class InboxScreen extends StatefulWidget {
   const InboxScreen({super.key});
@@ -26,9 +32,11 @@ class _InboxScreenState extends State<InboxScreen> {
   String? _observedUid;
   int _generation = 0;
   final _bandAccess = <StreamSubscription<bool>>[];
+  final _readableGroupBands = <String>{};
   void _cancelBandAccess() {
     for (final subscription in _bandAccess) { unawaited(subscription.cancel()); }
     _bandAccess.clear();
+    _readableGroupBands.clear();
   }
   String? _accessError;
   void _identityChanged() {
@@ -48,7 +56,8 @@ class _InboxScreenState extends State<InboxScreen> {
     _observedState?.removeListener(_identityChanged);
     super.dispose();
   }
-  int _activeTab = 0; // 0: Direct Chats, 1: Gigs & Agreements
+  _InboxTab _activeTab = _InboxTab.messages;
+  bool _openingGroup = false;
 
   @override
   void initState() {
@@ -71,14 +80,29 @@ class _InboxScreenState extends State<InboxScreen> {
       final list = await appState.firebaseService.getActiveConversationsAsync();
       if (!current()) return;
       setState(() => _threads = list);
-      for (final bandId in list.where((thread) => thread['isGroup'] == true)
+      for (final bandId in list.where((thread) =>
+          isGroupThread(thread) || thread['otherBandMember'] is BandMember)
           .map((thread) => thread['bandId']).whereType<String>().toSet()) {
         void clear() {
           if (!current()) return;
-          setState(() { _threads.removeWhere((thread) => thread['bandId'] == bandId && thread['isGroup'] == true); });
+          setState(() {
+            _readableGroupBands.remove(bandId);
+            _threads = [
+              for (final thread in _threads)
+                if (thread['bandId'] != bandId) thread
+                else if (!isGroupThread(thread)) {...thread, 'otherBandMember': null},
+            ];
+          });
         }
         _bandAccess.add(appState.firebaseService.subscribeToBandProfileAccess(bandId).listen(
-          (allowed) { if (!allowed) clear(); }, onError: (Object error) => clear(),
+          (allowed) {
+            if (!current()) return;
+            if (!allowed) {
+              clear();
+            } else if (!_readableGroupBands.contains(bandId)) {
+              setState(() => _readableGroupBands.add(bandId));
+            }
+          }, onError: (Object error) => clear(),
         ));
       }
     } catch (e) {
@@ -90,6 +114,42 @@ class _InboxScreenState extends State<InboxScreen> {
       }
     } finally {
       if (current()) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _openGroup(Map<String, dynamic> thread, AppState state) async {
+    if (_openingGroup) return;
+    final uid = state.currentUserId;
+    final id = conversationText(thread['conversationId']);
+    final bandId = conversationText(thread['bandId']);
+    if (uid == null || id == null || bandId == null) return;
+
+    _openingGroup = true;
+    try {
+      final metadata = await state.firebaseService
+          .subscribeToBandSectionMetadata(id).first;
+      if (!mounted || state.currentUserId != uid) return;
+      final participants = metadata?['participants'];
+      if (metadata == null || !isGroupThread(metadata) ||
+          metadata['bandId'] != bandId ||
+          participants is! Map || participants[uid] != true ||
+          !_threads.contains(thread)) {
+        throw const FormatException('Group unavailable');
+      }
+      // The group screen marks the caller's own thread read on entry.
+      await Navigator.pushNamed(context, '/band-section-chat', arguments: {
+        'conversationId': id,
+        'bandId': bandId,
+        'groupName': metadata['groupName'] ?? 'Group chat',
+      });
+      if (mounted && state.currentUserId == uid) await _loadThreads();
+    } catch (_) {
+      if (!mounted || state.currentUserId != uid) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('This group is currently unavailable.')),
+      );
+    } finally {
+      _openingGroup = false;
     }
   }
 
@@ -552,63 +612,44 @@ class _InboxScreenState extends State<InboxScreen> {
             ),
             child: Row(
               children: [
-                Expanded(
-                  child: GestureDetector(
-                    onTap: () => setState(() => _activeTab = 0),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                      decoration: BoxDecoration(
-                        color: _activeTab == 0
-                            ? AppTheme.primaryAccent
-                            : Colors.transparent,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Center(
-                        child: Text(
-                          'Messages',
-                          style: GoogleFonts.outfit(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                            color: _activeTab == 0
-                                ? Colors.white
-                                : AppTheme.textSecondary,
+                for (final tab in _InboxTab.values)
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => setState(() => _activeTab = tab),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        decoration: BoxDecoration(
+                          color: _activeTab != tab
+                              ? Colors.transparent
+                              : tab == _InboxTab.agreements
+                                  ? const Color(0xFF0F4D25)
+                                  : AppTheme.primaryAccent,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Center(
+                          child: Text(
+                            switch (tab) {
+                              _InboxTab.messages => 'Messages',
+                              _InboxTab.agreements => 'Agreements',
+                              _InboxTab.groups => 'Groups',
+                            },
+                            style: GoogleFonts.outfit(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              color: _activeTab == tab
+                                  ? Colors.white
+                                  : AppTheme.textSecondary,
+                            ),
                           ),
                         ),
                       ),
                     ),
                   ),
-                ),
-                Expanded(
-                  child: GestureDetector(
-                    onTap: () => setState(() => _activeTab = 1),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                      decoration: BoxDecoration(
-                        color: _activeTab == 1
-                            ? const Color(0xFF0F4D25)
-                            : Colors.transparent,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Center(
-                        child: Text(
-                          'Agreements',
-                          style: GoogleFonts.outfit(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                            color: _activeTab == 1
-                                ? Colors.white
-                                : AppTheme.textSecondary,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
               ],
             ),
           ),
 
-          if (_activeTab == 0)
+          if (_activeTab != _InboxTab.agreements)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
               child: Align(
@@ -619,14 +660,15 @@ class _InboxScreenState extends State<InboxScreen> {
                   child: InkWell(
                     borderRadius: BorderRadius.circular(12),
                     onTap: () async {
+                      final uid = appState.currentUserId;
                       final result = await CreateBandSectionSheet.show(context);
-                      if (result != null && mounted) {
-                        _loadThreads();
-                        Navigator.pushNamed(
+                      if (result != null && mounted && appState.currentUserId == uid) {
+                        await Navigator.pushNamed(
                           context,
                           '/band-section-chat',
                           arguments: result,
                         );
+                        if (mounted && appState.currentUserId == uid) await _loadThreads();
                       }
                     },
                     child: Container(
@@ -673,8 +715,11 @@ class _InboxScreenState extends State<InboxScreen> {
                     )
                   : () {
                       final filteredThreads = _threads.where((t) {
-                        final hasAgreement = t['agreement'] != null;
-                        return _activeTab == 0 ? !hasAgreement : hasAgreement;
+                        return switch (_activeTab) {
+                          _InboxTab.messages => !isAgreementThread(t) && !isGroupThread(t),
+                          _InboxTab.agreements => isAgreementThread(t),
+                          _InboxTab.groups => isGroupThread(t) && _readableGroupBands.contains(t['bandId']),
+                        };
                       }).toList();
 
                       if (filteredThreads.isEmpty) {
@@ -688,11 +733,13 @@ class _InboxScreenState extends State<InboxScreen> {
                               child: Column(
                                 children: [
                                   Icon(
-                                    _activeTab == 0
-                                        ? Icons.chat_bubble_outline_rounded
-                                        : Icons.handshake_outlined,
+                                    switch (_activeTab) {
+                                      _InboxTab.messages => Icons.chat_bubble_outline_rounded,
+                                      _InboxTab.agreements => Icons.handshake_outlined,
+                                      _InboxTab.groups => Icons.groups_outlined,
+                                    },
                                     size: 64,
-                                    color: _activeTab == 0
+                                    color: _activeTab != _InboxTab.agreements
                                         ? AppTheme.textSecondary.withOpacity(
                                             0.5,
                                           )
@@ -700,9 +747,11 @@ class _InboxScreenState extends State<InboxScreen> {
                                   ),
                                   const SizedBox(height: 16),
                                   Text(
-                                    _activeTab == 0
-                                        ? 'No messages yet.'
-                                        : 'No active gig agreements.',
+                                    switch (_activeTab) {
+                                      _InboxTab.messages => 'No messages yet.',
+                                      _InboxTab.agreements => 'No active gig agreements.',
+                                      _InboxTab.groups => 'No group chats yet.',
+                                    },
                                     style: GoogleFonts.outfit(
                                       fontSize: 18,
                                       fontWeight: FontWeight.bold,
@@ -715,9 +764,11 @@ class _InboxScreenState extends State<InboxScreen> {
                                       horizontal: 40,
                                     ),
                                     child: Text(
-                                      _activeTab == 0
-                                          ? 'Start a chat by tapping Message on a profile, or create a band section group.'
-                                          : 'Agreements are started when a sub request is accepted.',
+                                      switch (_activeTab) {
+                                        _InboxTab.messages => 'Start a chat by tapping Message on a profile.',
+                                        _InboxTab.agreements => 'Agreements are started when a sub request is accepted.',
+                                        _InboxTab.groups => 'Use New group to start a group chat.',
+                                      },
                                       style: GoogleFonts.inter(
                                         fontSize: 14,
                                         color: AppTheme.textSecondary,
@@ -738,14 +789,14 @@ class _InboxScreenState extends State<InboxScreen> {
                         itemCount: filteredThreads.length,
                         itemBuilder: (context, index) {
                           final thread = filteredThreads[index];
-                          final isGroup = thread['isGroup'] == true || thread['conversationType'] == 'band_section';
+                          final isGroup = isGroupThread(thread);
                           final hasUnread = thread['hasUnread'] == true;
                           final timestamp = parseDateTime(
                             thread['timestamp'] ??
                                 thread['lastMessageTimestamp'],
                           );
                           final otherUserId = (thread['otherUserId'] as String?) ?? '';
-                          final otherUserName = (thread['otherUserName'] as String?) ?? (isGroup ? 'Section Chat' : 'Musician');
+                          final otherUserName = (thread['otherUserName'] as String?) ?? (isGroup ? 'Group chat' : 'Unknown participant');
                           final lastMessage = (thread['lastMessageText'] as String?) ?? '';
                           final conversationId = (thread['conversationId'] as String?) ?? '';
                           final agreement = thread['agreement'] as Agreement?;
@@ -764,7 +815,12 @@ class _InboxScreenState extends State<InboxScreen> {
                             );
                           }
 
-                          final isAgreement = agreement != null;
+                          final isAgreement = isAgreementThread(thread);
+                          final member = thread['otherBandMember'] as BandMember?;
+                          final musicalRole = member == null ? '' :
+                              BandMusicalRolePicker.memberLabel(
+                                member, thread['otherUserProfile'] as UserProfile?,
+                              );
                           final cardBorderColor = hasUnread
                               ? AppTheme.primaryAccent.withOpacity(0.5)
                               : isAgreement
@@ -792,47 +848,16 @@ class _InboxScreenState extends State<InboxScreen> {
                               color: Colors.transparent,
                               child: InkWell(
                                 borderRadius: BorderRadius.circular(16),
-                                onTap: () async {
-                                  if (isGroup) {
-                                    await appState.firebaseService
-                                        .markBandSectionConversationReadAsync(conversationId);
-                                    appState.refreshProfile();
-
-                                    if (context.mounted) {
-                                      await Navigator.pushNamed(
-                                        context,
-                                        '/band-section-chat',
-                                        arguments: {
-                                          'conversationId': conversationId,
-                                          'bandId': thread['bandId'],
-                                          'groupName': thread['groupName'] ?? otherUserName,
-                                        },
-                                      );
-                                      _loadThreads();
-                                    }
-                                  } else {
-                                    // Mark conversation as read
-                                    await appState.firebaseService
-                                        .markConversationAsRead(conversationId);
-
-                                    // Trigger state update
-                                    appState.refreshProfile();
-
-                                    if (context.mounted) {
-                                      await Navigator.pushNamed(
-                                        context,
-                                        '/chat-detail',
-                                        arguments: {
-                                          'conversationId': conversationId,
-                                          'receiverId': otherUserId,
-                                          'receiverName': otherUserName,
-                                        },
-                                      );
-                                      // Reload thread list on pop back
-                                      _loadThreads();
-                                    }
-                                  }
-                                },
+                                onTap: isGroup
+                                    ? () => _openGroup(thread, appState)
+                                    : otherUserId.isEmpty || conversationId.isEmpty
+                                        ? null
+                                        : () => _openConversation(
+                                            conversationId: conversationId,
+                                            otherUserId: otherUserId,
+                                            otherUserName: otherUserName,
+                                            appState: appState,
+                                          ),
                                 child: Padding(
                                   padding: const EdgeInsets.symmetric(
                                     horizontal: 16,
@@ -996,36 +1021,17 @@ class _InboxScreenState extends State<InboxScreen> {
                                             ),
                                             const SizedBox(height: 4),
 
-                                            // Context info for agreements & groups
-                                            if (isAgreement) ...[
-                                              Row(
-                                                children: [
-                                                  const Icon(
-                                                    Icons.music_note_rounded,
-                                                    size: 13,
-                                                    color: Colors.greenAccent,
-                                                  ),
-                                                  const SizedBox(width: 4),
-                                                  Expanded(
-                                                    child: Text(
-                                                      '${agreement.bandName ?? "Unknown Band"} • Sub: ${agreement.voicePart ?? "Musician"}',
-                                                      style: GoogleFonts.inter(
-                                                        color: Colors
-                                                            .greenAccent
-                                                            .withOpacity(0.8),
-                                                        fontSize: 12,
-                                                        fontWeight:
-                                                            FontWeight.w500,
-                                                      ),
-                                                      maxLines: 1,
-                                                      overflow:
-                                                          TextOverflow.ellipsis,
-                                                    ),
-                                                  ),
-                                                ],
+                                            if (musicalRole.isNotEmpty) ...[
+                                              Text(
+                                                musicalRole,
+                                                style: GoogleFonts.inter(
+                                                  color: AppTheme.textSecondary,
+                                                  fontSize: 12,
+                                                ),
                                               ),
                                               const SizedBox(height: 4),
-                                            ] else if (isGroup) ...[
+                                            ],
+                                            if (isGroup) ...[
                                               Row(
                                                 children: [
                                                   const Icon(

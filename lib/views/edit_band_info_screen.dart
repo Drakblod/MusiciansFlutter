@@ -591,7 +591,7 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
               if (canCreateSectionChat)
                 ListTile(
                   leading: const Icon(Icons.group_add_outlined, color: Colors.greenAccent),
-                  title: Text('Create section chat: $instrument', style: GoogleFonts.inter(color: Colors.white)),
+                  title: Text('Create group chat: $instrument', style: GoogleFonts.inter(color: Colors.white)),
                   subtitle: Text('$matchingCount band members match this instrument', style: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 11)),
                   onTap: () async {
                     Navigator.pop(ctx);

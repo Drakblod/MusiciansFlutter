@@ -31,6 +31,7 @@ import '../utils/date_parser.dart';
 import '../utils/secondary_skills_utils.dart';
 import '../utils/band_membership_policy.dart';
 import '../utils/catalogue_profiles.dart';
+import '../utils/conversation_thread_metadata.dart';
 import 'storage_media_service.dart';
 
 class PrivateDataAccessException implements Exception {
@@ -1782,10 +1783,10 @@ class FirebaseService {
       if (data is Map) {
         return {
           'conversationId': conversationId,
-          'conversationType': data['conversationType']?.toString() ?? 'band_section',
+          'conversationType': conversationType(data),
           'bandId': data['bandId']?.toString(),
           'bandName': data['bandName']?.toString() ?? 'Band',
-          'groupName': data['groupName']?.toString() ?? 'Section Chat',
+          'groupName': data['groupName']?.toString() ?? 'Group chat',
           'createdBy': data['createdBy']?.toString(),
           'participantCount': data['participantCount'] is int
               ? data['participantCount'] as int
@@ -1897,6 +1898,27 @@ class FirebaseService {
 
     final snapshot = await _dbRef('userConversations/$selfId').get();
     final List<Map<String, dynamic>> conversations = [];
+    final bandMembers = <String, Future<List<BandMember>>>{};
+
+    Future<List<BandMember>> readMembers(String bandId) async {
+      try {
+        return await getBandMembersAsync(bandId);
+      } on FirebaseException {
+        return [];
+      } on PrivateDataAccessException {
+        return [];
+      }
+    }
+
+    Future<UserProfile?> readCounterpart(String userId) async {
+      try {
+        return await getUserProfileAsync(userId);
+      } on FirebaseException {
+        return null;
+      } on PrivateDataAccessException {
+        return null;
+      }
+    }
 
     if (snapshot.exists && snapshot.value is Map) {
       final data = snapshot.value as Map;
@@ -1904,16 +1926,29 @@ class FirebaseService {
         final convId = entry.key.toString();
         final item = entry.value;
         if (item is Map) {
-          final convType = item['conversationType']?.toString() ?? 'direct';
+          Map? canonical;
+          if (needsConversationMetadata(item)) {
+            try {
+              final value = (await _dbRef('conversations/$convId').get()).value;
+              if (value is Map) canonical = value;
+            } on FirebaseException {
+              // An unavailable legacy conversation does not erase its inbox row.
+            }
+          }
+          final metadata = resolveConversationMetadata(
+            index: item, canonical: canonical, selfId: selfId,
+          );
+          final convType = metadata['conversationType'];
           final isGroup = convType == 'band_section';
 
           if (isGroup) {
-            final groupName = item['groupName']?.toString() ?? 'Section Chat';
-            final bandName = item['bandName']?.toString() ?? 'Band';
-            final bandId = item['bandId']?.toString();
-            final participantCount = item['participantCount'] is int
-                ? item['participantCount'] as int
-                : int.tryParse(item['participantCount']?.toString() ?? '0') ?? 0;
+            final groupName = conversationText(canonical?['groupName']) ??
+                conversationText(item['groupName']) ?? 'Group chat';
+            final bandName = conversationText(canonical?['bandName']) ??
+                conversationText(item['bandName']) ?? 'Band';
+            final bandId = metadata['bandId'];
+            final count = canonical?['participantCount'] ?? item['participantCount'];
+            final participantCount = int.tryParse(count?.toString() ?? '') ?? 0;
             final sectionKey = item['sectionKey']?.toString();
             final sourceInstrument = item['sourceInstrument']?.toString();
 
@@ -1972,16 +2007,18 @@ class FirebaseService {
             continue;
           }
 
-          final otherUserId = item['otherUserId']?.toString();
-          if (otherUserId == null || otherUserId.isEmpty) continue;
-
-          String otherUserName = "Musician";
-          String? profilePic;
-          final profile = await getUserProfileAsync(otherUserId);
-          if (profile != null) {
-            otherUserName =
-                profile.displayName ?? profile.nickname ?? "Musician";
-            profilePic = profile.profilePictureUrl;
+          final otherUserId = metadata['otherUserId'] as String?;
+          final bandId = metadata['bandId'] as String?;
+          final profile = otherUserId == null ? null : await readCounterpart(otherUserId);
+          final otherUserName = conversationText(profile?.displayName) ??
+              conversationText(profile?.nickname) ??
+              (otherUserId == conversationText(item['otherUserId'])
+                  ? conversationText(item['otherUserName']) : null) ??
+              (convType == 'agreement' ? 'Agreement' : 'Unknown participant');
+          BandMember? member;
+          if (convType != 'agreement' && bandId != null && otherUserId != null) {
+            final members = await bandMembers.putIfAbsent(bandId, () => readMembers(bandId));
+            member = members.where((member) => member.userId == otherUserId).firstOrNull;
           }
 
           final rawTs =
@@ -1991,29 +2028,20 @@ class FirebaseService {
               item['CreatedTimestamp'];
           final parsedDt = parseDateTime(rawTs);
 
-          // Parse agreement if attached or in agreements map
-          final agreementRaw = item['agreement'] ?? item['Agreement'];
-          Agreement? agreement;
-          if (agreementRaw is Map) {
-            try {
-              agreement = Agreement.fromJson(agreementRaw);
-            } catch (accessError) { _rethrowAccessDenied(accessError);}
-          }
-
           conversations.add({
+            ...metadata,
             'conversationId': convId,
             'isGroup': false,
-            'otherUserId': otherUserId,
             'otherUserName': otherUserName,
-            'otherUserProfilePicture': profilePic,
+            'otherUserProfilePicture': profile?.profilePictureUrl,
+            'otherBandMember': member,
+            'otherUserProfile': profile,
             'lastMessageText':
                 item['lastMessageText']?.toString() ?? 'No messages yet',
             'lastMessageTimestamp':
                 item['lastMessageTimestamp']?.toString() ?? '',
             'timestamp': parsedDt,
             'hasUnread': item['hasUnread'] == true,
-            'conversationType': convType,
-            'agreement': agreement,
           });
         }
       }

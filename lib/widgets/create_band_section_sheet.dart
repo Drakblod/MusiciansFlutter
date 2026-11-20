@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../models/band.dart';
@@ -8,6 +7,7 @@ import '../providers/app_state.dart';
 import '../theme/app_theme.dart';
 import '../utils/band_section_utils.dart';
 import 'animated_tap_detector.dart';
+import 'band_musical_role_picker.dart';
 
 class CreateBandSectionSheet extends StatefulWidget {
   final String? initialBandId;
@@ -64,10 +64,8 @@ class _CreateBandSectionSheetState extends State<CreateBandSectionSheet> {
 
   List<BandMember> _bandMembers = [];
   Map<String, UserProfile> _memberProfiles = {};
-  List<BandSectionSuggestion> _suggestions = [];
 
   BandSectionSuggestion? _selectedSuggestion;
-  bool _isCustomMode = false;
 
   final Set<String> _selectedMemberIds = {};
   final TextEditingController _groupNameController = TextEditingController();
@@ -138,7 +136,6 @@ class _CreateBandSectionSheetState extends State<CreateBandSectionSheet> {
       _errorMessage = null;
       _bandMembers = [];
       _memberProfiles = {};
-      _suggestions = [];
       _selectedSuggestion = null;
       _selectedMemberIds.clear();
     });
@@ -164,23 +161,21 @@ class _CreateBandSectionSheetState extends State<CreateBandSectionSheet> {
         }
       }
 
-      final suggestions = BandSectionUtils.generateSectionSuggestions(
-        members: members,
-        userProfiles: profiles,
-      );
-
       if (mounted && generation == _memberLoadGeneration &&
           appState.currentUserId == selfId && _selectedBandId == bandId) {
         setState(() {
           _bandMembers = members;
           _memberProfiles = profiles;
-          _suggestions = suggestions;
           _isLoadingMembers = false;
 
           _selectedMemberIds.clear();
           if (selfId != null) _selectedMemberIds.add(selfId);
 
           if (widget.initialInstrument != null && widget.initialInstrument!.isNotEmpty) {
+            final suggestions = BandSectionUtils.generateSectionSuggestions(
+              members: members,
+              userProfiles: profiles,
+            );
             final key = BandSectionUtils.normalizeInstrumentKey(widget.initialInstrument!);
             final match = suggestions.cast<BandSectionSuggestion?>().firstWhere(
                   (s) => s?.sectionKey == key,
@@ -189,27 +184,18 @@ class _CreateBandSectionSheetState extends State<CreateBandSectionSheet> {
             if (match != null) {
               _applySuggestion(match);
             } else {
-              _isCustomMode = true;
               _groupNameController.text = '${widget.initialInstrument} Section';
               if (members.any((member) => member.userId == widget.initialMemberId)) {
                 _selectedMemberIds.add(widget.initialMemberId!);
               }
             }
           } else if (widget.initialMemberId != null) {
-            _isCustomMode = true;
             if (members.any((member) => member.userId == widget.initialMemberId)) {
               _selectedMemberIds.add(widget.initialMemberId!);
             }
             _groupNameController.text = 'Custom Section';
-          } else if (widget.lockToInitialBand) {
-            _isCustomMode = true;
-            _selectedSuggestion = null;
-            _groupNameController.clear();
-          } else if (suggestions.isNotEmpty) {
-            _applySuggestion(suggestions.first);
           } else {
-            _isCustomMode = true;
-            _groupNameController.text = 'Band Section';
+            _groupNameController.clear();
           }
         });
       }
@@ -228,7 +214,6 @@ class _CreateBandSectionSheetState extends State<CreateBandSectionSheet> {
     final selfId = appState.currentUserId;
 
     _selectedSuggestion = suggestion;
-    _isCustomMode = false;
     _selectedMemberIds.clear();
     if (selfId != null) _selectedMemberIds.add(selfId);
     _selectedMemberIds.addAll(suggestion.memberUserIds);
@@ -274,8 +259,8 @@ class _CreateBandSectionSheetState extends State<CreateBandSectionSheet> {
         bandId: bandId,
         groupName: groupName,
         participantIds: _selectedMemberIds.toList(),
-        sectionKey: _isCustomMode ? null : _selectedSuggestion?.sectionKey,
-        sourceInstrument: _isCustomMode ? null : _selectedSuggestion?.sectionName,
+        sectionKey: _selectedSuggestion?.sectionKey,
+        sourceInstrument: _selectedSuggestion?.sectionName,
       );
       if (convId.trim().isEmpty || appState.currentUserId != callerUid ||
           (widget.lockToInitialBand && appState.activeBandId != bandId)) {
@@ -465,127 +450,6 @@ class _CreateBandSectionSheetState extends State<CreateBandSectionSheet> {
                                   ),
                                 )
                               else ...[
-                                // Section suggestions
-                                Text(
-                                  'Section Choice',
-                                  style: GoogleFonts.outfit(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Wrap(
-                                  spacing: 8,
-                                  runSpacing: 8,
-                                  children: [
-                                    ..._suggestions.map((s) {
-                                      final isSelected = !_isCustomMode && _selectedSuggestion?.sectionKey == s.sectionKey;
-                                      return Semantics(
-                                        button: true,
-                                        label: 'Suggested section: ${s.sectionName}, ${s.memberCount} members',
-                                        child: FocusableActionDetector(
-                                          mouseCursor: SystemMouseCursors.click,
-                                          shortcuts: {
-                                            LogicalKeySet(LogicalKeyboardKey.enter): const ActivateIntent(),
-                                            LogicalKeySet(LogicalKeyboardKey.space): const ActivateIntent(),
-                                          },
-                                          actions: {
-                                            ActivateIntent: CallbackAction<ActivateIntent>(
-                                              onInvoke: (_) => setState(() => _applySuggestion(s)),
-                                            ),
-                                          },
-                                          child: InkWell(
-                                            borderRadius: BorderRadius.circular(10),
-                                            onTap: () => setState(() => _applySuggestion(s)),
-                                            child: Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                              decoration: BoxDecoration(
-                                                color: isSelected ? AppTheme.primaryAccent : const Color(0xFF231F45),
-                                                borderRadius: BorderRadius.circular(10),
-                                                border: Border.all(
-                                                  color: isSelected ? AppTheme.primaryAccent : const Color(0xFF3B336B),
-                                                ),
-                                              ),
-                                              child: Text(
-                                                '${s.sectionName} (${s.memberCount})',
-                                                style: GoogleFonts.inter(
-                                                  fontSize: 13,
-                                                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                                                  color: isSelected ? Colors.white : Colors.white70,
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      );
-                                    }),
-                                    Semantics(
-                                      button: true,
-                                      label: 'Custom group',
-                                      child: FocusableActionDetector(
-                                        mouseCursor: SystemMouseCursors.click,
-                                        shortcuts: {
-                                          LogicalKeySet(LogicalKeyboardKey.enter): const ActivateIntent(),
-                                          LogicalKeySet(LogicalKeyboardKey.space): const ActivateIntent(),
-                                        },
-                                        actions: {
-                                          ActivateIntent: CallbackAction<ActivateIntent>(
-                                            onInvoke: (_) => setState(() {
-                                              _isCustomMode = true;
-                                              _selectedSuggestion = null;
-                                              if (_groupNameController.text.isEmpty ||
-                                                  _suggestions.any((s) => _groupNameController.text == '${s.sectionName} Section')) {
-                                                _groupNameController.text = 'Custom Group';
-                                              }
-                                            }),
-                                          ),
-                                        },
-                                        child: InkWell(
-                                          borderRadius: BorderRadius.circular(10),
-                                          onTap: () => setState(() {
-                                            _isCustomMode = true;
-                                            _selectedSuggestion = null;
-                                            if (_groupNameController.text.isEmpty ||
-                                                _suggestions.any((s) => _groupNameController.text == '${s.sectionName} Section')) {
-                                              _groupNameController.text = 'Custom Group';
-                                            }
-                                          }),
-                                          child: Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                            decoration: BoxDecoration(
-                                              color: _isCustomMode ? AppTheme.primaryAccent : const Color(0xFF231F45),
-                                              borderRadius: BorderRadius.circular(10),
-                                              border: Border.all(
-                                                color: _isCustomMode ? AppTheme.primaryAccent : const Color(0xFF3B336B),
-                                              ),
-                                            ),
-                                            child: Text(
-                                              'Custom group',
-                                              style: GoogleFonts.inter(
-                                                fontSize: 13,
-                                                fontWeight: _isCustomMode ? FontWeight.bold : FontWeight.w500,
-                                                color: _isCustomMode ? Colors.white : Colors.white70,
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  'Suggested from profile skills. Review the members before creating the group.',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 11,
-                                    fontStyle: FontStyle.italic,
-                                    color: AppTheme.textMuted,
-                                  ),
-                                ),
-                                const SizedBox(height: 16),
-
-                                // Group Name Input
                                 Text(
                                   'Group Name',
                                   style: GoogleFonts.outfit(
@@ -663,7 +527,7 @@ class _CreateBandSectionSheetState extends State<CreateBandSectionSheet> {
                                       final isSelected = _selectedMemberIds.contains(uid);
                                       final profile = _memberProfiles[uid];
                                       final name = profile?.displayName ?? profile?.nickname ?? member.nickname ?? 'Musician';
-                                      final inst = BandSectionUtils.resolveEffectiveInstrument(profile) ?? 'Musician';
+                                      final inst = BandMusicalRolePicker.memberLabel(member, profile);
 
                                       return CheckboxListTile(
                                         key: ValueKey('band-group-member-$uid'),
@@ -683,7 +547,7 @@ class _CreateBandSectionSheetState extends State<CreateBandSectionSheet> {
                                                 overflow: TextOverflow.ellipsis,
                                               ),
                                             ),
-                                            Container(
+                                            if (inst.isNotEmpty) Container(
                                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                                               decoration: BoxDecoration(
                                                 color: const Color(0xFF231F45),

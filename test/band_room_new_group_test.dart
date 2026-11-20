@@ -372,6 +372,7 @@ void main() {
     await open(tester, room: false);
     final picker = tester.widget<DropdownButton<String>>(find.byType(DropdownButton<String>));
     expect(picker.items!.map((item) => item.value), unorderedEquals(['band_feed_test', 'other_band']));
+    expect(find.text('Section Choice'), findsNothing);
     await tester.tap(find.byKey(const ValueKey('cancel-band-group')));
     await pumpUiTransitions(tester);
     expect(s.groupCalls, isEmpty);
