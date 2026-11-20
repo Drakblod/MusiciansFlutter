@@ -2401,9 +2401,12 @@ class _BandRoomChatScreenState extends State<_BandRoomContent>
         final endLocal = DateTime.tryParse(event.endDateTime)?.toLocal() ?? startLocal;
         final isUpcoming = endLocal != null ? endLocal.isAfter(now) : (startLocal != null && startLocal.isAfter(now));
         final needsRsvp = isUpcoming && event.requireResponse && !event.isLocked;
+        final hasResponded = selfId != null &&
+            classifyEventResponse(event.responses[selfId]?.status) !=
+                EventResponseStatus.noAnswer;
         final isFinalized = isUpcoming && (!event.requireResponse || event.isLocked);
 
-        if (_eventsSubFilter.startsWith('New') && needsRsvp) {
+        if (_eventsSubFilter.startsWith('New') && needsRsvp && !hasResponded) {
           filteredEvents.add(event);
         } else if (_eventsSubFilter.startsWith('Upcoming') && isFinalized) {
           filteredEvents.add(event);
@@ -3454,7 +3457,8 @@ class _BandRoomChatScreenState extends State<_BandRoomContent>
               Builder(
                 builder: (context) {
                   final userRespStatus = currentUserId != null ? event.responses[currentUserId]?.status : null;
-                  final hasResponse = userRespStatus != null && userRespStatus.trim().isNotEmpty;
+                  final hasResponse = classifyEventResponse(userRespStatus) !=
+                      EventResponseStatus.noAnswer;
                   final isExpanded = !hasResponse || (event.id != null && _expandedRsvpEventIds.contains(event.id));
 
                   Color statusColor;

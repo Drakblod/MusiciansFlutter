@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'tab_label_expectations.dart';
 import 'support/bounded_ui_pump.dart';
 import 'package:musicians_flutter/utils/band_membership_policy.dart';
@@ -17,7 +19,9 @@ import 'package:musicians_flutter/providers/app_state.dart';
 import 'package:musicians_flutter/services/firebase_service.dart';
 import 'package:musicians_flutter/views/band_room_chat_screen.dart';
 import 'package:musicians_flutter/views/event_results_page.dart';
+import 'package:musicians_flutter/views/manage_events_screen.dart';
 import 'package:musicians_flutter/widgets/animated_tap_detector.dart';
+import 'package:musicians_flutter/widgets/rsvp_reminder_dialog.dart';
 
 class MockGigsInfoFirebaseService extends FirebaseService {
   @override
@@ -47,11 +51,16 @@ class MockGigsInfoFirebaseService extends FirebaseService {
   @override
   Future<Map<String, String>> getUserBandsAsync(String userId) async => {'band_feed_test': 'Rock Band'};
 
+  @override
+  Future<String?> getUserBandRoleAsync(String bandId, String userId) async => 'Leader';
+
   BandEvent? testEvent;
   List<BandEvent> testEventsList = [];
   List<BandMember> testMembers = [];
   Map<String, Map<String, String>> testFiles = {};
   final List<Map<String, String>> updatedResponses = [];
+  StreamController<List<BandEvent>>? eventUpdates;
+  bool denyRsvpWrite = false;
 
   @override
   Stream<List<Message>> subscribeToBandMessages(String bandId) {
@@ -59,11 +68,10 @@ class MockGigsInfoFirebaseService extends FirebaseService {
   }
 
   @override
-  Stream<List<BandEvent>> subscribeToBandEvents(String bandId) {
-    if (testEventsList.isNotEmpty) {
-      return Stream.value(testEventsList);
-    }
-    return Stream.value(testEvent != null ? [testEvent!] : []);
+  Stream<List<BandEvent>> subscribeToBandEvents(String bandId) async* {
+    yield testEventsList.isNotEmpty ? testEventsList : [if (testEvent != null) testEvent!];
+    final updates = eventUpdates;
+    if (updates != null) yield* updates.stream;
   }
 
   @override
@@ -79,12 +87,30 @@ class MockGigsInfoFirebaseService extends FirebaseService {
     String status, {
     String? comment,
   }) async {
+    if (denyRsvpWrite) throw StateError('write denied');
     updatedResponses.add({
       'bandId': bandId,
       'eventId': eventId,
       'userId': userId,
       'response': status,
     });
+    final updates = eventUpdates;
+    if (updates != null) {
+      testEventsList = [
+        for (final event in testEventsList)
+          if (event.id == eventId)
+            BandEvent.fromJson({
+              ...event.toJson(),
+              'Responses': {
+                ...event.toJson()['Responses'] as Map,
+                userId: EventResponse(status: status, timestamp: DateTime.now()).toJson(),
+              },
+            }, eventId)
+          else
+            event,
+      ];
+      updates.add(testEventsList);
+    }
   }
 
   @override
@@ -201,7 +227,7 @@ void main() {
     expect(find.text('MP3s / Audio'), findsNothing);
   });
 
-  testWidgets('News event card is whole clickable, has chevron, no RSVP button, opens EventResultsPage', (tester) async {
+  testWidgets('Unanswered News event card has a chevron and opens EventResultsPage', (tester) async {
     tester.view.physicalSize = const Size(1200, 2400);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(() {
@@ -213,6 +239,7 @@ void main() {
     mockService.testMembers = [
       BandMember(userId: 'leader_1', nickname: 'Leader', role: 'Leader'),
       BandMember(userId: 'u2', nickname: 'Bassist', role: 'Member'),
+      BandMember(userId: 'u3', nickname: 'Drummer', role: 'Member'),
     ];
 
     final now = DateTime.now();
@@ -230,7 +257,7 @@ void main() {
       updatedAt: now.millisecondsSinceEpoch,
       requireResponse: true,
       responses: {
-        'leader_1': EventResponse(status: 'YES', timestamp: now),
+        'u3': EventResponse(status: 'YES', timestamp: now),
         'u2': EventResponse(status: 'declined', timestamp: now),
       },
     );
@@ -255,6 +282,8 @@ void main() {
     tester.view.physicalSize = const Size(1200, 2400);
     await tester.pump();
 
+    Navigator.of(tester.element(find.byType(RsvpReminderDialog))).pop();
+    await pumpUiTransitions(tester);
     final gigsTab = find.text('News');
     expect(gigsTab, findsOneWidget);
     await tester.tap(gigsTab);
@@ -269,13 +298,6 @@ void main() {
     // Verify Gig Type Badge 'Concert' is displayed
     expect(find.text('Concert'), findsOneWidget);
     expect(find.text('NEW EVENT (Needs RSVP)'), findsOneWidget);
-    expect(find.text('Your RSVP: YES'), findsOneWidget);
-    expect(find.text('Change'), findsOneWidget);
-    expect(find.text('Yes'), findsNothing);
-
-    // Tapping Change expands RSVP buttons
-    await tester.tap(find.text('Change'));
-    await pumpUiTransitions(tester);
     expect(find.text('Yes'), findsOneWidget);
     expect(find.text('No'), findsOneWidget);
     expect(find.text('Maybe'), findsOneWidget);
@@ -308,7 +330,7 @@ void main() {
     expect(find.textContaining('YES (1)'), findsOneWidget);
     expect(find.textContaining('NO (1)'), findsOneWidget);
     expect(find.textContaining('UNCERTAIN (0)'), findsOneWidget);
-    expect(find.textContaining('NO ANSWER (0)'), findsOneWidget);
+    expect(find.textContaining('NO ANSWER (1)'), findsOneWidget);
   });
 
   testWidgets('News sub-tabs: Events (left) & Other (right), sub-filters Upcoming & Past, and newest first sorting', (tester) async {
@@ -422,7 +444,7 @@ void main() {
     expect(find.text('Gig / Booking'), findsNothing);
   });
 
-  testWidgets('Direct 1-tap RSVP saves response and chronology sorts upcoming ascending and past descending', (tester) async {
+  testWidgets('New Events uses saved own RSVP on save, failure and reload and preserves chronology', (tester) async {
     tester.view.physicalSize = const Size(1200, 2400);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(() {
@@ -431,6 +453,9 @@ void main() {
     });
 
     final mockService = MockGigsInfoFirebaseService();
+    final eventUpdates = StreamController<List<BandEvent>>.broadcast();
+    mockService.eventUpdates = eventUpdates;
+    addTearDown(eventUpdates.close);
     mockService.testMembers = [
       BandMember(userId: 'leader_1', nickname: 'Leader', role: 'Leader'),
       BandMember(userId: 'u2', nickname: 'Member', role: 'Member'),
@@ -451,7 +476,7 @@ void main() {
       updatedAt: now.millisecondsSinceEpoch,
       requireResponse: true,
       responses: {
-        'leader_1': EventResponse(status: 'UNCERTAIN', timestamp: now),
+        'u2': EventResponse(status: 'UNCERTAIN', timestamp: now),
       },
     );
 
@@ -469,7 +494,7 @@ void main() {
       updatedAt: now.millisecondsSinceEpoch,
       requireResponse: true,
       responses: {
-        'leader_1': EventResponse(status: 'UNCERTAIN', timestamp: now),
+        'u2': EventResponse(status: 'UNCERTAIN', timestamp: now),
       },
     );
 
@@ -505,19 +530,21 @@ void main() {
 
     mockService.testEventsList = [evFar, evNear, evPastOlder, evPastNewer];
 
-    await tester.pumpWidget(
+    final bandRoom =
       ChangeNotifierProvider<AppState>(
         create: (_) => MockGigsInfoAppState(mockService),
         child: const MaterialApp(
           home: BandRoomChatScreen(),
         ),
-      ),
-    );
+      );
+    await tester.pumpWidget(bandRoom);
 
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
     await tester.pump(const Duration(milliseconds: 300));
 
+    Navigator.of(tester.element(find.byType(RsvpReminderDialog))).pop();
+    await pumpUiTransitions(tester);
     await tester.tap(find.text('News'));
     for (int i = 0; i < 10; i++) {
       await tester.pump(const Duration(milliseconds: 50));
@@ -532,14 +559,15 @@ void main() {
     final laterTop = tester.getTopLeft(find.text('”Later Gig”')).dy;
     expect(soonerTop, lessThan(laterTop));
 
-    // Verify 1-tap RSVP button works: tap Change to expand options on Sooner Gig, then tap Yes
-    final changeFinder = find.text('Change');
-    expect(changeFinder, findsWidgets);
-    await tester.tap(changeFinder.first);
+    final yesFinder = find.text('Yes');
+    expect(yesFinder, findsNWidgets(2));
+    mockService.denyRsvpWrite = true;
+    await tester.tap(yesFinder.first);
     await pumpUiTransitions(tester);
+    expect(mockService.updatedResponses, isEmpty);
+    expect(find.text('”Sooner Gig”'), findsOneWidget);
 
-    final yesFinder = find.widgetWithText(AnimatedTapDetector, 'Yes');
-    expect(yesFinder, findsWidgets);
+    mockService.denyRsvpWrite = false;
     await tester.tap(yesFinder.first);
     await pumpUiTransitions(tester);
 
@@ -547,6 +575,18 @@ void main() {
     expect(mockService.updatedResponses.first['eventId'], 'ev_near');
     expect(mockService.updatedResponses.first['response'], 'Yes');
     expect(mockService.updatedResponses.first['userId'], 'leader_1');
+    expect(find.text('”Sooner Gig”'), findsNothing);
+    expect(find.text('”Later Gig”'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpWidget(bandRoom);
+    await pumpUiTransitions(tester);
+    Navigator.of(tester.element(find.byType(RsvpReminderDialog))).pop();
+    await pumpUiTransitions(tester);
+    await tester.tap(find.text('News'));
+    await pumpUiTransitions(tester);
+    expect(find.text('”Sooner Gig”'), findsNothing);
+    expect(find.text('”Later Gig”'), findsOneWidget);
 
     // Switch to Past Events
     await tester.tap(find.text('Past Events'));
@@ -564,5 +604,10 @@ void main() {
     expect(find.widgetWithText(AnimatedTapDetector, 'Yes'), findsNothing);
     expect(find.widgetWithText(AnimatedTapDetector, 'No'), findsNothing);
     expect(find.widgetWithText(AnimatedTapDetector, 'Maybe'), findsNothing);
+
+    await tester.tap(find.widgetWithText(Tab, 'Events'));
+    await pumpUiTransitions(tester);
+    expect(find.byType(ManageEventsScreen), findsOneWidget);
+    expect(find.textContaining('Sooner Gig'), findsOneWidget);
   });
 }
