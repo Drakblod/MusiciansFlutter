@@ -22,6 +22,8 @@ class PublicCalendarEvent {
   final String address;
   final DateTime startDateTime;
   final DateTime endDateTime;
+  final bool _hasStartDateTime;
+  final bool _hasEndDateTime;
   final List<String> genres;
   final double? priceAmount;
   final String currency;
@@ -50,6 +52,8 @@ class PublicCalendarEvent {
     required this.address,
     required this.startDateTime,
     required this.endDateTime,
+    bool hasStartDateTime = true,
+    bool hasEndDateTime = true,
     this.genres = const [],
     this.priceAmount,
     this.currency = 'SEK',
@@ -65,7 +69,8 @@ class PublicCalendarEvent {
     this.locationPrecision = 'exact',
     this.placeId,
     this.locationStatus,
-  });
+  }) : _hasStartDateTime = hasStartDateTime,
+       _hasEndDateTime = hasEndDateTime;
 
   factory PublicCalendarEvent.fromJson(Map<dynamic, dynamic> json, [String? id]) {
     PublicEventType parseType(String? val) {
@@ -97,13 +102,14 @@ class PublicCalendarEvent {
       return [raw.toString()];
     }
 
-    DateTime parseDate(dynamic raw) {
-      if (raw == null) return DateTime.now();
+    DateTime? parseDate(dynamic raw) {
       if (raw is int) return DateTime.fromMillisecondsSinceEpoch(raw);
-      if (raw is String) return DateTime.tryParse(raw) ?? DateTime.now();
-      return DateTime.now();
+      if (raw is String) return DateTime.tryParse(raw);
+      return null;
     }
 
+    final start = parseDate(json['startDateTime']);
+    final end = parseDate(json['endDateTime']);
     return PublicCalendarEvent(
       id: json['id']?.toString() ?? id ?? '',
       title: json['title']?.toString() ?? '',
@@ -114,8 +120,10 @@ class PublicCalendarEvent {
       venueName: json['venueName']?.toString() ?? '',
       city: json['city']?.toString() ?? '',
       address: json['address']?.toString() ?? '',
-      startDateTime: parseDate(json['startDateTime']),
-      endDateTime: parseDate(json['endDateTime']),
+      startDateTime: start ?? DateTime.now(),
+      endDateTime: end ?? DateTime.now(),
+      hasStartDateTime: start != null,
+      hasEndDateTime: end != null,
       genres: parseGenres(json['genres']),
       priceAmount: json['priceAmount'] is num
           ? (json['priceAmount'] as num).toDouble()
@@ -213,6 +221,8 @@ class PublicCalendarEvent {
       address: address ?? this.address,
       startDateTime: startDateTime ?? this.startDateTime,
       endDateTime: endDateTime ?? this.endDateTime,
+      hasStartDateTime: startDateTime != null || _hasStartDateTime,
+      hasEndDateTime: endDateTime != null || _hasEndDateTime,
       genres: genres ?? this.genres,
       priceAmount: priceAmount ?? this.priceAmount,
       currency: currency ?? this.currency,
@@ -229,6 +239,14 @@ class PublicCalendarEvent {
       placeId: placeId ?? this.placeId,
       locationStatus: locationStatus ?? this.locationStatus,
     );
+  }
+
+  /// The calendar uses stored times for expiry, with a start-only boundary
+  /// for legacy events. An inverted schedule has no reliable end boundary.
+  DateTime? get calendarExpiration {
+    if (!_hasEndDateTime) return _hasStartDateTime ? startDateTime : null;
+    if (_hasStartDateTime && endDateTime.isBefore(startDateTime)) return null;
+    return endDateTime;
   }
 
   /// Human-readable formatted price label (e.g. 'Free', '150 SEK', '295 SEK')

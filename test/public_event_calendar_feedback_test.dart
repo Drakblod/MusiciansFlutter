@@ -144,11 +144,13 @@ void main() {
         routes: {
           '/event-calendar': (context) => PublicEventCalendarScreen(
                 repository: repository ?? MockPublicEventRepository(referenceNow: fixedRef),
+                clock: () => fixedRef,
               ),
           '/public-event-details': (context) => const PublicEventDetailsScreen(),
         },
         home: PublicEventCalendarScreen(
           repository: repository ?? MockPublicEventRepository(referenceNow: fixedRef),
+          clock: () => fixedRef,
         ),
       ),
     );

@@ -426,6 +426,7 @@ void main() {
   });
 
   group('OCT-SPRINT-01: Event Calendar polish', () {
+    final calendarNow = DateTime(2026, 9, 1);
     final imageEvent = PublicCalendarEvent(
       id: 'img_cal_1',
       title: 'Stockholm Sound Gala',
@@ -477,7 +478,7 @@ void main() {
         ChangeNotifierProvider<AppState>.value(
           value: appState,
           child: MaterialApp(
-            home: PublicEventCalendarScreen(repository: repo),
+            home: PublicEventCalendarScreen(repository: repo, clock: () => calendarNow),
           ),
         ),
       );
@@ -500,7 +501,7 @@ void main() {
         ChangeNotifierProvider<AppState>.value(
           value: appState,
           child: MaterialApp(
-            home: PublicEventCalendarScreen(repository: repo),
+            home: PublicEventCalendarScreen(repository: repo, clock: () => calendarNow),
           ),
         ),
       );
@@ -579,7 +580,7 @@ void main() {
         ChangeNotifierProvider<AppState>.value(
           value: appState,
           child: MaterialApp(
-            home: PublicEventCalendarScreen(repository: repo),
+            home: PublicEventCalendarScreen(repository: repo, clock: () => calendarNow),
           ),
         ),
       );
@@ -612,7 +613,7 @@ void main() {
             routes: {
               '/public-event-details': (context) => const PublicEventDetailsScreen(),
             },
-            home: PublicEventCalendarScreen(repository: repo),
+            home: PublicEventCalendarScreen(repository: repo, clock: () => calendarNow),
           ),
         ),
       );
@@ -646,7 +647,7 @@ void main() {
         ChangeNotifierProvider<AppState>.value(
           value: appState,
           child: MaterialApp(
-            home: PublicEventCalendarScreen(repository: repo),
+            home: PublicEventCalendarScreen(repository: repo, clock: () => calendarNow),
           ),
         ),
       );

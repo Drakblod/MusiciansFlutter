@@ -96,6 +96,16 @@ class FailingThenSucceedingRepository implements PublicEventRepository {
   Future<void> deleteEvent(String eventId) async => fallback.deleteEvent(eventId);
 }
 
+class CalendarExpiryTestRepository extends EmptyPublicEventRepository {
+  int loads = 0;
+
+  @override
+  Future<List<PublicCalendarEvent>> getUpcomingEvents() {
+    loads++;
+    return super.getUpcomingEvents();
+  }
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setupFirebaseCoreMocks();
@@ -111,6 +121,7 @@ void main() {
     PublicEventRepository? repository,
     SpyingFirebaseService? spyService,
     Widget? home,
+    DateTime Function()? clock,
   }) {
     final service = spyService ?? SpyingFirebaseService();
     return ChangeNotifierProvider<AppState>(
@@ -119,6 +130,7 @@ void main() {
         routes: {
           '/event-calendar': (context) => PublicEventCalendarScreen(
                 repository: repository ?? MockPublicEventRepository(referenceNow: fixedRef),
+                clock: clock ?? () => fixedRef,
               ),
           '/public-event-details': (context) => const PublicEventDetailsScreen(),
           '/calendar': (context) => const CalendarScreen(bandId: 'b1'),
@@ -126,12 +138,104 @@ void main() {
         home: home ??
             PublicEventCalendarScreen(
               repository: repository ?? MockPublicEventRepository(referenceNow: fixedRef),
+              clock: clock ?? () => fixedRef,
             ),
       ),
     );
   }
 
   group('PublicEventCalendarScreen Widget Tests', () {
+    testWidgets('shows ongoing and upcoming events, then expires each at its end without reloading', (tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final reference = fixedRef.toUtc();
+      final elapsedOrigin = tester.binding.clock.now();
+      DateTime clock() => reference.add(tester.binding.clock.now().difference(elapsedOrigin));
+      final ongoingEnd = reference.add(const Duration(seconds: 10));
+      final upcomingEnd = reference.add(const Duration(seconds: 25));
+      final repo = CalendarExpiryTestRepository();
+
+      await repo.createEvent(PublicCalendarEvent.fromJson({
+        'id': 'finished',
+        'title': 'Already finished',
+        'startDateTime': reference.subtract(const Duration(hours: 2)).millisecondsSinceEpoch,
+        'endDateTime': reference.millisecondsSinceEpoch,
+      }));
+      await repo.createEvent(PublicCalendarEvent.fromJson({
+        'id': 'ongoing',
+        'title': 'Currently playing',
+        'startDateTime': reference.subtract(const Duration(hours: 1)).toIso8601String(),
+        'endDateTime': ongoingEnd.add(const Duration(hours: 2)).toIso8601String().replaceFirst('Z', '+02:00'),
+      }));
+      await repo.createEvent(PublicCalendarEvent.fromJson({
+        'id': 'upcoming',
+        'title': 'Starting soon',
+        'startDateTime': reference.add(const Duration(seconds: 15)).toLocal().toIso8601String(),
+        'endDateTime': upcomingEnd.toLocal().toIso8601String(),
+      }));
+
+      await tester.pumpWidget(createTestWidget(repository: repo, clock: clock));
+      await pumpUiTransitions(tester);
+      expect(find.text('Already finished'), findsNothing);
+      expect(find.text('Currently playing'), findsOneWidget);
+      expect(find.text('Starting soon'), findsOneWidget);
+      expect(find.text('Load More'), findsNothing);
+
+      const tick = Duration(milliseconds: 1);
+      await tester.pump(ongoingEnd.difference(clock()) - tick);
+      expect(find.text('Currently playing'), findsOneWidget);
+      await tester.pump(tick);
+      expect(find.text('Currently playing'), findsNothing);
+      expect(find.text('Starting soon'), findsOneWidget);
+
+      await tester.pump(upcomingEnd.difference(clock()));
+      expect(find.text('Starting soon'), findsNothing);
+      expect(find.text('No public events available yet.'), findsOneWidget);
+      expect(repo.loads, 1);
+    });
+
+    testWidgets('uses the stored start for legacy events without an end', (tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final elapsedOrigin = tester.binding.clock.now();
+      DateTime clock() => fixedRef.add(tester.binding.clock.now().difference(elapsedOrigin));
+      final start = fixedRef.add(const Duration(seconds: 10));
+      final repo = CalendarExpiryTestRepository();
+      await repo.createEvent(PublicCalendarEvent.fromJson({
+        'id': 'legacy-past',
+        'title': 'Legacy already started',
+        'startDateTime': fixedRef.subtract(const Duration(minutes: 1)).toIso8601String(),
+      }));
+      await repo.createEvent(PublicCalendarEvent.fromJson({
+        'id': 'legacy-future',
+        'title': 'Legacy upcoming',
+        'startDateTime': start.toIso8601String(),
+      }));
+      await repo.createEvent(PublicCalendarEvent.fromJson({
+        'id': 'inverted',
+        'title': 'Uncertain end',
+        'startDateTime': start.toIso8601String(),
+        'endDateTime': fixedRef.subtract(const Duration(seconds: 1)).toIso8601String(),
+      }));
+
+      await tester.pumpWidget(createTestWidget(repository: repo, clock: clock));
+      await pumpUiTransitions(tester);
+      expect(find.text('Legacy already started'), findsNothing);
+      expect(find.text('Legacy upcoming'), findsOneWidget);
+      expect(find.text('Uncertain end'), findsOneWidget);
+
+      await tester.pump(start.difference(clock()));
+      expect(find.text('Legacy upcoming'), findsNothing);
+      expect(find.text('Uncertain end'), findsOneWidget);
+      expect(repo.loads, 1);
+    });
+
     testWidgets('1. Renders title and subtitle without a production demo badge', (tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;

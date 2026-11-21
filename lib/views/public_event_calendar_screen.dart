@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -17,18 +19,21 @@ import 'create_public_event_screen.dart';
 class PublicEventCalendarScreen extends StatefulWidget {
   final PublicEventRepository? repository;
   final bool enableCategoryFallback;
+  final DateTime Function()? clock;
 
   const PublicEventCalendarScreen({
     super.key,
     this.repository,
     this.enableCategoryFallback = true,
+    this.clock,
   });
 
   @override
   State<PublicEventCalendarScreen> createState() => _PublicEventCalendarScreenState();
 }
 
-class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
+class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen>
+    with WidgetsBindingObserver {
   PublicEventRepository? _repository;
   PublicEventRepository get repository =>
       _repository ??
@@ -43,6 +48,8 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
   bool _isLoading = true;
   String? _errorMessage;
   List<PublicCalendarEvent> _allEvents = [];
+  Timer? _expirationTimer;
+  DateTime get _now => (widget.clock ?? DateTime.now)();
 
   String _searchQuery = '';
   String _selectedFilter = EventCalendarCategories.all;
@@ -55,6 +62,7 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _searchFocusNode.addListener(_handleSearchFocusChange);
   }
 
@@ -112,10 +120,41 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _expirationTimer?.cancel();
     _searchFocusNode.removeListener(_handleSearchFocusChange);
     _searchFocusNode.dispose();
     _searchController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _refreshExpiration();
+  }
+
+  void _refreshExpiration() {
+    if (!mounted) return;
+    setState(() {});
+    _scheduleExpiration();
+  }
+
+  void _scheduleExpiration() {
+    _expirationTimer?.cancel();
+    final now = _now;
+    DateTime? next;
+    for (final event in _allEvents) {
+      final boundary = event.calendarExpiration;
+      if (boundary != null && boundary.isAfter(now) &&
+          (next == null || boundary.isBefore(next))) {
+        next = boundary;
+      }
+    }
+    if (next == null) return;
+    final delay = next.difference(now);
+    // Cap the delay to keep timers within the browser's supported range.
+    const maxDelay = Duration(days: 1);
+    _expirationTimer = Timer(delay > maxDelay ? maxDelay : delay, _refreshExpiration);
   }
 
   Future<void> _loadEvents() async {
@@ -131,6 +170,7 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
           _allEvents = events;
           _isLoading = false;
         });
+        _scheduleExpiration();
       }
     } catch (e) {
       if (mounted) {
@@ -150,6 +190,7 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
           _allEvents = events;
           _errorMessage = null;
         });
+        _scheduleExpiration();
       }
     } catch (e) {
       if (mounted) {
@@ -261,8 +302,8 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
     }
   }
 
-  List<PublicCalendarEvent> _getFilteredEvents() {
-    return _allEvents.where((event) {
+  List<PublicCalendarEvent> _getFilteredEvents(List<PublicCalendarEvent> currentEvents) {
+    return currentEvents.where((event) {
       // Category / Type Filter
       if (!EventCalendarCategories.matches(event, _selectedFilter)) {
         return false;
@@ -295,7 +336,11 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final filteredEvents = _getFilteredEvents();
+    final now = _now;
+    final currentEvents = _allEvents
+        .where((event) => event.calendarExpiration?.isAfter(now) ?? true)
+        .toList();
+    final filteredEvents = _getFilteredEvents(currentEvents);
     final visibleEvents = filteredEvents.take(_visibleCount).toList();
     final hasMore = filteredEvents.length > _visibleCount;
 
@@ -576,7 +621,7 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen> {
                     ),
                   ),
                 )
-              else if (_allEvents.isEmpty)
+              else if (currentEvents.isEmpty)
                 SliverFillRemaining(
                   hasScrollBody: false,
                   child: Center(
