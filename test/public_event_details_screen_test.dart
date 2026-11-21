@@ -1,8 +1,12 @@
+// ignore_for_file: depend_on_referenced_packages
+
 import 'support/bounded_ui_pump.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:firebase_core/firebase_core.dart' hide FirebaseService;
 import 'package:firebase_core_platform_interface/test.dart';
+import 'package:firebase_database_platform_interface/src/pigeon/messages.pigeon.dart';
 import 'package:provider/provider.dart';
 
 import 'package:musicians_flutter/models/public_calendar_event.dart';
@@ -61,7 +65,7 @@ class SpyingFirebaseService extends FirebaseService {
 }
 
 class MockAppStateForDetailsTest extends AppState {
-  final SpyingFirebaseService spyService;
+  final FirebaseService spyService;
 
   MockAppStateForDetailsTest(this.spyService);
 
@@ -84,6 +88,78 @@ class MockAppStateForDetailsTest extends AppState {
         'band_room',
         'create_event',
       ];
+}
+
+class CalendarOwnerFirebaseService extends FirebaseService {
+  @override
+  String get currentUserId => 'test_user_1';
+
+  @override
+  Future<Map<String, String>> getUserBandsAsync(String userId) async => {};
+}
+
+class CalendarDatabaseFixture {
+  final Map<String, Object?> records;
+  final String publicPath;
+  final String ownerPath;
+  String? rejectedPath;
+  String rejection = 'unavailable';
+  int writes = 0;
+
+  CalendarDatabaseFixture(WidgetTester tester, PublicCalendarEvent event)
+      : publicPath = 'PublicEvents/${event.id}',
+        ownerPath = 'users/${event.createdBy}/PublicEvents/${event.id}',
+        records = {
+          'PublicEvents/${event.id}': event.toJson(),
+          'users/${event.createdBy}/PublicEvents/${event.id}': event.toJson(),
+        } {
+    const host = 'dev.flutter.pigeon.firebase_database_platform_interface.FirebaseDatabaseHostApi';
+    const codec = FirebaseDatabaseHostApi.pigeonChannelCodec;
+    final messenger = tester.binding.defaultBinaryMessenger;
+    const query = BasicMessageChannel<Object?>('$host.queryGet', codec);
+    const set = BasicMessageChannel<Object?>('$host.databaseReferenceSet', codec);
+    const update = BasicMessageChannel<Object?>('$host.databaseReferenceUpdate', codec);
+
+    messenger.setMockDecodedMessageHandler<Object?>(query, (message) async {
+      final request = (message as List)[1] as QueryRequest;
+      final path = request.path.replaceFirst(RegExp(r'^/'), '');
+      final value = <String, Object?>{
+        for (final entry in records.entries)
+          if (entry.key.startsWith('$path/')) entry.key.substring(path.length + 1): entry.value,
+      };
+      return [{'snapshot': {'key': path.split('/').last, 'value': value.isEmpty ? null : value}}];
+    });
+    messenger.setMockDecodedMessageHandler<Object?>(set, (message) async {
+      final request = (message as List)[1] as DatabaseReferenceRequest;
+      return _write({request.path.replaceFirst(RegExp(r'^/'), ''): request.value});
+    });
+    messenger.setMockDecodedMessageHandler<Object?>(update, (message) async {
+      final request = (message as List)[1] as UpdateRequest;
+      expect(request.path, '/');
+      return _write(request.value);
+    });
+    addTearDown(() {
+      for (final channel in [query, set, update]) {
+        messenger.setMockDecodedMessageHandler<Object?>(channel, null);
+      }
+    });
+  }
+
+  List<Object?> _write(Map<String, Object?> values) {
+    writes++;
+    expect(values.keys, everyElement(isIn([publicPath, ownerPath])));
+    if (values.containsKey(rejectedPath)) {
+      return [rejection, 'Synthetic write failure', {'code': rejection}];
+    }
+    for (final entry in values.entries) {
+      if (entry.value == null) {
+        records.remove(entry.key);
+      } else {
+        records[entry.key] = entry.value;
+      }
+    }
+    return [null];
+  }
 }
 
 void main() {
@@ -138,6 +214,200 @@ void main() {
     status: PublicEventStatus.published,
     isMock: true,
   );
+
+  group('Calendar edit and delete persistence', () {
+    final now = DateTime(2030, 8, 28, 20);
+    final event = testEvent.copyWith(
+      id: 'public-test-event',
+      isMock: false,
+      startDateTime: now.subtract(const Duration(hours: 2)),
+      endDateTime: now.add(const Duration(hours: 2)),
+    );
+
+    Future<void> mountCalendar(WidgetTester tester) async {
+      final service = CalendarOwnerFirebaseService();
+      final repo = FirebasePublicEventRepository(firebaseService: service, includeMock: false);
+      await tester.pumpWidget(ChangeNotifierProvider<AppState>(
+        create: (_) => MockAppStateForDetailsTest(service),
+        child: MaterialApp(
+          routes: {'/public-event-details': (_) => PublicEventDetailsScreen(repository: repo)},
+          home: PublicEventCalendarScreen(repository: repo, clock: () => now),
+        ),
+      ));
+      await pumpUiTransitions(tester);
+    }
+
+    Future<void> openDetails(WidgetTester tester) async {
+      await tester.tap(find.text(event.title));
+      await pumpUiTransitions(tester);
+      expect(find.byType(PublicEventDetailsScreen), findsOneWidget);
+    }
+
+    Future<void> saveEdit(WidgetTester tester) async {
+      final save = find.text('Save Changes');
+      await tester.ensureVisible(save);
+      await tester.tap(save);
+      await pumpUiTransitions(tester);
+    }
+
+    Future<void> confirmDelete(WidgetTester tester) async {
+      await tester.ensureVisible(find.text('Delete'));
+      await tester.tap(find.text('Delete'));
+      await pumpUiTransitions(tester);
+      await tester.tap(find.descendant(of: find.byType(AlertDialog), matching: find.text('Delete')));
+      await pumpUiTransitions(tester);
+    }
+
+    void useLargeViewport(WidgetTester tester) {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+    }
+
+    testWidgets('Event edit refreshes the open calendar when returning with the header arrow', (tester) async {
+      useLargeViewport(tester);
+      final upcoming = event.copyWith(startDateTime: now.add(const Duration(hours: 1)));
+      final store = CalendarDatabaseFixture(tester, upcoming);
+      await mountCalendar(tester);
+      await openDetails(tester);
+      await tester.tap(find.text('Edit'));
+      await pumpUiTransitions(tester);
+      await tester.enterText(find.widgetWithText(TextFormField, event.title), 'Updated calendar title');
+      await tester.enterText(find.widgetWithText(TextFormField, event.description), 'Updated calendar description');
+      await saveEdit(tester);
+      expect((store.records[store.publicPath] as Map)['description'], 'Updated calendar description');
+      expect(find.text('Updated calendar description'), findsOneWidget);
+
+      await tester.tap(find.byIcon(Icons.arrow_back_ios_new_rounded));
+      await pumpUiTransitions(tester);
+      expect(find.byType(PublicEventCalendarScreen), findsOneWidget);
+      expect(find.text('Updated calendar title'), findsOneWidget);
+      expect(find.text(event.title), findsNothing);
+      expect(store.records[store.publicPath], store.records[store.ownerPath]);
+      expect(store.writes, 1);
+    });
+
+    testWidgets('Title-only edit preserves the actual end date and keeps the event visible', (tester) async {
+      useLargeViewport(tester);
+      final scheduled = event.copyWith(
+        startDateTime: now.subtract(const Duration(days: 1, hours: 2, seconds: 9)).toUtc(),
+        endDateTime: now.add(const Duration(hours: 2, seconds: 7)).toUtc(),
+      );
+      final store = CalendarDatabaseFixture(tester, scheduled);
+      await mountCalendar(tester);
+      await tester.tap(find.byTooltip('Edit Event'));
+      await pumpUiTransitions(tester);
+      await tester.enterText(find.widgetWithText(TextFormField, event.title), 'Same event schedule');
+      await saveEdit(tester);
+
+      final saved = PublicCalendarEvent.fromJson(store.records[store.publicPath] as Map);
+      expect(saved.startDateTime, scheduled.startDateTime);
+      expect(saved.endDateTime, scheduled.endDateTime);
+      expect(find.text('Same event schedule'), findsOneWidget);
+    });
+
+    testWidgets('The public copy takes precedence over a stale owner copy', (tester) async {
+      useLargeViewport(tester);
+      final store = CalendarDatabaseFixture(tester, event);
+      store.records[store.ownerPath] = event.copyWith(title: 'Stale title').toJson();
+      await mountCalendar(tester);
+      expect(find.text(event.title), findsOneWidget);
+      expect(find.text('Stale title'), findsNothing);
+    });
+
+    testWidgets('A title edit does not add a synthetic end to a legacy event', (tester) async {
+      useLargeViewport(tester);
+      final legacyJson = event.copyWith(startDateTime: now.add(const Duration(hours: 1))).toJson()
+        ..remove('endDateTime');
+      final store = CalendarDatabaseFixture(tester, PublicCalendarEvent.fromJson(legacyJson));
+      await mountCalendar(tester);
+      await tester.tap(find.byTooltip('Edit Event'));
+      await pumpUiTransitions(tester);
+      await tester.enterText(find.widgetWithText(TextFormField, event.title), 'Updated legacy title');
+      await saveEdit(tester);
+      expect(find.text('Updated legacy title'), findsOneWidget);
+      expect((store.records[store.publicPath] as Map).containsKey('endDateTime'), isFalse);
+      expect(store.records[store.ownerPath], store.records[store.publicPath]);
+    });
+
+    testWidgets('Moving the end before the calendar clock hides the card but preserves the record', (tester) async {
+      useLargeViewport(tester);
+      final store = CalendarDatabaseFixture(tester, event);
+      await mountCalendar(tester);
+      await tester.tap(find.byTooltip('Edit Event'));
+      await pumpUiTransitions(tester);
+      await tester.tap(find.widgetWithText(ListTile, 'End Time'));
+      await pumpUiTransitions(tester);
+      Navigator.of(tester.element(find.byType(TimePickerDialog))).pop(const TimeOfDay(hour: 19, minute: 0));
+      await pumpUiTransitions(tester);
+      await saveEdit(tester);
+
+      expect(find.byType(PublicEventCalendarScreen), findsOneWidget);
+      expect(find.text(event.title), findsNothing);
+      final saved = PublicCalendarEvent.fromJson(store.records[store.publicPath] as Map);
+      expect(saved.endDateTime, now.subtract(const Duration(hours: 1)));
+      expect(saved.status, PublicEventStatus.published);
+      expect(store.records[store.ownerPath], store.records[store.publicPath]);
+    });
+
+    testWidgets('Delete removes the event from the open calendar and a fresh load', (tester) async {
+      useLargeViewport(tester);
+      final store = CalendarDatabaseFixture(tester, event);
+      await mountCalendar(tester);
+      await openDetails(tester);
+      await confirmDelete(tester);
+
+      expect(find.byType(PublicEventCalendarScreen), findsOneWidget);
+      expect(find.text(event.title), findsNothing);
+      expect(store.records, isEmpty);
+      expect(store.writes, 1);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await mountCalendar(tester);
+      expect(find.text(event.title), findsNothing);
+    });
+
+    for (final error in ['permission-denied', 'unavailable']) {
+      testWidgets('Edit rejection $error keeps the original event and reports failure', (tester) async {
+        useLargeViewport(tester);
+        final store = CalendarDatabaseFixture(tester, event)
+          ..rejectedPath = 'PublicEvents/${event.id}'
+          ..rejection = error;
+        await mountCalendar(tester);
+        await tester.tap(find.byTooltip('Edit Event'));
+        await pumpUiTransitions(tester);
+        await tester.enterText(find.widgetWithText(TextFormField, event.title), 'Rejected title');
+        await saveEdit(tester);
+
+        expect(find.textContaining('Failed to save event'), findsOneWidget);
+        expect(find.textContaining('updated successfully'), findsNothing);
+        expect(store.records[store.publicPath], event.toJson());
+        expect(store.records[store.ownerPath], event.toJson());
+        await tester.tap(find.byIcon(Icons.arrow_back_ios_new_rounded));
+        await pumpUiTransitions(tester);
+        expect(find.text(event.title), findsOneWidget);
+      });
+
+      testWidgets('Delete rejection $error keeps both copies and reports failure', (tester) async {
+        useLargeViewport(tester);
+        final store = CalendarDatabaseFixture(tester, event)
+          ..rejectedPath = 'users/${event.createdBy}/PublicEvents/${event.id}'
+          ..rejection = error;
+        await mountCalendar(tester);
+        await openDetails(tester);
+        await confirmDelete(tester);
+
+        expect(find.textContaining('Failed to delete event'), findsOneWidget);
+        expect(find.textContaining('deleted.'), findsNothing);
+        expect(find.byType(PublicEventDetailsScreen), findsOneWidget);
+        expect(store.records[store.publicPath], event.toJson());
+        expect(store.records[store.ownerPath], event.toJson());
+        await tester.tap(find.byIcon(Icons.arrow_back_ios_new_rounded));
+        await pumpUiTransitions(tester);
+        expect(find.text(event.title), findsOneWidget);
+      });
+    }
+  });
 
   Widget createDetailsTestWidget({
     PublicCalendarEvent? event,

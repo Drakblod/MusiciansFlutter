@@ -3673,6 +3673,8 @@ class FirebaseService {
   // ==========================================
 
   Future<String> savePublicCalendarEventAsync(PublicCalendarEvent event) async {
+    final uid = currentUserId;
+    if (uid == null) throw const PrivateDataAccessException();
     final eventId = (event.id.isNotEmpty && !event.id.startsWith('mock_'))
         ? event.id
         : (_dbRef('PublicEvents').push().key ?? 'event_${DateTime.now().millisecondsSinceEpoch}');
@@ -3681,31 +3683,22 @@ class FirebaseService {
       id: eventId,
       createdBy: (event.createdBy != null && event.createdBy!.isNotEmpty)
           ? event.createdBy
-          : currentUserId,
+          : uid,
       createdAt: event.createdAt ?? DateTime.now().millisecondsSinceEpoch,
       isMock: false,
     );
 
     final json = updatedEvent.toJson();
 
-    // 1. Save under user's node first (guaranteed permitted by users/$userId rules)
-    final uid = currentUserId;
-    if (uid != null) {
-      try {
-        await _dbRef('users/$uid/PublicEvents/$eventId').set(json);
-      } catch (e) { _rethrowAccessDenied(e);
-        debugPrint('[FirebaseService] Could not save users/$uid/PublicEvents: $e');
-      }
-    }
-
-    // 2. Save under global /PublicEvents
+    // Commit the public row and the owner's copy together, or neither.
     try {
-      await _dbRef('PublicEvents/$eventId').set(json);
-    } catch (e) { _rethrowAccessDenied(e);
-      debugPrint('[FirebaseService] Global PublicEvents write notice: $e');
-      if (uid == null) {
-        rethrow;
-      }
+      await _dbRef().update({
+        'PublicEvents/$eventId': json,
+        'users/$uid/PublicEvents/$eventId': json,
+      });
+    } catch (error) {
+      _rethrowAccessDenied(error);
+      rethrow;
     }
 
     return eventId;
@@ -3741,7 +3734,8 @@ class FirebaseService {
           (userSnap.value as Map).forEach((key, value) {
             if (value is Map) {
               try {
-                eventsMap[key.toString()] = PublicCalendarEvent.fromJson(value, key.toString());
+                eventsMap.putIfAbsent(key.toString(), () =>
+                    PublicCalendarEvent.fromJson(value, key.toString()));
               } catch (accessError) { _rethrowAccessDenied(accessError);}
             }
           });
@@ -3753,21 +3747,16 @@ class FirebaseService {
   }
 
   Future<void> deletePublicCalendarEventAsync(String eventId) async {
-    // 1. Remove from global PublicEvents
-    try {
-      await _dbRef('PublicEvents/$eventId').remove();
-    } catch (e) { _rethrowAccessDenied(e);
-      debugPrint('[FirebaseService] Notice: could not remove global PublicEvents/$eventId: $e');
-    }
-
-    // 2. Remove from user's personal PublicEvents
     final uid = currentUserId;
-    if (uid != null) {
-      try {
-        await _dbRef('users/$uid/PublicEvents/$eventId').remove();
-      } catch (e) { _rethrowAccessDenied(e);
-        debugPrint('[FirebaseService] Notice: could not remove users/$uid/PublicEvents/$eventId: $e');
-      }
+    if (uid == null) throw const PrivateDataAccessException();
+    try {
+      await _dbRef().update({
+        'PublicEvents/$eventId': null,
+        'users/$uid/PublicEvents/$eventId': null,
+      });
+    } catch (error) {
+      _rethrowAccessDenied(error);
+      rethrow;
     }
   }
 

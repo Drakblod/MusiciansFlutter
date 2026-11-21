@@ -242,7 +242,10 @@ class _PublicEventDetailsScreenState extends State<PublicEventDetailsScreen> {
         Navigator.pop(context, _hasChanges);
       },
       child: GradientScaffold(
-        appBar: const CustomTopBar(showBack: true),
+        appBar: CustomTopBar(
+          showBack: true,
+          onBack: () => Navigator.pop(context, _hasChanges),
+        ),
         body: SafeArea(
           top: false,
           child: SingleChildScrollView(

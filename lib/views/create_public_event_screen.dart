@@ -326,6 +326,17 @@ class _CreatePublicEventScreenState extends State<CreatePublicEventScreen> {
     });
   }
 
+  DateTime? _changedEventTime(DateTime original, TimeOfDay selected, int dayShift) {
+    if (dayShift == 0 && TimeOfDay.fromDateTime(original) == selected) {
+      return null;
+    }
+    final dateTime = original.isUtc ? DateTime.utc : DateTime.new;
+    return dateTime(
+      original.year, original.month, original.day + dayShift,
+      selected.hour, selected.minute,
+    );
+  }
+
   Future<void> _saveEvent() async {
     if (_isSaving) return;
 
@@ -360,22 +371,6 @@ class _CreatePublicEventScreenState extends State<CreatePublicEventScreen> {
       final appState = Provider.of<AppState>(context, listen: false);
       final currentUid = appState.currentUserProfile?.userId;
 
-      final startDateTime = DateTime(
-        _selectedDate.year,
-        _selectedDate.month,
-        _selectedDate.day,
-        _startTime.hour,
-        _startTime.minute,
-      );
-
-      final endDateTime = DateTime(
-        _selectedDate.year,
-        _selectedDate.month,
-        _selectedDate.day,
-        _endTime.hour,
-        _endTime.minute,
-      );
-
       double? price;
       if (!_isFree && _priceController.text.trim().isNotEmpty) {
         price = double.tryParse(_priceController.text.trim().replaceAll(',', '.'));
@@ -403,8 +398,14 @@ class _CreatePublicEventScreenState extends State<CreatePublicEventScreen> {
             firebaseService: appState.firebaseService,
           );
 
-      if (isEditing) {
-        final updatedEvent = widget.eventToEdit!.copyWith(
+      final original = widget.eventToEdit;
+      if (original != null) {
+        final originalStart = original.startDateTime;
+        final dayShift = DateTime.utc(_selectedDate.year, _selectedDate.month, _selectedDate.day)
+            .difference(DateTime.utc(originalStart.year, originalStart.month, originalStart.day))
+            .inDays;
+        // Keep untouched timestamps and preserve the end's calendar day offset.
+        final updatedEvent = original.copyWith(
           title: _titleController.text.trim(),
           shortDescription: shortDesc,
           description: _descController.text.trim(),
@@ -413,12 +414,12 @@ class _CreatePublicEventScreenState extends State<CreatePublicEventScreen> {
           venueName: _venueController.text.trim(),
           city: _cityController.text.trim(),
           address: _addressController.text.trim(),
-          startDateTime: startDateTime,
-          endDateTime: endDateTime,
+          startDateTime: _changedEventTime(originalStart, _startTime, dayShift),
+          endDateTime: _changedEventTime(original.endDateTime, _endTime, dayShift),
           genres: _selectedGenres,
           priceAmount: price,
           isFree: _isFree,
-          imageUrl: resolvedImageUrl ?? widget.eventToEdit!.imageUrl,
+          imageUrl: resolvedImageUrl ?? original.imageUrl,
           imageFitMode: _posterFit == BoxFit.contain ? 'contain' : 'cover',
           latitude: _canonicalLocation?.latitude,
           longitude: _canonicalLocation?.longitude,
@@ -453,8 +454,14 @@ class _CreatePublicEventScreenState extends State<CreatePublicEventScreen> {
           venueName: _venueController.text.trim(),
           city: _cityController.text.trim(),
           address: _addressController.text.trim(),
-          startDateTime: startDateTime,
-          endDateTime: endDateTime,
+          startDateTime: DateTime(
+            _selectedDate.year, _selectedDate.month, _selectedDate.day,
+            _startTime.hour, _startTime.minute,
+          ),
+          endDateTime: DateTime(
+            _selectedDate.year, _selectedDate.month, _selectedDate.day,
+            _endTime.hour, _endTime.minute,
+          ),
           genres: _selectedGenres,
           priceAmount: price,
           currency: 'SEK',

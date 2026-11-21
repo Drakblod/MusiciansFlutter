@@ -99,6 +99,25 @@ for(const rules of ['database.rules.json','database.transitional.rules.json']) {
       await assertFails(write(b,publicPath,null));
       await db.ref(publicPath).remove();
 
+      // The calendar writes and deletes the global row and the owner's copy together.
+      const ownerPublicPath=`users/${uidA}/${publicPath}`;
+      const unrelatedPublicPath=`users/${uidB}/${publicPath}`;
+      await assertSucceeds(update(ref(a.db),{[publicPath]:publicRecord,[ownerPublicPath]:publicRecord}));
+      const updatedPublicRecord={...publicRecord,title:'Atomic calendar edit'};
+      await assertSucceeds(update(ref(a.db),{
+        [publicPath]:updatedPublicRecord,[ownerPublicPath]:updatedPublicRecord,
+      }));
+      await assertFails(update(ref(b.db),{
+        [publicPath]:{...publicRecord,title:'Rejected edit'},[unrelatedPublicPath]:publicRecord,
+      }));
+      await assertFails(update(ref(b.db),{[publicPath]:null,[unrelatedPublicPath]:null}));
+      assert.deepEqual((await read(a,publicPath)).val(),updatedPublicRecord);
+      assert.deepEqual((await read(a,ownerPublicPath)).val(),updatedPublicRecord);
+      assert.equal((await read(b,unrelatedPublicPath)).exists(),false);
+      await assertSucceeds(update(ref(a.db),{[publicPath]:null,[ownerPublicPath]:null}));
+      assert.equal((await read(a,publicPath)).exists(),false);
+      assert.equal((await read(a,ownerPublicPath)).exists(),false);
+
       await call(a,'mutateBandEvent',{action:'save',bandId:band,eventId:event,event:{title:'Release concert',startDateTime:'2099-12-01T18:00:00Z',endDateTime:'2099-12-01T21:00:00Z'}});
       for(const p of [`bandMemberEvents/${band}/${event}`,`bandManagerEvents/${band}/${event}`])await until(p,v=>v?.title==='Release concert');
       // The own-user overlay is sparse: no RSVP, exclusion or invitation means

@@ -15,12 +15,14 @@ class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
   final String title;
   final bool showBack;
   final bool transparent;
+  final VoidCallback? onBack;
 
   const CustomTopBar({
     super.key,
     this.title = '',
     this.showBack = false,
     this.transparent = false,
+    this.onBack,
   });
 
   @override
@@ -118,7 +120,7 @@ class CustomTopBar extends StatelessWidget implements PreferredSizeWidget {
 
     if (showBack || canPop) {
       return AnimatedTapDetector(
-        onTap: () => Navigator.pop(context),
+        onTap: onBack ?? () => Navigator.pop(context),
         child: const Center(
           child: Icon(
             Icons.arrow_back_ios_new_rounded,
