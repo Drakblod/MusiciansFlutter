@@ -2,10 +2,12 @@ import 'package:musicians_flutter/config/feature_toggles.dart';
 import 'package:musicians_flutter/widgets/custom_top_bar.dart';
 import 'package:musicians_flutter/widgets/city_location_picker_field.dart';
 import 'package:musicians_flutter/models/city_location.dart';
+import 'package:musicians_flutter/utils/catalogue_profiles.dart';
+import 'package:musicians_flutter/widgets/searchable_category_multi_select_sheet.dart';
 import 'international_city_picker_01_test.dart' as picker;
 import 'international_city_forms_01_test.dart' show chooseBerlin;
 import 'support/bounded_ui_pump.dart';
-import 'band_musical_role_test.dart' show chooseMusicalRole;
+import 'band_musical_role_test.dart' show chooseMusicalRole, inMusicalRolePicker;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:firebase_core/firebase_core.dart' hide FirebaseService;
@@ -97,20 +99,35 @@ void main() {
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.resetDevicePixelRatio);
       addTearDown(tester.view.resetPhysicalSize);
-      final service = MockBandFirebaseService()..availableMembers = [
-        UserProfile(userId:'one', displayName:'Alex Trumpet'),
-        UserProfile(userId:'two', displayName:'Kim Vocalist'),
-      ];
+      final service = MockBandFirebaseService()..availableMembers = CatalogueProfiles.users({
+        'one': {
+          'DisplayName': 'Alex Trumpet',
+          'Nickname': 'Different nickname',
+          'MainInstrument': 'Drums',
+          'Instruments': ['Drums', 'Keyboard/Synth', 'Vocalist'],
+        },
+        'two': {'DisplayName': 'Kim Vocalist'},
+      });
       await tester.pumpWidget(createTestWidget(const CreateBandScreen(), MockBandAppState(service)));
       await pumpUiTransitions(tester);
       await tester.enterText(find.widgetWithText(TextFormField, 'Enter band name'), 'Two Parts');
       await chooseBerlin(tester);
       await tester.tap(find.text('Add Member'));
       await pumpUiTransitions(tester);
+      expect(find.text('Alex Trumpet'), findsOneWidget);
+      expect(find.text('Kim Vocalist'), findsOneWidget);
+      expect(find.text('Different nickname'), findsNothing);
+      expect(find.text('Primary Skill: Drums'), findsOneWidget);
+      expect(find.text('Secondary Skills: Keyboard/Synth, Vocalist'), findsOneWidget);
+      expect(find.textContaining('Primary Skill:'), findsOneWidget);
+      expect(find.textContaining('Secondary Skills:'), findsOneWidget);
 
       await tester.tap(find.byIcon(Icons.add_circle).first);
       await pumpUiTransitions(tester);
       expect(find.text('Which instrument or role would you like Alex Trumpet to take on in this particular band?'), findsOneWidget);
+      expect(inMusicalRolePicker(find.text('Primary Skill: Drums')), findsOneWidget);
+      expect(inMusicalRolePicker(find.text('Secondary Skills: Keyboard/Synth, Vocalist')), findsOneWidget);
+      expect(tester.widget<SearchableCategoryMultiSelectSheet>(find.byType(SearchableCategoryMultiSelectSheet)).initialSelected, isEmpty);
       await chooseMusicalRole(tester, 'Trumpet');
       await pumpUiTransitions(tester);
       expect(find.text('Added'), findsOneWidget);
@@ -119,6 +136,8 @@ void main() {
       await tester.tap(find.byIcon(Icons.add_circle));
       await pumpUiTransitions(tester);
       expect(find.text('Which instrument or role would you like Kim Vocalist to take on in this particular band?'), findsOneWidget);
+      expect(inMusicalRolePicker(find.textContaining('Primary Skill:')), findsNothing);
+      expect(inMusicalRolePicker(find.textContaining('Secondary Skills:')), findsNothing);
       await chooseMusicalRole(tester, 'BANDLEADER');
       await pumpUiTransitions(tester);
       expect(find.text('Added'), findsNWidgets(2));
@@ -133,6 +152,65 @@ void main() {
       expect(members['one']!.musicalRole, 'Trumpet');
       expect(members['two']!.musicalRole, 'BANDLEADER');
       expect(members.values.map((member) => member.role), everyElement('Member'));
+    });
+
+    testWidgets('Create Band shows profile skills on a narrow screen without inventing a name', (tester) async {
+      tester.view.physicalSize = const Size(320, 568);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetViewInsets);
+
+      final service = MockBandFirebaseService()..availableMembers = CatalogueProfiles.users({
+        'narrow': {
+          'DisplayName': 'Robin Parker',
+          'UserType': 'Drums',
+          'Instruments': ['Drums', 'Keyboard/Synth', 'Music Production', 'Electric Guitar'],
+        },
+        'unnamed': {'UserType': 'Bass'},
+      });
+      await tester.pumpWidget(createTestWidget(const CreateBandScreen(), MockBandAppState(service)));
+      await pumpUiTransitions(tester);
+      final addMember = find.text('Add Member');
+      await tester.ensureVisible(addMember);
+      await tester.tap(addMember);
+      await pumpUiTransitions(tester);
+
+      const secondary = 'Secondary Skills: Keyboard/Synth, Music Production, Electric Guitar';
+      expect(find.text('Robin Parker').hitTestable(), findsOneWidget);
+      expect(find.text('Primary Skill: Drums').hitTestable(), findsOneWidget);
+      expect(find.text(secondary).hitTestable(), findsOneWidget);
+      expect(find.text('Unknown'), findsNothing);
+
+      await tester.tap(find.byTooltip('Select musical role').first);
+      await pumpUiTransitions(tester);
+      expect(inMusicalRolePicker(find.textContaining('Robin Parker')).hitTestable(), findsOneWidget);
+      expect(inMusicalRolePicker(find.text('Primary Skill: Drums')).hitTestable(), findsOneWidget);
+      expect(inMusicalRolePicker(find.text(secondary)).hitTestable(), findsOneWidget);
+
+      await tester.tap(inMusicalRolePicker(find.byType(TextField)));
+      tester.view.viewInsets = const FakeViewPadding(bottom: 290);
+      await chooseMusicalRole(tester, 'Trumpet');
+      tester.view.resetViewInsets();
+      await pumpUiTransitions(tester);
+      expect(find.text('Added'), findsOneWidget);
+
+      final selectRemaining = find.byTooltip('Select musical role');
+      final bass = find.text('Primary Skill: Bass');
+      final memberList = find.descendant(of: find.byType(Dialog), matching: find.byType(ListView));
+      await tester.scrollUntilVisible(
+        bass,
+        60,
+        scrollable: find.descendant(of: memberList, matching: find.byType(Scrollable)),
+      );
+      await tester.pump();
+      expect(bass.hitTestable(), findsOneWidget);
+      await tester.tap(selectRemaining);
+      await pumpUiTransitions(tester);
+      expect(find.text('Which instrument or role should this person take on in this band?'), findsOneWidget);
+      expect(inMusicalRolePicker(find.text('Primary Skill: Bass')), findsOneWidget);
+      expect(inMusicalRolePicker(find.textContaining('Secondary Skills:')), findsNothing);
+      expect(tester.takeException(), isNull);
     });
 
     testWidgets('1. About appears directly after Band Name in CreateBandScreen', (tester) async {

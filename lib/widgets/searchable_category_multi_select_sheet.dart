@@ -13,6 +13,7 @@ enum CategoryPickerPresentation {
 class SearchableCategoryMultiSelectSheet extends StatefulWidget {
   final String title;
   final String? prompt;
+  final Widget? optionsHeader;
   final Map<String, List<String>> categoryMap;
   final List<String> initialSelected;
   final bool isSingleSelect;
@@ -24,6 +25,7 @@ class SearchableCategoryMultiSelectSheet extends StatefulWidget {
     super.key,
     required this.title,
     this.prompt,
+    this.optionsHeader,
     required this.categoryMap,
     required this.initialSelected,
     this.isSingleSelect = false,
@@ -36,6 +38,7 @@ class SearchableCategoryMultiSelectSheet extends StatefulWidget {
     required BuildContext context,
     required String title,
     String? prompt,
+    Widget? optionsHeader,
     required Map<String, List<String>> categoryMap,
     required List<String> initialSelected,
     bool isSingleSelect = false,
@@ -51,6 +54,7 @@ class SearchableCategoryMultiSelectSheet extends StatefulWidget {
       builder: (context) => SearchableCategoryMultiSelectSheet(
         title: title,
         prompt: prompt,
+        optionsHeader: optionsHeader,
         categoryMap: categoryMap,
         initialSelected: initialSelected,
         isSingleSelect: isSingleSelect,
@@ -459,18 +463,18 @@ class _SearchableCategoryMultiSelectSheetState
 
               final categoryEntries = filteredCategories.entries.toList();
 
-              if (categoryEntries.isEmpty && !hasBandleaderMatch) {
-                return Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24.0),
-                    child: Text(
-                      'No matching options found.',
-                      style: GoogleFonts.inter(
-                          color: AppTheme.textSecondary, fontSize: 14),
-                    ),
+              final noOptions = categoryEntries.isEmpty && !hasBandleaderMatch;
+              Widget emptyResults() => Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24.0),
+                  child: Text(
+                    'No matching options found.',
+                    style: GoogleFonts.inter(
+                        color: AppTheme.textSecondary, fontSize: 14),
                   ),
-                );
-              }
+                ),
+              );
+              if (noOptions && widget.optionsHeader == null) return emptyResults();
 
               return ListView(
                 shrinkWrap: compact,
@@ -480,7 +484,10 @@ class _SearchableCategoryMultiSelectSheetState
                     ? const NeverScrollableScrollPhysics()
                     : const BouncingScrollPhysics(),
                 children: () {
-                  final widgets = <Widget>[];
+                  final widgets = <Widget>[
+                    if (widget.optionsHeader case final Widget header) header,
+                    if (noOptions) emptyResults(),
+                  ];
 
                   // RUTA-02B: Standalone BANDLEADER Option at the very top
                   if (hasBandleaderMatch) {

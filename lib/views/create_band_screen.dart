@@ -16,6 +16,7 @@ import '../widgets/searchable_category_multi_select_sheet.dart';
 import '../widgets/what_is_map_view_dialog.dart';
 import '../data/genres_taxonomy.dart';
 import '../utils/band_member_role_label.dart';
+import '../widgets/band_member_profile_skills.dart';
 import '../widgets/band_musical_role_picker.dart';
 
 class CreateBandScreen extends StatefulWidget {
@@ -244,6 +245,7 @@ class _CreateBandScreenState extends State<CreateBandScreen> {
       builder: (ctx) {
         return Dialog(
           backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 24),
           child: Container(
             decoration: BoxDecoration(
               color: const Color(0xFF0F0C20).withValues(alpha: 0.95),
@@ -257,8 +259,11 @@ class _CreateBandScreenState extends State<CreateBandScreen> {
               allUsers: allUsers,
               existingUserIds: existingUserIds,
               onUserSelected: (pickerContext, user) async {
-                final name = user.displayName ?? user.nickname ?? 'Member';
-                final role = await BandMusicalRolePicker.show(pickerContext, name);
+                final role = await BandMusicalRolePicker.show(
+                  pickerContext,
+                  user.displayName ?? user.nickname,
+                  profile: user,
+                );
                 if (!mounted || !pickerContext.mounted || role == null ||
                     currentUserId != appState.currentUserId) {
                   return false;
@@ -1162,12 +1167,14 @@ class _SelectBandMemberDialogState extends State<_SelectBandMemberDialog> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              "Add Band Member",
-              style: GoogleFonts.outfit(
-                fontSize: 18,
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
+            Expanded(
+              child: Text(
+                "Add Band Member",
+                style: GoogleFonts.outfit(
+                  fontSize: 18,
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
             IconButton(
@@ -1211,7 +1218,7 @@ class _SelectBandMemberDialogState extends State<_SelectBandMemberDialog> {
                   itemCount: filteredUsers.length,
                   itemBuilder: (context, index) {
                     final user = filteredUsers[index];
-                    final name = user.displayName ?? user.nickname ?? 'Unknown';
+                    final name = user.displayName ?? user.nickname;
                     final isAlreadyAdded = _addedIds.contains(user.userId);
 
                     return Container(
@@ -1227,27 +1234,24 @@ class _SelectBandMemberDialogState extends State<_SelectBandMemberDialog> {
                             CircleAvatar(
                               radius: 16,
                               backgroundColor: AppTheme.primaryAccent.withValues(alpha: 0.2),
-                              child: Text(
-                                name.isNotEmpty ? name.substring(0, 1).toUpperCase() : '?',
-                                style: GoogleFonts.inter(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
-                              ),
+                              child: name == null || name.isEmpty
+                                  ? const Icon(Icons.person_outline_rounded, size: 16)
+                                  : Text(
+                                      name.substring(0, 1).toUpperCase(),
+                                      style: GoogleFonts.inter(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                                    ),
                             ),
                             const SizedBox(width: 12),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(
-                                    name,
-                                    style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
-                                  ),
-                                  if (user.instruments.isNotEmpty)
+                                  if (name != null && name.isNotEmpty)
                                     Text(
-                                      user.instruments.join(', '),
-                                      style: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 11),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
+                                      name,
+                                      style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
                                     ),
+                                  BandMemberProfileSkills(profile: user),
                                 ],
                               ),
                             ),
@@ -1270,6 +1274,7 @@ class _SelectBandMemberDialogState extends State<_SelectBandMemberDialog> {
                             else
                               IconButton(
                                 icon: const Icon(Icons.add_circle, color: AppTheme.primaryAccent, size: 24),
+                                tooltip: 'Select musical role',
                                 onPressed: _choosingRole ? null : () => _chooseMember(user),
                                 padding: EdgeInsets.zero,
                                 constraints: const BoxConstraints(),

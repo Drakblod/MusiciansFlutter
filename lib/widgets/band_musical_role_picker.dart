@@ -7,6 +7,7 @@ import '../models/user_profile.dart';
 import '../providers/app_state.dart';
 import '../utils/band_membership_policy.dart';
 import '../utils/membership_mutation_feedback.dart';
+import 'band_member_profile_skills.dart';
 import 'searchable_category_multi_select_sheet.dart';
 import 'skill_picker.dart';
 
@@ -21,14 +22,17 @@ class BandMusicalRolePicker {
 
   static Future<String?> show(
     BuildContext context,
-    String name, {
+    String? name, {
     String? selected,
+    UserProfile? profile,
   }) async {
     final result = await SearchableCategoryMultiSelectSheet.show(
       context: context,
       title: 'Musical role',
-      prompt:
-          'Which instrument or role would you like $name to take on in this particular band?',
+      prompt: name == null
+          ? 'Which instrument or role should this person take on in this band?'
+          : 'Which instrument or role would you like $name to take on in this particular band?',
+      optionsHeader: profile == null ? null : BandMemberProfileSkills(profile: profile),
       categoryMap: categories,
       initialSelected: [if (selected != null) selected],
       isSingleSelect: true,
