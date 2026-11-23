@@ -316,6 +316,57 @@ void main() {
       expect(find.text('Stale title'), findsNothing);
     });
 
+    for (final storedType in ['live_gig', 'Recording Session', null]) {
+      testWidgets('Editing text preserves the stored event type $storedType', (tester) async {
+        useLargeViewport(tester);
+        final store = CalendarDatabaseFixture(tester, event);
+        final legacy = event.toJson();
+        if (storedType == null) {
+          legacy.remove('eventType');
+        } else {
+          legacy['eventType'] = storedType;
+        }
+        store.records[store.publicPath] = legacy;
+        store.records[store.ownerPath] = legacy;
+        await mountCalendar(tester);
+        await tester.tap(find.byTooltip('Edit Event'));
+        await pumpUiTransitions(tester);
+        await tester.enterText(find.widgetWithText(TextFormField, event.title), 'Updated legacy event');
+        await tester.enterText(find.widgetWithText(TextFormField, event.description), 'Updated legacy description');
+        await saveEdit(tester);
+
+        final saved = store.records[store.publicPath] as Map;
+        expect(saved.containsKey('eventType'), storedType != null);
+        expect(saved['eventType'], storedType);
+        expect(saved['description'], 'Updated legacy description');
+        expect(store.records[store.ownerPath], saved);
+        expect(find.text('Updated legacy event'), findsOneWidget);
+      });
+    }
+
+    testWidgets('An explicit type change persists and displays the selected calendar type', (tester) async {
+      useLargeViewport(tester);
+      final store = CalendarDatabaseFixture(tester, event);
+      final legacy = event.toJson()..['eventType'] = 'live_gig';
+      store.records[store.publicPath] = legacy;
+      store.records[store.ownerPath] = legacy;
+      await mountCalendar(tester);
+      await tester.tap(find.byTooltip('Edit Event'));
+      await pumpUiTransitions(tester);
+      await tester.tap(find.text('Workshop'));
+      await pumpUiTransitions(tester);
+      await saveEdit(tester);
+
+      final saved = store.records[store.publicPath] as Map;
+      expect(saved['eventType'], 'workshopCourse');
+      expect(store.records[store.ownerPath], saved);
+      final reloaded = PublicCalendarEvent.fromJson(saved);
+      expect(EventCalendarCategories.matches(reloaded, EventCalendarCategories.workshops), isTrue);
+      expect(EventCalendarCategories.matches(reloaded, EventCalendarCategories.liveGigs), isFalse);
+      await openDetails(tester);
+      expect(find.text('Workshop/Course'), findsOneWidget);
+    });
+
     testWidgets('A title edit does not add a synthetic end to a legacy event', (tester) async {
       useLargeViewport(tester);
       final legacyJson = event.copyWith(startDateTime: now.add(const Duration(hours: 1))).toJson()

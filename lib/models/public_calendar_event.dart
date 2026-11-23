@@ -16,6 +16,9 @@ class PublicCalendarEvent {
   final String shortDescription;
   final String description;
   final PublicEventType eventType;
+  // Keep the stored value separate from the type used by calendar filters.
+  final Object? _storedEventType;
+  final bool _hasStoredEventType;
   final String organizerName;
   final String venueName;
   final String city;
@@ -46,6 +49,8 @@ class PublicCalendarEvent {
     required this.shortDescription,
     required this.description,
     required this.eventType,
+    Object? storedEventType,
+    bool hasStoredEventType = true,
     required this.organizerName,
     required this.venueName,
     required this.city,
@@ -69,7 +74,9 @@ class PublicCalendarEvent {
     this.locationPrecision = 'exact',
     this.placeId,
     this.locationStatus,
-  }) : _hasStartDateTime = hasStartDateTime,
+  }) : _storedEventType = storedEventType,
+       _hasStoredEventType = hasStoredEventType,
+       _hasStartDateTime = hasStartDateTime,
        _hasEndDateTime = hasEndDateTime;
 
   factory PublicCalendarEvent.fromJson(Map<dynamic, dynamic> json, [String? id]) {
@@ -116,6 +123,8 @@ class PublicCalendarEvent {
       shortDescription: json['shortDescription']?.toString() ?? '',
       description: json['description']?.toString() ?? '',
       eventType: parseType(json['eventType']?.toString()),
+      storedEventType: json['eventType'],
+      hasStoredEventType: json['eventType'] != null,
       organizerName: json['organizerName']?.toString() ?? '',
       venueName: json['venueName']?.toString() ?? '',
       city: json['city']?.toString() ?? '',
@@ -156,7 +165,7 @@ class PublicCalendarEvent {
       'title': title,
       'shortDescription': shortDescription,
       'description': description,
-      'eventType': eventType.name,
+      if (_hasStoredEventType) 'eventType': _storedEventType ?? eventType.name,
       'organizerName': organizerName,
       'venueName': venueName,
       'city': city,
@@ -215,6 +224,8 @@ class PublicCalendarEvent {
       shortDescription: shortDescription ?? this.shortDescription,
       description: description ?? this.description,
       eventType: eventType ?? this.eventType,
+      storedEventType: eventType == null ? _storedEventType : null,
+      hasStoredEventType: eventType != null || _hasStoredEventType,
       organizerName: organizerName ?? this.organizerName,
       venueName: venueName ?? this.venueName,
       city: city ?? this.city,

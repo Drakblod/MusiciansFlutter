@@ -47,7 +47,8 @@ class _CreatePublicEventScreenState extends State<CreatePublicEventScreen> {
   final TextEditingController _descController = TextEditingController();
   final TextEditingController _imageUrlController = TextEditingController();
 
-  PublicEventType _selectedType = PublicEventType.liveGig;
+  PublicEventType? _selectedType;
+  PublicEventType get _initialType => widget.eventToEdit?.eventType ?? PublicEventType.liveGig;
   DateTime _selectedDate = DateTime.now().add(const Duration(days: 2));
   TimeOfDay _startTime = const TimeOfDay(hour: 19, minute: 0);
   TimeOfDay _endTime = const TimeOfDay(hour: 22, minute: 0);
@@ -95,7 +96,6 @@ class _CreatePublicEventScreenState extends State<CreatePublicEventScreen> {
         _imageUrlController.text = e.imageUrl!;
       }
       _posterFit = e.imageFitMode == 'contain' ? BoxFit.contain : BoxFit.cover;
-      _selectedType = e.eventType;
       _selectedDate = e.startDateTime;
       _startTime = TimeOfDay(hour: e.startDateTime.hour, minute: e.startDateTime.minute);
       _endTime = TimeOfDay(hour: e.endDateTime.hour, minute: e.endDateTime.minute);
@@ -449,7 +449,7 @@ class _CreatePublicEventScreenState extends State<CreatePublicEventScreen> {
           title: _titleController.text.trim(),
           shortDescription: shortDesc,
           description: _descController.text.trim(),
-          eventType: _selectedType,
+          eventType: _selectedType ?? _initialType,
           organizerName: _organizerController.text.trim(),
           venueName: _venueController.text.trim(),
           city: _cityController.text.trim(),
@@ -1115,14 +1115,14 @@ class _CreatePublicEventScreenState extends State<CreatePublicEventScreen> {
       runSpacing: 8,
       children: types.map((item) {
         final type = item['type'] as PublicEventType;
-        final isSelected = _selectedType == type;
+        final isSelected = (_selectedType ?? _initialType) == type;
         final label = item['label'] as String;
         final icon = item['icon'] as IconData;
 
         return AnimatedTapDetector(
           onTap: () {
             setState(() {
-              _selectedType = type;
+              _selectedType = type == _initialType ? null : type;
             });
           },
           child: Container(
