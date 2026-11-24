@@ -1,3 +1,4 @@
+import 'international_city_forms_01_test.dart' as city_forms show FormState;
 import 'support/bounded_ui_pump.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -78,6 +79,160 @@ void main() {
   });
 
   group('Registration Genres/Band Types Verification Tests', () {
+    testWidgets('custom genre round-trips from registration through Edit Profile',
+        (tester) async {
+      tester.view.physicalSize = const Size(430, 2000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final registration = MockRegisterAppState();
+      final registerGenres = find.text('Genres/Band Types');
+      final editGenres = find.text('GENRES/BAND TYPES');
+      final sheet = find.byType(SearchableCategoryMultiSelectSheet);
+      final other = find.descendant(of: sheet, matching: find.text('Other'));
+      final dialog = find.byType(AlertDialog);
+      final nameField =
+          find.descendant(of: dialog, matching: find.byType(TextFormField));
+      final saveName = find.descendant(of: dialog, matching: find.text('Save'));
+      final done =
+          find.descendant(of: sheet, matching: find.textContaining('Done'));
+
+      Future<void> tap(Finder finder) async {
+        await tester.ensureVisible(finder);
+        await tester.tap(finder);
+        await pumpUiTransitions(tester);
+      }
+
+      await tester.pumpWidget(createRegisterTestApp(appState: registration));
+      await pumpUiTransitions(tester);
+      final fields = find.byType(TextFormField);
+      await tester.enterText(fields.at(0), 'Nordic Player');
+      await tester.enterText(fields.at(1), 'player@example.test');
+      await tester.enterText(fields.at(2), 'local-widget-fixture');
+      await selectBlues(tester, registerGenres);
+      await tap(registerGenres);
+      await tap(other);
+
+      await tester.enterText(nameField, '   ');
+      await tap(saveName);
+      expect(find.text('Enter a name.'), findsOneWidget);
+      await tester.enterText(nameField, 'x' * 201);
+      await tap(saveName);
+      expect(find.text('Use at most 200 characters.'), findsOneWidget);
+      await tester.enterText(nameField, '  bLuEs ');
+      await tap(saveName);
+      expect(find.text('Choose this option from the list.'), findsOneWidget);
+
+      const original = 'Nordic Folk, Jazz';
+      await tester.enterText(nameField, '  $original  ');
+      await tap(saveName);
+      await tap(other);
+      await tester.enterText(nameField, ' nordic FOLK, jazz ');
+      await tap(saveName);
+      expect(find.text('This option is already selected.'), findsOneWidget);
+      await tap(find.descendant(of: dialog, matching: find.text('Cancel')));
+      await tap(done);
+      expect(find.widgetWithText(InputChip, original), findsOneWidget);
+      await tap(find.text('Sign Up'));
+      expect(find.text('Main Nav'), findsOneWidget);
+      expect(registration.registeredGenres, ['Blues', original]);
+
+      UserProfile decode(UserProfile saved) =>
+          UserProfile.fromJson(saved.toJson(), saved.userId!);
+      final registered = registration.savedProfile!;
+      expect(registered.toJson()['Genres'], ['Blues', original]);
+      final editing = city_forms.FormState(decode(registered));
+      Future<void> openEdit() async {
+        await tester.pumpWidget(
+          ChangeNotifierProvider<AppState>.value(
+            value: editing,
+            child: MaterialApp(key: UniqueKey(), home: const EditProfileScreen()),
+          ),
+        );
+        await pumpUiTransitions(tester);
+      }
+
+      await openEdit();
+      expect(find.widgetWithText(InputChip, original), findsOneWidget);
+      await tap(editGenres);
+      await tap(find.descendant(of: sheet, matching: find.text(original)));
+      expect(tester.widget<TextFormField>(nameField).initialValue, original);
+      const renamed = 'Nordic Chamber Jazz';
+      await tester.enterText(nameField, ' $renamed ');
+      await tap(saveName);
+      await tap(done);
+      await tap(find.text('Save Profile'));
+      expect(editing.service.saved!.toJson()['Genres'], ['Blues', renamed]);
+
+      editing.profile = decode(editing.service.saved!);
+      await openEdit();
+      expect(find.widgetWithText(InputChip, renamed), findsOneWidget);
+      await tap(editGenres);
+      await tap(find.byTooltip('Remove $renamed'));
+      await tap(done);
+      await tap(find.text('Save Profile'));
+      expect(editing.service.saved!.toJson()['Genres'], ['Blues']);
+
+      editing.profile = decode(editing.service.saved!);
+      await openEdit();
+      expect(find.widgetWithText(InputChip, renamed), findsNothing);
+      expect(find.widgetWithText(InputChip, 'Blues'), findsOneWidget);
+    });
+
+    testWidgets('canceling the genre picker discards custom options and skills stay unchanged',
+        (tester) async {
+      tester.view.physicalSize = const Size(430, 2000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final state = MockRegisterAppState();
+      final genreField = find.text('Genres/Band Types');
+      final sheet = find.byType(SearchableCategoryMultiSelectSheet);
+      final close =
+          find.descendant(of: sheet, matching: find.byIcon(Icons.close_rounded));
+      final dialog = find.byType(AlertDialog);
+      Future<void> tap(Finder finder) async {
+        await tester.ensureVisible(finder);
+        await tester.tap(finder);
+        await pumpUiTransitions(tester);
+      }
+
+      await tester.pumpWidget(createRegisterTestApp(appState: state));
+      await pumpUiTransitions(tester);
+      for (final label in [
+        'Primary Skill/Talent (Select 1)',
+        'Secondary Skills (optional)',
+      ]) {
+        await tap(find.text(label));
+        expect(
+          tester
+              .widget<SearchableCategoryMultiSelectSheet>(sheet)
+              .customOptionMaxLength,
+          isNull,
+        );
+        await tap(close);
+      }
+
+      await selectBlues(tester, genreField);
+      await tap(genreField);
+      await tap(find.descendant(of: sheet, matching: find.text('Other')));
+      await tester.enterText(
+        find.descendant(of: dialog, matching: find.byType(TextFormField)),
+        'Canceled Genre',
+      );
+      await tap(find.descendant(of: dialog, matching: find.text('Save')));
+      expect(find.descendant(of: sheet, matching: find.text('Canceled Genre')),
+          findsOneWidget);
+      await tap(close);
+      expect(find.widgetWithText(InputChip, 'Canceled Genre'), findsNothing);
+      expect(find.widgetWithText(InputChip, 'Blues'), findsOneWidget);
+      await tap(genreField);
+      expect(find.descendant(of: sheet, matching: find.text('Canceled Genre')),
+          findsNothing);
+    });
+
     // 1. The field appears between Primary Skill and Level.
     testWidgets('1. Genres/Band Types appears between Primary Skill and Level', (tester) async {
       tester.view.physicalSize = const Size(800, 2400);

@@ -5,9 +5,8 @@ import '../providers/app_state.dart';
 import '../theme/app_theme.dart';
 import '../widgets/gradient_scaffold.dart';
 import '../widgets/animated_tap_detector.dart';
-import '../widgets/searchable_category_multi_select_sheet.dart';
+import '../widgets/genre_picker.dart';
 import '../data/skills_taxonomy.dart';
-import '../data/genres_taxonomy.dart';
 import '../utils/secondary_skills_utils.dart';
 import '../widgets/secondary_skills_editor.dart';
 import '../widgets/skill_picker.dart';
@@ -48,13 +47,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   Future<void> _openGenrePicker() async {
-    final result = await SearchableCategoryMultiSelectSheet.show(
-      context: context,
-      title: 'Genres/Band Types',
-      categoryMap: GenresTaxonomy.categoryMap,
-      initialSelected: _selectedGenres,
-    );
-    if (result != null) {
+    final result = await GenrePicker.show(context, _selectedGenres);
+    if (mounted && result != null) {
       setState(() {
         _selectedGenres = result;
       });

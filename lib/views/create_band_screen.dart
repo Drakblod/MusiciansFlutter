@@ -12,7 +12,7 @@ import '../models/user_profile.dart';
 import '../widgets/gradient_scaffold.dart';
 import '../widgets/custom_top_bar.dart';
 import '../widgets/animated_tap_detector.dart';
-import '../widgets/band_genre_picker.dart';
+import '../widgets/genre_picker.dart';
 import '../widgets/what_is_map_view_dialog.dart';
 import '../utils/band_member_role_label.dart';
 import '../widgets/band_member_profile_skills.dart';
@@ -75,7 +75,7 @@ class _CreateBandScreenState extends State<CreateBandScreen> {
   }
 
   Future<void> _openGenrePicker() async {
-    final result = await BandGenrePicker.show(context, _selectedGenres);
+    final result = await GenrePicker.showForBand(context, _selectedGenres);
     if (mounted && result != null) {
       setState(() {
         _selectedGenres = result;

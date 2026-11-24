@@ -15,7 +15,7 @@ import '../models/user_profile.dart';
 import '../widgets/gradient_scaffold.dart';
 import '../widgets/custom_top_bar.dart';
 import '../widgets/animated_tap_detector.dart';
-import '../widgets/band_genre_picker.dart';
+import '../widgets/genre_picker.dart';
 import '../utils/band_member_role_label.dart';
 import '../widgets/band_musical_role_picker.dart';
 import '../widgets/secondary_skills_badge.dart';
@@ -179,7 +179,7 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
   }
 
   Future<void> _openGenrePicker() async {
-    final result = await BandGenrePicker.show(context, _selectedStyles);
+    final result = await GenrePicker.showForBand(context, _selectedStyles);
     if (mounted && result != null) {
       setState(() {
         _selectedStyles = result;
@@ -257,7 +257,7 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
       // Do not leave a removed custom genre visible as the band type.
       final previousTypeWasCustomGenre = originalFirstGenre != null &&
           originalFirstGenre == previousType &&
-          !BandGenrePicker.isStandard(originalFirstGenre);
+          !GenrePicker.isStandard(originalFirstGenre);
       final derivedType = hasIndependentType
           ? previousType
           : _selectedStyles.firstOrNull ??

@@ -12,10 +12,9 @@ import '../widgets/city_location_picker_field.dart';
 import '../widgets/gradient_scaffold.dart';
 import '../widgets/custom_top_bar.dart';
 import '../widgets/animated_tap_detector.dart';
-import '../widgets/searchable_category_multi_select_sheet.dart';
+import '../widgets/genre_picker.dart';
 import '../widgets/audio_snippet_player.dart';
 import '../data/skills_taxonomy.dart';
-import '../data/genres_taxonomy.dart';
 import '../utils/secondary_skills_utils.dart';
 import '../widgets/secondary_skills_editor.dart';
 import '../widgets/skill_picker.dart';
@@ -61,9 +60,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   String? _pickedAudioFileName;
   bool _isUploadingAudio = false;
 
-  // PDF Specified Genre & Band Types Categories
-  static final Map<String, List<String>> _genreCategoryMap = GenresTaxonomy.categoryMap;
-
   Future<void> _openPrimarySkillPicker() async {
     final result = await SkillPicker.show(
       context,
@@ -84,13 +80,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   }
 
   Future<void> _openGenrePicker() async {
-    final result = await SearchableCategoryMultiSelectSheet.show(
-      context: context,
-      title: 'Genres/Band Types',
-      categoryMap: _genreCategoryMap,
-      initialSelected: _selectedGenres,
-    );
-    if (result != null) {
+    final result = await GenrePicker.show(context, _selectedGenres);
+    if (mounted && result != null) {
       setState(() {
         _selectedGenres = result;
       });
