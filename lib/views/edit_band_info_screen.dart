@@ -15,8 +15,7 @@ import '../models/user_profile.dart';
 import '../widgets/gradient_scaffold.dart';
 import '../widgets/custom_top_bar.dart';
 import '../widgets/animated_tap_detector.dart';
-import '../widgets/searchable_category_multi_select_sheet.dart';
-import '../data/genres_taxonomy.dart';
+import '../widgets/band_genre_picker.dart';
 import '../utils/band_member_role_label.dart';
 import '../widgets/band_musical_role_picker.dart';
 import '../widgets/secondary_skills_badge.dart';
@@ -107,8 +106,6 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
     'Sunday'
   ];
 
-  static final Map<String, List<String>> _genreCategoryMap = GenresTaxonomy.categoryMap;
-
   String _formatTime(TimeOfDay t) {
     return '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
   }
@@ -182,13 +179,8 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
   }
 
   Future<void> _openGenrePicker() async {
-    final result = await SearchableCategoryMultiSelectSheet.show(
-      context: context,
-      title: 'Genres/Band Types',
-      categoryMap: _genreCategoryMap,
-      initialSelected: _selectedStyles,
-    );
-    if (result != null) {
+    final result = await BandGenrePicker.show(context, _selectedStyles);
+    if (mounted && result != null) {
       setState(() {
         _selectedStyles = result;
       });
@@ -255,9 +247,21 @@ class _EditBandInfoScreenState extends State<EditBandInfoScreen> {
     setState(() => _isSaving = true);
 
     try {
-      final derivedType = _selectedStyles.isNotEmpty
-          ? _selectedStyles.first
-          : (widget.band.ensembleType ?? 'Band');
+      final originalFirstGenre = widget.band.genres.firstOrNull;
+      final previousType = widget.band.ensembleType;
+      // Some older bands have a saved type independent of their genres.
+      final hasIndependentType = previousType != null &&
+          previousType.trim().isNotEmpty &&
+          previousType != originalFirstGenre &&
+          !(previousType == 'Band' && originalFirstGenre == null);
+      // Do not leave a removed custom genre visible as the band type.
+      final previousTypeWasCustomGenre = originalFirstGenre != null &&
+          originalFirstGenre == previousType &&
+          !BandGenrePicker.isStandard(originalFirstGenre);
+      final derivedType = hasIndependentType
+          ? previousType
+          : _selectedStyles.firstOrNull ??
+              (previousTypeWasCustomGenre ? 'Band' : previousType ?? 'Band');
 
       final updated = Band(
         id: bandId,

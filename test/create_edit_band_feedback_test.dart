@@ -94,6 +94,212 @@ void main() {
   });
 
   group('Create and Edit Band Focused Owner-Feedback Tests', () {
+    testWidgets('a custom band genre saves, reopens, changes and can be removed',
+        (tester) async {
+      tester.view.physicalSize = const Size(430, 2000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final service = MockBandFirebaseService();
+      final state = MockBandAppState(service);
+      final genreField = find.text('GENRES/BAND TYPES');
+      final sheet = find.byType(SearchableCategoryMultiSelectSheet);
+      final dialog = find.byType(AlertDialog);
+      final customInput =
+          find.descendant(of: dialog, matching: find.byType(TextFormField));
+      final saveCustom =
+          find.descendant(of: dialog, matching: find.text('Save'));
+
+      Future<void> tap(Finder finder) async {
+        await tester.ensureVisible(finder);
+        await tester.tap(finder);
+        await pumpUiTransitions(tester);
+      }
+
+      Future<void> reopen(Band saved) async {
+        // The server assigns the creator's membership when creating the band.
+        final stored = saved.toJson()
+          ..['Members_band'] = {
+            'test_user_123': {'Role': 'Leader', 'Status': 'active'},
+          };
+        final band = Band.fromJson(stored, 'genre_band');
+        await tester.pumpWidget(
+          createTestWidget(EditBandInfoScreen(band: band), state),
+        );
+        await pumpUiTransitions(tester);
+      }
+
+      await tester.pumpWidget(createTestWidget(const CreateBandScreen(), state));
+      await pumpUiTransitions(tester);
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Enter band name'),
+        'Genre Band',
+      );
+      await chooseBerlin(tester);
+      await tap(genreField);
+      await tap(find.text('Other'));
+
+      for (final input in ['   ', ' Other ']) {
+        await tester.enterText(customInput, input);
+        await tap(saveCustom);
+        expect(find.text('Enter a name.'), findsOneWidget);
+      }
+      await tester.enterText(customInput, 'x' * 201);
+      await tap(saveCustom);
+      expect(find.text('Use at most 200 characters.'), findsOneWidget);
+      await tester.enterText(customInput, '  bLuEs  ');
+      await tap(saveCustom);
+      expect(find.text('Choose this option from the list.'), findsOneWidget);
+
+      const original = 'Nordic Folk, Jazz';
+      await tester.enterText(customInput, '  $original  ');
+      await tap(saveCustom);
+      expect(dialog, findsNothing);
+      await tap(find.text('Other'));
+      await tester.enterText(customInput, '  nordic folk, jazz  ');
+      await tap(saveCustom);
+      expect(find.text('This option is already selected.'), findsOneWidget);
+      await tap(find.descendant(of: dialog, matching: find.text('Cancel')));
+      await tap(find.descendant(of: sheet, matching: find.text('Done (1 Selected)')));
+
+      await selectBlues(tester, genreField);
+      await tap(find.text('Save Band'));
+      final created = service.createdBand!;
+      expect(created.toJson()['Genres'], [original, 'Blues']);
+      expect(created.toJson()['Style_band'], [original, 'Blues']);
+      expect(created.toJson()['EnsembleType'], original);
+
+      await reopen(created);
+      await tap(genreField);
+      await tap(find.descendant(of: sheet, matching: find.text(original)));
+      expect(tester.widget<TextFormField>(customInput).initialValue, original);
+      const updated = 'Nordic Chamber Jazz';
+      await tester.enterText(customInput, updated);
+      await tap(saveCustom);
+      await tap(find.descendant(of: sheet, matching: find.text('Done (2 Selected)')));
+      await tap(find.text('Save Changes'));
+      final edited = service.updatedBand!;
+      expect(edited.toJson()['Genres'], [updated, 'Blues']);
+      expect(edited.toJson()['Style_band'], [updated, 'Blues']);
+      expect(edited.toJson()['EnsembleType'], updated);
+
+      await reopen(edited);
+      await tap(genreField);
+      await tap(find.byTooltip('Remove $updated'));
+      await tap(find.descendant(of: sheet, matching: find.text('Done (1 Selected)')));
+      await tap(find.text('Save Changes'));
+      expect(service.updatedBand!.toJson()['Genres'], ['Blues']);
+      expect(service.updatedBand!.toJson()['Style_band'], ['Blues']);
+      expect(service.updatedBand!.toJson()['EnsembleType'], 'Blues');
+    });
+
+    testWidgets('removing the only custom genre clears its derived band type',
+        (tester) async {
+      tester.view.physicalSize = const Size(430, 2000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      const custom = 'Northern Chamber Folk';
+      final service = MockBandFirebaseService();
+      final band = Band(
+        id: 'genre_band',
+        name: 'Genre Band',
+        genres: [custom],
+        styleBand: [custom],
+        ensembleType: custom,
+        membersBand: {
+          'test_user_123':
+              BandMember(userId: 'test_user_123', role: 'Leader', status: 'active'),
+        },
+      );
+      await tester.pumpWidget(
+        createTestWidget(EditBandInfoScreen(band: band), MockBandAppState(service)),
+      );
+      await pumpUiTransitions(tester);
+
+      final field = find.text('GENRES/BAND TYPES');
+      await tester.ensureVisible(field);
+      await tester.tap(field);
+      await pumpUiTransitions(tester);
+      await tester.tap(find.byTooltip('Remove $custom'));
+      await pumpUiTransitions(tester);
+      await tester.tap(find.text('Done'));
+      await pumpUiTransitions(tester);
+      await tester.tap(find.text('Save Changes'));
+      await pumpUiTransitions(tester);
+
+      final saved = service.updatedBand!;
+      expect(saved.toJson()['Genres'], isEmpty);
+      expect(saved.toJson()['Style_band'], isEmpty);
+      expect(saved.toJson()['EnsembleType'], 'Band');
+    });
+
+    testWidgets('changing or removing a custom genre preserves a separate band type',
+        (tester) async {
+      tester.view.physicalSize = const Size(430, 2000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      const original = 'Northern Chamber Folk';
+      const updated = 'Nordic Chamber Jazz';
+      const separateType = 'Choir';
+      final service = MockBandFirebaseService();
+      final state = MockBandAppState(service);
+
+      Future<void> openPicker(List<String> genres) async {
+        final band = Band(
+          id: 'genre_band',
+          name: 'Genre Band',
+          genres: genres,
+          ensembleType: separateType,
+          membersBand: {
+            'test_user_123':
+                BandMember(userId: 'test_user_123', role: 'Leader', status: 'active'),
+          },
+        );
+        await tester.pumpWidget(createTestWidget(EditBandInfoScreen(band: band), state));
+        await pumpUiTransitions(tester);
+        final field = find.text('GENRES/BAND TYPES');
+        await tester.ensureVisible(field);
+        await tester.tap(field);
+        await pumpUiTransitions(tester);
+      }
+
+      Future<void> saveChanges(String doneLabel) async {
+        await tester.tap(find.text(doneLabel));
+        await pumpUiTransitions(tester);
+        await tester.tap(find.text('Save Changes'));
+        await pumpUiTransitions(tester);
+        expect(service.updatedBand!.ensembleType, separateType);
+      }
+
+      await openPicker([original, 'Blues']);
+      await tester.tap(find.descendant(
+        of: find.byType(SearchableCategoryMultiSelectSheet),
+        matching: find.text(original),
+      ));
+      await pumpUiTransitions(tester);
+      await tester.enterText(
+        find.descendant(
+          of: find.byType(AlertDialog),
+          matching: find.byType(TextFormField),
+        ),
+        updated,
+      );
+      await tester.tap(find.text('Save'));
+      await pumpUiTransitions(tester);
+      await saveChanges('Done (2 Selected)');
+      expect(service.updatedBand!.genres, [updated, 'Blues']);
+
+      await openPicker(service.updatedBand!.genres);
+      await tester.tap(find.byTooltip('Remove $updated'));
+      await pumpUiTransitions(tester);
+      await saveChanges('Done (1 Selected)');
+      expect(service.updatedBand!.genres, ['Blues']);
+    });
+
     testWidgets('Create Band prompts separately and saves both selected musical roles', (tester) async {
       tester.view.physicalSize = const Size(800, 2000);
       tester.view.devicePixelRatio = 1;

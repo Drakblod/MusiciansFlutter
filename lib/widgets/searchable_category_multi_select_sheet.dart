@@ -19,6 +19,7 @@ class SearchableCategoryMultiSelectSheet extends StatefulWidget {
   final bool isSingleSelect;
   final bool showBandleader;
   final int? maxSelection;
+  final int? customOptionMaxLength;
   final CategoryPickerPresentation presentation;
 
   const SearchableCategoryMultiSelectSheet({
@@ -31,6 +32,7 @@ class SearchableCategoryMultiSelectSheet extends StatefulWidget {
     this.isSingleSelect = false,
     this.showBandleader = true,
     this.maxSelection,
+    this.customOptionMaxLength,
     this.presentation = CategoryPickerPresentation.standard,
   });
 
@@ -44,6 +46,7 @@ class SearchableCategoryMultiSelectSheet extends StatefulWidget {
     bool isSingleSelect = false,
     bool showBandleader = true,
     int? maxSelection,
+    int? customOptionMaxLength,
     CategoryPickerPresentation presentation =
         CategoryPickerPresentation.standard,
   }) {
@@ -60,6 +63,7 @@ class SearchableCategoryMultiSelectSheet extends StatefulWidget {
         isSingleSelect: isSingleSelect,
         showBandleader: showBandleader,
         maxSelection: maxSelection,
+        customOptionMaxLength: customOptionMaxLength,
         presentation: presentation,
       ),
     );
@@ -75,6 +79,8 @@ class _SearchableCategoryMultiSelectSheetState
   late Set<String> _tempSelectedPersistedValues;
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
+  late final Set<String> _standardOptionKeys =
+      widget.categoryMap.values.expand((items) => items).map(_optionKey).toSet();
 
   bool get _isSkillsHierarchy =>
       widget.presentation == CategoryPickerPresentation.skillsHierarchy;
@@ -138,6 +144,97 @@ class _SearchableCategoryMultiSelectSheetState
           _tempSelectedPersistedValues.contains(displayOrPersistedItem);
     }
     return _tempSelectedPersistedValues.contains(displayOrPersistedItem);
+  }
+
+  String _optionKey(String value) => value.trim().toLowerCase();
+
+  Future<void> _editCustomOption({String? previous}) async {
+    final formKey = GlobalKey<FormState>();
+    final maxLength = widget.customOptionMaxLength!;
+    var name = previous ?? '';
+    FocusScope.of(context).unfocus();
+    final result = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        void save() {
+          if (formKey.currentState!.validate()) {
+            Navigator.pop(dialogContext, name.trim());
+          }
+        }
+
+        return AlertDialog(
+          title: Text(previous == null ? 'Other' : 'Edit custom option'),
+          scrollable: true,
+          content: Form(
+            key: formKey,
+            child: TextFormField(
+              initialValue: previous,
+              autofocus: true,
+              decoration: const InputDecoration(labelText: 'Name'),
+              textInputAction: TextInputAction.done,
+              onChanged: (value) => name = value,
+              onFieldSubmitted: (_) => save(),
+              validator: (value) {
+                final trimmed = (value ?? '').trim();
+                if (trimmed.isEmpty || _optionKey(trimmed) == 'other') {
+                  return 'Enter a name.';
+                }
+                if (trimmed.length > maxLength) {
+                  return 'Use at most $maxLength characters.';
+                }
+                final key = _optionKey(trimmed);
+                if (_standardOptionKeys.contains(key)) {
+                  return 'Choose this option from the list.';
+                }
+                if (_tempSelectedPersistedValues.any(
+                    (item) => item != previous && _optionKey(item) == key)) {
+                  return 'This option is already selected.';
+                }
+                return null;
+              },
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            TextButton(onPressed: save, child: const Text('Save')),
+          ],
+        );
+      },
+    );
+    if (!mounted || result == null) return;
+    if (previous == null) {
+      _toggleItem(result);
+      return;
+    }
+    // Keep the option in its original position when editing it.
+    setState(() {
+      _tempSelectedPersistedValues = _tempSelectedPersistedValues
+          .map((item) => item == previous ? result : item)
+          .toSet();
+    });
+  }
+
+  Iterable<Widget> _customOptions() sync* {
+    yield ListTile(
+      leading: const Icon(Icons.add),
+      title: const Text('Other'),
+      onTap: () => _editCustomOption(),
+    );
+    for (final item in _tempSelectedPersistedValues) {
+      if (_standardOptionKeys.contains(_optionKey(item))) continue;
+      yield ListTile(
+        title: Text(item),
+        onTap: () => _editCustomOption(previous: item),
+        trailing: IconButton(
+          tooltip: 'Remove $item',
+          icon: const Icon(Icons.close),
+          onPressed: () => _toggleItem(item),
+        ),
+      );
+    }
   }
 
   Widget _buildCategoryTitleWidget(String categoryName) {
@@ -474,7 +571,11 @@ class _SearchableCategoryMultiSelectSheetState
                   ),
                 ),
               );
-              if (noOptions && widget.optionsHeader == null) return emptyResults();
+              if (noOptions &&
+                  widget.optionsHeader == null &&
+                  widget.customOptionMaxLength == null) {
+                return emptyResults();
+              }
 
               return ListView(
                 shrinkWrap: compact,
@@ -486,6 +587,7 @@ class _SearchableCategoryMultiSelectSheetState
                 children: () {
                   final widgets = <Widget>[
                     if (widget.optionsHeader case final Widget header) header,
+                    if (widget.customOptionMaxLength != null) ..._customOptions(),
                     if (noOptions) emptyResults(),
                   ];
 
