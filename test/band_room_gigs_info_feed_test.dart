@@ -18,9 +18,9 @@ import 'package:musicians_flutter/models/event_room.dart';
 import 'package:musicians_flutter/providers/app_state.dart';
 import 'package:musicians_flutter/services/firebase_service.dart';
 import 'package:musicians_flutter/views/band_room_chat_screen.dart';
+import 'package:musicians_flutter/views/event_details_page.dart';
 import 'package:musicians_flutter/views/event_results_page.dart';
 import 'package:musicians_flutter/views/manage_events_screen.dart';
-import 'package:musicians_flutter/widgets/animated_tap_detector.dart';
 import 'package:musicians_flutter/widgets/rsvp_reminder_dialog.dart';
 
 class MockGigsInfoFirebaseService extends FirebaseService {
@@ -58,6 +58,9 @@ class MockGigsInfoFirebaseService extends FirebaseService {
   List<BandEvent> testEventsList = [];
   List<BandMember> testMembers = [];
   Map<String, Map<String, String>> testFiles = {};
+  List<Map<String, dynamic>> testPosts = [];
+  final postedNews = <Map<String, dynamic>>[];
+  final deletedNews = <(String, String)>[];
   final List<Map<String, String>> updatedResponses = [];
   StreamController<List<BandEvent>>? eventUpdates;
   bool denyRsvpWrite = false;
@@ -75,9 +78,10 @@ class MockGigsInfoFirebaseService extends FirebaseService {
   }
 
   @override
-  Stream<BandEvent?> subscribeToBandEvent(String bandId, String eventId) {
-    return Stream.value(testEvent);
-  }
+  Stream<BandEvent?> subscribeToBandEvent(String bandId, String eventId) =>
+      subscribeToBandEvents(bandId).map(
+        (events) => events.where((event) => event.id == eventId).firstOrNull,
+      );
 
   @override
   Future<void> updateEventResponseAsync(
@@ -120,7 +124,17 @@ class MockGigsInfoFirebaseService extends FirebaseService {
 
   @override
   Stream<List<Map<String, dynamic>>> subscribeToGigsNews(String bandId) {
-    return Stream.value([]);
+    return Stream.value(testPosts);
+  }
+
+  @override
+  Future<void> postGigsNewsAsync(String bandId, Map<String, dynamic> data) async {
+    postedNews.add({'bandId': bandId, ...data});
+  }
+
+  @override
+  Future<void> deleteGigsNewsAsync(String bandId, String postId) async {
+    deletedNews.add((bandId, postId));
   }
 
   @override
@@ -145,7 +159,7 @@ class MockGigsInfoFirebaseService extends FirebaseService {
 
   @override
   Future<List<BandEvent>> getBandEventsListAsync(String bandId) async {
-    return testEvent != null ? [testEvent!] : [];
+    return testEventsList.isNotEmpty ? testEventsList : [if (testEvent != null) testEvent!];
   }
 
   @override
@@ -227,54 +241,20 @@ void main() {
     expect(find.text('MP3s / Audio'), findsNothing);
   });
 
-  testWidgets('Unanswered News event card has a chevron and opens EventResultsPage', (tester) async {
-    tester.view.physicalSize = const Size(1200, 2400);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(() {
-      tester.view.resetPhysicalSize();
-      tester.view.resetDevicePixelRatio();
-    });
-
-    final mockService = MockGigsInfoFirebaseService();
-    mockService.testMembers = [
-      BandMember(userId: 'leader_1', nickname: 'Leader', role: 'Leader'),
-      BandMember(userId: 'u2', nickname: 'Bassist', role: 'Member'),
-      BandMember(userId: 'u3', nickname: 'Drummer', role: 'Member'),
-    ];
-
+  testWidgets('Events opens manager RSVP results for the exact event', (tester) async {
     final now = DateTime.now();
-    mockService.testEvent = BandEvent(
-      id: 'event_feed_1',
-      title: 'Summer Fest Gig',
-      description: 'Gig details description',
-      eventType: 'Concert',
-      location: 'Main Stage',
-      startDateTime: now.add(const Duration(days: 3)).toIso8601String(),
-      endDateTime: now.add(const Duration(days: 3, hours: 3)).toIso8601String(),
-      additionalNotes: 'Backline provided',
-      createdBy: 'leader_1',
-      createdAt: now.millisecondsSinceEpoch,
-      updatedAt: now.millisecondsSinceEpoch,
-      requireResponse: true,
-      responses: {
+    final service = MockGigsInfoFirebaseService()
+      ..testMembers = [
+        BandMember(userId: 'leader_1', nickname: 'Leader', role: 'Leader'),
+        BandMember(userId: 'u2', nickname: 'Bassist', role: 'Member'),
+        BandMember(userId: 'u3', nickname: 'Drummer', role: 'Member'),
+      ]
+      ..testEvent = _event(now, 'event_1', 'Summer Fest Gig', 3, responses: {
         'u3': EventResponse(status: 'YES', timestamp: now),
         'u2': EventResponse(status: 'declined', timestamp: now),
-      },
-    );
+      });
 
-    await tester.pumpWidget(
-      ChangeNotifierProvider<AppState>(
-        create: (_) => MockGigsInfoAppState(mockService),
-        child: const MaterialApp(
-          home: BandRoomChatScreen(),
-        ),
-      ),
-    );
-
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
-    await tester.pump(const Duration(milliseconds: 300));
-
+    await _mountBandRoom(tester, service);
     tester.view.physicalSize = const Size(320, 2400);
     await tester.pump();
     expectVisibleTabLabels(tester, ['Chat', 'Files', 'Events', 'News', 'Members']);
@@ -282,50 +262,17 @@ void main() {
     tester.view.physicalSize = const Size(1200, 2400);
     await tester.pump();
 
-    Navigator.of(tester.element(find.byType(RsvpReminderDialog))).pop();
-    await pumpUiTransitions(tester);
-    final gigsTab = find.text('News');
-    expect(gigsTab, findsOneWidget);
-    await tester.tap(gigsTab);
-    for (int i = 0; i < 10; i++) {
-      await tester.pump(const Duration(milliseconds: 50));
-    }
-
-    // 1. Verify Event Card Title & Location rendered
+    await _dismissReminder(tester);
+    await _tapBandRoom(tester, find.widgetWithText(Tab, 'Events'));
+    expect(find.byType(ManageEventsScreen), findsOneWidget);
     expect(find.text('”Summer Fest Gig”'), findsOneWidget);
     expect(find.text('Main Stage'), findsOneWidget);
-
-    // Verify Gig Type Badge 'Concert' is displayed
     expect(find.text('Concert'), findsOneWidget);
-    expect(find.text('NEW EVENT (Needs RSVP)'), findsOneWidget);
-    expect(find.text('Yes'), findsOneWidget);
-    expect(find.text('No'), findsOneWidget);
-    expect(find.text('Maybe'), findsOneWidget);
 
-    // 2. Verify normalized response counts
-    expect(find.textContaining('1 Attending (2 responses)'), findsOneWidget);
-
-    // 3. Verify old separate "RSVP / Details" button is REMOVED
-    expect(find.text('RSVP / Details'), findsNothing);
-    expect(find.text('View Details'), findsNothing);
-
-    // 4. Verify trailing chevron icon is present
-    expect(find.byIcon(Icons.chevron_right_rounded), findsWidgets);
-
-    // 5. Verify whole card is wrapped in AnimatedTapDetector and trigger navigation
-    final cardFinder = find.ancestor(
-      of: find.text('”Summer Fest Gig”'),
-      matching: find.byType(AnimatedTapDetector),
-    );
-    expect(cardFinder, findsOneWidget);
-
-    final tapDetector = tester.widget<AnimatedTapDetector>(cardFinder);
-    tapDetector.onTap();
-
-    await pumpUiTransitions(tester);
-
-    // EventResultsPage should be active with its 4 regular member groups
-    expect(find.byType(EventResultsPage), findsOneWidget);
+    await _tapBandRoom(tester, find.text('RSVPs'));
+    final results = tester.widget<EventResultsPage>(find.byType(EventResultsPage));
+    expect(results.bandId, 'band_feed_test');
+    expect(results.eventId, 'event_1');
     expect(find.text('ATTENDANCE RESPONSES'), findsOneWidget);
     expect(find.textContaining('YES (1)'), findsOneWidget);
     expect(find.textContaining('NO (1)'), findsOneWidget);
@@ -333,281 +280,235 @@ void main() {
     expect(find.textContaining('NO ANSWER (1)'), findsOneWidget);
   });
 
-  testWidgets('News sub-tabs: Events (left) & Other (right), sub-filters Upcoming & Past, and newest first sorting', (tester) async {
-    tester.view.physicalSize = const Size(1200, 2400);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(() {
-      tester.view.resetPhysicalSize();
-      tester.view.resetDevicePixelRatio();
-    });
-
-    final mockService = MockGigsInfoFirebaseService();
-    mockService.testMembers = [
-      BandMember(userId: 'leader_1', nickname: 'Leader', role: 'Leader'),
-    ];
-
+  testWidgets('News shows posts directly, keeps linked gigs and preserves post actions', (tester) async {
     final now = DateTime.now();
-    final event1 = BandEvent(
-      id: 'ev_1',
-      title: 'Upcoming Gig One',
-      description: 'Older upcoming',
-      eventType: 'Club Gig',
-      location: 'Club A',
-      startDateTime: now.add(const Duration(days: 2)).toIso8601String(),
-      endDateTime: now.add(const Duration(days: 2, hours: 2)).toIso8601String(),
-      additionalNotes: '',
-      createdBy: 'leader_1',
-      createdAt: now.millisecondsSinceEpoch,
-      updatedAt: now.millisecondsSinceEpoch,
-      requireResponse: false,
+    final service = MockGigsInfoFirebaseService()
+      ..testMembers = [
+        BandMember(userId: 'leader_1', nickname: 'Leader', role: 'Leader'),
+      ]
+      ..testEvent = _event(now, 'gig_event', 'Summer Fest Gig', 3, requireResponse: false)
+      ..testPosts = [
+        {
+          'id': 'regular_post',
+          'title': 'Rehearsal update',
+          'content': 'Rehearsal moved to Studio B.',
+          'timestamp': 1000,
+        },
+        {
+          'id': 'linked_gig',
+          'type': 'Gig',
+          'title': 'Sub needed for Summer Fest',
+          'content': 'Looking for a bass substitute.',
+          'eventId': 'gig_event',
+          'timestamp': 2000,
+        },
+      ];
+    await _mountBandRoom(tester, service);
+    await _tapBandRoom(tester, find.widgetWithText(Tab, 'News'));
+
+    expect(find.text('Rehearsal update'), findsOneWidget);
+    expect(find.text('Rehearsal moved to Studio B.'), findsOneWidget);
+    expect(find.text('Sub needed for Summer Fest'), findsOneWidget);
+    expect(find.text('Looking for a bass substitute.'), findsOneWidget);
+    expect(find.text('GIG'), findsOneWidget);
+    expect(find.text('NEWS'), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.text('Sub needed for Summer Fest')).dy,
+      lessThan(tester.getTopLeft(find.text('Rehearsal update')).dy),
     );
+    expect(find.textContaining('”Summer Fest Gig”'), findsNothing);
+    expect(find.text('Other'), findsNothing);
+    expect(find.text('Events'), findsOneWidget);
+    expect(find.widgetWithText(Tab, 'Events'), findsOneWidget);
+    expect(find.textContaining('New Events', findRichText: true), findsNothing);
+    expect(find.text('Upcoming (Finalized)'), findsNothing);
+    expect(find.text('Past Events'), findsNothing);
+    expect(find.text('No posts or updates found.'), findsNothing);
 
-    final event2 = BandEvent(
-      id: 'ev_2',
-      title: 'Upcoming Gig Two (Newer)',
-      description: 'Newer upcoming',
-      eventType: 'Festival',
-      location: 'Park B',
-      startDateTime: now.add(const Duration(days: 5)).toIso8601String(),
-      endDateTime: now.add(const Duration(days: 5, hours: 4)).toIso8601String(),
-      additionalNotes: '',
-      createdBy: 'leader_1',
-      createdAt: now.millisecondsSinceEpoch,
-      updatedAt: now.millisecondsSinceEpoch,
-      requireResponse: false,
-    );
-
-    final pastEvent = BandEvent(
-      id: 'ev_past',
-      title: 'Past Rehearsal',
-      description: 'Past rehearsal event',
-      eventType: 'Rehearsal',
-      location: 'Studio 1',
-      startDateTime: now.subtract(const Duration(days: 4)).toIso8601String(),
-      endDateTime: now.subtract(const Duration(days: 4, hours: -2)).toIso8601String(),
-      additionalNotes: '',
-      createdBy: 'leader_1',
-      createdAt: now.millisecondsSinceEpoch,
-      updatedAt: now.millisecondsSinceEpoch,
-      requireResponse: false,
-    );
-
-    mockService.testEvent = event1; // Single stream subscriber returns this
-
-    await tester.pumpWidget(
-      ChangeNotifierProvider<AppState>(
-        create: (_) => MockGigsInfoAppState(mockService),
-        child: const MaterialApp(
-          home: BandRoomChatScreen(),
-        ),
-      ),
-    );
-
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
-    await tester.pump(const Duration(milliseconds: 300));
-
-    await tester.tap(find.text('News'));
-    for (int i = 0; i < 10; i++) {
-      await tester.pump(const Duration(milliseconds: 50));
-    }
-
-    // Top sub-tabs: Events on left, Other on right
-    expect(find.widgetWithText(AnimatedTapDetector, 'Events'), findsOneWidget);
-    expect(find.widgetWithText(AnimatedTapDetector, 'Other'), findsOneWidget);
-
-    // Sub-filters under Events
-    expect(find.text('New Events'), findsOneWidget);
-    expect(find.text('Upcoming (Finalized)'), findsOneWidget);
-    expect(find.text('Past Events'), findsOneWidget);
-
-    // Switch to Past Events
-    await tester.tap(find.text('Past Events'));
-    await pumpUiTransitions(tester);
-
-    expect(find.text('No past events found.'), findsOneWidget);
-
-    // Switch to Other tab
-    await tester.tap(find.text('Other'));
-    await pumpUiTransitions(tester);
-
-    expect(find.text('Create Post / Update'), findsOneWidget);
-    expect(find.text('No posts or updates found.'), findsOneWidget);
-
-    // Tap Create Post / Update to open dialog
-    await tester.tap(find.text('Create Post / Update'));
-    await pumpUiTransitions(tester);
-
+    await _tapBandRoom(tester, find.text('Create Post / Update'));
     expect(find.text('POST GIG / NEWS'), findsOneWidget);
     expect(find.text('News Update'), findsOneWidget);
     expect(find.text('Gig / Event'), findsOneWidget);
     expect(find.text('Gig / Booking'), findsNothing);
+    await _tapBandRoom(tester, find.text('Gig / Event'));
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'e.g. Rehearsal Update or Gig Event'),
+      'Venue update',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Provide all the details for the members...'),
+      'Use the stage entrance.',
+    );
+    await _tapBandRoom(tester, find.text('Post'));
+    expect(service.postedNews, [{
+      'bandId': 'band_feed_test',
+      'title': 'Venue update',
+      'content': 'Use the stage entrance.',
+      'type': 'Gig',
+      'authorName': 'Leader Musician',
+    }]);
+
+    final delete = find.widgetWithIcon(IconButton, Icons.delete_outline_rounded).first;
+    await _tapBandRoom(tester, delete);
+    expect(find.text('Delete Post?'), findsOneWidget);
+    await _tapBandRoom(tester, find.text('Cancel'));
+    expect(service.deletedNews, isEmpty);
+    await _tapBandRoom(tester, delete);
+    await _tapBandRoom(tester, find.text('Delete'));
+    expect(service.deletedNews, [('band_feed_test', 'linked_gig')]);
+
+    await _tapBandRoom(tester, find.widgetWithText(Tab, 'Chat'));
+    expect(find.byKey(const ValueKey('band-room-groups')), findsOneWidget);
+    expect(find.text('New Group'), findsOneWidget);
+    expect(find.text('Type a message...'), findsOneWidget);
   });
 
-  testWidgets('New Events uses saved own RSVP on save, failure and reload and preserves chronology', (tester) async {
-    tester.view.physicalSize = const Size(1200, 2400);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(() {
-      tester.view.resetPhysicalSize();
-      tester.view.resetDevicePixelRatio();
-    });
+  testWidgets('Empty News shows its empty state without manager actions for a member', (tester) async {
+    final service = MockGigsInfoFirebaseService()
+      ..testMembers = [BandMember(userId: 'leader_1', role: 'Member')];
+    await _mountBandRoom(tester, service);
+    await _tapBandRoom(tester, find.widgetWithText(Tab, 'News'));
 
-    final mockService = MockGigsInfoFirebaseService();
-    final eventUpdates = StreamController<List<BandEvent>>.broadcast();
-    mockService.eventUpdates = eventUpdates;
-    addTearDown(eventUpdates.close);
-    mockService.testMembers = [
-      BandMember(userId: 'leader_1', nickname: 'Leader', role: 'Leader'),
-      BandMember(userId: 'u2', nickname: 'Member', role: 'Member'),
-    ];
+    expect(find.text('No posts or updates found.'), findsOneWidget);
+    expect(find.text('Create Post / Update'), findsNothing);
+    expect(find.text('Other'), findsNothing);
+  });
 
+  testWidgets('Events keeps unanswered and answered RSVPs after save, failure and reload', (tester) async {
     final now = DateTime.now();
-    final evNear = BandEvent(
-      id: 'ev_near',
-      title: 'Sooner Gig',
-      description: 'Happening in 2 days',
-      eventType: 'Concert',
-      location: 'Stage A',
-      startDateTime: now.add(const Duration(days: 2)).toIso8601String(),
-      endDateTime: now.add(const Duration(days: 2, hours: 2)).toIso8601String(),
-      additionalNotes: '',
-      createdBy: 'leader_1',
-      createdAt: now.millisecondsSinceEpoch,
-      updatedAt: now.millisecondsSinceEpoch,
-      requireResponse: true,
-      responses: {
-        'u2': EventResponse(status: 'UNCERTAIN', timestamp: now),
-      },
-    );
+    final updates = StreamController<List<BandEvent>>.broadcast();
+    addTearDown(updates.close);
+    final service = MockGigsInfoFirebaseService()
+      ..eventUpdates = updates
+      ..testMembers = [
+        BandMember(userId: 'leader_1', nickname: 'Leader', role: 'Leader'),
+        BandMember(userId: 'u2', nickname: 'Member', role: 'Member'),
+      ]
+      ..testEventsList = [
+        _event(now, 'far', 'Later Gig', 7, responses: {
+          'leader_1': EventResponse(status: 'Yes', timestamp: now),
+        }),
+        _event(now, 'near', 'Sooner Gig', 2),
+        _event(now, 'past_older', 'Past Older Event', -10),
+        _event(now, 'past_newer', 'Past Newer Event', -2),
+        _event(now, 'finalized', 'Finalized Event', 3, requireResponse: false),
+      ];
+    await _mountBandRoom(tester, service);
+    await _dismissReminder(tester);
+    final eventsTab = find.widgetWithText(Tab, 'Events');
+    await _tapBandRoom(tester, eventsTab);
 
-    final evFar = BandEvent(
-      id: 'ev_far',
-      title: 'Later Gig',
-      description: 'Happening in 7 days',
-      eventType: 'Festival',
-      location: 'Park B',
-      startDateTime: now.add(const Duration(days: 7)).toIso8601String(),
-      endDateTime: now.add(const Duration(days: 7, hours: 2)).toIso8601String(),
-      additionalNotes: '',
-      createdBy: 'leader_1',
-      createdAt: now.millisecondsSinceEpoch,
-      updatedAt: now.millisecondsSinceEpoch,
-      requireResponse: true,
-      responses: {
-        'u2': EventResponse(status: 'UNCERTAIN', timestamp: now),
-      },
-    );
+    final sooner = find.text('”Sooner Gig”');
+    final later = find.text('”Later Gig”');
+    expect(sooner, findsOneWidget);
+    expect(later, findsOneWidget);
+    expect(tester.getTopLeft(sooner).dy, lessThan(tester.getTopLeft(later).dy));
+    expect(find.text('Save RSVP'), findsNothing);
 
-    final evPastOlder = BandEvent(
-      id: 'ev_past_older',
-      title: 'Past Older Event',
-      description: 'Happened 10 days ago',
-      eventType: 'Club',
-      location: 'Club A',
-      startDateTime: now.subtract(const Duration(days: 10)).toIso8601String(),
-      endDateTime: now.subtract(const Duration(days: 10, hours: -2)).toIso8601String(),
-      additionalNotes: '',
-      createdBy: 'leader_1',
-      createdAt: now.millisecondsSinceEpoch,
-      updatedAt: now.millisecondsSinceEpoch,
-      requireResponse: true,
-    );
+    await _tapBandRoom(tester, sooner);
+    final details = tester.widget<EventDetailsPage>(find.byType(EventDetailsPage));
+    expect(details.eventId, 'near');
+    expect(details.bandId, 'band_feed_test');
+    await _tapBandRoom(tester, find.text('YES'));
+    service.denyRsvpWrite = true;
+    await _tapBandRoom(tester, find.text('Save RSVP'));
+    expect(find.text('Failed to update RSVP'), findsOneWidget);
+    expect(service.updatedResponses, isEmpty);
+    expect(service.testEventsList.singleWhere((event) => event.id == 'near')
+        .responses['leader_1'], isNull);
 
-    final evPastNewer = BandEvent(
-      id: 'ev_past_newer',
-      title: 'Past Newer Event',
-      description: 'Happened 2 days ago',
-      eventType: 'Club',
-      location: 'Club B',
-      startDateTime: now.subtract(const Duration(days: 2)).toIso8601String(),
-      endDateTime: now.subtract(const Duration(days: 2, hours: -2)).toIso8601String(),
-      additionalNotes: '',
-      createdBy: 'leader_1',
-      createdAt: now.millisecondsSinceEpoch,
-      updatedAt: now.millisecondsSinceEpoch,
-      requireResponse: true,
-    );
-
-    mockService.testEventsList = [evFar, evNear, evPastOlder, evPastNewer];
-
-    final bandRoom =
-      ChangeNotifierProvider<AppState>(
-        create: (_) => MockGigsInfoAppState(mockService),
-        child: const MaterialApp(
-          home: BandRoomChatScreen(),
-        ),
-      );
-    await tester.pumpWidget(bandRoom);
-
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
-    await tester.pump(const Duration(milliseconds: 300));
-
-    Navigator.of(tester.element(find.byType(RsvpReminderDialog))).pop();
+    service.denyRsvpWrite = false;
+    await _tapBandRoom(tester, find.text('Save RSVP'));
+    expect(service.updatedResponses, [{
+      'bandId': 'band_feed_test',
+      'eventId': 'near',
+      'userId': 'leader_1',
+      'response': 'Yes',
+    }]);
+    Navigator.of(tester.element(find.byType(EventDetailsPage))).pop();
     await pumpUiTransitions(tester);
-    await tester.tap(find.text('News'));
-    for (int i = 0; i < 10; i++) {
-      await tester.pump(const Duration(milliseconds: 50));
-    }
-
-    // Default sub-filter is New Events
-    expect(find.text('”Sooner Gig”'), findsOneWidget);
-    expect(find.text('”Later Gig”'), findsOneWidget);
-
-    // Verify chronological order for upcoming events: Sooner Gig is above Later Gig
-    final soonerTop = tester.getTopLeft(find.text('”Sooner Gig”')).dy;
-    final laterTop = tester.getTopLeft(find.text('”Later Gig”')).dy;
-    expect(soonerTop, lessThan(laterTop));
-
-    final yesFinder = find.text('Yes');
-    expect(yesFinder, findsNWidgets(2));
-    mockService.denyRsvpWrite = true;
-    await tester.tap(yesFinder.first);
-    await pumpUiTransitions(tester);
-    expect(mockService.updatedResponses, isEmpty);
-    expect(find.text('”Sooner Gig”'), findsOneWidget);
-
-    mockService.denyRsvpWrite = false;
-    await tester.tap(yesFinder.first);
-    await pumpUiTransitions(tester);
-
-    expect(mockService.updatedResponses.length, 1);
-    expect(mockService.updatedResponses.first['eventId'], 'ev_near');
-    expect(mockService.updatedResponses.first['response'], 'Yes');
-    expect(mockService.updatedResponses.first['userId'], 'leader_1');
-    expect(find.text('”Sooner Gig”'), findsNothing);
-    expect(find.text('”Later Gig”'), findsOneWidget);
+    expect(sooner, findsOneWidget);
+    expect(later, findsOneWidget);
 
     await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pumpWidget(bandRoom);
-    await pumpUiTransitions(tester);
-    Navigator.of(tester.element(find.byType(RsvpReminderDialog))).pop();
-    await pumpUiTransitions(tester);
-    await tester.tap(find.text('News'));
-    await pumpUiTransitions(tester);
-    expect(find.text('”Sooner Gig”'), findsNothing);
-    expect(find.text('”Later Gig”'), findsOneWidget);
+    await _mountBandRoom(tester, service);
+    expect(find.byType(RsvpReminderDialog), findsNothing);
+    await _tapBandRoom(tester, eventsTab);
+    expect(sooner, findsOneWidget);
+    expect(later, findsOneWidget);
 
-    // Switch to Past Events
-    await tester.tap(find.text('Past Events'));
-    await pumpUiTransitions(tester);
+    await _tapBandRoom(tester, find.text('UPCOMING (Finalized)'));
+    expect(find.text('”Finalized Event”'), findsOneWidget);
+    expect(sooner, findsNothing);
 
-    expect(find.text('”Past Newer Event”'), findsOneWidget);
-    expect(find.text('”Past Older Event”'), findsOneWidget);
+    await _tapBandRoom(tester, find.text('PAST EVENTS'));
+    final newer = find.text('”Past Newer Event”');
+    final older = find.text('”Past Older Event”');
+    expect(newer, findsOneWidget);
+    expect(older, findsOneWidget);
+    expect(tester.getTopLeft(newer).dy, lessThan(tester.getTopLeft(older).dy));
+    expect(find.text('Save RSVP'), findsNothing);
 
-    // Verify chronological order for past events: Past Newer Event is above Past Older Event
-    final newerTop = tester.getTopLeft(find.text('”Past Newer Event”')).dy;
-    final olderTop = tester.getTopLeft(find.text('”Past Older Event”')).dy;
-    expect(newerTop, lessThan(olderTop));
-
-    // Past events should have NO RSVP buttons
-    expect(find.widgetWithText(AnimatedTapDetector, 'Yes'), findsNothing);
-    expect(find.widgetWithText(AnimatedTapDetector, 'No'), findsNothing);
-    expect(find.widgetWithText(AnimatedTapDetector, 'Maybe'), findsNothing);
-
-    await tester.tap(find.widgetWithText(Tab, 'Events'));
-    await pumpUiTransitions(tester);
-    expect(find.byType(ManageEventsScreen), findsOneWidget);
-    expect(find.textContaining('Sooner Gig'), findsOneWidget);
+    await _tapBandRoom(tester, find.widgetWithText(Tab, 'News'));
+    expect(find.byType(ManageEventsScreen), findsNothing);
+    expect(sooner, findsNothing);
+    expect(later, findsNothing);
+    expect(newer, findsNothing);
   });
+}
+
+BandEvent _event(
+  DateTime now,
+  String id,
+  String title,
+  int days, {
+  bool requireResponse = true,
+  Map<String, EventResponse> responses = const {},
+}) {
+  final start = now.add(Duration(days: days));
+  return BandEvent(
+    id: id,
+    title: title,
+    description: 'Gig details description',
+    eventType: 'Concert',
+    location: 'Main Stage',
+    startDateTime: start.toIso8601String(),
+    endDateTime: start.add(const Duration(hours: 3)).toIso8601String(),
+    additionalNotes: 'Backline provided',
+    createdBy: 'leader_1',
+    createdAt: now.millisecondsSinceEpoch,
+    updatedAt: now.millisecondsSinceEpoch,
+    requireResponse: requireResponse,
+    responses: responses,
+  );
+}
+
+Future<void> _mountBandRoom(
+  WidgetTester tester,
+  MockGigsInfoFirebaseService service,
+) async {
+  tester.view.physicalSize = const Size(1200, 2400);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+  await tester.pumpWidget(
+    ChangeNotifierProvider<AppState>(
+      create: (_) => MockGigsInfoAppState(service),
+      child: const MaterialApp(home: BandRoomChatScreen()),
+    ),
+  );
+  await pumpUiTransitions(tester);
+}
+
+Future<void> _tapBandRoom(WidgetTester tester, Finder finder) async {
+  await tester.ensureVisible(finder);
+  await tester.tap(finder);
+  await pumpUiTransitions(tester);
+}
+
+Future<void> _dismissReminder(WidgetTester tester) async {
+  final reminder = find.byType(RsvpReminderDialog);
+  expect(reminder, findsOneWidget);
+  Navigator.of(tester.element(reminder)).pop();
+  await pumpUiTransitions(tester);
 }
