@@ -21,12 +21,14 @@ class GenrePicker {
   static Future<List<String>?> show(
     BuildContext context,
     List<String> selected, {
+    String title = 'Genres/Band Types',
+    Map<String, List<String>> categoryMap = GenresTaxonomy.categoryMap,
     int? maxSelection,
   }) {
     return SearchableCategoryMultiSelectSheet.show(
       context: context,
-      title: 'Genres/Band Types',
-      categoryMap: GenresTaxonomy.categoryMap,
+      title: title,
+      categoryMap: categoryMap,
       initialSelected: selected,
       maxSelection: maxSelection,
       // Existing band metadata and public catalogue limit per genre.

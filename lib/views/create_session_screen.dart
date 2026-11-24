@@ -10,7 +10,7 @@ import '../data/genres_taxonomy.dart';
 import '../widgets/custom_top_bar.dart';
 import '../widgets/gradient_scaffold.dart';
 import '../widgets/animated_tap_detector.dart';
-import '../widgets/searchable_category_multi_select_sheet.dart';
+import '../widgets/genre_picker.dart';
 
 class _SessionDraft {
   String title;
@@ -245,13 +245,12 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
   }
 
   Future<void> _openGenrePicker() async {
-    final result = await SearchableCategoryMultiSelectSheet.show(
-      context: context,
-      title: 'Genres/Band Types',
+    final result = await GenrePicker.show(
+      context,
+      _selectedGenres,
       categoryMap: GenresTaxonomy.createSessionCategoryMap,
-      initialSelected: _selectedGenres,
     );
-    if (result != null) {
+    if (mounted && result != null) {
       setState(() {
         _selectedGenres = result;
       });

@@ -6,7 +6,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import '../data/genres_taxonomy.dart';
 import '../models/public_calendar_event.dart';
 import '../models/canonical_location.dart';
 import '../widgets/location_picker_field.dart';
@@ -16,7 +15,7 @@ import '../theme/app_theme.dart';
 import '../widgets/animated_tap_detector.dart';
 import '../widgets/custom_top_bar.dart';
 import '../widgets/gradient_scaffold.dart';
-import '../widgets/searchable_category_multi_select_sheet.dart';
+import '../widgets/genre_picker.dart';
 
 class CreatePublicEventScreen extends StatefulWidget {
   final PublicEventRepository? repository;
@@ -223,11 +222,10 @@ class _CreatePublicEventScreenState extends State<CreatePublicEventScreen> {
   }
 
   Future<void> _openGenrePicker() async {
-    final result = await SearchableCategoryMultiSelectSheet.show(
-      context: context,
+    final result = await GenrePicker.show(
+      context,
+      _selectedGenres,
       title: 'Select Genres',
-      categoryMap: GenresTaxonomy.categoryMap,
-      initialSelected: _selectedGenres,
     );
 
     if (result != null && mounted) {
