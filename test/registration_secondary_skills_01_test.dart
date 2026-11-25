@@ -265,8 +265,8 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
   }
   Future<void> openPicker(WidgetTester tester) async {
-    await tester.ensureVisible(find.text('Secondary Skills (optional)'));
-    await tester.tap(find.text('Secondary Skills (optional)'));
+    await tester.ensureVisible(find.text('Secondary Skills'));
+    await tester.tap(find.text('Secondary Skills'));
     await settle(tester);
   }
   for (final skills in <List<String>>[[], ['Electric Bass'], ['Electric Bass', 'Piano']]) {
@@ -565,7 +565,7 @@ void main() {
     await expectLater(OwnershipService().saveUserProfileAsync('b', UserProfile(userId: 'b')),
       throwsStateError);
   });
-  testWidgets('edit opens a saved empty optional selection', (tester) async {
+  testWidgets('Edit Profile saves changes without secondary skills', (tester) async {
     await size(tester);
     final state = SkillState();
     state.service.profile = UserProfile(userId: 'a', displayName: 'Alex', email: 'alex@example.com', userType: 'Piano');
@@ -573,7 +573,15 @@ void main() {
     await tester.pumpWidget(app(state, const EditProfileScreen()));
     await settle(tester);
     expect(tester.widget<SecondarySkillsEditor>(find.byType(SecondarySkillsEditor)).selected, isEmpty);
-    expect(find.text('Secondary Skills (optional)'), findsOneWidget);
+    expect(find.text('Secondary Skills'), findsOneWidget);
+    await tester.enterText(find.byType(TextFormField).first, 'Alex Updated');
+    await tester.ensureVisible(find.text('Save Profile'));
+    await tester.tap(find.text('Save Profile'));
+    await settle(tester);
+    expect(state.service.writes, 1);
+    expect(state.service.saved!.displayName, 'Alex Updated');
+    expect(state.service.saved!.secondarySkills, isEmpty);
+    expect(state.service.saved!.instruments, ['Piano']);
   });
   testWidgets('edit saves several skills and preserves unrelated profile fields', (tester) async {
     await size(tester);

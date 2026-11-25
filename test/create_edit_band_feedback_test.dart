@@ -1,4 +1,5 @@
 import 'package:musicians_flutter/config/feature_toggles.dart';
+import 'package:musicians_flutter/widgets/band_member_profile_skills.dart';
 import 'package:musicians_flutter/widgets/custom_top_bar.dart';
 import 'package:musicians_flutter/widgets/city_location_picker_field.dart';
 import 'package:musicians_flutter/models/city_location.dart';
@@ -324,15 +325,21 @@ void main() {
       expect(find.text('Kim Vocalist'), findsOneWidget);
       expect(find.text('Different nickname'), findsNothing);
       expect(find.text('Primary Skill: Drums'), findsOneWidget);
-      expect(find.text('Secondary Skills: Keyboard/Synth, Vocalist'), findsOneWidget);
+      expect(find.text('Secondary Skills'), findsOneWidget);
       expect(find.textContaining('Primary Skill:'), findsOneWidget);
-      expect(find.textContaining('Secondary Skills:'), findsOneWidget);
+      expect(find.text('Keyboard/Synth'), findsNothing);
+      expect(find.text('Vocalist'), findsNothing);
 
       await tester.tap(find.byIcon(Icons.add_circle).first);
       await pumpUiTransitions(tester);
       expect(find.text('Which instrument or role would you like Alex Trumpet to take on in this particular band?'), findsOneWidget);
       expect(inMusicalRolePicker(find.text('Primary Skill: Drums')), findsOneWidget);
-      expect(inMusicalRolePicker(find.text('Secondary Skills: Keyboard/Synth, Vocalist')), findsOneWidget);
+      final secondarySkills = inMusicalRolePicker(find.text('Secondary Skills'));
+      expect(secondarySkills, findsOneWidget);
+      await tester.tap(secondarySkills);
+      await pumpUiTransitions(tester);
+      expect(inMusicalRolePicker(find.text('Keyboard/Synth')), findsOneWidget);
+      expect(inMusicalRolePicker(find.text('Vocalist')), findsOneWidget);
       expect(tester.widget<SearchableCategoryMultiSelectSheet>(find.byType(SearchableCategoryMultiSelectSheet)).initialSelected, isEmpty);
       await chooseMusicalRole(tester, 'Trumpet');
       await pumpUiTransitions(tester);
@@ -343,7 +350,7 @@ void main() {
       await pumpUiTransitions(tester);
       expect(find.text('Which instrument or role would you like Kim Vocalist to take on in this particular band?'), findsOneWidget);
       expect(inMusicalRolePicker(find.textContaining('Primary Skill:')), findsNothing);
-      expect(inMusicalRolePicker(find.textContaining('Secondary Skills:')), findsNothing);
+      expect(inMusicalRolePicker(find.text('Secondary Skills')), findsNothing);
       await chooseMusicalRole(tester, 'BANDLEADER');
       await pumpUiTransitions(tester);
       expect(find.text('Added'), findsNWidgets(2));
@@ -360,7 +367,7 @@ void main() {
       expect(members.values.map((member) => member.role), everyElement('Member'));
     });
 
-    testWidgets('Create Band shows profile skills on a narrow screen without inventing a name', (tester) async {
+    testWidgets('Create Band expands skills separately from member and role selection at 320 px', (tester) async {
       tester.view.physicalSize = const Size(320, 568);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.resetDevicePixelRatio);
@@ -382,19 +389,66 @@ void main() {
       await tester.tap(addMember);
       await pumpUiTransitions(tester);
 
-      const secondary = 'Secondary Skills: Keyboard/Synth, Music Production, Electric Guitar';
+      const skills = ['Keyboard/Synth', 'Music Production', 'Electric Guitar'];
+      final secondary = find.text('Secondary Skills');
+      final rolePicker = find.byType(SearchableCategoryMultiSelectSheet);
       expect(find.text('Robin Parker').hitTestable(), findsOneWidget);
       expect(find.text('Primary Skill: Drums').hitTestable(), findsOneWidget);
-      expect(find.text(secondary).hitTestable(), findsOneWidget);
+      expect(secondary.hitTestable(), findsOneWidget);
       expect(find.text('Unknown'), findsNothing);
+
+      final peopleSearch = find.widgetWithText(TextField, 'Search name or instrument...');
+      await tester.enterText(peopleSearch, skills.first);
+      await pumpUiTransitions(tester);
+      expect(find.text('Robin Parker'), findsOneWidget);
+      expect(find.text('Primary Skill: Bass'), findsNothing);
+      await tester.enterText(peopleSearch, '');
+      tester.testTextInput.hide();
+      await pumpUiTransitions(tester);
+
+      for (final skill in skills) {
+        expect(find.text(skill), findsNothing);
+      }
+      await tester.tap(secondary);
+      await pumpUiTransitions(tester);
+      final rowOffsets = [for (final skill in skills) tester.getTopLeft(find.text(skill)).dy];
+      expect(rowOffsets[0], lessThan(rowOffsets[1]));
+      expect(rowOffsets[1], lessThan(rowOffsets[2]));
+      await tester.tap(find.text(skills.first).hitTestable());
+      await pumpUiTransitions(tester);
+      expect(find.text('Add Band Member'), findsOneWidget);
+      expect(rolePicker, findsNothing);
+      expect(find.text('Added'), findsNothing);
+      await tester.tap(secondary);
+      await pumpUiTransitions(tester);
+      for (final skill in skills) {
+        expect(find.text(skill), findsNothing);
+      }
 
       await tester.tap(find.byTooltip('Select musical role').first);
       await pumpUiTransitions(tester);
       expect(inMusicalRolePicker(find.textContaining('Robin Parker')).hitTestable(), findsOneWidget);
       expect(inMusicalRolePicker(find.text('Primary Skill: Drums')).hitTestable(), findsOneWidget);
-      expect(inMusicalRolePicker(find.text(secondary)).hitTestable(), findsOneWidget);
+      final roleSecondary = inMusicalRolePicker(secondary);
+      final roleSkills = inMusicalRolePicker(find.byType(BandMemberProfileSkills));
+      expect(roleSecondary.hitTestable(), findsOneWidget);
+      await tester.tap(roleSecondary);
+      await pumpUiTransitions(tester);
+      final skillRow = find.descendant(of: roleSkills, matching: find.text(skills.first));
+      await tester.ensureVisible(skillRow);
+      await tester.tap(skillRow.hitTestable());
+      await pumpUiTransitions(tester);
+      expect(rolePicker, findsOneWidget);
+      await tester.ensureVisible(roleSecondary);
+      await tester.pump();
+      await tester.tap(roleSecondary.hitTestable());
+      await pumpUiTransitions(tester);
+      expect(skillRow, findsNothing);
 
-      await tester.tap(inMusicalRolePicker(find.byType(TextField)));
+      final roleSearch = inMusicalRolePicker(find.byType(TextField));
+      await tester.ensureVisible(roleSearch);
+      await tester.pump();
+      await tester.tap(roleSearch.hitTestable());
       tester.view.viewInsets = const FakeViewPadding(bottom: 290);
       await chooseMusicalRole(tester, 'Trumpet');
       tester.view.resetViewInsets();
@@ -411,11 +465,15 @@ void main() {
       );
       await tester.pump();
       expect(bass.hitTestable(), findsOneWidget);
+      expect(find.descendant(
+        of: find.ancestor(of: bass, matching: find.byType(BandMemberProfileSkills)),
+        matching: secondary,
+      ), findsNothing);
       await tester.tap(selectRemaining);
       await pumpUiTransitions(tester);
       expect(find.text('Which instrument or role should this person take on in this band?'), findsOneWidget);
       expect(inMusicalRolePicker(find.text('Primary Skill: Bass')), findsOneWidget);
-      expect(inMusicalRolePicker(find.textContaining('Secondary Skills:')), findsNothing);
+      expect(inMusicalRolePicker(secondary), findsNothing);
       expect(tester.takeException(), isNull);
     });
 

@@ -130,15 +130,18 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
-      final secondaryLabel = find.text('Secondary Skills (optional)');
+      final secondaryLabel = find.text('Secondary Skills');
       expect(secondaryLabel, findsOneWidget);
       await tester.tap(secondaryLabel);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
-      expect(find.byType(SearchableCategoryMultiSelectSheet), findsOneWidget);
+      final sheet = find.byType(SearchableCategoryMultiSelectSheet);
+      expect(sheet, findsOneWidget);
+      expect(tester.widget<SearchableCategoryMultiSelectSheet>(sheet).title,
+          'Secondary Skills');
 
-      Navigator.pop(tester.element(find.byType(SearchableCategoryMultiSelectSheet)));
+      Navigator.pop(tester.element(sheet));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
     });

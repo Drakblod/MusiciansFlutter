@@ -1243,7 +1243,10 @@ class _SelectBandMemberDialogState extends State<_SelectBandMemberDialog> {
                                       name,
                                       style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
                                     ),
-                                  BandMemberProfileSkills(profile: user),
+                                  BandMemberProfileSkills(
+                                    key: ValueKey(user.userId),
+                                    profile: user,
+                                  ),
                                 ],
                               ),
                             ),

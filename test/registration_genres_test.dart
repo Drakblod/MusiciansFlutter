@@ -203,7 +203,7 @@ void main() {
       await pumpUiTransitions(tester);
       for (final label in [
         'Primary Skill/Talent (Select 1)',
-        'Secondary Skills (optional)',
+        'Secondary Skills',
       ]) {
         await tap(find.text(label));
         expect(

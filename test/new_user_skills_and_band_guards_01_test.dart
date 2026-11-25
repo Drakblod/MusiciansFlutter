@@ -149,7 +149,7 @@ void main() {
     await size(tester);
     await tester.pumpWidget(app(GuardState(), const RegisterScreen()));
     await settle(tester);
-    await tester.tap(find.text('Secondary Skills (optional)'));
+    await tester.tap(find.text('Secondary Skills'));
     await settle(tester);
     final sheet = tester.widget<SearchableCategoryMultiSelectSheet>(find.byType(SearchableCategoryMultiSelectSheet));
     expect(sheet.isSingleSelect, isFalse);
@@ -190,6 +190,7 @@ void main() {
     final state = GuardState();
     await tester.pumpWidget(app(state, const RegisterScreen()));
     await settle(tester);
+    expect(find.text('Secondary Skills'), findsOneWidget);
     await openPrimary(tester);
     await tester.enterText(find.byType(TextField).last, 'Songwriter');
     await settle(tester);

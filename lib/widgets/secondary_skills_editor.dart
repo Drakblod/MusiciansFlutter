@@ -21,7 +21,7 @@ class SecondarySkillsEditor extends StatelessWidget {
   Future<void> _openPicker(BuildContext context) async {
     final result = await SkillPicker.show(
       context,
-      title: 'Secondary Skills (optional)',
+      title: 'Secondary Skills',
       taxonomyContext: taxonomyContext,
       selected: selected,
       excludedSkill: primarySkill,
@@ -39,7 +39,7 @@ class SecondarySkillsEditor extends StatelessWidget {
         TextButton.icon(
           onPressed: () => _openPicker(context),
           icon: const Icon(Icons.add_rounded),
-          label: const Text('Secondary Skills (optional)'),
+          label: const Text('Secondary Skills'),
         ),
         if (skills.isNotEmpty)
           LayoutBuilder(builder: (context, constraints) {
