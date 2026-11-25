@@ -678,6 +678,7 @@ class _CreatePublicEventScreenState extends State<CreatePublicEventScreen> {
                     const SizedBox(height: 16),
                     LocationPickerField(
                       controller: _locationController,
+                      wrapCitySuggestion: true,
                       initialLocation: _canonicalLocation,
                       onLocationChanged: (loc) {
                         setState(() {

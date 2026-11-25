@@ -6,12 +6,14 @@ import 'package:firebase_core_platform_interface/test.dart';
 import 'package:provider/provider.dart';
 
 import 'package:musicians_flutter/models/public_calendar_event.dart';
+import 'package:musicians_flutter/models/canonical_location.dart';
 import 'package:musicians_flutter/models/user_profile.dart';
 import 'package:musicians_flutter/providers/app_state.dart';
 import 'package:musicians_flutter/repositories/public_event_repository.dart';
 import 'package:musicians_flutter/services/firebase_service.dart';
 import 'package:musicians_flutter/views/create_public_event_screen.dart';
 import 'package:musicians_flutter/views/public_event_calendar_screen.dart';
+import 'package:musicians_flutter/widgets/location_picker_field.dart';
 
 class SpyingFirebaseService extends FirebaseService {
   final List<PublicCalendarEvent> savedEvents = [];
@@ -232,6 +234,58 @@ void main() {
 
       // Should show validation error snackbar
       expect(find.text('Please fill in all required fields.'), findsOneWidget);
+    });
+
+    testWidgets('Long location suggestion fits and can be selected at 430 px',
+        (tester) async {
+      tester.view.physicalSize = const Size(430, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(
+        ChangeNotifierProvider<AppState>(
+          create: (_) => MockAppStateForCreateTest(SpyingFirebaseService()),
+          child: MaterialApp(
+            home: CreatePublicEventScreen(repository: EmptyPublicEventRepository()),
+          ),
+        ),
+      );
+      await pumpUiTransitions(tester);
+
+      final picker = find.byType(LocationPickerField);
+      final location =
+          find.descendant(of: picker, matching: find.byType(TextFormField));
+      await tester.ensureVisible(location);
+      await tester.enterText(
+        location,
+        'Kulturkvarterets stora konsertsal, Gamla Rådstugugatan 42, Norrköping',
+      );
+      // The city suggestion is resolved during the location field's next build.
+      final admission = find.byType(Switch);
+      await tester.ensureVisible(admission);
+      await tester.tap(admission);
+      await pumpUiTransitions(tester);
+
+      final suggestion = find.textContaining('Use approximate Norrköping centroid');
+      expect(tester.takeException(), isNull);
+      expect(suggestion, findsOneWidget);
+      await tester.ensureVisible(suggestion);
+      await pumpUiTransitions(tester);
+      final suggestionRect = tester.getRect(suggestion);
+      final pickerRect = tester.getRect(picker);
+      expect(suggestionRect.left, greaterThanOrEqualTo(pickerRect.left));
+      expect(suggestionRect.right, lessThanOrEqualTo(pickerRect.right));
+      expect(suggestion.hitTestable(), findsOneWidget);
+      await tester.tap(suggestion);
+      await pumpUiTransitions(tester);
+
+      expect(suggestion, findsNothing);
+      expect(find.byTooltip('Coordinates confirmed'), findsOneWidget);
+      final confirmed = tester.state<LocationPickerFieldState>(picker).currentLocation;
+      expect(confirmed?.locationLabel, 'Norrköping');
+      expect(confirmed?.precision, LocationPrecision.city);
+      expect(confirmed?.status, LocationResolutionStatus.resolved);
     });
 
     testWidgets('Fills in form and successfully creates event', (tester) async {
