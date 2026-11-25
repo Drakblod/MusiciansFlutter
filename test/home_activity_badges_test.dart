@@ -8,6 +8,7 @@ import 'package:firebase_core_platform_interface/test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:musicians_flutter/models/app_notification.dart';
+import 'package:musicians_flutter/models/request_management_access.dart';
 import 'package:musicians_flutter/models/user_profile.dart';
 import 'package:musicians_flutter/providers/app_state.dart';
 import 'package:musicians_flutter/services/firebase_service.dart';
@@ -24,6 +25,23 @@ class MockFirebaseServiceForBadges extends FirebaseService {
 
   @override
   Future<List<SubRequest>> getUserSubRequestsAsync(String userId) async => [];
+
+  @override
+  Future<List<SubRequest>> getAllSubRequestsAsync() async => [];
+
+  @override
+  Future<RequestManagementAccess> authorizeRequestManagement({
+    String? bandId,
+    String? requestId,
+    String? expectedCreatorId,
+    bool Function()? isCurrent,
+  }) async {
+    if (bandId == null || !userBands.containsKey(bandId) ||
+        requestId != null || !(isCurrent?.call() ?? true)) {
+      throw const PrivateDataAccessException();
+    }
+    return RequestManagementAccess(userId: 'badge_test_user', bandId: bandId);
+  }
 
   @override
   Future<void> markFeatureNotificationsRead(String featureId) async {

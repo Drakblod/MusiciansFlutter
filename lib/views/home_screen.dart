@@ -1,4 +1,5 @@
 import '../widgets/request_management_gate.dart';
+import '../utils/sub_request_card_helper.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -40,35 +41,28 @@ class HomeScreen extends StatelessWidget {
     if (!context.mounted || !isCurrent()) return false;
     appState.selectBand(bandId, bandName);
 
-    if (routeName == '/find-sub') {
-      final userId = appState.currentUserId;
-      if (userId != null) {
-        try {
-          final subRequests = await appState.firebaseService.getUserSubRequestsAsync(userId);
-          if (!context.mounted || !isCurrent()) return false;
-          final activeForBand = subRequests.where((req) {
-            final matchesBand = (req.bandId != null && req.bandId == bandId) ||
-                (req.bandName != null &&
-                    (req.bandName == bandName ||
-                        req.bandName == bandId ||
-                        req.bandName!.replaceAll(' ', '_') == bandId));
-            final isNotDeleted = req.status != 'deleted';
-            return matchesBand && isNotDeleted;
-          }).toList();
-
-          if (activeForBand.isNotEmpty && context.mounted) {
-            return await _showSubRequestChoiceBottomSheet(
-              context,
-              appState,
-              bandId,
-              bandName,
-              activeForBand.length,
-              isCurrent,
-            );
-          }
-        } catch (e) {
-          debugPrint("Error checking active sub requests for band $bandId: $e");
+    bool selectedBandIsCurrent() =>
+        isCurrent() && appState.activeBandId == bandId;
+    final userId = appState.currentUserId;
+    if (routeName == '/find-sub' && userId != null) {
+      try {
+        final activeCount = await loadActiveManageRequestCount(
+          service: appState.firebaseService,
+          userId: userId,
+          bandId: bandId,
+          isCurrent: selectedBandIsCurrent,
+        );
+        if (!context.mounted || !selectedBandIsCurrent()) return false;
+        if (activeCount != null && activeCount > 0) {
+          return _showSubRequestChoiceBottomSheet(
+            context, appState, bandId, bandName, activeCount, selectedBandIsCurrent,
+          );
         }
+      } catch (_) {
+        if (!context.mounted || !selectedBandIsCurrent()) return false;
+        return _showSubRequestChoiceBottomSheet(
+          context, appState, bandId, bandName, null, selectedBandIsCurrent,
+        );
       }
     }
 
@@ -84,7 +78,7 @@ class HomeScreen extends StatelessWidget {
     AppState appState,
     String bandId,
     String bandName,
-    int activeCount,
+    int? activeCount,
     bool Function() isCurrent,
   ) async {
     final choice = await BandRequiredPrompt.showSessionSheet<String>(
@@ -152,7 +146,9 @@ class HomeScreen extends StatelessWidget {
               ),
               const SizedBox(height: 6),
               Text(
-                'You have $activeCount active request${activeCount == 1 ? '' : 's'} for $bandName.',
+                activeCount == null
+                    ? 'Could not load active requests for $bandName.'
+                    : 'You have $activeCount active request${activeCount == 1 ? '' : 's'} for $bandName.',
                 style: GoogleFonts.inter(
                   fontSize: 13,
                   color: AppTheme.textSecondary,
@@ -914,35 +910,28 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
     if (!context.mounted || !isCurrent()) return false;
     appState.selectBand(bandId, bandName);
 
-    if (routeName == '/find-sub') {
-      final userId = appState.currentUserId;
-      if (userId != null) {
-        try {
-          final subRequests = await appState.firebaseService.getUserSubRequestsAsync(userId);
-          if (!context.mounted || !isCurrent()) return false;
-          final activeForBand = subRequests.where((req) {
-            final matchesBand = (req.bandId != null && req.bandId == bandId) ||
-                (req.bandName != null &&
-                    (req.bandName == bandName ||
-                        req.bandName == bandId ||
-                        req.bandName!.replaceAll(' ', '_') == bandId));
-            final isNotDeleted = req.status != 'deleted';
-            return matchesBand && isNotDeleted;
-          }).toList();
-
-          if (activeForBand.isNotEmpty && context.mounted) {
-            return await _showSubRequestChoiceBottomSheet(
-              context,
-              appState,
-              bandId,
-              bandName,
-              activeForBand.length,
-              isCurrent,
-            );
-          }
-        } catch (e) {
-          debugPrint("Error checking active sub requests for band $bandId: $e");
+    bool selectedBandIsCurrent() =>
+        isCurrent() && appState.activeBandId == bandId;
+    final userId = appState.currentUserId;
+    if (routeName == '/find-sub' && userId != null) {
+      try {
+        final activeCount = await loadActiveManageRequestCount(
+          service: appState.firebaseService,
+          userId: userId,
+          bandId: bandId,
+          isCurrent: selectedBandIsCurrent,
+        );
+        if (!context.mounted || !selectedBandIsCurrent()) return false;
+        if (activeCount != null && activeCount > 0) {
+          return _showSubRequestChoiceBottomSheet(
+            context, appState, bandId, bandName, activeCount, selectedBandIsCurrent,
+          );
         }
+      } catch (_) {
+        if (!context.mounted || !selectedBandIsCurrent()) return false;
+        return _showSubRequestChoiceBottomSheet(
+          context, appState, bandId, bandName, null, selectedBandIsCurrent,
+        );
       }
     }
 
@@ -958,7 +947,7 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
     AppState appState,
     String bandId,
     String bandName,
-    int activeCount,
+    int? activeCount,
     bool Function() isCurrent,
   ) async {
     final choice = await BandRequiredPrompt.showSessionSheet<String>(
@@ -1026,7 +1015,9 @@ class _ExperimentalHomeViewContentState extends State<ExperimentalHomeViewConten
               ),
               const SizedBox(height: 6),
               Text(
-                'You have $activeCount active request${activeCount == 1 ? '' : 's'} for $bandName.',
+                activeCount == null
+                    ? 'Could not load active requests for $bandName.'
+                    : 'You have $activeCount active request${activeCount == 1 ? '' : 's'} for $bandName.',
                 style: GoogleFonts.inter(
                   fontSize: 13,
                   color: AppTheme.textSecondary,

@@ -11,7 +11,9 @@ import '../widgets/custom_top_bar.dart';
 import '../widgets/gradient_scaffold.dart';
 import '../utils/sub_request_card_helper.dart';
 import '../utils/active_manage_requests.dart';
+import '../utils/band_membership_policy.dart';
 import '../widgets/request_management_gate.dart';
+import '../services/firebase_service.dart' show PrivateDataAccessException;
 
 class SubRequestResponsesScreen extends StatelessWidget {
   const SubRequestResponsesScreen({super.key,required this.bandId,this.clock});
@@ -51,6 +53,7 @@ class __AuthorizedSubRequestResponsesScreenState extends State<_AuthorizedSubReq
   Map<String, int> _viewedResponseCounts = {};
   bool _isBandAdmin = false;
   bool _isLoading = true;
+  String? _loadError;
   Timer? _expirationTimer;
   final _accessSubscriptions = <StreamSubscription<dynamic>>[];
   void _cancelAccessSubscriptions() {
@@ -58,7 +61,10 @@ class __AuthorizedSubRequestResponsesScreenState extends State<_AuthorizedSubReq
     _accessSubscriptions.clear();
   }
 
-  void _accessLost(int generation) {
+  void _accessLost(
+    int generation, {
+    String message = 'Requests are unavailable for your current access. Please try again.',
+  }) {
     if (!mounted || !_current || generation != _loadGeneration) return;
     _loadGeneration++;
     _cancelAccessSubscriptions();
@@ -70,10 +76,8 @@ class __AuthorizedSubRequestResponsesScreenState extends State<_AuthorizedSubReq
       _viewedResponseCounts = {};
       _isBandAdmin = false;
       _isLoading = false;
+      _loadError = message;
     });
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-      content: Text('Requests are unavailable for your current access. Please try again.'),
-    ));
   }
 
   int _loadGeneration = 0;
@@ -182,6 +186,7 @@ class __AuthorizedSubRequestResponsesScreenState extends State<_AuthorizedSubReq
     _cancelAccessSubscriptions();
     setState(() {
       _isLoading = true;
+      _loadError = null;
       _isBandAdmin = false;
       _substituteRequests = [];
       _memberRequests = [];
@@ -194,19 +199,14 @@ class __AuthorizedSubRequestResponsesScreenState extends State<_AuthorizedSubReq
     bool current() =>
         _current &&
         generation == _loadGeneration &&
-        userId == appState.currentUserId;
+        userId == appState.currentUserId &&
+        userId == widget.access.userId;
     try {
-      if (userId == null) return;
-
-      final isBandAdmin = widget.bandId.isNotEmpty && widget.bandId != 'all' &&
-          await appState.firebaseService.isBandLeaderOrAdminAsync(widget.bandId, userId);
       if (!current()) return;
-      _isBandAdmin = isBandAdmin;
+
       final requests = await loadActiveManageRequests(
         service: appState.firebaseService,
-        userId: userId,
-        bandId: widget.bandId,
-        includeBandFeed: _isBandAdmin,
+        scope: widget.access,
         now: () => _now,
         isCurrent: current,
         onAuthorized: (access) {
@@ -224,9 +224,14 @@ class __AuthorizedSubRequestResponsesScreenState extends State<_AuthorizedSubReq
         bandRequests.map((req) async {
           final reqId = req.subRequestId ?? req.id;
           if (reqId != null) {
-            final count = await appState.firebaseService
-                .getSubRequestResponseCountAsync(reqId);
-            counts[reqId] = count;
+            try {
+              counts[reqId] = await appState.firebaseService
+                  .getSubRequestResponseCountAsync(reqId);
+            } on PrivateDataAccessException {
+              rethrow;
+            } catch (_) {
+              // An unavailable response count does not hide an authorized card.
+            }
           }
         }),
       );
@@ -249,12 +254,13 @@ class __AuthorizedSubRequestResponsesScreenState extends State<_AuthorizedSubReq
 
       if (!current()) return;
       setState(() {
+        _isBandAdmin = BandMembershipPolicy.isRealId(widget.access.bandId);
         _substituteRequests = subs;
         _memberRequests = members;
         _responseCounts = counts;
         _viewedResponseCounts = viewedMap;
       });
-      for (final request in bandRequests) {
+      for (final request in [...subs, ...members]) {
         final id = request.subRequestId ?? request.id;
         if (id == null) continue;
         _accessSubscriptions.add(appState.firebaseService.subscribeToSubRequestResponseCount(id).listen((count) {
@@ -263,15 +269,9 @@ class __AuthorizedSubRequestResponsesScreenState extends State<_AuthorizedSubReq
       }
       // Re-evaluate after asynchronous counts/preferences, then arm the timer.
       _expireVisibleRequests();
-    } catch (e) {
-      debugPrint("Error loading sub requests: $e");
-      if (mounted && _current && current()) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Requests are unavailable for your current access. Please try again.'),
-            backgroundColor: AppTheme.danger,
-          ),
-        );
+    } catch (_) {
+      if (current()) {
+        _accessLost(generation, message: 'Could not load active requests. Retry');
       }
     } finally {
       if (_current && generation == _loadGeneration) {
@@ -523,6 +523,13 @@ class __AuthorizedSubRequestResponsesScreenState extends State<_AuthorizedSubReq
               Expanded(
                 child: _isLoading
                     ? const Center(child: CircularProgressIndicator(color: AppTheme.primaryAccent))
+                    : _loadError != null
+                        ? Center(
+                            child: TextButton(
+                              onPressed: _loadRequests,
+                              child: Text(_loadError!),
+                            ),
+                          )
                     : TabBarView(
                         controller: _tabController,
                         children: [
@@ -568,7 +575,7 @@ class __AuthorizedSubRequestResponsesScreenState extends State<_AuthorizedSubReq
         itemBuilder: (context, index) {
           final req = list[index];
           final reqId = req.subRequestId ?? req.id ?? '';
-          final responseCount = _responseCounts[reqId] ?? 0;
+          final responseCount = _responseCounts[reqId];
           final appState = Provider.of<AppState>(context, listen: false);
           final currentUserId = appState.currentUserId;
           final presentation = SubRequestCardPresentation.fromSubRequest(
@@ -690,7 +697,9 @@ class __AuthorizedSubRequestResponsesScreenState extends State<_AuthorizedSubReq
                               children: [
                                 Flexible(
                                   child: Text(
-                                    'View Responses ($responseCount)',
+                                    responseCount == null
+                                        ? 'View Responses'
+                                        : 'View Responses ($responseCount)',
                                     overflow: TextOverflow.ellipsis,
                                     style: GoogleFonts.inter(
                                       color: Colors.white,

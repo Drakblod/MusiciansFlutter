@@ -9,6 +9,7 @@ import 'package:firebase_auth_platform_interface/firebase_auth_platform_interfac
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:musicians_flutter/models/band.dart';
+import 'package:musicians_flutter/models/request_management_access.dart';
 import 'package:musicians_flutter/models/user_profile.dart';
 import 'package:musicians_flutter/models/sub_request.dart';
 import 'package:musicians_flutter/services/firebase_service.dart';
@@ -60,6 +61,15 @@ class ReadSpy {
   void clearLog() { reads.clear(); writes.clear(); }
 }
 
+class _MembershipReader extends FirebaseService {
+  _MembershipReader(this.service) : super(membershipRead: service.spy.read);
+
+  final PerformanceService service;
+
+  @override
+  String? get currentUserId => service.uid;
+}
+
 class PerformanceService extends guards.GuardService {
   final ReadSpy spy = ReadSpy();
   int catalogueCalls = 0;
@@ -72,7 +82,32 @@ class PerformanceService extends guards.GuardService {
     throw StateError('Catalogue must not be called by membership/access flows');
   }
 
-  late final FirebaseService reader = FirebaseService(membershipRead: spy.read);
+  late final FirebaseService reader = _MembershipReader(this);
+
+  @override
+  Stream<String?> get catalogueIdentityChanges => const Stream.empty();
+
+  @override
+  Future<RequestManagementAccess> authorizeRequestManagement({
+    String? bandId, String? requestId, String? expectedCreatorId,
+    bool Function()? isCurrent,
+  }) async {
+    final userId = uid;
+    if (userId == null || bandId == null || requestId != null ||
+        !await isBandLeaderOrAdminAsync(bandId, userId) ||
+        !(isCurrent?.call() ?? true)) {
+      throw const PrivateDataAccessException();
+    }
+    return RequestManagementAccess(userId: userId, bandId: bandId);
+  }
+
+  @override
+  Stream<bool> watchRequestManagementAccess(RequestManagementAccess access) =>
+      const Stream.empty();
+
+  @override
+  Future<bool> isBandLeaderOrAdminAsync(String bandId, String userId) =>
+      reader.isBandLeaderOrAdminAsync(bandId, userId);
 
   @override
   Future<Map<String, String>> getUserBandsAsync(String userId) => reader.getUserBandsAsync(userId);
@@ -102,6 +137,13 @@ class PerformanceService extends guards.GuardService {
   @override
   Future<List<SubRequest>> getUserSubRequestsAsync(String userId) async {
     await spy.read('creatorSubRequestFeed/$userId'); return [];
+  }
+  @override
+  Future<List<SubRequest>> getAllSubRequestsAsync() async {
+    await spy.read('publicSubRequests');
+    await spy.read('userSubRequestFeed/$uid');
+    await spy.read('creatorSubRequestFeed/$uid');
+    return [];
   }
   @override
   Future<List<BandMember>> getBandMembersAsync(String bandId) async {
@@ -422,10 +464,26 @@ void main() {
             ...discoveryPaths('a', ['one']),
             'Bands/one', 'Bands/one', 'Bands/one/Members_band', 'files/one', 'users/a']);
         } else {
-          expect(spy.reads, [
-            if (scenario.startsWith('home-')) ...[...discoveryPaths('a', ['one']), 'creatorSubRequestFeed/a'],
+          final managementAuthorization = [
             ...discoveryPaths('a', ['one']),
-            'Bands/one', 'users/a/Favorites', 'users', 'Bands/one', 'creatorSubRequestFeed/a']);
+            'Bands/one/Members_band/a',
+          ];
+          final managementFeeds = [
+            'creatorSubRequestFeed/a', 'publicSubRequests',
+            'userSubRequestFeed/a', 'creatorSubRequestFeed/a',
+          ];
+          expect(spy.reads, unorderedEquals([
+            if (scenario.startsWith('home-')) ...[
+              ...discoveryPaths('a', ['one']),
+              ...managementAuthorization,
+              ...managementFeeds,
+            ],
+            ...discoveryPaths('a', ['one']),
+            'Bands/one', 'users/a/Favorites', 'users', 'Bands/one',
+            ...managementAuthorization, // Manage Requests action gate.
+            ...managementAuthorization, // Active requests count.
+            ...managementFeeds,
+          ]));
         }
       }
       expect(spy.reads, isNot(contains('Bands')));

@@ -898,7 +898,7 @@ class FirebaseService {
         });
       }
     } catch (e) { _rethrowAccessDenied(e);
-      debugPrint('[FirebaseService] Error reading publicSubRequests: $e');
+      rethrow;
     }
 
     // 2. Load targeted requests for current user from /userSubRequestFeed/$selfId
@@ -914,7 +914,7 @@ class FirebaseService {
           });
         }
       } catch (e) { _rethrowAccessDenied(e);
-        debugPrint('[FirebaseService] Error reading userSubRequestFeed: $e');
+        rethrow;
       }
 
       // 3. Load creator requests for current user from /creatorSubRequestFeed/$selfId
@@ -929,7 +929,7 @@ class FirebaseService {
           });
         }
       } catch (e) { _rethrowAccessDenied(e);
-        debugPrint('[FirebaseService] Error reading creatorSubRequestFeed: $e');
+        rethrow;
       }
     }
 
@@ -1200,7 +1200,7 @@ class FirebaseService {
           });
         }
       } catch (e) { _rethrowAccessDenied(e);
-        debugPrint("[FirebaseService] Error loading creatorSubRequestFeed/$userId: $e");
+        rethrow;
       }
     } else {
       // For other users, return authorized requests from the merged feed created by that user
@@ -1417,7 +1417,7 @@ class FirebaseService {
           raw is Map &&
           _isCanonicalManager(raw, uid);
     } catch (accessError) { _rethrowAccessDenied(accessError);
-      return false;
+      rethrow;
     }
   }
 

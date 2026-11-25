@@ -4,6 +4,7 @@ import '../models/agreement.dart';
 import '../models/request_management_access.dart';
 import '../services/firebase_service.dart';
 import 'active_manage_requests.dart';
+import 'band_membership_policy.dart';
 
 /// Formats agreement payment if present and positive (> 0).
 /// E.g. "Paid · 1,500 SEK" or "Paid · 1,500" if currency is absent or malformed.
@@ -733,20 +734,20 @@ List<SubRequest> filterActiveManageRequests(
 /// Discover through the existing feeds, then authorize each exact request.
 Future<List<RequestManagementAccess>> loadActiveManageRequests({
   required FirebaseService service,
-  required String userId,
-  required String bandId,
-  required bool includeBandFeed,
+  required RequestManagementAccess scope,
   required DateTime Function() now,
   required bool Function() isCurrent,
   void Function(RequestManagementAccess)? onAuthorized,
 }) async {
-  if (!isCurrent()) return [];
-  final ownRequests = await service.getUserSubRequestsAsync(userId);
-  if (!isCurrent()) return [];
-  final visibleRequests = includeBandFeed
+  bool current() => scope.isValid && isCurrent();
+  if (!current()) return [];
+  final bandId = scope.bandId;
+  final ownRequests = await service.getUserSubRequestsAsync(scope.userId);
+  if (!current()) return [];
+  final visibleRequests = BandMembershipPolicy.isRealId(bandId)
       ? await service.getAllSubRequestsAsync()
       : const <SubRequest>[];
-  if (!isCurrent()) return [];
+  if (!current()) return [];
 
   final candidates = filterActiveManageRequests(
     manageRequestCandidates(
@@ -758,24 +759,59 @@ Future<List<RequestManagementAccess>> loadActiveManageRequests({
   );
   final authorized = <RequestManagementAccess>[];
   for (final hint in candidates) {
-    if (!isCurrent()) return [];
+    if (!current()) return [];
     try {
       final access = await service.authorizeRequestManagement(
         bandId: bandId,
         requestId: hint.subRequestId ?? hint.id,
         expectedCreatorId: hint.creatorUserId ?? hint.userId,
-        isCurrent: isCurrent,
+        isCurrent: current,
       );
-      if (!isCurrent()) return [];
+      if (!current()) return [];
       final request = access.request;
-      if (request != null && isActiveManageRequest(request, now: now())) {
-        onAuthorized?.call(access);
+      if (access.userId == scope.userId &&
+          access.bandId == bandId &&
+          request?.bandId == bandId) {
         authorized.add(access);
       }
-    } catch (_) {
-      // A stale or inaccessible feed item contributes no request or count.
-      if (!isCurrent()) return [];
+    } on PrivateDataAccessException {
+      // An inaccessible or stale candidate is not a manageable request.
+      if (!current()) return [];
     }
   }
+  final active = filterActiveManageRequests(
+    authorized.map((access) => access.request!),
+    now: now(),
+  ).toSet();
+  authorized.retainWhere((access) => active.remove(access.request));
+  if (onAuthorized != null) authorized.forEach(onAuthorized);
   return authorized;
+}
+
+/// Null means the current account cannot manage the band.
+Future<int?> loadActiveManageRequestCount({
+  required FirebaseService service,
+  required String userId,
+  required String bandId,
+  required bool Function() isCurrent,
+}) async {
+  final RequestManagementAccess scope;
+  try {
+    scope = await service.authorizeRequestManagement(
+      bandId: bandId,
+      isCurrent: isCurrent,
+    );
+  } on PrivateDataAccessException {
+    return null;
+  }
+  if (!isCurrent() || scope.userId != userId || scope.bandId != bandId) {
+    return null;
+  }
+  final requests = await loadActiveManageRequests(
+    service: service,
+    scope: scope,
+    now: DateTime.now,
+    isCurrent: isCurrent,
+  );
+  return requests.length;
 }

@@ -12,9 +12,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:musicians_flutter/providers/app_state.dart';
 import 'package:musicians_flutter/models/sub_request.dart';
 import 'package:musicians_flutter/models/band.dart';
+import 'package:musicians_flutter/models/request_management_access.dart';
+import 'package:musicians_flutter/services/firebase_service.dart' show PrivateDataAccessException;
+import 'package:musicians_flutter/utils/band_membership_policy.dart';
 import 'package:musicians_flutter/views/home_screen.dart';
 import 'package:musicians_flutter/views/band_room_chat_screen.dart';
 import 'package:musicians_flutter/views/find_sub_screen.dart';
+import 'package:musicians_flutter/views/sub_request_responses_screen.dart';
 import 'package:musicians_flutter/widgets/band_required_prompt.dart';
 import 'package:musicians_flutter/widgets/animated_tap_detector.dart';
 import 'new_user_skills_and_band_guards_01_test.dart' as guards;
@@ -42,9 +46,40 @@ class PromptService extends guards.GuardService {
 
   Completer<List<SubRequest>>? delayedRequests;
   List<SubRequest> activeRequests = [];
+  List<SubRequest> visibleRequests = [];
   @override
   Future<List<SubRequest>> getUserSubRequestsAsync(String userId) =>
       delayedRequests?.future ?? Future.value(activeRequests);
+  @override
+  Future<List<SubRequest>> getAllSubRequestsAsync() async => visibleRequests;
+  @override
+  Future<RequestManagementAccess> authorizeRequestManagement({
+    String? bandId,
+    String? requestId,
+    String? expectedCreatorId,
+    bool Function()? isCurrent,
+  }) async {
+    if (!(isCurrent?.call() ?? true) || !BandMembershipPolicy.canStaff(bands[bandId], uid)) {
+      throw const PrivateDataAccessException();
+    }
+    final request = requestId == null ? null : [...activeRequests, ...visibleRequests]
+        .where((request) => (request.subRequestId ?? request.id) == requestId)
+        .firstOrNull;
+    if (requestId != null && request?.bandId != bandId) {
+      throw const PrivateDataAccessException();
+    }
+    return RequestManagementAccess(userId: uid!, bandId: bandId!, request: request);
+  }
+  @override
+  Stream<bool> watchRequestManagementAccess(RequestManagementAccess access) =>
+      const Stream.empty();
+  @override
+  Stream<String?> get catalogueIdentityChanges => const Stream.empty();
+  @override
+  Future<int> getSubRequestResponseCountAsync(String subRequestId) async => 0;
+  @override
+  Stream<int> subscribeToSubRequestResponseCount(String subRequestId) =>
+      const Stream.empty();
   @override
   Future<Map<String, String>> getUserBandsAsync(String userId) {
     membershipReads++;
@@ -88,6 +123,10 @@ Widget app(PromptState state, RouteSpy spy, Widget child) =>
               const Scaffold(body: Text('EXISTING CREATE BAND ROUTE')),
           '/band-room': (_) => const BandRoomChatScreen(),
           '/find-sub': (_) => const FindSubScreen(),
+          '/sub-request-responses': (context) {
+            final arguments = ModalRoute.of(context)!.settings.arguments as Map;
+            return SubRequestResponsesScreen(bandId: arguments['bandId'] as String);
+          },
           '/main-nav': (_) => const Scaffold(body: Text('SAFE HOME ROUTE')),
         },
       ),
@@ -578,7 +617,7 @@ void main() {
     final spy = RouteSpy();
     state.service.bands['real'] = guards.realBand();
     state.service.activeRequests = [
-      SubRequest(bandId: 'real', status: 'pending'),
+      SubRequest(id: 'active', bandId: 'real', status: 'published'),
     ];
     await tester.pumpWidget(app(state, spy, const HomeScreen()));
     await guards.settle(tester);
@@ -590,6 +629,57 @@ void main() {
     expect(find.text('FIND MUSICIAN / SUBSTITUTE'), findsNothing);
     expect(find.text('VERIFIED BAND'), findsNothing);
     noProtectedWork(state, spy);
+  });
+
+  testWidgets('Two stale creator rows do not advertise two active requests for an empty list', (tester) async {
+    await guards.size(tester);
+    final state = PromptState();
+    state.service.bands['real'] = guards.realBand();
+    state.service.activeRequests = [
+      SubRequest(id: 'expired', bandId: 'real', status: 'published', date: '2000-01-01'),
+      SubRequest(id: 'legacy', bandName: 'Verified Band', status: 'published'),
+    ];
+    await tester.pumpWidget(app(state, RouteSpy(), const HomeScreen()));
+    await guards.settle(tester);
+    await click(tester, true);
+
+    expect(find.textContaining('2 active requests'), findsNothing);
+    expect(find.byType(FindSubScreen), findsOneWidget);
+    final manage = find.byKey(const Key('manage_requests_btn'));
+    await tester.ensureVisible(manage);
+    await tester.tap(manage);
+    await guards.settle(tester);
+    expect(find.text('No active requests found.'), findsOneWidget);
+    await tester.tap(find.text('New Members'));
+    await guards.settle(tester);
+    expect(find.text('No active requests found.'), findsOneWidget);
+  });
+
+  testWidgets('Home counts two unique active positions across both Manage Requests tabs', (tester) async {
+    await guards.size(tester);
+    final state = PromptState();
+    state.service.bands['real'] = guards.realBand();
+    final substitute = SubRequest(id: 'sub', bandId: 'real', status: 'published',
+        role: 'Substitute');
+    final member = SubRequest(id: 'member', bandId: 'real', status: 'published',
+        role: 'New Member');
+    state.service.activeRequests = [substitute, substitute, substitute];
+    state.service.visibleRequests = [substitute, member];
+    await tester.pumpWidget(app(state, RouteSpy(), const HomeScreen()));
+    await guards.settle(tester);
+    await click(tester, true);
+
+    expect(find.text('You have 2 active requests for Verified Band.'), findsOneWidget);
+    await tester.tap(find.text('Manage Active Requests'));
+    await guards.settle(tester);
+    final subCard = find.byKey(const ValueKey('view_responses_sub'));
+    final memberCard = find.byKey(const ValueKey('view_responses_member'));
+    expect(subCard, findsOneWidget);
+    expect(memberCard, findsNothing);
+    await tester.tap(find.text('New Members'));
+    await guards.settle(tester);
+    expect(subCard, findsNothing);
+    expect(memberCard, findsOneWidget);
   });
 
   testWidgets(

@@ -511,6 +511,51 @@ void main() {
       expect(find.byType(RefreshIndicator), findsWidgets);
       await unmount(tester);
     });
+    testWidgets('Loading and failed requests stay distinct from an empty tab', (
+      tester,
+    ) async {
+      final pending = Completer<List<SubRequest>>();
+      final service = ManageService()..delayed = pending;
+      await mount(tester, service);
+      final empty = find.text('No active requests found.');
+      final retry = find.text('Could not load active requests. Retry');
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      expect(empty, findsNothing);
+      expect(retry, findsNothing);
+
+      pending.completeError(StateError('feed unavailable'));
+      await settle(tester);
+      expect(retry, findsOneWidget);
+      expect(empty, findsNothing);
+      await tester.tap(find.text('New Members'));
+      await settle(tester);
+      expect(retry, findsOneWidget);
+      expect(empty, findsNothing);
+
+      service.delayed = null;
+      await tester.tap(retry);
+      await settle(tester);
+      expect(retry, findsNothing);
+      expect(empty, findsOneWidget);
+      await unmount(tester);
+    });
+
+    testWidgets('A failed response count does not hide its active request', (
+      tester,
+    ) async {
+      final count = Completer<int>();
+      final service = ManageService()
+        ..requests = [request()]
+        ..delayedCount = count;
+      await mount(tester, service);
+      count.completeError(StateError('responses unavailable'));
+      await settle(tester);
+      expect(card('position'), findsOneWidget);
+      expect(find.text('View Responses'), findsOneWidget);
+      expect(find.text('View Responses (0)'), findsNothing);
+      expect(find.text('No active requests found.'), findsNothing);
+      await unmount(tester);
+    });
     testWidgets('22 No RenderFlex overflow at 320 px', (tester) async {
       tester.view.physicalSize = const Size(320, 800);
       tester.view.devicePixelRatio = 1;

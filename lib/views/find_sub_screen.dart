@@ -192,7 +192,9 @@ class _FindSubScreenState extends State<_FindSubForm> {
 
   BandEvent? _primaryEvent;
   String? _bandName;
-  int _activeBandSubCount = 0;
+  int? _activeBandSubCount;
+  bool _activeBandCountFailed = false;
+  int _activeBandCountGeneration = 0;
   List<UserProfile> _favorites = [];
   List<UserProfile> _allMusicianProfiles = [];
   List<EventStaffingSection> _eventSections = [];
@@ -313,29 +315,32 @@ class _FindSubScreenState extends State<_FindSubForm> {
   }
 
   Future<void> _refreshActiveBandRequestCount(AppState appState, String bandId) async {
+    if (!mounted || bandId != (widget.bandId ?? appState.activeBandId)) return;
     final uid = appState.currentUserId;
     final activeBandId = appState.activeBandId;
+    final generation = ++_activeBandCountGeneration;
     bool current() => mounted &&
+        generation == _activeBandCountGeneration &&
         uid == appState.currentUserId &&
         activeBandId == appState.activeBandId;
     if (uid == null) return;
+    setState(() {
+      _activeBandSubCount = null;
+      _activeBandCountFailed = false;
+    });
     try {
-      await appState.firebaseService.authorizeRequestManagement(
-        bandId: bandId,
-        isCurrent: current,
-      );
-      if (!current()) return;
-      final requests = await loadActiveManageRequests(
+      final count = await loadActiveManageRequestCount(
         service: appState.firebaseService,
         userId: uid,
         bandId: bandId,
-        includeBandFeed: true,
-        now: DateTime.now,
         isCurrent: current,
       );
-      if (current()) setState(() => _activeBandSubCount = requests.length);
+      if (current()) setState(() {
+        _activeBandSubCount = count;
+        _activeBandCountFailed = count == null;
+      });
     } catch (_) {
-      if (current()) setState(() => _activeBandSubCount = 0);
+      if (current()) setState(() => _activeBandCountFailed = true);
     }
   }
 
@@ -344,6 +349,7 @@ class _FindSubScreenState extends State<_FindSubForm> {
     final appState = Provider.of<AppState>(context, listen: false);
 
     await _loadFavoritesAndProfiles();
+    if (!mounted) return;
 
     final effectiveBandId = widget.bandId ?? appState.activeBandId;
     final effectiveEventId = widget.eventId;
@@ -353,14 +359,12 @@ class _FindSubScreenState extends State<_FindSubForm> {
     }
 
     if (effectiveBandId != null && effectiveBandId.isNotEmpty) {
+      unawaited(_refreshActiveBandRequestCount(appState, effectiveBandId));
       try {
         final band = await appState.firebaseService.getBandInfoAsync(effectiveBandId);
         if (band != null) {
           _bandName = band.name;
         }
-
-        if (!mounted) return;
-        unawaited(_refreshActiveBandRequestCount(appState, effectiveBandId));
       } catch (e) {
         debugPrint('Error loading band info: ' + e.toString());
       }
@@ -1231,13 +1235,14 @@ class _FindSubScreenState extends State<_FindSubForm> {
                               color: Colors.white,
                             ),
                           ),
-                          onPressed: () {
+                          onPressed: () async {
                             final effectiveBandId = widget.bandId ?? appState.activeBandId ?? 'freelance';
-                            Navigator.pushNamed(
+                            await Navigator.pushNamed(
                               context,
                               '/sub-request-responses',
                               arguments: {'bandId': effectiveBandId},
                             );
+                            await _refreshActiveBandRequestCount(appState, effectiveBandId);
                           },
                         )),
                       ],
@@ -1256,7 +1261,17 @@ class _FindSubScreenState extends State<_FindSubForm> {
                       const SizedBox(height: 16),
                     ],
 
-                    if (_activeBandSubCount > 0) ...[
+                    if (_activeBandCountFailed)
+                      TextButton(
+                        onPressed: () {
+                          final bandId = widget.bandId ?? appState.activeBandId;
+                          if (bandId != null) _refreshActiveBandRequestCount(appState, bandId);
+                        },
+                        child: const Text('Could not load active requests. Retry'),
+                      )
+                    else if (_activeBandSubCount == null)
+                      const Text('Loading active requests…')
+                    else if (_activeBandSubCount! > 0) ...[
                       RequestManagementGate(
                         hideWhenDenied: true,
                         bandId: widget.bandId ?? appState.activeBandId,
