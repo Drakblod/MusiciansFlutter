@@ -9,6 +9,7 @@ import 'package:musicians_flutter/models/public_calendar_event.dart';
 import 'package:musicians_flutter/models/canonical_location.dart';
 import 'package:musicians_flutter/models/user_profile.dart';
 import 'package:musicians_flutter/providers/app_state.dart';
+import 'package:musicians_flutter/utils/event_address_map.dart';
 import 'package:musicians_flutter/repositories/public_event_repository.dart';
 import 'package:musicians_flutter/services/firebase_service.dart';
 import 'package:musicians_flutter/views/create_public_event_screen.dart';
@@ -70,6 +71,17 @@ void main() {
   });
 
   group('PublicCalendarEvent Model Tests', () {
+    test('Map link treats the full address as text and excludes venue names', () {
+      final uri = eventAddressMapUri(' Strandvägen 12, Stockholm ', city: 'Uppsala')!;
+      expect(uri.scheme, 'https');
+      expect(uri.host, 'www.google.com');
+      expect(uri.path, '/maps/search/');
+      expect(uri.queryParameters, {'api': '1', 'query': 'Strandvägen 12, Stockholm'});
+      expect(eventAddressMapUri('Turistvägen 3', city: 'Järvsö')?.queryParameters['query'],
+          'Turistvägen 3, Järvsö');
+      expect(eventAddressMapUri(' ', city: 'Stockholm'), isNull);
+    });
+
     test('toJson and fromJson preserves all fields properly', () {
       final now = DateTime(2026, 10, 5, 20, 0);
       final later = DateTime(2026, 10, 5, 23, 0);
@@ -286,6 +298,44 @@ void main() {
       expect(confirmed?.locationLabel, 'Norrköping');
       expect(confirmed?.precision, LocationPrecision.city);
       expect(confirmed?.status, LocationResolutionStatus.resolved);
+    });
+
+    testWidgets('A full street address can be saved without a venue or separate city', (tester) async {
+      tester.view.physicalSize = const Size(1000, 1600);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final repo = MockPublicEventRepository();
+      await tester.pumpWidget(ChangeNotifierProvider<AppState>(
+        create: (_) => MockAppStateForCreateTest(SpyingFirebaseService()),
+        child: MaterialApp(home: CreatePublicEventScreen(repository: repo)),
+      ));
+      await pumpUiTransitions(tester);
+
+      await tester.enterText(find.widgetWithText(TextFormField,
+          'e.g. Stockholm Live Showcase, Jazz Jam'), 'Address-only event');
+      await tester.enterText(find.widgetWithText(TextFormField,
+          'e.g. Strandvägen 12, Stockholm'), 'Strandvägen 12, Stockholm');
+      await pumpUiTransitions(tester);
+      expect(find.text('Open in Google Maps'), findsOneWidget);
+      expect(find.byType(LocationPickerField), findsNothing);
+      final description = find.widgetWithText(TextFormField,
+          'Detailed program, schedule, line-up, participant details...');
+      await tester.ensureVisible(description);
+      await tester.enterText(description, 'An event with a street address.');
+
+      final publish = find.text('Publish Event');
+      await tester.ensureVisible(publish);
+      await pumpUiTransitions(tester);
+      await tester.tap(publish);
+      await pumpUiTransitions(tester);
+
+      final saved = (await repo.getUpcomingEvents()).singleWhere((e) => e.title == 'Address-only event');
+      expect(saved.address, 'Strandvägen 12, Stockholm');
+      expect(saved.venueName, isEmpty);
+      expect(saved.city, isEmpty);
+      expect(saved.latitude, isNull);
+      expect(saved.longitude, isNull);
     });
 
     testWidgets('Fills in form and successfully creates event', (tester) async {

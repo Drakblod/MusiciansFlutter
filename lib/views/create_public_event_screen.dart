@@ -9,6 +9,7 @@ import 'package:provider/provider.dart';
 import '../models/public_calendar_event.dart';
 import '../models/canonical_location.dart';
 import '../widgets/location_picker_field.dart';
+import '../widgets/open_event_address_button.dart';
 import '../providers/app_state.dart';
 import '../repositories/public_event_repository.dart';
 import '../theme/app_theme.dart';
@@ -62,6 +63,14 @@ class _CreatePublicEventScreenState extends State<CreatePublicEventScreen> {
   BoxFit _posterFit = BoxFit.cover;
 
   bool get isEditing => widget.eventToEdit != null;
+
+  bool get _hasStreetAddress => _addressController.text.trim().isNotEmpty;
+
+  void _addressChanged(String _) => setState(() => _canonicalLocation = null);
+
+  void _cityChanged(String _) {
+    if (_hasStreetAddress) _addressChanged('');
+  }
 
   @override
   void initState() {
@@ -398,6 +407,9 @@ class _CreatePublicEventScreenState extends State<CreatePublicEventScreen> {
 
       final original = widget.eventToEdit;
       if (original != null) {
+        final clearCoordinates = _canonicalLocation == null &&
+            (original.address.trim() != _addressController.text.trim() ||
+                (_hasStreetAddress && original.city.trim() != _cityController.text.trim()));
         final originalStart = original.startDateTime;
         final dayShift = DateTime.utc(_selectedDate.year, _selectedDate.month, _selectedDate.day)
             .difference(DateTime.utc(originalStart.year, originalStart.month, originalStart.day))
@@ -420,6 +432,7 @@ class _CreatePublicEventScreenState extends State<CreatePublicEventScreen> {
           imageUrl: resolvedImageUrl ?? original.imageUrl,
           imageFitMode: _posterFit == BoxFit.contain ? 'contain' : 'cover',
           latitude: _canonicalLocation?.latitude,
+          clearCoordinates: clearCoordinates,
           longitude: _canonicalLocation?.longitude,
           locationPrecision: _canonicalLocation?.precision.name ?? 'exact',
           placeId: _canonicalLocation?.placeId,
@@ -642,14 +655,8 @@ class _CreatePublicEventScreenState extends State<CreatePublicEventScreen> {
                           flex: 3,
                           child: _buildInputField(
                             controller: _venueController,
-                            label: 'Venue Name *',
+                            label: 'Venue Name (Optional)',
                             hint: 'e.g. Jazzbaren, Fasching',
-                            validator: (value) {
-                              if (value == null || value.trim().isEmpty) {
-                                return 'Required';
-                              }
-                              return null;
-                            },
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -657,10 +664,11 @@ class _CreatePublicEventScreenState extends State<CreatePublicEventScreen> {
                           flex: 2,
                           child: _buildInputField(
                             controller: _cityController,
-                            label: 'City *',
+                            label: _hasStreetAddress ? 'City (Optional)' : 'City *',
                             hint: 'e.g. Stockholm',
+                            onChanged: _cityChanged,
                             validator: (value) {
-                              if (value == null || value.trim().isEmpty) {
+                              if (!_hasStreetAddress && (value == null || value.trim().isEmpty)) {
                                 return 'Required';
                               }
                               return null;
@@ -673,10 +681,13 @@ class _CreatePublicEventScreenState extends State<CreatePublicEventScreen> {
                     _buildInputField(
                       controller: _addressController,
                       label: 'Street Address (Optional)',
-                      hint: 'e.g. Storgatan 14',
+                      hint: 'e.g. Strandvägen 12, Stockholm',
+                      onChanged: _addressChanged,
                     ),
+                    if (_hasStreetAddress)
+                      OpenEventAddressButton(address: _addressController.text, city: _cityController.text),
                     const SizedBox(height: 16),
-                    LocationPickerField(
+                    if (!_hasStreetAddress) LocationPickerField(
                       controller: _locationController,
                       wrapCitySuggestion: true,
                       initialLocation: _canonicalLocation,

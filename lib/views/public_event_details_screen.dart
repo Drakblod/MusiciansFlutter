@@ -9,6 +9,7 @@ import '../theme/app_theme.dart';
 import '../widgets/animated_tap_detector.dart';
 import '../widgets/custom_top_bar.dart';
 import '../widgets/gradient_scaffold.dart';
+import '../widgets/open_event_address_button.dart';
 
 import 'create_public_event_screen.dart';
 
@@ -534,8 +535,8 @@ class _PublicEventDetailsScreenState extends State<PublicEventDetailsScreen> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(
-                                    '${activeEvent.venueName}, ${activeEvent.city}',
+                                  if (activeEvent.venueAndCity.isNotEmpty) Text(
+                                    activeEvent.venueAndCity,
                                     style: GoogleFonts.outfit(
                                       fontSize: 15,
                                       fontWeight: FontWeight.bold,
@@ -550,6 +551,7 @@ class _PublicEventDetailsScreenState extends State<PublicEventDetailsScreen> {
                                       color: AppTheme.textSecondary,
                                     ),
                                   ),
+                                  OpenEventAddressButton(address: activeEvent.address, city: activeEvent.city),
                                 ],
                               ),
                             ),

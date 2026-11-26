@@ -314,6 +314,7 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen>
         final matchesTitle = event.title.toLowerCase().contains(_searchQuery);
         final matchesOrganizer = event.organizerName.toLowerCase().contains(_searchQuery);
         final matchesVenue = event.venueName.toLowerCase().contains(_searchQuery);
+        final matchesAddress = event.address.toLowerCase().contains(_searchQuery);
         final matchesCity = event.city.toLowerCase().contains(_searchQuery);
         final matchesShortDesc = event.shortDescription.toLowerCase().contains(_searchQuery);
         final matchesDesc = event.description.toLowerCase().contains(_searchQuery);
@@ -322,6 +323,7 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen>
         if (!matchesTitle &&
             !matchesOrganizer &&
             !matchesVenue &&
+            !matchesAddress &&
             !matchesCity &&
             !matchesShortDesc &&
             !matchesDesc &&
@@ -859,7 +861,7 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen>
 
     return Semantics(
       button: true,
-      label: '${event.title}, ${event.venueName}, $dayStr $monthShort, ${event.formattedPrice}',
+      label: '${event.title}, ${event.calendarLocationLabel}, $dayStr $monthShort, ${event.formattedPrice}',
       child: FocusableActionDetector(
         mouseCursor: SystemMouseCursors.click,
         shortcuts: {
@@ -1076,7 +1078,7 @@ class _PublicEventCalendarScreenState extends State<PublicEventCalendarScreen>
                                 const SizedBox(width: 4),
                                 Expanded(
                                   child: Text(
-                                    '${event.venueName}, ${event.city}',
+                                    event.calendarLocationLabel,
                                     style: GoogleFonts.inter(
                                       fontSize: 11,
                                       color: const Color(0xFFD4CEEB),

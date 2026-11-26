@@ -217,6 +217,7 @@ class PublicCalendarEvent {
     String? locationPrecision,
     String? placeId,
     String? locationStatus,
+    bool clearCoordinates = false,
   }) {
     return PublicCalendarEvent(
       id: id ?? this.id,
@@ -244,11 +245,11 @@ class PublicCalendarEvent {
       imageFitMode: imageFitMode ?? this.imageFitMode,
       createdBy: createdBy ?? this.createdBy,
       createdAt: createdAt ?? this.createdAt,
-      latitude: latitude ?? this.latitude,
-      longitude: longitude ?? this.longitude,
-      locationPrecision: locationPrecision ?? this.locationPrecision,
-      placeId: placeId ?? this.placeId,
-      locationStatus: locationStatus ?? this.locationStatus,
+      latitude: clearCoordinates ? null : latitude ?? this.latitude,
+      longitude: clearCoordinates ? null : longitude ?? this.longitude,
+      locationPrecision: clearCoordinates ? 'exact' : locationPrecision ?? this.locationPrecision,
+      placeId: clearCoordinates ? null : placeId ?? this.placeId,
+      locationStatus: clearCoordinates ? null : locationStatus ?? this.locationStatus,
     );
   }
 
@@ -259,6 +260,14 @@ class PublicCalendarEvent {
     if (_hasStartDateTime && endDateTime.isBefore(startDateTime)) return null;
     return endDateTime;
   }
+
+  String get venueAndCity => [venueName, city]
+      .where((part) => part.trim().isNotEmpty)
+      .join(', ');
+
+  String get calendarLocationLabel => venueName.trim().isEmpty && address.trim().isNotEmpty
+      ? address
+      : venueAndCity;
 
   /// Human-readable formatted price label (e.g. 'Free', '150 SEK', '295 SEK')
   String get formattedPrice {
