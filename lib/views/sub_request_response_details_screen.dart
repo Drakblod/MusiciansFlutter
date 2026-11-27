@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../models/canonical_location.dart';
+import '../widgets/open_event_address_button.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -499,6 +501,9 @@ class __AuthorizedSubRequestResponseDetailsScreenState
                 ),
               ],
             ),
+            if (!widget.subRequest.isNewMember &&
+                widget.subRequest.locationPrecision != LocationPrecision.city)
+              OpenEventAddressButton.forLocation(address: presentation.locationVenue),
           ],
 
           // 6. Description / Details

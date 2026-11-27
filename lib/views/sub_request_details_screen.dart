@@ -5,6 +5,8 @@ import 'package:intl/intl.dart';
 import '../providers/app_state.dart';
 import '../theme/app_theme.dart';
 import '../models/sub_request.dart';
+import '../models/canonical_location.dart';
+import '../widgets/open_event_address_button.dart';
 import '../widgets/gradient_scaffold.dart';
 import '../widgets/custom_top_bar.dart';
 import '../widgets/animated_tap_detector.dart';
@@ -226,6 +228,8 @@ class _SubRequestDetailsScreenState extends State<SubRequestDetailsScreen> {
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
+                            if (!gig.isNewMember && gig.locationPrecision != LocationPrecision.city)
+                              OpenEventAddressButton.forLocation(address: gig.location),
                           ],
                         ),
                       ),

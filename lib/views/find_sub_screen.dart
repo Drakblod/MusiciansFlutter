@@ -17,6 +17,7 @@ import '../models/sub_request.dart';
 import '../models/canonical_location.dart';
 import '../services/location_service.dart';
 import '../widgets/location_picker_field.dart';
+import '../widgets/open_event_address_button.dart';
 import '../models/user_profile.dart';
 import '../providers/app_state.dart';
 import '../theme/app_theme.dart';
@@ -1954,6 +1955,7 @@ class _FindSubScreenState extends State<_FindSubForm> {
                     onLocationChanged: (loc) => section.canonicalLocation = loc,
                     label: 'Location / Venue',
                   ),
+                  EventAddressFieldLink(controller: section.locationController),
                   const SizedBox(height: 14),
 
                   // 5. Description / Details

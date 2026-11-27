@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/open_event_address_button.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../providers/app_state.dart';
@@ -436,12 +437,19 @@ class _SessionDetailsScreenState extends State<SessionDetailsScreen> {
                       children: [
                         const Icon(Icons.location_on_outlined, color: AppTheme.primaryAccent, size: 16),
                         const SizedBox(width: 12),
-                        Text(
-                          widget.session.location ?? 'Remote Collaboration',
-                          style: GoogleFonts.inter(fontSize: 14, color: Colors.white),
+                        Expanded(
+                          child: Text(
+                            widget.session.location ?? 'Remote Collaboration',
+                            style: GoogleFonts.inter(fontSize: 14, color: Colors.white),
+                          ),
                         ),
                       ],
                     ),
+                    if (['in person', 'hybrid'].contains(widget.session.sessionType.trim().toLowerCase()))
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: OpenEventAddressButton.forLocation(address: widget.session.location),
+                      ),
                   ],
                 ),
               ),

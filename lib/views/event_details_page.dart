@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../widgets/open_event_address_button.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -733,6 +734,8 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                         ),
                       ],
                     ),
+                    if (event.locationPrecision.trim().toLowerCase() != 'city')
+                      OpenEventAddressButton.forLocation(address: event.location),
                   ],
                   if (event.description.isNotEmpty) ...[
                     const SizedBox(height: 14),
@@ -1187,6 +1190,8 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                                             color: AppTheme.textSecondary,
                                           ),
                                         ),
+                                        if (isExpanded)
+                                          OpenEventAddressButton.forLocation(address: item.location),
                                       ],
                                     ],
                                   ),

@@ -17,6 +17,7 @@ import '../widgets/gradient_scaffold.dart';
 import '../widgets/custom_top_bar.dart';
 import '../widgets/animated_tap_detector.dart';
 import '../widgets/location_picker_field.dart';
+import '../widgets/open_event_address_button.dart';
 
 String? _substituteInstrument(UserProfile? profile, {String? savedInstrument}) {
   var hasBandleader = false;
@@ -642,11 +643,12 @@ class _CreateEventPageState extends State<CreateEventPage> {
                       controller: draftLocationController,
                       style: GoogleFonts.inter(color: Colors.white),
                       decoration: const InputDecoration(
-                        labelText: 'Location (City, Country)',
+                        labelText: 'Location (city or street address)',
                         hintText: 'e.g. Studio A, Globen',
                         prefixIcon: Icon(Icons.location_on_outlined, color: AppTheme.textSecondary),
                       ),
                     ),
+                    EventAddressFieldLink(controller: draftLocationController),
                     const SizedBox(height: 12),
                     // Description
                     TextFormField(
@@ -1500,6 +1502,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                         return null;
                       },
                     ),
+                    EventAddressFieldLink(controller: _locationController),
                     const SizedBox(height: 20),
                     // 4 & 5. Attached Events / Event Schedule Section
                     Container(

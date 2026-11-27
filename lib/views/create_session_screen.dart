@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/open_event_address_button.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -702,7 +703,7 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
                     style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
                     decoration: const InputDecoration(
                       labelText: 'Location',
-                      hintText: 'e.g. Sound Studio 3, Stockholm',
+                      hintText: 'e.g. Strandvägen 12, Stockholm',
                       prefixIcon: Icon(Icons.location_on_outlined, color: AppTheme.textSecondary),
                     ),
                     validator: (value) {
@@ -712,6 +713,7 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
                       return null;
                     },
                   ),
+                  EventAddressFieldLink(controller: _locationController),
                   const SizedBox(height: 16),
                 ],
 

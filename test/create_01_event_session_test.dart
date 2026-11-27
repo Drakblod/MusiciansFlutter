@@ -360,7 +360,7 @@ void main() {
       expect(find.text('Add Event'), findsWidgets);
 
       // Enter session details
-      await tester.enterText(find.widgetWithText(TextFormField, 'Location (City, Country)').last, 'Studio A');
+      await tester.enterText(find.widgetWithText(TextFormField, 'Location (city or street address)').last, 'Studio A');
       await tester.enterText(find.widgetWithText(TextFormField, 'Description (Optional)'), 'Warmup rehearsal');
 
       // Tap Add Event
@@ -380,7 +380,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
 
       expect(find.text('Edit Event'), findsWidgets);
-      await tester.enterText(find.widgetWithText(TextFormField, 'Location (City, Country)').last, 'Studio B (Updated)');
+      await tester.enterText(find.widgetWithText(TextFormField, 'Location (city or street address)').last, 'Studio B (Updated)');
       await tester.tap(find.widgetWithText(ElevatedButton, 'Save Changes'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
@@ -391,7 +391,7 @@ void main() {
       await tester.tap(find.text('+ Add Event'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
-      await tester.enterText(find.widgetWithText(TextFormField, 'Location (City, Country)').last, 'Studio C');
+      await tester.enterText(find.widgetWithText(TextFormField, 'Location (city or street address)').last, 'Studio C');
       await tester.tap(find.widgetWithText(ElevatedButton, 'Add Event'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
@@ -942,7 +942,7 @@ void main() {
       // Add Session 1
       await tester.tap(find.text('+ Add Event'));
       await pumpUiTransitions(tester);
-      await tester.enterText(find.widgetWithText(TextFormField, 'Location (City, Country)').last, 'Studio A');
+      await tester.enterText(find.widgetWithText(TextFormField, 'Location (city or street address)').last, 'Studio A');
       await tester.enterText(find.widgetWithText(TextFormField, 'Description (Optional)'), 'Sectional rehearsal');
       await tester.tap(find.widgetWithText(ElevatedButton, 'Add Event'));
       await pumpUiTransitions(tester);
@@ -950,7 +950,7 @@ void main() {
       // Add Session 2
       await tester.tap(find.text('+ Add Event'));
       await pumpUiTransitions(tester);
-      await tester.enterText(find.widgetWithText(TextFormField, 'Location (City, Country)').last, 'Studio B');
+      await tester.enterText(find.widgetWithText(TextFormField, 'Location (city or street address)').last, 'Studio B');
       await tester.enterText(find.widgetWithText(TextFormField, 'Description (Optional)'), 'Dress rehearsal');
       await tester.tap(find.widgetWithText(ElevatedButton, 'Add Event'));
       await pumpUiTransitions(tester);

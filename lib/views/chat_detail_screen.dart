@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import '../widgets/open_event_address_button.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -381,6 +382,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                                   'Location / Venue',
                                   loc,
                                 ));
+                                if (agreement.requestType?.trim().toLowerCase() == 'substitute') {
+                                  rows.add(OpenEventAddressButton.forLocation(address: loc));
+                                }
                               }
 
                               // 7. Description / Details

@@ -6,6 +6,8 @@ import 'package:google_fonts/google_fonts.dart';
 import '../providers/app_state.dart';
 import '../theme/app_theme.dart';
 import '../models/sub_request.dart';
+import '../models/canonical_location.dart';
+import '../widgets/open_event_address_button.dart';
 import '../widgets/custom_top_bar.dart';
 import '../widgets/gradient_scaffold.dart';
 import '../config/feature_toggles.dart';
@@ -1042,6 +1044,9 @@ class _FindGigsScreenState extends State<FindGigsScreen>
                             ),
                           ],
                         ),
+                        if (group.requests.isNotEmpty && group.requests.every((request) =>
+                            !request.isNewMember && request.locationPrecision != LocationPrecision.city))
+                          OpenEventAddressButton.forLocation(address: presentation.locationVenue),
                         const SizedBox(height: 16),
                       ],
 
