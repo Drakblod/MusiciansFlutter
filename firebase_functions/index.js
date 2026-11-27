@@ -1,6 +1,7 @@
 const notificationDelivery = require('./notification_delivery');
 const notificationAccess = require('./notification_access');
 const eventReadiness = require('./event_readiness');
+const { effectiveRsvpDeadlineMs, isBeforeRsvpDeadline } = require('./rsvp_deadline');
 const { currentMember: notificationMember } = notificationAccess;
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
@@ -323,13 +324,13 @@ function registeredRecipients(uids) {
   return notificationDelivery.recipients(admin.database(), uids);
 }
 
-function dispatchRegistered(recipient, message) {
-  return notificationDelivery.dispatchRegistered(admin.database(), admin.messaging(), recipient, message);
+function dispatchRegistered(recipient, message, deadlineMs) {
+  return notificationDelivery.dispatchRegistered(admin.database(), admin.messaging(), recipient, message, deadlineMs);
 }
 
-async function dispatchRegisteredBatch(recipients, messages) {
+async function dispatchRegisteredBatch(recipients, messages, deadlineMs) {
   const responses = await Promise.all(recipients.map((recipient, index) =>
-    dispatchRegistered(recipient, messages[index])));
+    dispatchRegistered(recipient, messages[index], deadlineMs)));
   const successCount = responses.filter(response => response.success).length;
   return { responses, successCount, failureCount: responses.length - successCount };
 }
@@ -2124,6 +2125,8 @@ exports.checkEventReminders = functions.region('europe-west1').pubsub
         for (const eventId of eventIds) {
           const event = events[eventId];
           if (!event) continue;
+          const deadlineMs = effectiveRsvpDeadlineMs(event);
+          if (!isBeforeRsvpDeadline(deadlineMs)) continue;
 
           // Skip if locked
           if (event.isLocked === true) continue;
@@ -2167,8 +2170,11 @@ exports.checkEventReminders = functions.region('europe-west1').pubsub
             const responses = event.Responses || {};
             const recipients = Object.keys(members).filter(uid => notificationMember(members[uid]) && !responses[uid]);
             const reminderHours = send84 ? '84h' : send72 ? '72h' : '48h';
-            await Promise.all(recipients.map(uid => publishNotification(uid, 'event_reminder',
-              [bandId, eventId, reminderHours], { bandId, eventId })));
+            if (!isBeforeRsvpDeadline(deadlineMs)) continue;
+            const publications = await Promise.all(recipients.map(uid =>
+              publishNotification(uid, 'event_reminder', [bandId, eventId, reminderHours],
+                { bandId, eventId }, { deadlineMs })));
+            if (!isBeforeRsvpDeadline(deadlineMs) && publications.every(result => result == null)) continue;
 
             // Update database flags using the exact model names
             const updateObj = {};
@@ -2845,6 +2851,10 @@ exports.triggerEventReminder = onCall({ region: 'europe-west1' }, async (request
     };
   }
 
+  const deadlineMs = effectiveRsvpDeadlineMs(eventData);
+  const deadlineError = () => new HttpsError('failed-precondition', 'Response deadline passed.');
+  if (!isBeforeRsvpDeadline(deadlineMs)) throw deadlineError();
+
   const membersSnap = await admin.database().ref(`/Bands/${bandId}/Members_band`).once('value');
   const members = membersSnap.val() || {};
   const memberIdsSet = new Set(Object.keys(members));
@@ -2889,6 +2899,7 @@ exports.triggerEventReminder = onCall({ region: 'europe-west1' }, async (request
   }
 
   const recipientsWithTokens = await registeredRecipients(memberIds);
+  if (!isBeforeRsvpDeadline(deadlineMs)) throw deadlineError();
 
   if (recipientsWithTokens.length === 0) {
     await auditRef.update({
@@ -2914,7 +2925,8 @@ exports.triggerEventReminder = onCall({ region: 'europe-west1' }, async (request
     data: { bandId, eventId, type: 'event_reminder' },
   }));
 
-  const fcmResponse = await dispatchRegisteredBatch(recipientsWithTokens, messages);
+  const fcmResponse = await dispatchRegisteredBatch(recipientsWithTokens, messages, deadlineMs);
+  if (fcmResponse.responses.every(response => response.deadlinePassed)) throw deadlineError();
   const missingTokensCount = memberIds.length - new Set(recipientsWithTokens.map(row => row.userId)).size;
 
   let batchSuccess = 0;
@@ -2923,7 +2935,7 @@ exports.triggerEventReminder = onCall({ region: 'europe-west1' }, async (request
 
   fcmResponse.responses.forEach((res, index) => {
     const recipient = recipientsWithTokens[index];
-    if (!recipient) return;
+    if (!recipient || res.deadlinePassed) return;
 
     if (res.success) {
       batchSuccess++;
@@ -2942,7 +2954,7 @@ exports.triggerEventReminder = onCall({ region: 'europe-west1' }, async (request
   const auditUpdates = {
     ...recipientUpdates,
     status: finalStatus,
-    attemptedCount: recipientsWithTokens.length,
+    attemptedCount: batchSuccess + batchFailure,
     successCount: batchSuccess,
     failureCount: batchFailure,
     totalMembersCount: memberIds.length,
@@ -2962,7 +2974,7 @@ exports.triggerEventReminder = onCall({ region: 'europe-west1' }, async (request
     status: finalStatus,
     successCount: batchSuccess,
     failureCount: batchFailure,
-    attemptedCount: recipientsWithTokens.length,
+    attemptedCount: batchSuccess + batchFailure,
     totalMembersCount: memberIds.length,
     tokensFoundCount: recipientsWithTokens.length,
     missingTokensCount,

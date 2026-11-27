@@ -70,6 +70,7 @@ void main() {
     String location = 'Stockholm Stage',
     String startDateTime = '2026-09-20T19:00:00Z',
     Map<String, EventResponse> responses = const {},
+    int? rsvpDeadline,
   }) {
     return BandEvent(
       id: id,
@@ -84,6 +85,7 @@ void main() {
       createdAt: DateTime.now().millisecondsSinceEpoch - (2 * 3600 * 1000),
       updatedAt: DateTime.now().millisecondsSinceEpoch,
       requireResponse: true,
+      rsvpDeadline: rsvpDeadline,
       responses: responses,
     );
   }
@@ -94,6 +96,7 @@ void main() {
     String bandId = 'band_1',
     String currentUserId = 'user_me',
     VoidCallback? onResponded,
+    DateTime Function()? clock,
   }) {
     return ChangeNotifierProvider<AppState>(
       create: (_) => MockRsvpAppState(mockFirebase),
@@ -104,6 +107,7 @@ void main() {
             bandId: bandId,
             currentUserId: currentUserId,
             onResponded: onResponded,
+            clock: clock,
           ),
         ),
       ),
@@ -111,6 +115,27 @@ void main() {
   }
 
   group('RsvpReminderDialog Tests', () {
+    testWidgets('An open reminder switches to the expired label at its deadline', (tester) async {
+      final deadline = DateTime.utc(2026, 9, 18, 12);
+      var now = deadline.subtract(const Duration(milliseconds: 1));
+      await tester.pumpWidget(createTestWidget(
+        event: createTestEvent(rsvpDeadline: deadline.millisecondsSinceEpoch),
+        mockFirebase: MockRsvpFirebaseService(),
+        clock: () => now,
+      ));
+      expect(find.textContaining('(1)h', findRichText: true), findsOneWidget);
+      expect(find.text('Response deadline passed'), findsNothing);
+
+      now = deadline;
+      await tester.pump(const Duration(milliseconds: 1));
+      expect(find.text('Response deadline passed'), findsOneWidget);
+      expect(find.textContaining('(0)h', findRichText: true), findsNothing);
+
+      now = deadline.add(const Duration(milliseconds: 1));
+      await tester.pump(const Duration(milliseconds: 1));
+      expect(find.text('Response deadline passed'), findsOneWidget);
+    });
+
     testWidgets('1. Renders initial prompt with title, options, and MUSICIANS header', (tester) async {
       final mockFb = MockRsvpFirebaseService();
       final event = createTestEvent();

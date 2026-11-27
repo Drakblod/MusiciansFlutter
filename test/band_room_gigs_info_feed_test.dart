@@ -213,6 +213,20 @@ void main() {
     SharedPreferences.setMockInitialValues({});
   });
 
+  for (final offset in [-1, 0, 1]) {
+    testWidgets('Band Room reminder at $offset ms from the RSVP deadline', (tester) async {
+      final deadline = DateTime.utc(2027, 1, 1, 12);
+      final now = deadline.add(Duration(milliseconds: offset));
+      final service = MockGigsInfoFirebaseService()
+        ..testEvent = _event(now, 'deadline_event', 'Upcoming concert', 1,
+          rsvpDeadline: deadline.millisecondsSinceEpoch);
+
+      await _mountBandRoom(tester, service, clock: () => now);
+
+      expect(find.byType(RsvpReminderDialog), offset < 0 ? findsOneWidget : findsNothing);
+    });
+  }
+
   testWidgets('Files tab and upload picker relabel the legacy audio category', (tester) async {
     tester.view.physicalSize = const Size(1080, 1400);
     tester.view.devicePixelRatio = 1;
@@ -464,6 +478,7 @@ BandEvent _event(
   int days, {
   bool requireResponse = true,
   Map<String, EventResponse> responses = const {},
+  int? rsvpDeadline,
 }) {
   final start = now.add(Duration(days: days));
   return BandEvent(
@@ -479,14 +494,16 @@ BandEvent _event(
     createdAt: now.millisecondsSinceEpoch,
     updatedAt: now.millisecondsSinceEpoch,
     requireResponse: requireResponse,
+    rsvpDeadline: rsvpDeadline,
     responses: responses,
   );
 }
 
 Future<void> _mountBandRoom(
   WidgetTester tester,
-  MockGigsInfoFirebaseService service,
-) async {
+  MockGigsInfoFirebaseService service, {
+  DateTime Function()? clock,
+}) async {
   tester.view.physicalSize = const Size(1200, 2400);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.resetPhysicalSize);
@@ -494,7 +511,7 @@ Future<void> _mountBandRoom(
   await tester.pumpWidget(
     ChangeNotifierProvider<AppState>(
       create: (_) => MockGigsInfoAppState(service),
-      child: const MaterialApp(home: BandRoomChatScreen()),
+      child: MaterialApp(home: BandRoomChatScreen(clock: clock)),
     ),
   );
   await pumpUiTransitions(tester);

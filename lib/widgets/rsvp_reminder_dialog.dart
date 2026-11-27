@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -14,6 +16,7 @@ class RsvpReminderDialog extends StatefulWidget {
   final String bandId;
   final String currentUserId;
   final VoidCallback? onResponded;
+  final DateTime Function()? clock;
 
   const RsvpReminderDialog({
     super.key,
@@ -21,6 +24,7 @@ class RsvpReminderDialog extends StatefulWidget {
     required this.bandId,
     required this.currentUserId,
     this.onResponded,
+    this.clock,
   });
 
   static Future<void> show({
@@ -29,6 +33,7 @@ class RsvpReminderDialog extends StatefulWidget {
     required String bandId,
     required String currentUserId,
     VoidCallback? onResponded,
+    DateTime Function()? clock,
   }) {
     return showGeneralDialog(
       context: context,
@@ -42,6 +47,7 @@ class RsvpReminderDialog extends StatefulWidget {
           bandId: bandId,
           currentUserId: currentUserId,
           onResponded: onResponded,
+          clock: clock,
         );
       },
       transitionBuilder: (context, anim1, anim2, child) {
@@ -61,13 +67,17 @@ class RsvpReminderDialog extends StatefulWidget {
   State<RsvpReminderDialog> createState() => _RsvpReminderDialogState();
 }
 
-class _RsvpReminderDialogState extends State<RsvpReminderDialog> with SingleTickerProviderStateMixin {
+class _RsvpReminderDialogState extends State<RsvpReminderDialog>
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late AnimationController _controller;
   late Animation<double> _scaleAnimation;
   bool _isSubmitting = false;
   String? _selectedStatus;
   bool _showUncertainInput = false;
   final TextEditingController _uncertainController = TextEditingController();
+  Timer? _deadlineTimer;
+
+  int get _nowMs => (widget.clock ?? DateTime.now)().millisecondsSinceEpoch;
 
   // Receipt state
   bool _isReceiptState = false;
@@ -78,6 +88,8 @@ class _RsvpReminderDialogState extends State<RsvpReminderDialog> with SingleTick
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _scheduleDeadlineRefresh();
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 350),
@@ -98,8 +110,39 @@ class _RsvpReminderDialogState extends State<RsvpReminderDialog> with SingleTick
     }
   }
 
+  void _scheduleDeadlineRefresh() {
+    _deadlineTimer?.cancel();
+    final deadlineMs = RsvpDeadlineUtils.calculateEffectiveRsvpDeadlineMs(widget.event);
+    if (deadlineMs == null) return;
+    final remainingMs = deadlineMs - _nowMs;
+    if (remainingMs <= 0) return;
+    final delay = Duration(milliseconds: remainingMs);
+    const maxDelay = Duration(days: 1);
+    _deadlineTimer = Timer(delay > maxDelay ? maxDelay : delay, _refreshDeadline);
+  }
+
+  void _refreshDeadline() {
+    _scheduleDeadlineRefresh();
+    setState(() {});
+  }
+
+  @override
+  void didUpdateWidget(covariant RsvpReminderDialog oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.event != oldWidget.event || widget.clock != oldWidget.clock) {
+      _scheduleDeadlineRefresh();
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _refreshDeadline();
+  }
+
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _deadlineTimer?.cancel();
     _controller.dispose();
     _uncertainController.dispose();
     super.dispose();
@@ -175,10 +218,6 @@ class _RsvpReminderDialogState extends State<RsvpReminderDialog> with SingleTick
     } catch (_) {
       return DateFormat('EEE, MMM d HH:mm').format(dt);
     }
-  }
-
-  int? _calculateTimeLeftHours() {
-    return RsvpDeadlineUtils.calculateRemainingRsvpHours(widget.event);
   }
 
   @override
@@ -286,7 +325,10 @@ class _RsvpReminderDialogState extends State<RsvpReminderDialog> with SingleTick
     final noCount = _getCount('No');
     final uncertainCount = _getCount('Uncertain');
 
-    final timeLeftHours = _calculateTimeLeftHours();
+    final timeLeftHours = RsvpDeadlineUtils.calculateRemainingRsvpHours(
+      widget.event,
+      nowMs: _nowMs,
+    );
     final dateFormatted = _formatEventDate(widget.event.startDateTime);
 
     return Container(
@@ -307,7 +349,7 @@ class _RsvpReminderDialogState extends State<RsvpReminderDialog> with SingleTick
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // Reminder header text
-          timeLeftHours != null
+          timeLeftHours != null && timeLeftHours > 0
               ? RichText(
                   textAlign: TextAlign.center,
                   text: TextSpan(
@@ -330,7 +372,9 @@ class _RsvpReminderDialogState extends State<RsvpReminderDialog> with SingleTick
                   ),
                 )
               : Text(
-                  'Response requested — no automatic deadline.',
+                  timeLeftHours == 0
+                      ? 'Response deadline passed'
+                      : 'Response requested — no automatic deadline.',
                   textAlign: TextAlign.center,
                   style: GoogleFonts.inter(
                     fontSize: 13,

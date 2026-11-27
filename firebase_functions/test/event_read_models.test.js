@@ -4,6 +4,43 @@ const path = require('node:path');
 const vm = require('node:vm');
 const assert=require('node:assert/strict');
 const {project,memberEvent,verifiedAssignments,manualInvite,equal}=require('../event_read_models');
+const {effectiveRsvpDeadlineMs,isBeforeRsvpDeadline}=require('../rsvp_deadline');
+
+describe('RSVP deadline parity with the client read model', () => {
+  const createdAt = Date.UTC(2027, 0, 1, 12);
+  const deadline = createdAt + 48 * 3_600_000;
+  const source = {
+    title: 'Concert', startDateTime: '2027-01-08T18:00:00Z',
+    requireResponse: true, createdAt: String(createdAt), reminderIntervalHours: '48',
+    rsvpDeadline: String(deadline + 3_600_000),
+  };
+
+  it('uses the publication interval before a conflicting legacy deadline', () => {
+    const readModel = memberEvent('band', 'event', 'Band', source);
+    assert.equal(readModel.reminderIntervalHours, 48);
+    assert.equal(readModel.createdAt, createdAt);
+    assert.equal(effectiveRsvpDeadlineMs(readModel), deadline);
+    assert.equal(effectiveRsvpDeadlineMs(source), deadline);
+    assert.equal(isBeforeRsvpDeadline(deadline, deadline - 1), true);
+    assert.equal(isBeforeRsvpDeadline(deadline, deadline), false);
+    assert.equal(isBeforeRsvpDeadline(deadline, deadline + 1), false);
+  });
+
+  it('preserves explicit no-deadline settings and falls back to a stored legacy deadline', () => {
+    for (const event of [
+      { ...source, requireResponse: false },
+      { ...source, reminderIntervalHours: '0' },
+      { ...source, createdAt: null, reminderIntervalHours: null, rsvpDeadline: 'invalid' },
+    ]) {
+      const readModel = memberEvent('band', 'event', 'Band', event);
+      assert.equal(effectiveRsvpDeadlineMs(event), null);
+      assert.equal(effectiveRsvpDeadlineMs(readModel), null);
+    }
+    const legacy = { ...source, reminderIntervalHours: null };
+    const readModel = memberEvent('band', 'event', 'Band', legacy);
+    assert.equal(effectiveRsvpDeadlineMs(readModel), deadline + 3_600_000);
+  });
+});
 
 describe('SANITIZED-EVENT-READ-MODEL-01 explicit projection policy',()=>{
   it('pins deployable Event functions to europe-west1 outside the Functions emulator',()=>{

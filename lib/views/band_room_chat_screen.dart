@@ -4,6 +4,7 @@ import '../utils/private_file_download.dart';
 import '../utils/membership_mutation_feedback.dart';
 import '../utils/band_membership_policy.dart';
 import '../utils/band_member_role_label.dart';
+import '../utils/rsvp_deadline_utils.dart';
 import '../widgets/band_musical_role_picker.dart';
 import 'dart:async';
 import 'dart:io';
@@ -36,15 +37,20 @@ import '../widgets/create_band_section_sheet.dart';
 import '../widgets/secondary_skills_badge.dart';
 
 class BandRoomChatScreen extends StatelessWidget {
-  const BandRoomChatScreen({super.key});
+  const BandRoomChatScreen({super.key, this.clock});
+
+  final DateTime Function()? clock;
+
   @override
   Widget build(BuildContext context) => AuthorizedBandGate(
-    builder: (band) => const _BandRoomContent(),
+    builder: (band) => _BandRoomContent(clock: clock ?? DateTime.now),
   );
 }
 
 class _BandRoomContent extends StatefulWidget {
-  const _BandRoomContent();
+  const _BandRoomContent({required this.clock});
+
+  final DateTime Function() clock;
 
   @override
   State<_BandRoomContent> createState() => _BandRoomChatScreenState();
@@ -81,8 +87,14 @@ class _BandRoomChatScreenState extends State<_BandRoomContent>
     final userId = appState.currentUserProfile?.userId ?? appState.firebaseService.currentUser?.uid;
     if (userId == null) return;
 
-    final now = DateTime.now();
+    final now = widget.clock();
     for (final event in _bandEvents) {
+      if (RsvpDeadlineUtils.hasRsvpDeadlinePassed(
+        event,
+        nowMs: now.millisecondsSinceEpoch,
+      )) {
+        continue;
+      }
       final start = DateTime.tryParse(event.startDateTime)?.toLocal();
       final end = DateTime.tryParse(event.endDateTime)?.toLocal() ?? start;
       final isUpcoming = (end != null && end.isAfter(now)) || (start != null && start.isAfter(now));
@@ -92,14 +104,21 @@ class _BandRoomChatScreenState extends State<_BandRoomContent>
         if (userResp == null) {
           _hasPromptedRsvpReminder = true;
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) {
-              RsvpReminderDialog.show(
-                context: context,
-                event: event,
-                bandId: _activeBand?.id ?? '',
-                currentUserId: userId,
-              );
+            if (!mounted) return;
+            if (RsvpDeadlineUtils.hasRsvpDeadlinePassed(
+              event,
+              nowMs: widget.clock().millisecondsSinceEpoch,
+            )) {
+              _hasPromptedRsvpReminder = false;
+              return;
             }
+            RsvpReminderDialog.show(
+              context: context,
+              event: event,
+              bandId: _activeBand?.id ?? '',
+              currentUserId: userId,
+              clock: widget.clock,
+            );
           });
           break;
         }

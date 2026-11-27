@@ -317,6 +317,77 @@ describe('Real Cloud Functions Emulator Integration Tests (JS Client SDK + Emula
     assert.notStrictEqual(res2.data.status, 'already_sent');
   });
 
+  it('Manual and scheduled reminders stop at the effective RSVP deadline', async () => {
+    assert.strictEqual(adminDb.app.options.projectId, PROJECT_ID);
+    const { triggerEventReminder, checkEventReminders } = require('../index');
+    const bandId = 'deadline_probe', eventId = 'deadline_event';
+    const uid = 'deadline_recipient';
+    const audit = adminDb.ref(`eventReminderAudit/${bandId}/${eventId}/24h`);
+    const feed = adminDb.ref(`notificationFeedV2/${uid}`);
+    const routes = adminDb.ref(`notificationRoutesV2/${uid}`);
+    const event = adminDb.ref(`Bands/${bandId}/Events/${eventId}`);
+    const originalNow = Date.now;
+    const originalMessaging = Object.getOwnPropertyDescriptor(admin, 'messaging');
+    const deliveries = [];
+    const deadline = originalNow();
+    const createdAt = deadline - 72 * 3_600_000;
+    const reminder = {
+      auth: { uid: 'user_a' }, data: { bandId, eventId, reminderType: '24h' },
+    };
+    await adminDb.ref(`Bands/${bandId}/Members_band`).set({
+      user_a: { Role: 'Leader', Status: 'active' },
+      [uid]: { Role: 'Member', Status: 'active' },
+    });
+    await adminDb.ref('notificationTokenRegistry').set({
+      owners: { [uid]: { 'test-installation': true } },
+      installations: { 'test-installation': {
+        uid, sequence: 1, token: 'synthetic-rsvp-probe-token', soundProfile: 'ios-v2',
+      } },
+    });
+    Object.defineProperty(admin, 'messaging', {
+      configurable: true,
+      value: () => ({ send: async message => {
+        deliveries.push({ type: message.data.type, at: Date.now() });
+        return 'emulator-rsvp-probe';
+      } }),
+    });
+
+    try {
+      for (const [offset, interval] of [[-1, 72], [0, 72], [1, 72], [1, 0]]) {
+        await Promise.all([audit.remove(), feed.remove(), routes.remove()]);
+        await event.set({
+          title: 'Synthetic Event', startDateTime: new Date(deadline + 3_600_000).toISOString(),
+          createdAt, createdBy: 'user_a', requireResponse: true,
+          // A conflicting stored deadline must not override publication metadata.
+          rsvpDeadline: deadline + 3_600_000, reminderIntervalHours: interval,
+        });
+        deliveries.length = 0;
+        Date.now = () => deadline + offset;
+        if (offset < 0 || interval === 0) {
+          const result = await triggerEventReminder.run(reminder);
+          assert.strictEqual(result.successCount, 1);
+          assert.strictEqual((await triggerEventReminder.run(reminder)).status, 'already_sent');
+          await checkEventReminders.run({});
+          assert.deepStrictEqual(deliveries, Array(2).fill({ type: 'event_reminder', at: deadline + offset }));
+        } else {
+          await assert.rejects(triggerEventReminder.run(reminder), { code: 'failed-precondition' });
+          await checkEventReminders.run({});
+          assert.deepStrictEqual(deliveries, []);
+          assert.strictEqual((await audit.get()).exists(), false);
+          const row = (await event.get()).val();
+          assert.strictEqual(row.sentReminder24h, undefined);
+          assert.strictEqual(row.sentReminder72h, undefined);
+          const notifications = Object.values((await feed.get()).val() || {});
+          assert.ok(!notifications.some(row => row.type === 'event_reminder'));
+        }
+        Date.now = originalNow;
+      }
+    } finally {
+      Date.now = originalNow;
+      Object.defineProperty(admin, 'messaging', originalMessaging);
+    }
+  });
+
   it('11. createBandSectionConversation allows ordinary member to create group with band members', async () => {
     await adminDb.ref('Bands/band_sec/Name').set('Horn Power');
     await adminDb.ref('Bands/band_sec/Members_band/user_a').set({ Role: 'Member' });

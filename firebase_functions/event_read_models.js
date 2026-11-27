@@ -3,6 +3,7 @@
 // Server-owned Event read models. Every property below is an explicit public,
 // participant, or manager choice; canonical Event objects are never copied.
 const {validMember} = require('./band_membership_index');
+const {rsvpInteger} = require('./rsvp_deadline');
 const record = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 const key = value => typeof value === 'string' && value.length > 0 && value.length <= 128 &&
   !/[.#$\[\]/\u0000-\u001f\u007f]/.test(value) && !['__proto__','constructor','prototype'].includes(value);
@@ -37,8 +38,11 @@ function memberEvent(bandId,eventId,bandName,source,confirmed=[]) {
   const name=string(bandName,200);if(name)out.bandName=name;
   Object.assign(out,selected(source,['title','description','eventType','location',
     'startDateTime','endDateTime','additionalNotes','createdBy','parentEventId'],4000));
-  for(const field of ['createdAt','updatedAt','rsvpDeadline','subEventSequence']) {
+  for(const field of ['updatedAt','subEventSequence']) {
     const value=integer(source[field]);if(value!==undefined)out[field]=value;
+  }
+  for(const field of ['createdAt','rsvpDeadline','reminderIntervalHours']) {
+    const value=rsvpInteger(source[field]);if(value!==null&&value>=0)out[field]=value;
   }
   for(const field of ['requireResponse','isLocked'])if(typeof source[field]==='boolean')out[field]=source[field];
   const room=string(source.temporaryRoomId,128);if(room)out.temporaryRoomId=room;
@@ -134,9 +138,7 @@ function project(bandId,eventId,bandName,event,members={},requests={}) {
   const schedule=scheduleResponseMap(event.ScheduleResponses??event.scheduleResponses);
   const excluded=excludedIds(event);
   const manager={...base};
-  for(const field of ['lockedAt','reminderIntervalHours']){
-    const value=integer(event[field]);if(value!==undefined)manager[field]=value;
-  }
+  const lockedAt=integer(event.lockedAt);if(lockedAt!==undefined)manager.lockedAt=lockedAt;
   Object.assign(manager,selected(event,['lockedBy','city','placeId','locationPrecision'],200));
   for(const field of ['latitude','longitude'])if(typeof event[field]==='number'&&
       Number.isFinite(event[field]))manager[field]=event[field];

@@ -4,6 +4,7 @@ const { createHash, randomUUID, timingSafeEqual } = require('node:crypto');
 const { initializeApp, deleteApp } = require('firebase-admin/app');
 const { getDatabase } = require('firebase-admin/database');
 const { HttpsError } = require('firebase-functions/v2/https');
+const { isBeforeRsvpDeadline } = require('./rsvp_deadline');
 
 const digest = value => createHash('sha256').update(value).digest('hex');
 const registryPath = 'notificationTokenRegistry';
@@ -255,7 +256,7 @@ function messageFor(recipient, id, type, soundTest) {
   };
 }
 
-async function deliver(db, messaging, recipient, id, type, soundTest, canPublish) {
+async function deliver(db, messaging, recipient, id, type, soundTest, { canPublish, deadlineMs } = {}) {
   if (canPublish && !await canPublish()) return { success: false, superseded: true };
   if (!(await stillCurrent(db, recipient))) return { success: false, superseded: true };
   // A missing channel on an older Android client falls back to the guitar.
@@ -263,6 +264,7 @@ async function deliver(db, messaging, recipient, id, type, soundTest, canPublish
   if (type === 'band_section_chat' && !soundProfiles.has(recipient.soundProfile)) {
     return { success: false, noCompatibleSound: true };
   }
+  if (!isBeforeRsvpDeadline(deadlineMs)) return { success: false, deadlinePassed: true };
   try {
     const messageId = await messaging.send(messageFor(recipient, id, type, soundTest));
     return { success: true, messageId };
@@ -274,18 +276,20 @@ async function deliver(db, messaging, recipient, id, type, soundTest, canPublish
 
 const notificationId = (uid, type, key) => digest(JSON.stringify([uid, type, key]));
 
-async function dispatchRegistered(db, messaging, recipient, message) {
+async function dispatchRegistered(db, messaging, recipient, message, deadlineMs) {
   const { type, ...route } = routingData(message.data);
   const id = notificationId(recipient.userId, type, route);
   if (Object.keys(route).length) {
     if (!(await stillCurrent(db, recipient))) return { success: false, superseded: true };
     const written = await withNotificationWriter(db, recipient.userId, async writer => {
+      if (!isBeforeRsvpDeadline(deadlineMs)) return false;
       await writer.ref(`${routesPath}/${recipient.userId}/${id}`).set({ type, ...route });
       return true;
     });
+    if (written === false) return { success: false, deadlinePassed: true };
     if (!written) return { success: false, superseded: true };
   }
-  return deliver(db, messaging, recipient, id, type, message.data?.soundType);
+  return deliver(db, messaging, recipient, id, type, message.data?.soundType, { deadlineMs });
 }
 
 function routingData(data) {
@@ -300,18 +304,20 @@ function routingData(data) {
 // The private route doubles as the permanent delivery claim. No retry can
 // redispatch after an ambiguous provider result or an interrupted invocation.
 async function publish(db, messaging, uid, type, key, route, {
-  suppressPush = false, writeAsRecipient = withNotificationWriter, canPublish,
+  suppressPush = false, writeAsRecipient = withNotificationWriter, canPublish, deadlineMs,
 } = {}) {
   const id = notificationId(uid, type, key);
   const result = await writeAsRecipient(db, uid, async writer => {
     if (canPublish && !await canPublish()) return null;
     const claimRef = writer.ref(`${routesPath}/${uid}/${id}`);
     const claim = await claimRef.transaction(current =>
-      current ? undefined : { type, ...route, createdAt: Date.now(), dispatchState: 'claimed' });
+      current || !isBeforeRsvpDeadline(deadlineMs) ? undefined :
+        { type, ...route, createdAt: Date.now(), dispatchState: 'claimed' });
     const createdAt = claim.snapshot.val()?.createdAt;
-    if (!createdAt) return null;
+    if (!createdAt || !isBeforeRsvpDeadline(deadlineMs)) return null;
     const feed = await writer.ref(`${feedPath}/${uid}/${id}`).transaction(current =>
-      current ? undefined : { type, createdAt, isRead: false });
+      current || !isBeforeRsvpDeadline(deadlineMs) ? undefined : { type, createdAt, isRead: false });
+    if (!isBeforeRsvpDeadline(deadlineMs)) return null;
     if (feed.committed || claim.committed) await writer.ref(`${signalPath}/${uid}`).set(id);
     if (!claim.committed) return { id, duplicate: true };
     if (suppressPush) {
@@ -324,7 +330,7 @@ async function publish(db, messaging, uid, type, key, route, {
     }
     const destinations = await recipients(db, [uid]);
     const results = await Promise.all(destinations.map(recipient =>
-      deliver(db, messaging, recipient, id, type, undefined, canPublish)));
+      deliver(db, messaging, recipient, id, type, undefined, { canPublish, deadlineMs })));
     const dispatchState = results.some(result => result.success) ? 'sent' :
       results.some(result => result.error) ? 'undelivered-or-unknown' :
       results.some(result => result.noCompatibleSound) ? 'no-compatible-sound' : 'no-current-installation';

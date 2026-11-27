@@ -35,6 +35,11 @@ class RsvpDeadlineUtils {
     return null;
   }
 
+  static bool hasRsvpDeadlinePassed(BandEvent event, {required int nowMs}) {
+    final deadlineMs = calculateEffectiveRsvpDeadlineMs(event);
+    return deadlineMs != null && nowMs >= deadlineMs;
+  }
+
   /// Calculates remaining hours until the RSVP response deadline.
   ///
   /// Parameters:
