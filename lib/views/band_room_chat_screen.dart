@@ -23,6 +23,7 @@ import '../models/event_room.dart';
 import '../widgets/animated_tap_detector.dart';
 import '../widgets/custom_top_bar.dart';
 import '../widgets/gradient_scaffold.dart';
+import '../widgets/message_date_divider.dart';
 import '../widgets/authorized_band_gate.dart';
 import '../widgets/rsvp_reminder_dialog.dart';
 import 'create_event_page.dart';
@@ -1053,6 +1054,7 @@ class _BandRoomChatScreenState extends State<_BandRoomContent>
   }
 
   Widget _buildChatTab() {
+    final dates = messageDateDividers(_chatMessages);
     return Column(
       children: [
         Align(
@@ -1094,8 +1096,13 @@ class _BandRoomChatScreenState extends State<_BandRoomContent>
                   itemCount: _chatMessages.length,
                   physics: const BouncingScrollPhysics(),
                   itemBuilder: (context, index) {
-                    final message = _chatMessages[index];
-                    return _buildChatBubble(message);
+                    final bubble = _buildChatBubble(_chatMessages[index]);
+                    final date = dates[index];
+                    if (date == null) return bubble;
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [MessageDateDivider(date: date), bubble],
+                    );
                   },
                 ),
         ),
@@ -1274,6 +1281,7 @@ class _BandRoomChatScreenState extends State<_BandRoomContent>
   Widget _buildChatBubble(Message msg) {
     final isMe = msg.isCurrentUserSender;
     final senderName = _getSenderName(msg);
+    final timestamp = msg.timestamp?.toLocal();
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
@@ -1423,21 +1431,19 @@ class _BandRoomChatScreenState extends State<_BandRoomContent>
                     ),
                   ),
                 ),
-                const SizedBox(height: 4),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        msg.timestamp != null
-                            ? DateFormat('HH:mm').format(msg.timestamp!.toLocal())
-                            : '12:00',
-                        style: GoogleFonts.inter(fontSize: 10, color: AppTheme.textMuted),
+                if (timestamp != null) ...[
+                  const SizedBox(height: 4),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: Text(
+                      DateFormat('HH:mm').format(timestamp),
+                      style: GoogleFonts.inter(
+                        fontSize: 10,
+                        color: AppTheme.textMuted,
                       ),
-                    ],
+                    ),
                   ),
-                ),
+                ],
               ],
             ),
           ),

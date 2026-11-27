@@ -12,6 +12,7 @@ import '../utils/sub_request_card_helper.dart';
 import '../widgets/gradient_scaffold.dart';
 import '../widgets/custom_top_bar.dart';
 import '../widgets/animated_tap_detector.dart';
+import '../widgets/message_date_divider.dart';
 
 class ChatDetailScreen extends StatefulWidget {
   final String conversationId;
@@ -557,6 +558,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                       );
                     }
 
+                    final dates = isAgreement
+                        ? messageDateDividers(messages)
+                        : const <int, DateTime>{};
                     return ListView.builder(
                       controller: _scrollController,
                       padding: const EdgeInsets.all(16),
@@ -565,7 +569,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                         final msg = messages[index];
                         final isMe = msg.isCurrentUserSender;
 
-                        return Padding(
+                        final bubble = Padding(
                           padding: const EdgeInsets.only(bottom: 14),
                           child: Row(
                             mainAxisAlignment: isMe
@@ -650,6 +654,12 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                               ),
                             ],
                           ),
+                        );
+                        final date = dates[index];
+                        if (date == null) return bubble;
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [MessageDateDivider(date: date), bubble],
                         );
                       },
                     );
