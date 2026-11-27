@@ -202,7 +202,14 @@ if (isEmulator) {
 // Server-owned authenticated discovery projections; never use event snapshots as authority.
 exports.onCatalogueUserWritten = onValueWritten({ref:'/users/{userId}',region:databaseTriggerRegion,retry:true},
   event => require('./catalogue_projections').reconcile(admin.database(),'user',event.params.userId));
-exports.onCatalogueBandWritten = onValueWritten({ref:'/Bands/{bandId}',region:databaseTriggerRegion,retry:true},
+exports.onCatalogueBandWritten = onValueWritten({
+  ref: '/Bands/{bandId}',
+  region: databaseTriggerRegion,
+  retry: true,
+  serviceAccount: '674065132924-compute@developer.gserviceaccount.com',
+  ingressSettings: 'ALLOW_ALL',
+  timeoutSeconds: 60,
+},
   async event => {
     await require('./catalogue_projections').reconcile(admin.database(),'band',event.params.bandId);
     const beforeName=event.data.before.val()?.Name;
@@ -214,6 +221,9 @@ exports.onCatalogueBandWritten = onValueWritten({ref:'/Bands/{bandId}',region:da
   });
 exports.onBandEventReadModelWritten = onValueWritten({
   ref:'/Bands/{bandId}/Events/{eventId}',region:databaseTriggerRegion,retry:true,
+  serviceAccount: '674065132924-compute@developer.gserviceaccount.com',
+  ingressSettings: 'ALLOW_ALL',
+  timeoutSeconds: 60,
 }, async event => {
   const { bandId, eventId } = event.params;
   const db = admin.database();
@@ -2791,7 +2801,12 @@ exports.markDirectConversationRead = onCall({ region: 'europe-west1' }, async (r
 /**
  * 5. triggerEventReminder
  */
-exports.triggerEventReminder = onCall({ region: 'europe-west1' }, async (request) => {
+exports.triggerEventReminder = onCall({
+  region: 'europe-west1',
+  serviceAccount: '674065132924-compute@developer.gserviceaccount.com',
+  ingressSettings: 'ALLOW_ALL',
+  timeoutSeconds: 60,
+}, async (request) => {
   const callerUid = request.auth?.uid;
   if (!callerUid) {
     throw new HttpsError('unauthenticated', 'User must be authenticated.');
@@ -3570,6 +3585,9 @@ exports.onBandMemberWritten = onValueWritten({
   ref: '/Bands/{bandId}/Members_band/{memberId}',
   region: databaseTriggerRegion,
   retry: true,
+  serviceAccount: '674065132924-compute@developer.gserviceaccount.com',
+  ingressSettings: 'ALLOW_ALL',
+  timeoutSeconds: 60,
 }, async (event) => {
   // Re-read canonical state: delayed/retried events must not resurrect old membership.
   try {
