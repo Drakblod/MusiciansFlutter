@@ -210,14 +210,17 @@ class _CreateListingPageState extends State<CreateListingPage> {
       final legacyListingType = _selectedIntent == MarketplaceTaxonomy.intentLookingFor
           ? 'buy'
           : _selectedType;
-      final categoryLabel = MarketplaceTaxonomy.getCategoryLabel(_selectedIntent, _selectedCategory);
+      // Preserve the legacy category value alongside the canonical ID.
+      final legacyCategory = _selectedCategory == 'other_services'
+          ? 'Other Services'
+          : MarketplaceTaxonomy.getCategoryLabel(_selectedIntent, _selectedCategory);
 
       final listing = Listing(
         id: listingId,
         userId: userId,
         title: _titleController.text.trim(),
         description: _descriptionController.text.trim(),
-        category: categoryLabel,
+        category: legacyCategory,
         listingType: legacyListingType,
         marketplaceIntent: _selectedIntent,
         marketplaceCategory: _selectedCategory,

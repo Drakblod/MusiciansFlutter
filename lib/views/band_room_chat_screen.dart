@@ -1887,7 +1887,7 @@ class _BandRoomChatScreenState extends State<_BandRoomContent>
                 ),
               ListTile(
                 leading: const Icon(Icons.groups_rounded, color: Colors.purpleAccent),
-                title: const Text('Create custom group', style: TextStyle(color: Colors.white)),
+                title: const Text('Create New Group', style: TextStyle(color: Colors.white)),
                 onTap: () async {
                   Navigator.pop(ctx);
                   final result = await CreateBandSectionSheet.show(

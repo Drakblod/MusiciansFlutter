@@ -14,6 +14,7 @@ import 'package:musicians_flutter/views/marketplace_page.dart';
 import 'package:musicians_flutter/views/create_listing_page.dart';
 import 'package:musicians_flutter/views/listing_details_page.dart';
 import 'package:musicians_flutter/views/my_listings_page.dart';
+import 'package:musicians_flutter/widgets/animated_tap_detector.dart';
 import 'package:musicians_flutter/widgets/marketplace_category_sheet.dart';
 import 'package:musicians_flutter/widgets/marketplace_filter_selector.dart';
 
@@ -230,7 +231,7 @@ void main() {
         'Studio',
         'Engineer/Producer',
         'Rehearsal Space',
-        'Other Services',
+        'Other',
       ]);
 
       // Offering categories exact strings
@@ -244,7 +245,7 @@ void main() {
         'Recording/Production',
         'Promotion',
         'Management',
-        'Other Services',
+        'Other',
       ]);
     });
 
@@ -403,8 +404,8 @@ void main() {
       await tester.scrollUntilVisible(find.text('Rehearsal Space'), 50, scrollable: find.byType(Scrollable).last);
       expect(find.text('Rehearsal Space'), findsOneWidget);
 
-      await tester.scrollUntilVisible(find.text('Other Services'), 50, scrollable: find.byType(Scrollable).last);
-      expect(find.text('Other Services'), findsOneWidget);
+      await tester.scrollUntilVisible(find.text('Other'), 50, scrollable: find.byType(Scrollable).last);
+      expect(find.text('Other'), findsOneWidget);
     });
 
     testWidgets('3 & 5. Tapping I\'M OFFERING opens correct modal with 8 exact options in required order', (tester) async {
@@ -429,8 +430,87 @@ void main() {
       await tester.scrollUntilVisible(find.text('Management'), 50, scrollable: find.byType(Scrollable).last);
       expect(find.text('Management'), findsOneWidget);
 
-      await tester.scrollUntilVisible(find.text('Other Services'), 50, scrollable: find.byType(Scrollable).last);
-      expect(find.text('Other Services'), findsOneWidget);
+      await tester.scrollUntilVisible(find.text('Other'), 50, scrollable: find.byType(Scrollable).last);
+      expect(find.text('Other'), findsOneWidget);
+    });
+
+    testWidgets('Other filters existing listings with the ID or legacy label', (tester) async {
+      mockService.inMemoryListings.addAll([
+        Listing.fromJson({
+          'title': 'Available stage lighting',
+          'category': 'Other Services',
+          'marketplaceIntent': 'offering',
+          'marketplaceCategory': 'other_services',
+          'listingType': 'service',
+        }, 'other-offer'),
+        Listing.fromJson({
+          'title': 'Need help with stage lighting',
+          'category': 'Other Services',
+          'listingType': 'buy',
+        }, 'legacy-other-request'),
+      ]);
+      await tester.pumpWidget(createTestApp(
+        child: const MarketplacePage(),
+        mockService: mockService,
+      ));
+      await pumpUiTransitions(tester);
+
+      final sheet = find.byType(MarketplaceCategorySheet);
+      for (final (intentLabel, visible, hidden) in [
+        ("I'M LOOKING FOR", 'Available stage lighting', 'Need help with stage lighting'),
+        ("I'M OFFERING", 'Need help with stage lighting', 'Available stage lighting'),
+      ]) {
+        await tester.tap(find.text(intentLabel));
+        await pumpUiTransitions(tester);
+        final other = find.descendant(of: sheet, matching: find.text('Other'));
+        await tester.scrollUntilVisible(other, 50, scrollable: find.byType(Scrollable).last);
+        await tester.tap(other);
+        await pumpUiTransitions(tester);
+
+        expect(sheet, findsNothing);
+        expect(find.text(visible), findsOneWidget);
+        expect(find.text(hidden), findsNothing);
+        expect(find.text('Roland Juno-DS Synthesizer'), findsNothing);
+      }
+    });
+
+    testWidgets('Publishing Other preserves the canonical ID and legacy category', (tester) async {
+      tester.view.physicalSize = const Size(800, 1500);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(createTestApp(
+        child: const CreateListingPage(initialCategory: 'other_services'),
+        mockService: mockService,
+      ));
+      await pumpUiTransitions(tester);
+      expect(find.text('Other'), findsOneWidget);
+
+      for (final (hint, value) in [
+        ('e.g., Fender Stratocaster 2021', 'Stage lighting help'),
+        ('Provide all necessary details (condition, accessories, features, availability)...', 'Local music service'),
+        ('e.g., Stockholm', 'Stockholm'),
+        ('e.g., 4.500,00', '0'),
+      ]) {
+        final field = find.widgetWithText(TextFormField, hint);
+        await tester.ensureVisible(field);
+        await tester.enterText(field, value);
+      }
+      final publish = find.ancestor(
+        of: find.text('Publish Listing'),
+        matching: find.byType(AnimatedTapDetector),
+      );
+      FocusManager.instance.primaryFocus?.unfocus();
+      await tester.pump();
+      await Scrollable.ensureVisible(tester.element(publish), alignment: 0.5);
+      await tester.pump();
+      expect(publish.hitTestable(), findsOneWidget);
+      await tester.tap(publish);
+      await pumpUiTransitions(tester);
+
+      final saved = mockService.inMemoryListings.singleWhere((listing) => listing.title == 'Stage lighting help').toJson();
+      expect(saved['marketplaceCategory'], 'other_services');
+      expect(saved['category'], 'Other Services');
     });
 
     testWidgets('6 & 7. Selecting an option updates selector, closes modal, and remains fully tappable', (tester) async {

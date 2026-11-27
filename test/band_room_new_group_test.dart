@@ -261,6 +261,27 @@ void main() {
     await tester.pump();
   }
 
+  testWidgets('Members menu opens Create New Group in the current band', (tester) async {
+    final service = GroupService();
+    await mount(tester, service);
+    await tester.tap(find.text('Members'));
+    await pumpUiTransitions(tester);
+
+    await tester.tap(find.byIcon(Icons.chat_bubble_outline_rounded).first);
+    await pumpUiTransitions(tester);
+    final action = find.text('Create New Group');
+    expect(action, findsOneWidget);
+    await tester.tap(action);
+    await pumpUiTransitions(tester);
+
+    final sheet = find.byType(CreateBandSectionSheet);
+    expect(sheet, findsOneWidget);
+    expect(tester.widget<CreateBandSectionSheet>(sheet).initialBandId, 'band_feed_test');
+    expect(tester.widget<CreateBandSectionSheet>(sheet).lockToInitialBand, isTrue);
+    expect(service.groupCalls, isEmpty);
+    await unmount(tester);
+  });
+
   testWidgets('Band Room Groups opens the exact authorized group in the active band', (tester) async {
     final service = _ExistingGroupsService();
     await mount(tester, service);

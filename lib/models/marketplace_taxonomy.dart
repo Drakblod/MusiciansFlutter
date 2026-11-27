@@ -63,7 +63,7 @@ class MarketplaceTaxonomy {
     ),
     MarketplaceCategoryItem(
       id: 'other_services',
-      label: 'Other Services',
+      label: 'Other',
       intent: intentLookingFor,
     ),
   ];
@@ -107,7 +107,7 @@ class MarketplaceTaxonomy {
     ),
     MarketplaceCategoryItem(
       id: 'other_services',
-      label: 'Other Services',
+      label: 'Other',
       intent: intentOffering,
     ),
   ];

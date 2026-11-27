@@ -12,6 +12,7 @@ import 'package:musicians_flutter/services/firebase_service.dart';
 import 'package:musicians_flutter/views/band_room_chat_screen.dart';
 import 'package:musicians_flutter/views/create_band_screen.dart';
 import 'package:musicians_flutter/views/edit_band_info_screen.dart';
+import 'package:musicians_flutter/widgets/create_band_section_sheet.dart';
 import 'package:musicians_flutter/widgets/custom_top_bar.dart';
 import 'package:provider/provider.dart';
 
@@ -586,6 +587,24 @@ void main() {
       expect(find.text('Electric Guitar'), findsOneWidget);
       expect(find.text('Add Band Member'), findsWidgets);
       expect(find.text('Bandleader'), findsWidgets);
+
+      final memberChat = find.byWidgetPredicate((widget) =>
+          widget is Icon && widget.icon == Icons.chat_bubble_outline_rounded && widget.size == 18);
+      expect(memberChat, findsOneWidget);
+      await tester.tap(memberChat);
+      await pumpUiTransitions(tester);
+      await tester.tap(find.text('Create New Group'));
+      await pumpUiTransitions(tester);
+      final sheet = find.byType(CreateBandSectionSheet);
+      expect(sheet, findsOneWidget);
+      final createGroup = tester.widget<CreateBandSectionSheet>(sheet);
+      expect(createGroup.initialBandId, 'band_edit_1');
+      expect(createGroup.initialMemberId, 'user_guitarist');
+      expect(createGroup.lockToInitialBand, isFalse);
+      await tester.tap(find.descendant(of: sheet, matching: find.text('Close')));
+      await pumpUiTransitions(tester);
+      expect(sheet, findsNothing);
+      expect(mockService.roleUpdates, isEmpty);
 
       await tester.tap(find.byTooltip('Set Admin Roles'));
       await pumpUiTransitions(tester);
