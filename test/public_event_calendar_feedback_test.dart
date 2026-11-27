@@ -266,6 +266,54 @@ void main() {
       expect(find.text('Music Production Workshop'), findsNothing);
     });
 
+    testWidgets('Tapping the active category switches directly and preserves search text', (tester) async {
+      tester.view.physicalSize = const Size(430, 950);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(createTestWidget());
+      await pumpUiTransitions(tester);
+
+      final picker = find.byType(EventCategoryPickerSheet);
+      await tester.tap(find.byTooltip('Select Category'));
+      await pumpUiTransitions(tester);
+      await tester.tap(find.descendant(of: picker, matching: find.text('Live/Gigs')));
+      await pumpUiTransitions(tester);
+
+      final search = find.byType(TextField);
+      const query = 'Music Production';
+      final workshop = find.text('Music Production Workshop');
+      await tester.enterText(search, query);
+      await pumpUiTransitions(tester);
+      expect(workshop, findsNothing);
+
+      await tester.tap(find.text('Live/Gigs'));
+      await pumpUiTransitions(tester);
+      expect(tester.widget<EventCategoryPickerSheet>(picker).currentSelectedCategory, 'Live/Gigs');
+      await tester.tap(find.descendant(of: picker, matching: find.text('Workshops')));
+      await pumpUiTransitions(tester);
+
+      expect(find.text('Live/Gigs'), findsNothing);
+      expect(workshop, findsOneWidget);
+      expect(tester.widget<TextField>(search).controller!.text, query);
+
+      await tester.tap(find.text('Workshops'));
+      await pumpUiTransitions(tester);
+      expect(tester.widget<EventCategoryPickerSheet>(picker).currentSelectedCategory, 'Workshops');
+      await tester.tap(find.descendant(of: picker, matching: find.byTooltip('Close')));
+      await pumpUiTransitions(tester);
+      expect(picker, findsNothing);
+      expect(find.text('Workshops'), findsOneWidget);
+      expect(tester.widget<TextField>(search).controller!.text, query);
+
+      await tester.tap(find.text('Clear filter'));
+      await pumpUiTransitions(tester);
+      expect(picker, findsNothing);
+      expect(find.text('Active category:'), findsNothing);
+      expect(tester.widget<TextField>(search).controller!.text, query);
+      expect(workshop, findsOneWidget);
+    });
+
     testWidgets('5. Clearing category restores all events', (tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
